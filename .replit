@@ -3,6 +3,7 @@ modules = ["python-3.11"]
 
 [nix]
 channel = "stable-24_05"
+packages = ["arrow-cpp", "cairo", "ffmpeg-full", "freetype", "ghostscript", "glibcLocales", "gobject-introspection", "gtk3", "libcxx", "libxcrypt", "pkg-config", "qhull", "tcl", "tk", "xsimd"]
 
 [unitTest]
 language = "python3"
