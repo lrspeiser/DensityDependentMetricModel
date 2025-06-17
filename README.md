@@ -1,152 +1,111 @@
-# Exploring Galactic Rotation with a Density-Dependent Spacetime Metric (Gaia DR3 Analysis)
+# A Density-Dependent Metric Modification as an Alternative to Dark Matter for Explaining Milky Way Kinematics
 
-This project investigates an alternative explanation for the anomalous rotation curves of galaxies, such as the Milky Way. Instead of hypothesizing invisible dark matter, we explore a **Density-Dependent Metric Model**. The core idea is that the effective gravitational interaction, or how spacetime translates mass into orbital velocity, is modulated by the local baryonic (visible) matter density. This effect becomes more pronounced in lower-density regions, potentially explaining why outer stars orbit faster than predicted by Newtonian gravity based on visible mass alone.
+**Abstract:** The flat rotation curves of galaxies present a persistent challenge to standard Newtonian dynamics when only luminous baryonic matter is considered, conventionally addressed by invoking non-baryonic dark matter halos. Here, we explore an alternative phenomenological framework: a Density-Dependent Metric Model. We hypothesize that the effective gravitational interaction within a galaxy is modulated by the local baryonic matter density, $\rho(R)$. This modulation, parameterized by a function $\xi(\rho)$, leads to a modification of the observed circular velocity $v_{obs}^2(R) = \xi(\rho(R)) \cdot v_N^2(R ; M_{\text{baryonic}})$, where $v_N$ is the Newtonian velocity derived from the fitted baryonic mass. Using Markov Chain Monte Carlo (MCMC) methods to fit this model to a sample of ~80,000 stars from Gaia DR3, we find that a power-law form for $\xi(\rho)$ can reproduce the Milky Way's rotation curve with baryons alone. The model requires a baryonic disk mass of $M_{\text{disk}} \approx 1.75 \times 10^{11} M_{\odot}$ and yields an effective "missing" acceleration scale with a median of $\approx 1.15 \times 10^{-10} \, \text{m/s}^2$, strikingly close to MOND's characteristic acceleration $a_0$. While phenomenologically successful, the model's astrophysical implications, particularly the large baryonic mass and the fundamental origin of such density-dependent gravitational behavior, require further investigation.
 
-The analysis uses Python and a large sample of ~80,000 stars from the Gaia DR3 mission to fit the parameters of this phenomenological model directly to the Milky Way's rotation curve. The aim is to reproduce the observed kinematics using **baryons only**, modified by this density-dependent spacetime effect. This exploration was initially motivated by the "Universe in a Black Hole" hypothesis, considering if effects like universal frame-dragging or other internal Black Hole physics could manifest as such a density-dependent metric. While direct frame-dragging models faced challenges, the current focus is on the significant phenomenological success of the density-dependent approach itself.
+---
 
-## 🎯 What We're Trying to Accomplish
+## Introduction
 
-The primary goals are:
+The discrepancy between observed galactic rotation curves and those predicted by Newtonian dynamics based on visible matter remains a cornerstone of modern astrophysics, traditionally necessitating the existence of dark matter halos[^1],[^2]. While the $\Lambda$CDM model, incorporating cold dark matter, has achieved considerable success on cosmological scales, alternative paradigms continue to be explored to address galactic-scale dynamics without invoking new particles. Modified Newtonian Dynamics (MOND)[^3] proposes a change to gravitational laws or inertia at low accelerations, characterized by a fundamental acceleration scale $a_0 \approx 1.2 \times 10^{-10} \, \text{m/s}^2$.
 
-1.  **Model Galactic Rotation without Dark Matter:** To robustly test if a Density-Dependent Metric Model can explain the observed rotation curve of the Milky Way using only its visible (baryonic) mass, and to quantify the parameters of this model.
-2.  **Understand the Density-Dependent Effect:**
-    *   Define and fit phenomenological functions $\xi(\rho)$ that modulate the Newtonian gravitational effect based on local baryonic density $\rho(R)$.
-    *   Determine the critical density ($\rho_c$) and transition behavior (exponent $n$) for this effect.
-    *   Compare the viability of different $\xi(\rho)$ functional forms (e.g., `power` law, `logistic`) using statistical criteria (AIC/BIC).
-3.  **Relate to Known Phenomenology:** Compare the empirically derived "missing" acceleration or the behavior of the density-dependent model to established alternative paradigms like MOND (Modified Newtonian Dynamics), particularly its characteristic acceleration scale $a_0$.
-4.  **Contextual Plausibility (Initial Motivation):** Briefly assess if the observable universe's parameters are consistent with it being inside its own Schwarzschild radius, an idea that initially spurred the exploration of non-standard gravitational effects.
-
-## 💡 The Density-Dependent Metric: Concept and Implications
-
-**The Core Idea:**
-
-Standard Newtonian gravity predicts that the orbital speed $v_N$ of a star at radius $R$ from the galactic center is given by:
-$$
-v_N^2(R) = \frac{G M_{\text{enc}}(R)}{R}
-$$
-where $M_{\text{enc}}(R)$ is the mass enclosed within that radius. This works well for planetary systems but fails for the outer regions of galaxies if only visible (baryonic) mass is considered – it predicts velocities that are too low.
-
-The **Density-Dependent Metric Model** hypothesizes that the *observed* velocity $v_{obs}(R)$ is related to the Newtonian velocity (from baryons) by a modulating factor $\xi$, which itself depends on the local baryonic density $\rho(R)$:
+This work investigates a phenomenological **Density-Dependent Metric Model** where the effective gravitational potential experienced by stars is modulated by the local baryonic matter density, $\rho(R)$. The core hypothesis is that the relationship between baryonic mass and orbital velocity, $v_{obs}$, is modified from the standard Newtonian prediction, $v_N$, by a density-dependent factor, $\xi(\rho(R))$:
 
 $$
 v_{obs}^2(R) = \xi(\rho(R)) \cdot v_N^2(R ; M_{\text{baryonic}})
 $$
 
-Here, $v_N^2(R ; M_{\text{baryonic}})$ is the Newtonian prediction based on the *total fitted baryonic mass* of the galaxy. The function $\xi(\rho)$ is designed such that:
+The modulating function $\xi(\rho)$ is designed such that its effect is minimal (i.e., $\xi(\rho) \approx 1$) in low-density regions (e.g., galactic outskirts), allowing the full gravitational influence of the fitted baryonic mass ($M_{\text{baryonic}}$) to manifest. Conversely, in high-density regions (e.g., inner galaxy), $\xi(\rho) < 1$, effectively suppressing the gravitational impact. This study utilizes stellar kinematics from Gaia DR3[^4] for approximately 80,000 stars to constrain the parameters of this model for the Milky Way.
 
-*   **In High-Density Regions (e.g., inner galaxy):** $\xi(\rho)$ is small (e.g., $\xi < 1$). This effectively "suppresses" or "screens" the gravitational impact of the total baryonic mass. If the total fitted baryonic mass is larger than traditional estimates, this suppression ensures that inner velocities are not over-predicted.
-*   **In Low-Density Regions (e.g., outer galaxy):** $\xi(\rho)$ approaches $1$. This means the "full" gravitational impact of the total fitted baryonic mass is felt. If this total baryonic mass is substantial, it can sustain high orbital velocities at large radii, explaining the flat rotation curves.
+Such density-dependent behavior could conceptually arise from several theoretical avenues, including screening mechanisms in modified gravity theories[^5],[^6] (e.g., $f(R)$ gravity, scalar-tensor theories) or from emergent gravitational effects in non-standard cosmological environments. The empirical success of this model may provide insights into the nature of gravity at galactic scales.
 
-Essentially, the model proposes that the effective gravitational "strength" or how spacetime responds to baryonic matter is not constant but changes with the local density of that baryonic matter.
+## Methods
 
-**Why Could Such an Effect Exist? (Hypothetical Reasons):**
+### Observational Data
+Kinematic data (positions, proper motions, radial velocities, and their errors) for stars were sourced from the Gaia DR3 catalog. After quality cuts (e.g., parallax S/N > 5, RUWE < 1.4, constraints on astrometric and radial velocity errors), a sample of ~80,000 stars primarily located within $|b| < 30^{\circ}$ and Galactocentric radii $0.1 < R < 25 \text{ kpc}$ was obtained. 6D phase-space coordinates were transformed to a Galactocentric cylindrical frame to derive $R_{\text{kpc}}$ and the observed tangential velocity, $v_{obs}$. Observational errors $\sigma_v$ were propagated. Details of data acquisition and processing are available in `data_io.py`.
 
-While the current implementation is phenomenological, potential underlying physical reasons could include:
+### Baryonic Mass and Density Model
+The baryonic component of the Milky Way was initially modeled as a single exponential disk for both mass and density calculations:
+*   Enclosed Mass: $M_{\text{enc}}(R) = M_{\text{disk}} \left(1 - e^{-R/R_d} (1 + R/R_d)\right)$
+*   Midplane Volume Density: $\rho(R) = \frac{\Sigma_0}{2 h_z} e^{-R/R_d}$, where $\Sigma_0 = M_{\text{disk}} / (2 \pi R_d^2)$ is the central surface density.
+The parameters $M_{\text{disk}}$ (total disk mass in $M_{\odot}$), $R_d$ (disk scale length in kpc), and $h_z$ (disk scale height in kpc) were fitted as part of the MCMC analysis.
 
-1.  **Screening Mechanisms in Modified Gravity:** Many theories beyond General Relativity (e.g., scalar-tensor theories like $f(R)$ gravity, chameleon fields) involve new fields whose effects are "screened" (suppressed) in dense environments (like Earth, Solar System) to match observations, but become unscreened and significant in low-density cosmological environments like galactic outskirts. Our $\xi(\rho)$ could be an effective description of such a screening mechanism.
-2.  **Emergent Gravity / Quantum Gravity Effects:** Gravity itself might be an emergent phenomenon from a deeper quantum structure of spacetime. In this view, its macroscopic laws could be approximations that break down or are modified in certain regimes (e.g., low density/curvature, or specific conditions within a "Universe in a Black Hole").
-3.  **Interaction with a Cosmological Background:** Baryonic matter might interact with a pervasive cosmological field (like dark energy or a background scalar field) in a density-dependent way, leading to an effective force.
-4.  **Specific Physics of a "Universe in a Black Hole" Interior:** The unique and extreme environment inside a cosmological-scale black hole (e.g., non-standard singularity, different vacuum state, extreme global curvature) could fundamentally alter how gravity manifests locally, potentially leading to a density-dependent metric as an emergent property for observers within.
+### Density-Dependent $\xi(\rho)$ Functions
+Two primary functional forms for $\xi(\rho)$ were investigated:
+1.  **Power Law (`power`):**
+    $$
+    \xi(\rho) = \frac{1}{1 + (\rho/\rho_c)^n}
+    $$
+2.  **Logistic Law (`logistic`):**
+    $$
+    \xi(\rho) = \frac{1}{1 + \exp(n \cdot (\ln(\rho) - \ln(\rho_c)))}
+    $$
+Here, $\rho_c$ is a critical density parameter, and $n$ is an exponent controlling the transition's sharpness. These, along with $M_{\text{disk}}$, $R_d$, and $h_z$, constitute the five free parameters of the model. The physics implementations are in `density_metric.py`.
 
-**Similarity to MOND:**
-The Density-Dependent Metric Model, particularly its outcome that the "missing" acceleration required by data is approximately $1.15 \times 10^{-10} \, \text{m/s}^2$, shows a striking similarity to MOND's characteristic acceleration $a_0 \approx 1.2 \times 10^{-10} \, \text{m/s}^2$. MOND proposes that the law of inertia or gravity changes below this critical acceleration scale. Since low density in galactic outskirts often correlates with low gravitational acceleration, both approaches point to a modification of gravitational dynamics in these regimes. Our model explores density as the primary trigger, which is empirically testable and may have a more direct link to field screening mechanisms.
+### MCMC Fitting Procedure
+Parameters were constrained using an MCMC approach implemented with `emcee`[^7]. The log-likelihood function assumes Gaussian errors for $v_{obs}$. Uniform priors were adopted for all parameters within astrophysically plausible ranges (see `main.py` for details). The MCMC was run with 64 walkers for 100,000 steps. Burn-in and thinning were determined based on estimated autocorrelation times.
 
-## 💻 What We Coded
+## Results
 
-The project is structured into three main Python files:
+The MCMC analysis for the `power` law $\xi(\rho)$ model yielded the following median and 68% credible interval parameter estimates:
 
-*   **`data_io.py`:** Handles Gaia DR3 data querying via `astroquery`, caching of raw (CSV) and processed (Parquet) data, and coordinate transformations to derive Galactocentric positions ($R_{\text{kpc}}$, $z_{\text{kpc}}$) and observed tangential velocities ($v_{obs}$) with associated errors ($\sigma_v$) for stars.
-*   **`density_metric.py`:** Contains the physics layer. This includes:
-    *   A baryonic mass model for the Milky Way (currently an exponential disk) to calculate enclosed mass $M_{\text{enc}}(R)$ and Newtonian velocity $v_N(R)$.
-    *   Functions to calculate local baryonic density $\rho(R)$ (e.g., midplane volume density for an exponential disk).
-    *   Implementations of different phenomenological $\xi(\rho)$ laws (e.g., `power`: $\xi = 1 / (1 + (\rho/\rho_c)^n)$ and `logistic`).
-    *   The core function $v_{\text{model}}(R) = v_N(R) \cdot \sqrt{\xi(\rho(R))}$ that combines these elements. All computationally intensive parts are JIT-compiled with Numba for speed.
-*   **`main.py` (formerly `run_fit.py`):** The main driver script that:
-    *   Parses command-line arguments (e.g., choice of $\xi$ law, MCMC parameters, data handling flags, optional process killing).
-    *   Orchestrates data loading via `data_io.py`.
-    *   Defines log-likelihood, log-prior, and log-posterior functions for the MCMC.
-    *   Runs the MCMC fitting using `emcee` to sample the posterior distributions of the model parameters ($M_{\text{disk}}$, $R_d$, $\rho_c$, $n$, $h_z$).
-    *   Calculates and prints autocorrelation times, adjusting burn-in and thinning for the chain.
-    *   Generates output:
-        *   Corner plots (`corner_<xi>.png`) showing parameter posteriors and correlations.
-        *   Rotation curve plots (`rotation_curve_fit_<xi>.png`) displaying the Gaia data, the median fitted model with its 68% credible interval, and the Newtonian component from the fitted disk.
-        *   Saved MCMC chain (`chain_<xi>.npy`).
-        *   A summary text file (`info_summary_<xi>.txt`) with fitted parameters, AIC/BIC values, and RMS residuals in inner/outer galactic regions.
-    *   (The script also contains legacy code for frame-dragging models and a "Universe in a BH" hypothetical scenario, which are no longer the primary focus but provide historical context for the project's evolution).
+*   $M_{\text{disk}} = (1.746 \pm 0.005) \times 10^{11} M_{\odot}$
+*   $R_d = 4.292 \pm 0.016 \text{ kpc}$
+*   $\rho_c = (7.99^{+1.34}_{-1.07}) \times 10^8 M_{\odot}/\text{kpc}^3$
+*   $n = 2.198 \pm 0.019$
+*   $h_z = 0.558^{+0.091}_{-0.077} \text{ kpc}$
 
-## 📈 What The Results Tell Us So Far (Emphasis on Density-Dependent Model with `power` law $\xi$)
+The full posterior distributions are shown in the corner plot (Fig. 1), and the resulting median fitted rotation curve with its 68% credible interval is shown in Fig. 2.
 
-*(Based on the MCMC run with 10,000 steps, 32 walkers, for `xi='power'`)*
+<!-- Ensure image paths are correct -->
+<p align="center">
+  <img src="corner_power.png" alt="Corner Plot for Power Law Xi Model" width="700"/>
+</p>
+<p align="center"><em><b>Fig. 1:</b> Corner plot showing 1D and 2D marginalized posterior distributions for the five model parameters ($M_{\text{disk}}$, $R_d$, $\rho_c$, $n$, $h_z$) from the MCMC fit using the `power` law $\xi(\rho)$ function. Contours represent 0.5, 1, 1.5, and 2 sigma levels. Titles report median values and 68% credible intervals.</em></p>
 
-1.  **Schwarzschild Radius Context:**
-    *   The observable universe's calculated Schwarzschild radius ($R_S \approx 15.7 \text{ Bly}$) is larger than its lookback radius ($R_{obs} \approx 13.8 \text{ Bly}$).
-    *   **Conclusion:** Supports the initial conceptual plausibility that our universe *could* reside within such a structure. ✅
+<br/>
 
-2.  **Density-Dependent Metric Model Fit (`power` law $\xi$):**
-    *   **Fitted Parameters (Median Values from a converged MCMC run):**
-        *   $M_{\text{disk}} \approx 1.75 \times 10^{11} M_{\odot}$
-        *   $R_d \approx 4.29 \text{ kpc}$
-        *   $\rho_c \approx 7.89 \times 10^8 M_{\odot}/\text{kpc}^3$ (critical density for $\xi$ transition)
-        *   $n \approx 2.20$ (exponent governing sharpness of $\xi$ transition)
-        *   $h_z \approx 0.54 \text{ kpc}$ (disk scale height)
-    *   **Rotation Curve Fit (`rotation_curve_fit_power.png`):**
-        *   ![Rotation Curve Fit for Power Law Xi](rotation_curve_fit_power.png)
-        *   The median model (red line) provides a **good visual fit** to the overall trend of the Gaia stellar kinematics (black scatter), capturing the initial rise, the flattening around ~220-230 km/s, and a subsequent gentle decline. This is achieved **using only the fitted baryonic disk and the density-dependent $\xi$ factor.**
-    *   **Connection to MOND's $a_0$ Scale:** The "missing" or "effective universal" acceleration (`a_univ_effect_ms2`) required by the data to explain the velocities (if one were to attribute the difference to an extra force rather than a metric modification) has a median value of **$\approx 1.15 \times 10^{-10} \, \text{m/s}^2$**. This is **remarkably close (0.96 times) to MOND's characteristic acceleration $a_0 \approx 1.2 \times 10^{-10} \, \text{m/s}^2$**. This suggests the underlying physics becomes important at this specific acceleration scale, which often correlates with low-density regions. ✅
-    *   **Implications of Fitted Baryonic Mass:** The model requires a fitted disk mass ($M_{\text{disk}} \approx 1.75 \times 10^{11} M_{\odot}$) that is significantly larger (3-4 times) than standard estimates for the Milky Way's stellar disk ($4-6 \times 10^{10} M_{\odot}$). This is a key point: the model "absorbs" the missing mass problem into a larger-than-usual baryonic component whose gravitational effect is then modulated by density. The astrophysical viability of this large mass is a critical evaluation point.
+<p align="center">
+  <img src="rotation_curve_fit_power.png" alt="Rotation Curve Fit for Power Law Xi Model" width="700"/>
+</p>
+<p align="center"><em><b>Fig. 2:</b> Milky Way rotation curve. Black points represent a random subset of the ~80,000 Gaia DR3 stars used in the fit (for visualization clarity). The red solid line is the median rotation curve from the Density-Dependent Metric Model (with `power` law $\xi$) using the median posterior parameters. The red shaded region is the 68% credible interval from the MCMC samples. The green dashed line shows the Newtonian rotation curve component derived from the median fitted baryonic disk parameters ($M_{\text{disk}}$, $R_d$).</em></p>
 
-3.  **MCMC Convergence and Robustness:**
-    *   The implementation now uses autocorrelation times to guide burn-in and thinning, significantly improving the reliability of the MCMC sampling over initial short runs.
-    *   However, the analysis of a 10,000-step run still indicated that **longer chains (e.g., 50,000-100,000+ steps) are necessary** to achieve full convergence and obtain truly robust posterior distributions and parameter uncertainties. The current parameter uncertainties are likely underestimated.
+The median model provides a good overall description of the Gaia data, reproducing the rise and subsequent flattening of the rotation curve. The fitted disk mass ($M_{\text{disk}}$) is notably high compared to standard estimates for the Milky Way's stellar disk alone, suggesting that for this model to work, it requires a larger total baryonic contribution whose gravitational effect is modulated by $\xi(\rho)$.
 
-4.  **Goodness of Fit (RMS Residuals):**
-    *   The model fits the outer regions (10 < R < 20 kpc, RMS $\approx 32.6 \text{ km/s}$) significantly better than the inner regions (R < 5 kpc, RMS $\approx 60.3 \text{ km/s}$). This suggests that while promising, the current single exponential disk for baryons and the specific `power` law for $\xi(\rho)$ might need further refinement, especially for the complex inner galaxy.
+The RMS residuals for the median parameter fit are $\approx 60.2 \, \text{km/s}$ for $R < 5 \text{ kpc}$ and $\approx 32.6 \, \text{km/s}$ for $10 < R < 20 \text{ kpc}$, indicating a better fit in the outer regions. The Akaike Information Criterion (AIC) for this model is $\approx 3.843 \times 10^6$, and the Bayesian Information Criterion (BIC) is $\approx 3.843 \times 10^6$.
 
-### Summary of Current Analysis Status:
+Crucially, if we calculate the effective "missing" acceleration required by the data (i.e., $a_{\text{univ}} = (v_{obs}^2 - v_N^2(\text{standard } M_{\text{baryon}}))/R$), its median value is found to be $\approx 1.15 \times 10^{-10} \, \text{m/s}^2$. This is remarkably consistent with MOND's characteristic acceleration $a_0 \approx 1.2 \times 10^{-10} \, \text{m/s}^2$.
 
-The Density-Dependent Metric Model shows significant phenomenological promise. It can reproduce the Milky Way's flat rotation curve using only baryonic matter, provided this matter's gravitational influence is modulated by local density via the $\xi(\rho)$ factor. This approach naturally leads to an effective gravitational behavior that strengthens in low-density regions, mirroring the requirements to explain observed kinematics and intriguingly aligning with MOND's characteristic acceleration scale $a_0$.
+## Discussion and Outlook
 
-**Key Insights & Ongoing Challenges:**
-*   **Phenomenological Success:** The model provides a good descriptive framework for flat rotation curves without invoking particle dark matter.
-*   **Astrophysical Plausibility of High $M_{\text{disk}}$:** The primary question raised by the fit is whether the very large baryonic disk mass required by the model is consistent with other astrophysical observations of the Milky Way.
-*   **Need for Robust MCMC:** Longer MCMC chains are crucial for definitive parameter estimation.
-*   **Theoretical Foundation:** The most significant challenge is to derive the $\xi(\rho)$ behavior from a fundamental physical theory. The "Universe in a Black Hole" hypothesis is one speculative avenue that *might* provide such a foundation, but simple frame-dragging models within it have proven insufficient so far. The focus now is on whether the UniBH environment could inherently lead to such a density-dependent metric.
+This study demonstrates that a phenomenological Density-Dependent Metric Model, where $v_{obs}^2(R) = \xi(\rho(R)) \cdot v_N^2(R ; M_{\text{baryonic}})$, can successfully reproduce the observed rotation curve of the Milky Way using only baryonic matter, provided the total fitted baryonic mass is substantial ($M_{\text{disk}} \approx 1.75 \times 10^{11} M_{\odot}$). The model inherently generates an effect that becomes significant in low-density regions (where $\xi(\rho) \rightarrow 1$), mimicking the requirements for flat rotation curves. The emergence of an effective acceleration scale comparable to MOND's $a_0$ from our density-based approach is a compelling result.
 
-This data-driven exploration is paving the way for understanding what kind of new physics or modification to existing physics is needed to solve the puzzle of galactic rotation.
+Key challenges remain. The large fitted baryonic mass needs careful reconciliation with independent astrophysical constraints on the Milky Way's baryonic components. While the MCMC chains from the 100,000-step run are substantially improved, very high autocorrelation times for some parameters suggest even longer runs or advanced samplers could further refine posterior estimates. The larger RMS residuals in the inner galaxy point to the need for more sophisticated multi-component baryonic mass models (including a bulge and gas).
 
-## 🚀 Suggested Next Steps to Solidify This Theory
+Future work will focus on:
+1.  Achieving full MCMC convergence with improved sampling strategies.
+2.  Implementing realistic multi-component baryonic mass models for the Milky Way.
+3.  Systematically comparing different functional forms for $\xi(\rho)$ using statistical model selection criteria.
+4.  Applying the model to a diverse sample of external galaxies (e.g., from the SPARC database[^8]) to test the universality of the $\xi(\rho)$ form and its parameters.
+5.  Investigating the theoretical underpinnings of such a density-dependent metric, exploring whether it can be derived from fundamental principles within modified gravity frameworks or specific cosmological scenarios.
+6.  Exploring predictions for other observables, such as gravitational lensing.
 
-*(This section largely aligns with the excellent suggestions from the "review + upgrade pack" and is adapted here)*
+This approach offers a data-driven avenue to constrain the nature of gravitational interactions on galactic scales and explore alternatives to particle dark matter.
 
-1.  **Achieve Robust MCMC Convergence:**
-    *   Run significantly longer MCMC chains (e.g., `--nsteps 50000` to `100000+`, with `--nwalkers` perhaps increased to 64 or 100) using appropriate `--burnin` and `--thin` guided by autocorrelation times.
-    *   Utilize the `--ncores` option for parallel processing to make these longer runs feasible.
-    *   Aim for several thousand *independent* samples in the final chain for reliable posteriors.
+## Code Availability
+The Python code used for this analysis, including data processing, MCMC fitting, and plotting, is available in this repository: [Link to your repository, e.g., `https://github.com/yourusername/your-repo-name`](https://github.com/yourusername/your-repo-name).
+Key scripts are `main.py`, `data_io.py`, and `density_metric.py`.
 
-2.  **Refine Baryonic Mass Model:**
-    *   Incorporate a multi-component baryonic model in `density_metric.py` (e.g., Sersic bulge, multiple exponential disks for different stellar populations, HI/H2 gas distribution). This will provide a more realistic $\rho(R)$ and $M_{\text{enc}}(R)$.
-    *   Re-fit the Density-Dependent Metric Model parameters. This is crucial to assess if the very large $M_{\text{disk}}$ is an artifact of the current simple disk model or a persistent feature.
+## References
+[^1]: Rubin, V. C., & Ford, W. K. Jr. (1970). *Astrophysical Journal*, 159, 379.
+[^2]: Zwicky, F. (1933). *Helvetica Physica Acta*, 6, 110.
+[^3]: Milgrom, M. (1983). *Astrophysical Journal*, 270, 365.
+[^4]: Gaia Collaboration, Brown, A. G. A., et al. (2021). *Astronomy & Astrophysics*, 649, A1.
+[^5]: Clifton, T., Ferreira, P. G., Padilla, A., & Skordis, C. (2012). *Physics Reports*, 513(1-3), 1-189.
+[^6]: Joyce, A., Jain, B., Khoury, J., & Trodden, M. (2015). *Physics Reports*, 568, 1-98.
+[^7]: Foreman-Mackey, D., Hogg, D. W., Lang, D., & Goodman, J. (2013). *Publications of the Astronomical Society of the Pacific*, 125(925), 306.
+[^8]: Lelli, F., McGaugh, S. S., & Schombert, J. M. (2016). *The Astronomical Journal*, 152(6), 157.
 
-3.  **Explore Different $\xi(\rho)$ Laws & Model Comparison:**
-    *   Run the MCMC for the `logistic` $\xi$ law and any other custom $\xi$ functions.
-    *   Use AIC/BIC values (from converged chains) to quantitatively compare which $\xi(\rho)$ form provides a statistically preferred fit to the data.
+---
+*For details on running the code, dependencies, and extending the model, please see the sections below (or refer to the original detailed README if this summary is part of a larger document).*
 
-4.  **Analyze Radial Acceleration Relation (RAR):**
-    *   Plot $g_{obs} = v_{obs}^2/R$ versus $g_{bar} = v_{Newton\_fitted}^2/R$ (using $v_{Newton}$ from the *fitted baryonic mass* from the density model).
-    *   Compare this empirical relation with the prediction from the best-fit Density-Dependent Metric Model and the standard MOND relation. This is a powerful diagnostic for low-acceleration physics.
-
-5.  **Theoretical Derivation of $\xi(\rho)$ (The Grand Challenge):**
-    *   Focus on whether a $\xi(\rho)$-like behavior can be naturally derived from:
-        *   GR within the specific, potentially non-standard, interior of a cosmological black hole (UniBH).
-        *   Consistent modified gravity theories (e.g., scalar-tensor, $f(R)$, theories with screening mechanisms).
-        *   Emergent gravity frameworks.
-
-6.  **Application to Other Galaxies (e.g., SPARC dataset):**
-    *   Test the universality of the best-fit $\xi(\rho)$ form and its parameters (especially $\rho_c, n$) by fitting to other galaxies with well-measured rotation curves and baryonic mass distributions. Does a consistent set of "universal" parameters emerge?
-
-7.  **Further Observational Tests:**
-    *   **Gravitational Lensing:** What are the lensing predictions (weak, strong, CMB) of this density-dependent metric? How do they compare to GR+DM predictions and observations? This is a critical test for any modified gravity proposal.
-    *   **CMB Anisotropies:** Beyond simple global rotation (already constrained), could a Universe-BH model that yields a density-dependent metric have other specific, subtle signatures on the CMB?
-    *   **Large-Scale Structure:** How would this model affect the growth of cosmic structures and the dynamics of galaxy clusters?
-
-This project is effectively testing a novel phenomenological model that shows promise. The subsequent steps involve rigorous statistical validation, deeper astrophysical scrutiny of its implications, and the crucial search for a fundamental theoretical origin.
+*(You would then append the more practical sections like "Repository Layout", "Quick Start", "Command-Line Options", etc., from your previous README here if this is the main README file for the repository.)*
