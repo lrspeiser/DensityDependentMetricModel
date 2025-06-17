@@ -1,19 +1,19 @@
 --- Fit Summary for xi_type = 'power' ---
 Fitted Parameters (Median & 68% CI):
-  $M_\mathrm{disk}$ ($M_\odot$): 1.746e+11  (+4.25e+08 / -6.16e+08)
-  $R_d$ (kpc)              : 4.291e+00  (+1.57e-02 / -2.12e-02)
-  $\rho_c$ ($M_\odot/kpc^3$): 7.893e+08  (+1.37e+08 / -9.90e+07)
-  $n$                      : 2.196e+00  (+1.93e-02 / -2.32e-02)
-  $h_z$ (kpc)              : 5.365e-01  (+1.14e-01 / -7.24e-02)
+  $M_\mathrm{disk}$ ($M_\odot$): 1.746e+11  (+4.45e+08 / -4.73e+08)
+  $R_d$ (kpc)              : 4.293e+00  (+1.55e-02 / -1.64e-02)
+  $\rho_c$ ($M_\odot/kpc^3$): 7.988e+08  (+1.34e+08 / -1.07e+08)
+  $n$                      : 2.198e+00  (+1.91e-02 / -1.87e-02)
+  $h_z$ (kpc)              : 5.583e-01  (+9.13e-02 / -7.68e-02)
 
 --- Model Comparison ---
 Model: power
-Max Log-Likelihood: -1921638.73
+Max Log-Likelihood: -1921638.68
 k: 5, N: 79999
-AIC: 3843287.47
-BIC: 3843333.92
+AIC: 3843287.37
+BIC: 3843333.82
 
 
 --- RMS Residuals ---
-RMS inner (R < 5 kpc): 60.27 km/s
+RMS inner (R < 5 kpc): 60.24 km/s
 RMS outer (10 < R < 20 kpc): 32.57 km/s
