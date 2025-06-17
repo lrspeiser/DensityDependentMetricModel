@@ -91,9 +91,6 @@ Future work will focus on:
 
 This approach offers a data-driven avenue to constrain the nature of gravitational interactions on galactic scales and explore alternatives to particle dark matter.
 
-## Code Availability
-The Python code used for this analysis, including data processing, MCMC fitting, and plotting, is available in this repository: [Link to your repository, e.g., `https://github.com/yourusername/your-repo-name`](https://github.com/yourusername/your-repo-name).
-Key scripts are `main.py`, `data_io.py`, and `density_metric.py`.
 
 ## References
 [^1]: Rubin, V. C., & Ford, W. K. Jr. (1970). *Astrophysical Journal*, 159, 379.
@@ -104,8 +101,3 @@ Key scripts are `main.py`, `data_io.py`, and `density_metric.py`.
 [^6]: Joyce, A., Jain, B., Khoury, J., & Trodden, M. (2015). *Physics Reports*, 568, 1-98.
 [^7]: Foreman-Mackey, D., Hogg, D. W., Lang, D., & Goodman, J. (2013). *Publications of the Astronomical Society of the Pacific*, 125(925), 306.
 [^8]: Lelli, F., McGaugh, S. S., & Schombert, J. M. (2016). *The Astronomical Journal*, 152(6), 157.
-
----
-*For details on running the code, dependencies, and extending the model, please see the sections below (or refer to the original detailed README if this summary is part of a larger document).*
-
-*(You would then append the more practical sections like "Repository Layout", "Quick Start", "Command-Line Options", etc., from your previous README here if this is the main README file for the repository.)*
