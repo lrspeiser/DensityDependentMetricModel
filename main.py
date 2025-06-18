@@ -447,11 +447,13 @@ def run_mcmc_analysis(ARGS_in):
 
 
     # ... (Autocorrelation, burn-in, thinning, chain saving - largely same, ensure using fitted_param_labels) ...
-    actual_burnin = ARGS_in.burnin
-    actual_thin = ARGS_in.thin
+    # Initialize actual_burnin and actual_thin with the values from args
+    actual_burnin = ARGS_in.burnin_for_analysis # NEW
+    actual_thin = ARGS_in.thin_for_analysis     # NEW
     try:
         current_chain_length = sampler.iteration
-        discard_for_tau = min(ARGS_in.burnin, current_chain_length - 1 if current_chain_length > 0 else 0)
+        # Use ARGS_in.burnin_for_analysis for the initial discard estimate for tau calculation
+        discard_for_tau = min(ARGS_in.burnin_for_analysis, current_chain_length - 1 if current_chain_length > 0 else 0) # NEW
         
         if current_chain_length - discard_for_tau > 100 * ndim : # Heuristic: need enough samples post-discard
             autocorr_time = sampler.get_autocorr_time(discard=discard_for_tau, tol=0, quiet=True) # Use discard here
@@ -463,36 +465,34 @@ def run_mcmc_analysis(ARGS_in):
                 recommended_thin = int(np.ceil(max_autocorr / 2)); recommended_thin = max(1, recommended_thin)
                 logger.info(f"Recommended burn-in for analysis: ~{recommended_burnin}")
                 logger.info(f"Recommended thinning for analysis: ~{recommended_thin}")
-                if ARGS_in.burnin_for_analysis < recommended_burnin: # Using separate burnin for analysis
-                    logger.warning(f"User analysis burn-in ({ARGS_in.burnin_for_analysis}) is less than recommended ({recommended_burnin}).")
+                
+                # Update actual_burnin and actual_thin based on recommendations if they are better
+                if ARGS_in.burnin_for_analysis < recommended_burnin: 
+                    logger.warning(f"User analysis burn-in ({ARGS_in.burnin_for_analysis}) is less than recommended ({recommended_burnin}). Adopting recommended if longer chain available.")
                     actual_burnin = recommended_burnin 
-                else:
-                    actual_burnin = ARGS_in.burnin_for_analysis
+                # else actual_burnin remains ARGS_in.burnin_for_analysis
 
                 if ARGS_in.thin_for_analysis < recommended_thin:
-                    logger.warning(f"User analysis thinning ({ARGS_in.thin_for_analysis}) is less than recommended ({recommended_thin}).")
+                    logger.warning(f"User analysis thinning ({ARGS_in.thin_for_analysis}) is less than recommended ({recommended_thin}). Adopting recommended.")
                     actual_thin = recommended_thin
-                else:
-                    actual_thin = ARGS_in.thin_for_analysis
+                # else actual_thin remains ARGS_in.thin_for_analysis
             else: 
                 logger.warning("All autocorrelation times are non-finite. Using user-specified burn-in/thin for analysis.")
-                actual_burnin = ARGS_in.burnin_for_analysis
-                actual_thin = ARGS_in.thin_for_analysis
+                # actual_burnin and actual_thin already set from ARGS_in
         else: 
             logger.warning("Chain too short after initial discard to reliably estimate autocorr time. Using user-specified burn-in/thin for analysis.")
-            actual_burnin = ARGS_in.burnin_for_analysis
-            actual_thin = ARGS_in.thin_for_analysis
+            # actual_burnin and actual_thin already set from ARGS_in
     except emcee.autocorr.AutocorrError as e_acorr:
         logger.warning(f"Could not estimate autocorrelation time: {e_acorr}. Using user-specified values for analysis.")
-        actual_burnin = ARGS_in.burnin_for_analysis
-        actual_thin = ARGS_in.thin_for_analysis
+        # actual_burnin and actual_thin already set from ARGS_in
     except Exception as e_autocorr_generic:
         logger.warning(f"An unexpected error during autocorrelation time estimation: {e_autocorr_generic}. Using user-specified values for analysis.")
-        actual_burnin = ARGS_in.burnin_for_analysis
-        actual_thin = ARGS_in.thin_for_analysis
+        # actual_burnin and actual_thin already set from ARGS_in
 
-    actual_burnin = min(actual_burnin, sampler.iteration -1 if sampler.iteration > 0 else 0); actual_burnin = max(0, actual_burnin)
-    actual_thin = max(1, actual_thin)
+    # Final adjustment of actual_burnin and actual_thin based on chain length
+    actual_burnin = min(actual_burnin, sampler.iteration -1 if sampler.iteration > 0 else 0)
+    actual_burnin = max(0, actual_burnin) # Ensure non-negative
+    actual_thin = max(1, actual_thin)     # Ensure at least 1
     logger.info(f"Using actual burn-in for analysis: {actual_burnin}")
     logger.info(f"Using actual thinning for analysis: {actual_thin}")
 
