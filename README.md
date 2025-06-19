@@ -111,14 +111,14 @@ The MCMC analysis presented here is for the `power` law $\xi(\rho)$ function, mo
 
 <!-- Ensure image paths are correct, or use placeholders if not yet generated -->
 <p align="center">
-  <img src="corner_milkyway_MW_power_100k.png" alt="Corner Plot for Power Law Xi Model (100k steps)" width="700"/>
+ <img src="corner_milkyway_MW_power.png" alt="Corner Plot for Power Law Xi Model (100k steps)" width="700"/>
 </p>
 <p align="center"><em><b>Fig. 1:</b> Corner plot showing 1D and 2D marginalized posterior distributions for the five model parameters from the 100,000-step MCMC fit (single exponential disk, `power` law $\xi$). Titles report median values and 68% credible intervals derived from the thinned chain (1920 samples). Warnings regarding contour validity due to effective sample size were noted during generation; contours should be interpreted with caution.</em></p>
 
 <br/>
 
 <p align="center">
-  <img src="rotation_curve_fit_milkyway_MW_power_100k.png" alt="Rotation Curve Fit for Power Law Xi Model (100k steps)" width="700"/>
+  <img src="rotation_curve_fit_milkyway_MW_power.png" alt="Rotation Curve Fit for Power Law Xi Model (100k steps)" width="700"/>
 </p>
 <p align="center"><em><b>Fig. 2:</b> Milky Way rotation curve from Gaia DR3 data (subset shown as gray points). The red solid line is the median rotation curve from the Density-Dependent Metric Model (single exponential disk, `power` law $\xi$) using the median posterior parameters from the 100,000-step run. The red shaded region is the 68% credible interval. The green dashed line shows the Newtonian rotation curve component derived from the median fitted baryonic disk parameters ($M_{\text{disk}}$, $R_d$) using the Freeman (1970) kernel.</em></p>
 
