@@ -1,0 +1,21 @@
+--- Fit Summary: milkyway_MW_power_Bx_DTf_Gx ---
+Fitted Parameters (Median & 68% CI):
+  $\rho_c$ ($M_\odot/kpc^3$)         : 1.0000e+07 (initial guess - chain too short)
+  $n$                                : 1.5000e+00 (initial guess - chain too short)
+  $M_{d,thin}$ ($M_\odot$)           : 4.0000e+10 (initial guess - chain too short)
+  $R_{d,thin}$ (kpc)                 : 2.5000e+00 (initial guess - chain too short)
+  $h_{z,thin}$ (kpc)                 : 3.0000e-01 (initial guess - chain too short)
+
+Fixed Parameters (values are from ARGS defaults/user input):
+  $M_{bulge}$ ($M_\odot$)            : 9.0000e+09 (fixed)
+  $a_{bulge}$ (kpc)                  : 5.0000e-01 (fixed)
+  $M_{gas}$ ($M_\odot$)              : 1.0000e+10 (fixed)
+  $R_{d,gas}$ (kpc)                  : 7.0000e+00 (fixed)
+  $h_{z,gas}$ (kpc)                  : 1.5000e-01 (fixed)
+
+--- Model Comparison ---
+AIC/BIC: Not calculable.
+
+--- RMS Residuals ---
+RMS R<5kpc: 168.42(N=6462)
+RMS 10<R<20kpc: 170.44(N=5998)
