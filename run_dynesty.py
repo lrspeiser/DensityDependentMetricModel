@@ -2,6 +2,7 @@
 """
 run_dynesty.py - Run dynesty dynamic nested sampling on the Density-Metric model for the Milky Way.
 Saves posterior samples to specified output. Includes self-tests and advanced progress logging.
+Enhanced with expert feedback: log-uniform priors, configurable sampler settings, checkpoint support.
 """
 import logging
 import sys
@@ -37,30 +38,67 @@ except ImportError as e:
 logger = None
 
 # --- Parameter Configuration (Moved here to be self-contained) ---
+# Enhanced with log_prior flags for scale-variant parameters
 MW_MULTI_COMP_PARAM_CONFIG = {
-    'rho_c_solar_kpc3': {'label': r"$\rho_c$ ($M_\odot/kpc^3$)", 'fixed_val_from_arg': 'rho_c_fixed', 'default_fixed': 1e7, 'low': 1e5, 'high': 2e9, 'fit_flag_arg': 'fit_xi_params'},
-    'n_exp': {'label': r"$n$", 'fixed_val_from_arg': 'n_exp_fixed', 'default_fixed': 1.5, 'low': 0.1, 'high': 4.0, 'fit_flag_arg': 'fit_xi_params'},
-    'M_disk_thin_solar': {'label': r"$M_{d,thin}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_disk_thin_fixed', 'default_fixed': 4.0e10, 'low': 1e10, 'high': 8e10, 'fit_flag_arg': 'fit_disk_thin', 'include_flag_arg': 'include_disk_thin'},
-    'R_d_thin_kpc': {'label': r"$R_{d,thin}$ (kpc)", 'fixed_val_from_arg': 'R_d_thin_fixed', 'default_fixed': 2.5, 'low': 1.5, 'high': 5.0, 'fit_flag_arg': 'fit_disk_thin', 'include_flag_arg': 'include_disk_thin'},
-    'h_z_thin_kpc': {'label': r"$h_{z,thin}$ (kpc)", 'fixed_val_from_arg': 'h_z_thin_fixed', 'default_fixed': 0.3, 'low': 0.15, 'high': 0.45, 'fit_flag_arg': 'fit_disk_thin', 'include_flag_arg': 'include_disk_thin'},
-    'M_disk_thick_solar': {'label': r"$M_{d,thick}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_disk_thick_fixed', 'default_fixed': 1.0e10, 'low': 0.1e10, 'high': 5e10, 'fit_flag_arg': 'fit_disk_thick', 'include_flag_arg': 'include_disk_thick'},
-    'R_d_thick_kpc': {'label': r"$R_{d,thick}$ (kpc)", 'fixed_val_from_arg': 'R_d_thick_fixed', 'default_fixed': 3.5, 'low': 2.0, 'high': 6.0, 'fit_flag_arg': 'fit_disk_thick', 'include_flag_arg': 'include_disk_thick'},
-    'h_z_thick_kpc': {'label': r"$h_{z,thick}$ (kpc)", 'fixed_val_from_arg': 'h_z_thick_fixed', 'default_fixed': 0.9, 'low': 0.5, 'high': 1.5, 'fit_flag_arg': 'fit_disk_thick', 'include_flag_arg': 'include_disk_thick'},
-    'M_bulge_solar': {'label': r"$M_{bulge}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_bulge_fixed', 'default_fixed': 0.9e10, 'low': 0.1e10, 'high': 3.0e10, 'fit_flag_arg': 'fit_bulge', 'include_flag_arg': 'include_bulge'},
-    'a_bulge_kpc': {'label': r"$a_{bulge}$ (kpc)", 'fixed_val_from_arg': 'a_bulge_fixed', 'default_fixed': 0.5, 'low': 0.1, 'high': 2.0, 'fit_flag_arg': 'fit_bulge', 'include_flag_arg': 'include_bulge'},
-    'M_gas_solar': {'label': r"$M_{gas}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_gas_fixed', 'default_fixed': 1.0e10, 'low': 0.2e10, 'high': 2.0e10, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas'},
-    'R_d_gas_kpc': {'label': r"$R_{d,gas}$ (kpc)", 'fixed_val_from_arg': 'R_d_gas_fixed', 'default_fixed': 7.0, 'low': 3.0, 'high': 15.0, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas'},
-    'h_z_gas_kpc': {'label': r"$h_{z,gas}$ (kpc)", 'fixed_val_from_arg': 'h_z_gas_fixed', 'default_fixed': 0.15, 'low': 0.05, 'high': 0.5, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas'},
+    'rho_c_solar_kpc3': {'label': r"$\rho_c$ ($M_\odot/kpc^3$)", 'fixed_val_from_arg': 'rho_c_fixed', 
+                         'default_fixed': 1e7, 'low': 1e5, 'high': 2e9, 'fit_flag_arg': 'fit_xi_params',
+                         'log_prior': True},  # Log-uniform for density
+    'n_exp': {'label': r"$n$", 'fixed_val_from_arg': 'n_exp_fixed', 
+              'default_fixed': 1.5, 'low': 0.1, 'high': 4.0, 'fit_flag_arg': 'fit_xi_params',
+              'log_prior': False},  # Linear for exponent
+    'M_disk_thin_solar': {'label': r"$M_{d,thin}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_disk_thin_fixed', 
+                          'default_fixed': 4.0e10, 'low': 1e10, 'high': 1.5e11, 'fit_flag_arg': 'fit_disk_thin', 
+                          'include_flag_arg': 'include_disk_thin', 'log_prior': True},  # Log-uniform for mass, wider prior
+    'R_d_thin_kpc': {'label': r"$R_{d,thin}$ (kpc)", 'fixed_val_from_arg': 'R_d_thin_fixed', 
+                     'default_fixed': 2.5, 'low': 1.5, 'high': 5.0, 'fit_flag_arg': 'fit_disk_thin', 
+                     'include_flag_arg': 'include_disk_thin', 'log_prior': False},
+    'h_z_thin_kpc': {'label': r"$h_{z,thin}$ (kpc)", 'fixed_val_from_arg': 'h_z_thin_fixed', 
+                     'default_fixed': 0.3, 'low': 0.15, 'high': 0.7, 'fit_flag_arg': 'fit_disk_thin', 
+                     'include_flag_arg': 'include_disk_thin', 'log_prior': False},  # Wider prior
+    'M_disk_thick_solar': {'label': r"$M_{d,thick}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_disk_thick_fixed', 
+                           'default_fixed': 1.0e10, 'low': 0.1e10, 'high': 8e10, 'fit_flag_arg': 'fit_disk_thick', 
+                           'include_flag_arg': 'include_disk_thick', 'log_prior': True},  # Log-uniform for mass
+    'R_d_thick_kpc': {'label': r"$R_{d,thick}$ (kpc)", 'fixed_val_from_arg': 'R_d_thick_fixed', 
+                      'default_fixed': 3.5, 'low': 2.0, 'high': 6.0, 'fit_flag_arg': 'fit_disk_thick', 
+                      'include_flag_arg': 'include_disk_thick', 'log_prior': False},
+    'h_z_thick_kpc': {'label': r"$h_{z,thick}$ (kpc)", 'fixed_val_from_arg': 'h_z_thick_fixed', 
+                      'default_fixed': 0.9, 'low': 0.5, 'high': 1.5, 'fit_flag_arg': 'fit_disk_thick', 
+                      'include_flag_arg': 'include_disk_thick', 'log_prior': False},
+    'M_bulge_solar': {'label': r"$M_{bulge}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_bulge_fixed', 
+                      'default_fixed': 0.9e10, 'low': 0.1e10, 'high': 5e10, 'fit_flag_arg': 'fit_bulge', 
+                      'include_flag_arg': 'include_bulge', 'log_prior': True},  # Log-uniform for mass
+    'a_bulge_kpc': {'label': r"$a_{bulge}$ (kpc)", 'fixed_val_from_arg': 'a_bulge_fixed', 
+                    'default_fixed': 0.5, 'low': 0.1, 'high': 2.0, 'fit_flag_arg': 'fit_bulge', 
+                    'include_flag_arg': 'include_bulge', 'log_prior': False},
+    'M_gas_solar': {'label': r"$M_{gas}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_gas_fixed', 
+                    'default_fixed': 1.0e10, 'low': 0.2e10, 'high': 2.0e10, 'fit_flag_arg': 'fit_gas', 
+                    'include_flag_arg': 'include_gas', 'log_prior': True},  # Log-uniform for mass
+    'R_d_gas_kpc': {'label': r"$R_{d,gas}$ (kpc)", 'fixed_val_from_arg': 'R_d_gas_fixed', 
+                    'default_fixed': 7.0, 'low': 3.0, 'high': 15.0, 'fit_flag_arg': 'fit_gas', 
+                    'include_flag_arg': 'include_gas', 'log_prior': False},
+    'h_z_gas_kpc': {'label': r"$h_{z,gas}$ (kpc)", 'fixed_val_from_arg': 'h_z_gas_fixed', 
+                    'default_fixed': 0.15, 'low': 0.05, 'high': 0.5, 'fit_flag_arg': 'fit_gas', 
+                    'include_flag_arg': 'include_gas', 'log_prior': False},
 }
 
 
 # --- Likelihood and Prior Transform Functions ---
-def prior_transform_dynesty(u_array, fitted_param_names, prior_bounds_low, prior_bounds_high):
+def prior_transform_dynesty(u_array, fitted_param_names, prior_bounds_low, prior_bounds_high, use_log_prior_flags):
+    """
+    Enhanced prior transform with log-uniform support for scale-variant parameters.
+    """
     if fitted_param_names is None or prior_bounds_low is None or prior_bounds_high is None:
         raise ValueError("prior_transform_dynesty received None for essential arguments.")
     params = np.empty_like(u_array)
     for i in range(len(fitted_param_names)):
-        params[i] = prior_bounds_low[i] + u_array[i] * (prior_bounds_high[i] - prior_bounds_low[i])
+        low, high = prior_bounds_low[i], prior_bounds_high[i]
+        if use_log_prior_flags[i]:
+            # Log-uniform transform for scale-variant parameters
+            log_low, log_high = np.log10(low), np.log10(high)
+            params[i] = 10**(log_low + u_array[i] * (log_high - log_low))
+        else:
+            # Standard uniform transform
+            params[i] = low + u_array[i] * (high - low)
     return params
 
 def v_model_for_dynesty(R_kpc_array, p_all_params_dict, xi_type_str, ARGS_obj_dynesty):
@@ -128,6 +166,7 @@ def _check_flag_consistency(args, logger_obj):
     logger_obj.info("CLI flag consistency OK.")
 
 def get_param_labels_and_bounds(ARGS):
+    """Enhanced to return log_prior flags for each parameter."""
     param_info_list = []
     config_to_use = MW_MULTI_COMP_PARAM_CONFIG
     logger.info("Configuring parameters for NEW multi-component Milky Way model.")
@@ -136,16 +175,28 @@ def get_param_labels_and_bounds(ARGS):
         if not is_included: continue
         is_fitted = 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False)
         current_val = getattr(ARGS, p_details['fixed_val_from_arg'])
-        param_info_list.append({'name': p_name, 'label': p_details['label'], 'current_val': current_val,
-                                'low': p_details['low'], 'high': p_details['high'], 'is_fitted': is_fitted})
+        param_info_list.append({
+            'name': p_name, 
+            'label': p_details['label'], 
+            'current_val': current_val,
+            'low': p_details['low'], 
+            'high': p_details['high'], 
+            'is_fitted': is_fitted,
+            'log_prior': p_details.get('log_prior', False)  # Add log_prior info
+        })
     ARGS.all_param_info_list = param_info_list
     fitted_params_info = [p for p in param_info_list if p['is_fitted']]
     if not fitted_params_info: 
         logger.error("No parameters configured to be fitted! You must use at least one --fit_* flag.")
         sys.exit(1)
+    
+    # Extract log_prior flags for fitted parameters
+    use_log_flags = [p['log_prior'] for p in fitted_params_info]
+    
     return ([p['name'] for p in fitted_params_info], [p['label'] for p in fitted_params_info],
             np.array([p['current_val'] for p in fitted_params_info]),
-            np.array([p['low'] for p in fitted_params_info]), np.array([p['high'] for p in fitted_params_info]))
+            np.array([p['low'] for p in fitted_params_info]), np.array([p['high'] for p in fitted_params_info]),
+            use_log_flags)  # Return the log_prior flags
 
 def main_dynesty():
     global logger
@@ -155,7 +206,8 @@ def main_dynesty():
 
     if not DYNESTY_AVAILABLE: logger.error("Dynesty library not found."); sys.exit(1)
     
-    parser = argparse.ArgumentParser(description="Run Dynesty for Density-Metric model.")
+    parser = argparse.ArgumentParser(description="Run Dynesty for Density-Metric model.",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--xi', type=str, default='power', choices=['power', 'logistic'])
     parser.add_argument('--max_sample_gaia', type=int, default=10000)
     parser.add_argument('--output_dir', type=str, default="chains_dynesty")
@@ -167,6 +219,19 @@ def main_dynesty():
     parser.add_argument('--maxcall', type=int, default=2000000, help="Hard limit on likelihood calls.")
     parser.add_argument('--progress_update_interval_s', type=int, default=60, help="Interval in seconds for printing custom progress.")
     parser.add_argument('--debug_likelihood_params', type=str, default=None, help="Comma-separated physical parameters to test likelihood function.")
+    parser.add_argument('--use_run_nested', action='store_true', default=False, 
+                        help="Use run_nested instead of custom sampling loop (recommended for stability).")
+    parser.add_argument('--checkpoint_every', type=int, default=300, 
+                        help="Checkpoint interval in seconds (only for run_nested).")
+
+    # Enhanced Dynesty sampler settings
+    dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
+    dynesty_g.add_argument('--sample_method', type=str, default='rwalk', choices=['rwalk', 'rslice', 'hslice'],
+                           help="Dynesty's internal sampling method. rwalk is recommended for difficult posteriors.")
+    dynesty_g.add_argument('--enlarge_factor', type=float, default=1.8,
+                           help="Bound enlargement factor. Recommended > 1.5 for rwalk, higher for difficult posteriors.")
+    dynesty_g.add_argument('--bound_method', type=str, default='multi', choices=['none', 'single', 'multi', 'balls', 'cubes'],
+                           help="Bounding method for live points.")
 
     mw_model_g = parser.add_argument_group('Milky Way Model Configuration')
     mw_model_g.add_argument('--include_bulge', action='store_true', default=False)
@@ -197,11 +262,18 @@ def main_dynesty():
     R_data_for_run, v_data_for_run, sigma_data_for_run = gaia_data_dict["R_kpc"], gaia_data_dict["v_obs"], gaia_data_dict["sigma_v"]
     logger.info(f"Loaded {len(R_data_for_run)} Gaia data points.")
 
-    fitted_p_names, fitted_p_labels, _, p_low, p_high = get_param_labels_and_bounds(args)
+    # Enhanced parameter configuration with log_prior flags
+    fitted_p_names, fitted_p_labels, _, p_low, p_high, use_log_flags = get_param_labels_and_bounds(args)
     ndim_dynesty = len(fitted_p_names)
     logger.info(f"Dynesty fitting {ndim_dynesty} parameters: {fitted_p_names}")
     
-    ptform_args_tuple = (fitted_p_names, np.array(p_low), np.array(p_high))
+    # Log prior type information
+    logger.info("Parameter Prior Types:")
+    for name, is_log in zip(fitted_p_names, use_log_flags):
+        prior_type = "Log-Uniform" if is_log else "Uniform"
+        logger.info(f"  - {name:<25} | Prior: {prior_type}")
+    
+    ptform_args_tuple = (fitted_p_names, np.array(p_low), np.array(p_high), use_log_flags)
     logl_args_tuple = (fitted_p_names, args, args.all_param_info_list, R_data_for_run, v_data_for_run, sigma_data_for_run, args.xi)
 
     pool_obj, queue_size_for_sampler = None, None
@@ -213,8 +285,14 @@ def main_dynesty():
         except Exception as e:
             logger.warning(f"Failed to create Pool: {e}. Running serially.")
     
+    # Enhanced sampler configuration
+    logger.info(f"Sampler configuration: method='{args.sample_method}', bound='{args.bound_method}', enlarge={args.enlarge_factor}")
+    
     sampler = DynamicNestedSampler(log_likelihood_dynesty, prior_transform_dynesty, ndim_dynesty,
                                    pool=pool_obj, queue_size=queue_size_for_sampler,
+                                   sample=args.sample_method,  # Use configurable method
+                                   bound=args.bound_method,     # Use configurable bound
+                                   enlarge=args.enlarge_factor,  # Use configurable enlarge
                                    ptform_args=ptform_args_tuple, logl_args=logl_args_tuple,
                                    blob=True)
     
@@ -222,49 +300,68 @@ def main_dynesty():
     last_progress_log_time = time.time()
     best_rmse_so_far = np.inf
     
+    # Create output directory if it doesn't exist
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Checkpoint file path
+    checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
+    
     try:
-        logger.info(f"Running initial sampling with nlive_init = {args.nlive_init}...")
-        for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
-            if time.time() - last_progress_log_time > args.progress_update_interval_s:
-                last_progress_log_time = time.time()
-                logger.info(f"Initial Sampling | Calls: {sampler.results.ncall}/{args.maxcall} | Live: {len(sampler.live_logl)}")
+        if args.use_run_nested:
+            # Use run_nested for more stable sampling (recommended)
+            logger.info(f"Using run_nested() with nlive_init={args.nlive_init}, checkpoint_every={args.checkpoint_every}s")
+            sampler.run_nested(nlive_init=args.nlive_init, 
+                              nlive_batch=args.nlive_batch,
+                              dlogz_init=args.dlogz_target, 
+                              maxcall=args.maxcall,
+                              print_progress=True, 
+                              checkpoint_file=str(checkpoint_file),
+                              checkpoint_every=args.checkpoint_every)
+            logger.info("run_nested() completed.")
+        else:
+            # Original custom sampling loop (kept for compatibility)
+            logger.info(f"Running initial sampling with nlive_init = {args.nlive_init}...")
+            for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
+                if time.time() - last_progress_log_time > args.progress_update_interval_s:
+                    last_progress_log_time = time.time()
+                    logger.info(f"Initial Sampling | Calls: {sampler.results.ncall}/{args.maxcall} | Live: {len(sampler.live_logl)}")
 
-        logger.info("Initial sampling complete. Starting batch processing...")
-        
-        while sampler.results.ncall < args.maxcall:
-            stop_val, _ = sampler.stopping_function(sampler.results)
-            if stop_val < args.dlogz_target:
-                logger.info(f"Stopping criterion met: dlogz ({stop_val:.4f}) < target ({args.dlogz_target:.4f}).")
-                break
+            logger.info("Initial sampling complete. Starting batch processing...")
             
-            sampler.add_batch(nlive=args.nlive_batch, maxcall=args.maxcall, save_samples=True)
+            while sampler.results.ncall < args.maxcall:
+                stop_val, _ = sampler.stopping_function(sampler.results)
+                if stop_val < args.dlogz_target:
+                    logger.info(f"Stopping criterion met: dlogz ({stop_val:.4f}) < target ({args.dlogz_target:.4f}).")
+                    break
+                
+                sampler.add_batch(nlive=args.nlive_batch, maxcall=args.maxcall, save_samples=True)
+                
+                if time.time() - last_progress_log_time > args.progress_update_interval_s:
+                    last_progress_log_time = time.time()
+                    res = sampler.results
+                    
+                    if res.blob is not None and len(res.blob) > 0:
+                        all_rmses = np.array([b[0] for b in res.blob if b])
+                        finite_rmses = all_rmses[np.isfinite(all_rmses)]
+                        if len(finite_rmses) > 0:
+                             best_rmse_so_far = np.nanmin(finite_rmses)
+                    
+                    eta_str = "N/A"
+                    elapsed_time = time.time() - run_start_time
+                    if res.ncall > args.nlive_init and elapsed_time > 1:
+                        rate = res.ncall / elapsed_time
+                        remaining_calls = args.maxcall - res.ncall
+                        if rate > 0 and remaining_calls > 0: eta_str = str(timedelta(seconds=int(remaining_calls/rate)))
+
+                    logz_str = f"{res.logz[-1]:.2f}"
+                    if not np.isfinite(res.logz[-1]): logz_str = f"WARNING: {res.logz[-1]}"
+
+                    logger.info(
+                        f"Progress | Calls: {res.ncall}/{args.maxcall} | dlogz: {stop_val:.4f} "
+                        f"| logZ: {logz_str} | Best RMSE so far: {best_rmse_so_far:.2f} km/s | ETA: {eta_str}"
+                    )
             
-            if time.time() - last_progress_log_time > args.progress_update_interval_s:
-                last_progress_log_time = time.time()
-                res = sampler.results
-                
-                if res.blob is not None and len(res.blob) > 0:
-                    all_rmses = np.array([b[0] for b in res.blob if b])
-                    finite_rmses = all_rmses[np.isfinite(all_rmses)]
-                    if len(finite_rmses) > 0:
-                         best_rmse_so_far = np.nanmin(finite_rmses)
-                
-                eta_str = "N/A"
-                elapsed_time = time.time() - run_start_time
-                if res.ncall > args.nlive_init and elapsed_time > 1:
-                    rate = res.ncall / elapsed_time
-                    remaining_calls = args.maxcall - res.ncall
-                    if rate > 0 and remaining_calls > 0: eta_str = str(timedelta(seconds=int(remaining_calls/rate)))
-
-                logz_str = f"{res.logz[-1]:.2f}"
-                if not np.isfinite(res.logz[-1]): logz_str = f"WARNING: {res.logz[-1]}"
-
-                logger.info(
-                    f"Progress | Calls: {res.ncall}/{args.maxcall} | dlogz: {stop_val:.4f} "
-                    f"| logZ: {logz_str} | Best RMSE so far: {best_rmse_so_far:.2f} km/s | ETA: {eta_str}"
-                )
-        
-        logger.info("Sampling loop finished.")
+            logger.info("Sampling loop finished.")
 
     finally:
         if pool_obj:
