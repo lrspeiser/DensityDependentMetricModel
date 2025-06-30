@@ -8,19 +8,25 @@ Implements two-stage caching:
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import sys # sys was already imported
+import sys
 
 try:
     from astropy import units as u
     from astropy.coordinates import SkyCoord, Galactocentric, CartesianDifferential, CylindricalDifferential
     from astroquery.gaia import Gaia
     HAS_ASTROPY_AND_QUERY = True
+    # Set timeout for Gaia queries
+    if hasattr(Gaia, 'TIMEOUT'):
+        Gaia.TIMEOUT = 900  # 15 minutes
+    elif hasattr(Gaia, 'tap'):
+        if hasattr(Gaia.tap, 'timeout'):
+            Gaia.tap.timeout = 900
 except ImportError:
     HAS_ASTROPY_AND_QUERY = False
     print("⚠️  Critical libraries (astropy/astroquery) not found in data_io.py. Please install them:")
     print("   pip install astropy astroquery numpy pandas")
 
-# Cache Control Configuration
+# Cache Control Configuration - MUST BE DEFINED BEFORE ANY FUNCTION USES THEM
 USE_LOCAL_CACHE = True
 PROCESSED_GAIA_CACHE_FILENAME_DEFAULT = "gaia_query_cache_DR3_processed_for_fit.parquet"
 
@@ -29,11 +35,9 @@ R0_KPC_ASTRO = 8.122 * u.kpc
 ZSUN_KPC_ASTRO = 0.025 * u.kpc
 VSUN_KMS_ASTRO = CartesianDifferential([11.1, 245.6, 7.25] * u.km/u.s)
 
-# force_live_query in perform_gaia_adql_query was correctly named force_live_query
-# The issue is in load_gaia's signature and how it passes the flags down.
 
 def perform_gaia_adql_query(limit_val=100000, cache_raw_filename="gaia_query_cache_DR3_raw.csv", 
-                            force_live_query=False): # This function signature is fine
+                            force_live_query=False):
     """
     Performs the Gaia ADQL query, saving/loading raw results from a CSV cache.
     Returns a pandas DataFrame with raw query results.
@@ -44,7 +48,7 @@ def perform_gaia_adql_query(limit_val=100000, cache_raw_filename="gaia_query_cac
 
     raw_cache_path = Path(cache_raw_filename)
 
-    # Correctly use force_live_query here
+    # Check cache first
     if USE_LOCAL_CACHE and not force_live_query and raw_cache_path.exists():
         print(f"💾 Loading RAW Gaia query results from CSV cache: {raw_cache_path}")
         try:
@@ -91,14 +95,16 @@ def perform_gaia_adql_query(limit_val=100000, cache_raw_filename="gaia_query_cac
                 print(f"   ⚠️ Error saving raw Gaia data to CSV cache {raw_cache_path}: {e_save_raw}")
         return df_raw_live
     except Exception as e_query:
-        print(f"❌ Gaia ADQL query failed: {e_query}"); return None
+        print(f"❌ Gaia ADQL query failed: {e_query}")
+        return None
 
 
 def process_raw_gaia_df(df_raw):
-    # (This function's content remains unchanged from your version)
+    """Process raw Gaia data into galactocentric coordinates."""
     if df_raw is None or df_raw.empty:
         print("   No raw Gaia data to process.")
         return pd.DataFrame()
+    
     print("\n🌠 Processing raw Gaia data: Sky → 6‑D Galactocentric coordinates and velocities...")
     gc_frame = Galactocentric(galcen_distance=R0_KPC_ASTRO,
                               z_sun=ZSUN_KPC_ASTRO,
@@ -114,45 +120,62 @@ def process_raw_gaia_df(df_raw):
     except Exception as e_skycoord:
         print(f"❌ Error creating SkyCoord object: {e_skycoord}")
         return pd.DataFrame()
+    
     coords_gc = coords_icrs.transform_to(gc_frame)
     df_processed = pd.DataFrame()
-    if 'source_id' in df_raw.columns: df_processed['source_id'] = df_raw['source_id']
+    
+    if 'source_id' in df_raw.columns: 
+        df_processed['source_id'] = df_raw['source_id']
+        
     df_processed['R_kpc'] = coords_gc.cylindrical.rho.to(u.kpc).value
     df_processed['z_kpc'] = coords_gc.z.to(u.kpc).value
+    
     cyl_vel_diff = coords_gc.velocity.represent_as(CylindricalDifferential, coords_gc.data)
     v_phi_kms = (coords_gc.cylindrical.rho * cyl_vel_diff.d_phi).to(u.km/u.s, equivalencies=u.dimensionless_angles()).value
     df_processed['v_obs'] = np.abs(v_phi_kms)
+    
+    # Calculate velocity errors
     distance_kpc = coords_icrs.distance.to(u.kpc).value
     rv_error_kms = df_raw['radial_velocity_error'].values
     pmra_error_masyr = df_raw['pmra_error'].values
     pmdec_error_masyr = df_raw['pmdec_error'].values
+    
     rv_error_kms = np.nan_to_num(rv_error_kms)
     pmra_error_masyr = np.nan_to_num(pmra_error_masyr)
     pmdec_error_masyr = np.nan_to_num(pmdec_error_masyr)
     distance_kpc = np.nan_to_num(distance_kpc)
+    
     pm_tot_error_masyr = np.hypot(pmra_error_masyr, pmdec_error_masyr)
     v_tan_error_kms = 4.74047 * distance_kpc * pm_tot_error_masyr
     v_err_combined = np.hypot(rv_error_kms, v_tan_error_kms)
+    
     v_err_combined[v_err_combined < 5.0] = 5.0
     v_err_combined[~np.isfinite(v_err_combined) | (v_err_combined > 500.0)] = 50.0
     df_processed['sigma_v'] = v_err_combined
+    
+    # Filter to valid values
     df_processed = df_processed[
         np.isfinite(df_processed['R_kpc']) & (df_processed['R_kpc'] > 0.01) &
         np.isfinite(df_processed['v_obs']) & (df_processed['v_obs'] < 700) &
         np.isfinite(df_processed['sigma_v']) & (df_processed['sigma_v'] < 100)
     ].copy()
+    
     print(f"   → Successfully processed {len(df_processed)} stars with valid kinematics and errors.")
     return df_processed
 
-# Corrected load_gaia function signature
+
 def load_gaia(sample_max=100_000, 
-              force_new_query_gaia=False,  # ADDED this keyword argument
-              force_reprocess_raw=False,   # ADDED this keyword argument
+              force_new_query_gaia=False,
+              force_reprocess_raw=False,
               raw_cache_filename="gaia_query_cache_DR3_raw.csv",
-              processed_cache_filename=PROCESSED_GAIA_CACHE_FILENAME_DEFAULT):
+              processed_cache_filename=None):  # Use None as default
     """
     Loads Gaia data, using a two-stage caching system.
     """
+    # Handle default value properly
+    if processed_cache_filename is None:
+        processed_cache_filename = PROCESSED_GAIA_CACHE_FILENAME_DEFAULT
+        
     if not HAS_ASTROPY_AND_QUERY:
         print("❌ data_io.py: Astroquery/Astropy not available. Cannot load Gaia data.")
         return None
@@ -161,12 +184,11 @@ def load_gaia(sample_max=100_000,
     df_processed_output = None
 
     # Stage 1: Try to load already PROCESSED data from Parquet cache
-    # Use force_reprocess_raw here
     if USE_LOCAL_CACHE and not force_reprocess_raw and processed_cache_path.exists():
         print(f"💾 Loading PROCESSED Gaia data from Parquet cache: {processed_cache_path}")
         try:
             df_cached_processed = pd.read_parquet(processed_cache_path)
-            if not df_cached_processed.empty and all(col in df_cached_processed.columns for col in ['R_kpc', 'v_obs', 'sigma_v', 'z_kpc']):
+            if not df_cached_processed.empty and all(col in df_cached_processed.columns for col in ['R_kpc', 'v_obs', 'sigma_v']):
                 print(f"   → Successfully loaded {len(df_cached_processed):,} processed stars from Parquet cache.")
                 df_processed_output = df_cached_processed
             else:
@@ -174,13 +196,12 @@ def load_gaia(sample_max=100_000,
         except Exception as e_processed_cache:
             print(f"   ⚠️ Error loading processed Parquet cache {processed_cache_path}: {e_processed_cache}. Will attempt to regenerate from raw.")
 
-    # Stage 2: If processed data not loaded, get RAW data (from its cache or live query) and then process it
+    # Stage 2: If processed data not loaded, get RAW data and process it
     if df_processed_output is None:
         print("\n-- Attempting to obtain or generate processed data --")
-        # Pass force_new_query_gaia to perform_gaia_adql_query as force_live_query
         df_raw_gaia = perform_gaia_adql_query(limit_val=sample_max,
                                               cache_raw_filename=raw_cache_filename,
-                                              force_live_query=force_new_query_gaia) # Pass the flag
+                                              force_live_query=force_new_query_gaia)
 
         if df_raw_gaia is not None and not df_raw_gaia.empty:
             df_processed_output = process_raw_gaia_df(df_raw_gaia)
@@ -197,8 +218,15 @@ def load_gaia(sample_max=100_000,
     if df_processed_output is None or df_processed_output.empty:
         print("❌ Ultimately, no Gaia data was loaded or processed.")
         return None
+        
+    # Ensure z_kpc column exists
     if 'z_kpc' not in df_processed_output.columns:
         df_processed_output['z_kpc'] = 0.0
+
+    # Apply sampling if requested
+    if sample_max and len(df_processed_output) > sample_max:
+        df_processed_output = df_processed_output.sample(n=sample_max, random_state=42)
+        print(f"   → Sampled down to {sample_max} stars")
 
     return_dict = {
         "R_kpc": df_processed_output["R_kpc"].values,
@@ -208,10 +236,11 @@ def load_gaia(sample_max=100_000,
     }
     if 'source_id' in df_processed_output.columns:
          return_dict["source_id"] = df_processed_output["source_id"].values
+         
     return return_dict
 
+
 if __name__ == '__main__':
-    # (Test block remains unchanged)
     print("Testing data_io.py with two-stage caching...")
     raw_csv_name = "test_gaia_raw.csv"
     processed_parquet_name = "test_gaia_processed.parquet"
@@ -221,7 +250,8 @@ if __name__ == '__main__':
                           raw_cache_filename=raw_csv_name, processed_cache_filename=processed_parquet_name)
     if gaia_data and gaia_data["R_kpc"] is not None :
         print(f"Run 1: Loaded data for {len(gaia_data['R_kpc'])} stars.")
-    else: print("Run 1: Failed to load data.")
+    else: 
+        print("Run 1: Failed to load data.")
 
     print("\n--- Test Run 2: Use caches if available ---")
     gaia_data_cached = load_gaia(sample_max=500, force_new_query_gaia=False, force_reprocess_raw=False,
@@ -230,9 +260,5 @@ if __name__ == '__main__':
         print(f"Run 2: Loaded data for {len(gaia_data_cached['R_kpc'])} stars.")
         if gaia_data and len(gaia_data["R_kpc"]) == len(gaia_data_cached["R_kpc"]):
             print("   Data length matches Run 1, caches likely used.")
-    else: print("Run 2: Failed to load data from cache.")
-
-    # Clean up test cache files
-    # if Path(raw_csv_name).exists(): Path(raw_csv_name).unlink()
-    # if Path(processed_parquet_name).exists(): Path(processed_parquet_name).unlink()
-    # print("\nCleaned up test cache files (if they existed).")
+    else: 
+        print("Run 2: Failed to load data from cache.")
