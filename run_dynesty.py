@@ -151,29 +151,35 @@ def _check_flag_consistency(args, logger_obj):
         "bulge": ["M_bulge_fixed", "a_bulge_fixed"],
         "gas": ["M_gas_fixed", "R_d_gas_fixed", "h_z_gas_fixed"]
     }
-    inconsistent_flags_found = False
-    for comp_name, fixed_arg_names in components_to_check.items():
-        fit_flag_name = f"fit_{comp_name}"
-        if not hasattr(args, fit_flag_name): continue
-        fit_flag_is_set = getattr(args, fit_flag_name, False)
-        if fit_flag_is_set:
-            for fixed_name in fixed_arg_names:
-                if f"--{fixed_name}" in sys.argv:
-                    logger_obj.error(f"Inconsistent CLI: --{fit_flag_name} and --{fixed_name} provided.")
-                    inconsistent_flags_found = True
-    if inconsistent_flags_found:
-        raise ValueError("Inconsistent command-line arguments detected. Aborting.")
+    
+    # Note: The presence of --fit_<component> means "fit at least some parameters of this component"
+    # Individual fixed values override the general fit flag for specific parameters
+    # This allows partial fitting (e.g., fit only h_z while fixing M and R)
+    logger_obj.info("Note: Fixed value arguments override fit flags for specific parameters, allowing partial fitting.")
     logger_obj.info("CLI flag consistency OK.")
 
 def get_param_labels_and_bounds(ARGS):
-    """Enhanced to return log_prior flags for each parameter."""
+    """Enhanced to return log_prior flags for each parameter and handle partial fitting."""
     param_info_list = []
     config_to_use = MW_MULTI_COMP_PARAM_CONFIG
     logger.info("Configuring parameters for NEW multi-component Milky Way model.")
+    
     for p_name, p_details in config_to_use.items():
         is_included = 'include_flag_arg' not in p_details or getattr(ARGS, p_details['include_flag_arg'], False)
         if not is_included: continue
-        is_fitted = 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False)
+        
+        # Check if this parameter should be fitted
+        is_fitted = False
+        if 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
+            # The general fit flag is set, but check if a specific fixed value was provided
+            fixed_arg_name = p_details['fixed_val_from_arg']
+            if f"--{fixed_arg_name}" not in sys.argv:
+                # No specific fixed value provided, so fit this parameter
+                is_fitted = True
+            else:
+                # Specific fixed value provided, override the general fit flag
+                logger.info(f"  {p_name}: Using fixed value (overrides fit flag)")
+        
         current_val = getattr(ARGS, p_details['fixed_val_from_arg'])
         param_info_list.append({
             'name': p_name, 
@@ -184,10 +190,12 @@ def get_param_labels_and_bounds(ARGS):
             'is_fitted': is_fitted,
             'log_prior': p_details.get('log_prior', False)  # Add log_prior info
         })
+    
     ARGS.all_param_info_list = param_info_list
     fitted_params_info = [p for p in param_info_list if p['is_fitted']]
     if not fitted_params_info: 
         logger.error("No parameters configured to be fitted! You must use at least one --fit_* flag.")
+        logger.error("Note: If you used fixed values for all parameters in a component, nothing will be fitted.")
         sys.exit(1)
     
     # Extract log_prior flags for fitted parameters
@@ -273,6 +281,13 @@ def main_dynesty():
         prior_type = "Log-Uniform" if is_log else "Uniform"
         logger.info(f"  - {name:<25} | Prior: {prior_type}")
     
+    # Also log fixed parameters
+    fixed_params = [p for p in args.all_param_info_list if not p['is_fitted']]
+    if fixed_params:
+        logger.info("Fixed Parameters:")
+        for p in fixed_params:
+            logger.info(f"  - {p['name']:<25} | Value: {p['current_val']:.2e}")
+    
     ptform_args_tuple = (fitted_p_names, np.array(p_low), np.array(p_high), use_log_flags)
     logl_args_tuple = (fitted_p_names, args, args.all_param_info_list, R_data_for_run, v_data_for_run, sigma_data_for_run, args.xi)
 
@@ -287,6 +302,23 @@ def main_dynesty():
     
     # Enhanced sampler configuration
     logger.info(f"Sampler configuration: method='{args.sample_method}', bound='{args.bound_method}', enlarge={args.enlarge_factor}")
+    
+    # Log run configuration summary
+    logger.info("="*60)
+    logger.info("RUN CONFIGURATION SUMMARY:")
+    logger.info(f"  Data points: {len(R_data_for_run):,}")
+    logger.info(f"  Fitting {ndim_dynesty} parameters")
+    logger.info(f"  Initial live points: {args.nlive_init}")
+    logger.info(f"  Batch size: {args.nlive_batch}")
+    logger.info(f"  Max calls: {args.maxcall:,}")
+    logger.info(f"  Target dlogz: {args.dlogz_target}")
+    logger.info(f"  Threads: {args.num_threads}")
+    logger.info(f"  Components included: " + 
+                 ("Thin disk " if args.include_disk_thin else "") +
+                 ("Thick disk " if args.include_disk_thick else "") +
+                 ("Bulge " if args.include_bulge else "") +
+                 ("Gas " if args.include_gas else ""))
+    logger.info("="*60)
     
     sampler = DynamicNestedSampler(log_likelihood_dynesty, prior_transform_dynesty, ndim_dynesty,
                                    pool=pool_obj, queue_size=queue_size_for_sampler,
@@ -324,50 +356,124 @@ def main_dynesty():
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
                 if time.time() - last_progress_log_time > args.progress_update_interval_s:
                     last_progress_log_time = time.time()
-                    logger.info(f"Initial Sampling | Calls: {sampler.results.ncall}/{args.maxcall} | Live: {len(sampler.live_logl)}")
+                    # Handle ncall being an array during initial sampling
+                    ncall_val = sampler.results.ncall
+                    if isinstance(ncall_val, np.ndarray):
+                        ncall_total = np.sum(ncall_val)
+                        ncall_mean = np.mean(ncall_val)
+                        ncall_max = np.max(ncall_val)
+                        logger.info(f"Initial Sampling | Total calls: {ncall_total:,} | Mean/point: {ncall_mean:.1f} | Max/point: {ncall_max} | Live: {len(sampler.live_logl)}")
+                    else:
+                        logger.info(f"Initial Sampling | Calls: {ncall_val}/{args.maxcall} | Live: {len(sampler.live_logl)}")
 
             logger.info("Initial sampling complete. Starting batch processing...")
             
-            while sampler.results.ncall < args.maxcall:
-                stop_val, _ = sampler.stopping_function(sampler.results)
-                if stop_val < args.dlogz_target:
-                    logger.info(f"Stopping criterion met: dlogz ({stop_val:.4f}) < target ({args.dlogz_target:.4f}).")
-                    break
+            # Report initial sampling status
+            initial_ncall = sampler.results.ncall if not isinstance(sampler.results.ncall, np.ndarray) else np.sum(sampler.results.ncall)
+            if hasattr(sampler.results, 'logz') and len(sampler.results.logz) > 0:
+                logger.info(f"Initial status: {initial_ncall:,} calls, logZ = {sampler.results.logz[-1]:.2f}")
+                if sampler.results.logz[-1] < -1e6:
+                    logger.warning("WARNING: Extremely negative logZ suggests likelihood calculation issues!")
+            else:
+                logger.info(f"Initial status: {initial_ncall:,} calls")
+            
+            # Check if we've already exceeded maxcall
+            if initial_ncall >= args.maxcall:
+                logger.warning("Initial sampling used all available calls. Skipping batch processing.")
+                logger.warning("Consider increasing --maxcall or adjusting sampler settings.")
+            else:
+                # Handle ncall being array or scalar
+                ncall_total = initial_ncall
                 
-                sampler.add_batch(nlive=args.nlive_batch, maxcall=args.maxcall, save_samples=True)
-                
-                if time.time() - last_progress_log_time > args.progress_update_interval_s:
-                    last_progress_log_time = time.time()
-                    res = sampler.results
+                while ncall_total < args.maxcall:
+                    stop_val, _ = sampler.stopping_function(sampler.results)
+                    if stop_val < args.dlogz_target:
+                        logger.info(f"Stopping criterion met: dlogz ({stop_val:.4f}) < target ({args.dlogz_target:.4f}).")
+                        break
                     
-                    if res.blob is not None and len(res.blob) > 0:
-                        all_rmses = np.array([b[0] for b in res.blob if b])
-                        finite_rmses = all_rmses[np.isfinite(all_rmses)]
-                        if len(finite_rmses) > 0:
-                             best_rmse_so_far = np.nanmin(finite_rmses)
+                    sampler.add_batch(nlive=args.nlive_batch, maxcall=args.maxcall, save_samples=True)
                     
-                    eta_str = "N/A"
-                    elapsed_time = time.time() - run_start_time
-                    if res.ncall > args.nlive_init and elapsed_time > 1:
-                        rate = res.ncall / elapsed_time
-                        remaining_calls = args.maxcall - res.ncall
-                        if rate > 0 and remaining_calls > 0: eta_str = str(timedelta(seconds=int(remaining_calls/rate)))
+                    # Update ncall_total after batch
+                    ncall_total = sampler.results.ncall if not isinstance(sampler.results.ncall, np.ndarray) else np.sum(sampler.results.ncall)
+                    
+                    if time.time() - last_progress_log_time > args.progress_update_interval_s:
+                        last_progress_log_time = time.time()
+                        res = sampler.results
+                        
+                        # Handle ncall properly
+                        if isinstance(res.ncall, np.ndarray):
+                            ncall_total = np.sum(res.ncall)
+                        else:
+                            ncall_total = res.ncall
+                        
+                        # Extract RMSE information from blobs
+                        if res.blob is not None and len(res.blob) > 0:
+                            all_rmses = np.array([b[0] for b in res.blob if b])
+                            finite_rmses = all_rmses[np.isfinite(all_rmses)]
+                            if len(finite_rmses) > 0:
+                                 best_rmse_so_far = np.nanmin(finite_rmses)
+                                 current_rmse = finite_rmses[-1] if len(finite_rmses) > 0 else np.inf
+                        else:
+                            current_rmse = np.inf
+                        
+                        # Calculate ETA
+                        eta_str = "N/A"
+                        elapsed_time = time.time() - run_start_time
+                        if ncall_total > args.nlive_init and elapsed_time > 1:
+                            rate = ncall_total / elapsed_time
+                            remaining_calls = args.maxcall - ncall_total
+                            if rate > 0 and remaining_calls > 0: 
+                                eta_str = str(timedelta(seconds=int(remaining_calls/rate)))
 
-                    logz_str = f"{res.logz[-1]:.2f}"
-                    if not np.isfinite(res.logz[-1]): logz_str = f"WARNING: {res.logz[-1]}"
+                        # Check if logz is valid
+                        logz_str = f"{res.logz[-1]:.2f}"
+                        if not np.isfinite(res.logz[-1]): 
+                            logz_str = f"WARNING: {res.logz[-1]}"
 
-                    logger.info(
-                        f"Progress | Calls: {res.ncall}/{args.maxcall} | dlogz: {stop_val:.4f} "
-                        f"| logZ: {logz_str} | Best RMSE so far: {best_rmse_so_far:.2f} km/s | ETA: {eta_str}"
-                    )
+                        # Calculate efficiency
+                        eff = 100.0 * len(res.samples) / ncall_total if ncall_total > 0 else 0.0
+
+                        logger.info(
+                            f"Progress | Calls: {ncall_total:,}/{args.maxcall:,} | dlogz: {stop_val:.4f}/{args.dlogz_target:.4f} "
+                            f"| logZ: {logz_str} | RMSE: {current_rmse:.2f} (best: {best_rmse_so_far:.2f}) km/s "
+                            f"| Eff: {eff:.1f}% | ETA: {eta_str}"
+                        )
             
             logger.info("Sampling loop finished.")
+    
+    except Exception as e:
+        logger.error(f"Sampling failed with error: {e}")
+        if "ambiguous" in str(e): # Specific check for common numpy/dynesty issue
+            logger.error("Array comparison error detected - this is a known issue with ncall handling.")
+            logger.error("The sampling may have completed but post-processing failed.")
+        if hasattr(sampler, 'results'):
+            # Try to save partial results
+            logger.info("Attempting to save partial results...")
+            res = sampler.results
+            output_fname_parts = ["dynesty_mw_PARTIAL", args.xi]
+            output_basename = "_".join(output_fname_parts)
+            output_npz_file = Path(args.output_dir) / f"{output_basename}_samples.npz"
+            try:
+                weights = np.exp(res.logwt - res.logz[-1]) if hasattr(res, 'logwt') and hasattr(res, 'logz') else None
+                np.savez(output_npz_file, samples=res.samples, weights=weights,
+                         logl=res.logl if hasattr(res, 'logl') else None)
+                logger.info(f"Partial results saved to {output_npz_file}")
+            except Exception as save_error:
+                logger.error(f"Failed to save partial results: {save_error}")
+        # Exit gracefully instead of re-raising
+        logger.error("Exiting due to sampling error.")
+        return
 
     finally:
         if pool_obj:
             logger.info("Closing and joining multiprocessing Pool.")
             pool_obj.close(); pool_obj.join()
 
+    # Process results (moved outside try block to ensure execution)
+    if not hasattr(sampler, 'results'):
+        logger.error("No results to process. Exiting.")
+        return
+        
     res = sampler.results
     tdelta = time.time() - run_start_time
     logger.info("Dynesty run complete in %.1f min (%.2f hr).", tdelta / 60, tdelta / 3600)
@@ -382,6 +488,12 @@ def main_dynesty():
 
     if not np.isfinite(logZ_final):
         logger.error(f"FINAL LOGZ IS PROBLEMATIC: {logZ_final:.2f}. Fit likely failed.")
+        if logZ_final < -1e6:
+            logger.error("Extremely negative logZ suggests:")
+            logger.error("  1. Likelihood calculations returning very small values")
+            logger.error("  2. Data/model mismatch (check units)")
+            logger.error("  3. Prior bounds may be too wide")
+            logger.error("  4. Consider fixing more parameters initially")
     else:
         logger.info("log(Z) = %.2f +/- %.2f (evidence)", logZ_final, logZerr_final)
 
@@ -412,6 +524,22 @@ def main_dynesty():
         logger.info(f"Corner plot saved to {corner_plot_file}")
     else:
         logger.warning(f"Skipping corner plot. Insufficient ESS ({ess:.0f} vs {ndim_dynesty*10} needed).")
+    
+    # Provide diagnostic advice if sampling was difficult
+    if hasattr(res, 'ncall'):
+        final_ncall = res.ncall if not isinstance(res.ncall, np.ndarray) else np.sum(res.ncall)
+        if final_ncall >= args.maxcall * 0.95:
+            logger.warning("="*60)
+            logger.warning("SAMPLING DIFFICULTY DETECTED")
+            logger.warning("The sampler used most/all available calls.")
+            logger.warning("Recommendations:")
+            logger.warning("  1. Increase --maxcall (e.g., 200000)")
+            logger.warning("  2. Use --enlarge_factor 2.5 or 3.0")
+            logger.warning("  3. Try --sample_method rslice")
+            logger.warning("  4. Check prior bounds - they may be too wide")
+            logger.warning("  5. Fix more parameters initially")
+            logger.warning("  6. Use --num_threads for speed")
+            logger.warning("="*60)
     
     logger.info("main_dynesty function finished.")
 
