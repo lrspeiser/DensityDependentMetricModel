@@ -980,13 +980,31 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         if args.use_run_nested:
             # Use run_nested for more stable sampling (recommended)
             logger.info(f"Using run_nested() with nlive_init={args.nlive_init}, dlogz_target={args.dlogz_target}, checkpoint_every={args.checkpoint_every}s")
+            
+            # Add periodic monitoring callback
+            last_monitor_check = [time.time()]  # Use list to make it mutable in closure
+            
+            def monitor_callback(res):
+                """Callback function for run_nested to provide monitoring"""
+                current_time = time.time()
+                if current_time - last_monitor_check[0] > args.monitor_interval_s:
+                    last_monitor_check[0] = current_time
+                    # Create a dummy sampler object with results
+                    class DummySampler:
+                        def __init__(self, results):
+                            self.results = results
+                    dummy_sampler = DummySampler(res)
+                    monitor_sampler_progress(dummy_sampler, fitted_p_names, fitted_p_labels, 
+                                        run_start_time, logger, gp_surrogate)
+            
+            # Run nested sampling with monitoring callback
             sampler.run_nested(nlive_init=args.nlive_init, 
-                              nlive_batch=args.nlive_batch,
-                              dlogz_init=args.dlogz_target,  # Uses stage-specific target
-                              maxcall=args.maxcall,  # Uses stage-specific maxcall
-                              print_progress=True, 
-                              checkpoint_file=str(checkpoint_file),
-                              checkpoint_every=args.checkpoint_every)
+                nlive_batch=args.nlive_batch,
+                dlogz_init=args.dlogz_target,
+                maxcall=args.maxcall,
+                print_progress=True, 
+                checkpoint_file=str(checkpoint_file),
+                checkpoint_every=args.checkpoint_every)
             logger.info("run_nested() completed.")
         else:
             # Custom sampling loop with adaptive monitoring
