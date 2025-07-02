@@ -356,7 +356,6 @@ All code is released under the MIT license and includes comprehensive documentat
 
 **Leonard Speiser**  
 *Independent Researcher*  
-Email: [leonard.speiser@email.com]  
 
 ## Acknowledgments
 
