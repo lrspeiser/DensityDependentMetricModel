@@ -903,6 +903,7 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     """
     Run a single dynesty sampling (extracted for reuse in curriculum learning)
     """
+
     R_data_for_run, v_data_for_run, sigma_data_for_run = gaia_data_dict["R_kpc"], gaia_data_dict["v_obs"], gaia_data_dict["sigma_v"]
     
     # Enhanced parameter configuration with log_prior flags
@@ -915,7 +916,7 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     for name, is_log in zip(fitted_p_names, use_log_flags):
         prior_type = "Log-Uniform" if is_log else "Uniform"
         logger.info(f"  - {name:<25} | Prior: {prior_type}")
-    
+        
     # Also log fixed parameters
     fixed_params = [p for p in args.all_param_info_list if not p['is_fitted']]
     if fixed_params:
@@ -1041,10 +1042,16 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                 ncall_total = initial_ncall
                 
                 while ncall_total < args.maxcall:
-                    stop_val, _ = sampler.stopping_function(sampler.results)
+                    # Calculate stopping criterion manually
+                    if hasattr(sampler.results, 'logz') and len(sampler.results.logz) > 1:
+                        stop_val = sampler.results.logz[-1] - sampler.results.logz[-2]
+                    else:
+                        stop_val = np.inf
+                    
                     if stop_val < args.dlogz_target:
                         logger.info(f"Stopping criterion met: dlogz ({stop_val:.4f}) < target ({args.dlogz_target:.4f}).")
                         break
+
                     
                     sampler.add_batch(nlive=args.nlive_batch, maxcall=args.maxcall, save_samples=True)
                     
@@ -1104,7 +1111,7 @@ def main_dynesty():
                         help="Use run_nested instead of custom sampling loop (recommended for stability).")
     parser.add_argument('--checkpoint_every', type=int, default=300, 
                         help="Checkpoint interval in seconds (only for run_nested).")
-
+    
     # Enhanced Dynesty sampler settings
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
     dynesty_g.add_argument('--sample_method', type=str, default='rslice', choices=['rwalk', 'rslice', 'hslice'],
@@ -1196,6 +1203,7 @@ def main_dynesty():
     else:
         logger.info("🎯 Using standard sampling approach")
         results = run_single_dynesty(args, gaia_data_dict, gp_surrogate)
+    
     
     # Process and save results
     if results is None:
