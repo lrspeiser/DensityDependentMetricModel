@@ -3,6 +3,7 @@
 run_dynesty.py - Run dynesty dynamic nested sampling on the Density-Metric model for the Milky Way.
 Saves posterior samples to specified output. Includes self-tests and advanced progress logging.
 Enhanced with expert feedback: log-uniform priors, configurable sampler settings, checkpoint support.
+NOW WITH INTEGRATED MONITORING for detailed progress tracking during sampling.
 """
 import logging
 import sys
@@ -14,7 +15,7 @@ from pathlib import Path
 import pickle
 import gzip
 from multiprocessing import Pool, freeze_support
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import matplotlib.pyplot as plt
 import corner
@@ -80,6 +81,204 @@ MW_MULTI_COMP_PARAM_CONFIG = {
                     'default_fixed': 0.15, 'low': 0.05, 'high': 0.5, 'fit_flag_arg': 'fit_gas', 
                     'include_flag_arg': 'include_gas', 'log_prior': False},
 }
+
+
+# --- Integrated Monitoring Functions ---
+def format_parameter_value_monitor(value, param_name):
+    """Format parameter values appropriately for monitoring"""
+    if 'M_' in param_name and 'solar' in param_name:
+        return f"{value:.2e} M☉"
+    elif 'rho_c' in param_name:
+        return f"{value:.2e} M☉/kpc³"
+    elif 'kpc' in param_name:
+        return f"{value:.3f} kpc"
+    elif 'n_exp' in param_name:
+        return f"{value:.3f}"
+    else:
+        return f"{value:.3e}"
+
+def monitor_sampler_progress(sampler, fitted_param_names, fitted_param_labels, start_time, logger):
+    """
+    Monitor the progress of dynesty sampling with detailed diagnostics.
+    This is adapted from dynesty_monitor.py to work with live sampler object.
+    """
+    try:
+        res = sampler.results
+        
+        # Basic info
+        logger.info("="*60)
+        logger.info(f"DYNESTY DETAILED PROGRESS MONITOR - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("="*60)
+        
+        # Get samples and basic stats
+        if not hasattr(res, 'samples') or len(res.samples) == 0:
+            logger.info("❌ No samples available yet")
+            return
+            
+        samples = res.samples
+        n_samples, n_params = samples.shape
+        
+        # Handle ncall properly
+        if isinstance(res.ncall, np.ndarray):
+            ncall_total = np.sum(res.ncall)
+        else:
+            ncall_total = res.ncall
+            
+        elapsed_time = time.time() - start_time
+        elapsed_str = str(timedelta(seconds=int(elapsed_time)))
+        
+        logger.info(f"📈 Current samples: {n_samples:,} × {n_params} parameters")
+        logger.info(f"📊 Total likelihood calls: {ncall_total:,}")
+        logger.info(f"⏱️  Elapsed time: {elapsed_str}")
+        
+        if n_samples < 50:
+            logger.info("⚠️  Very few samples yet - check back later")
+            return
+        
+        # Parameter estimates
+        logger.info(f"\n📊 CURRENT PARAMETER ESTIMATES (median ± MAD):")
+        logger.info("─" * 60)
+        
+        # Use last 1000 samples for more current estimate
+        recent_samples = samples[-min(1000, len(samples)):]
+        
+        for i, (param_name, param_label) in enumerate(zip(fitted_param_names, fitted_param_labels)):
+            values = recent_samples[:, i]
+            
+            median_val = np.median(values)
+            mad = np.median(np.abs(values - median_val))  # Median Absolute Deviation
+            
+            # Format nicely
+            param_display = param_name.replace('_solar', '').replace('_kpc3', '').replace('_kpc', '')
+            formatted_val = format_parameter_value_monitor(median_val, param_name)
+            formatted_mad = format_parameter_value_monitor(mad, param_name)
+            
+            logger.info(f"  {param_display:<20}: {formatted_val:<15} ± {formatted_mad}")
+        
+        # Key indicators for xi parameters
+        logger.info(f"\n🎯 KEY INDICATORS:")
+        logger.info("─" * 30)
+        
+        # Find xi parameters
+        rho_c_idx = next((i for i, name in enumerate(fitted_param_names) if 'rho_c' in name), None)
+        n_exp_idx = next((i for i, name in enumerate(fitted_param_names) if 'n_exp' in name), None)
+        
+        if rho_c_idx is not None and n_exp_idx is not None:
+            rho_c_vals = recent_samples[:, rho_c_idx]
+            n_exp_vals = recent_samples[:, n_exp_idx]
+            
+            median_rho_c = np.median(rho_c_vals)
+            median_n = np.median(n_exp_vals)
+            
+            logger.info(f"  Critical density: {median_rho_c:.2e} M☉/kpc³")
+            logger.info(f"  Power index: {median_n:.3f}")
+            
+            # Estimate xi range
+            rho_inner = 1e9  # Typical inner galaxy density
+            rho_outer = 1e6  # Typical outer galaxy density
+            
+            xi_inner = 1 / (1 + (rho_inner / median_rho_c)**median_n)
+            xi_outer = 1 / (1 + (rho_outer / median_rho_c)**median_n)
+            
+            logger.info(f"  ξ inner (~R=2kpc): ~{xi_inner:.3f}")
+            logger.info(f"  ξ outer (~R=20kpc): ~{xi_outer:.3f}")
+            
+            if xi_inner > 0.8:
+                logger.info("  ⚠️  ξ close to 1 in inner regions - weak density dependence")
+            elif xi_inner < 0.3:
+                logger.info("  ✅ Strong density dependence in inner regions")
+            else:
+                logger.info("  ✅ Moderate density dependence")
+        
+        # Check baryonic masses
+        mass_params = [(i, name) for i, name in enumerate(fitted_param_names) if 'M_' in name and 'solar' in name]
+        
+        if mass_params:
+            logger.info(f"\n💫 BARYONIC MASS COMPONENTS:")
+            total_mass = 0
+            
+            for i, name in mass_params:
+                mass_vals = recent_samples[:, i]
+                median_mass = np.median(mass_vals)
+                total_mass += median_mass
+                
+                component = name.replace('M_', '').replace('_solar', '')
+                logger.info(f"  {component:<12}: {median_mass:.2e} M☉")
+            
+            logger.info(f"  {'Total':<12}: {total_mass:.2e} M☉")
+            
+            # Check if masses are realistic
+            if total_mass > 2e11:
+                logger.info("  ⚠️  High total mass - may be compensating for weak ξ")
+            elif total_mass < 5e10:
+                logger.info("  ⚠️  Low total mass - insufficient baryonic matter")
+            else:
+                logger.info("  ✅ Reasonable total baryonic mass")
+        
+        # Sampling efficiency and diagnostics
+        if hasattr(res, 'logl') and len(res.logl) > 100:
+            recent_logl = res.logl[-min(1000, len(res.logl)):]
+            logl_range = np.max(recent_logl) - np.min(recent_logl)
+            
+            logger.info(f"\n📈 SAMPLING DIAGNOSTICS:")
+            logger.info(f"  Log-likelihood range: {logl_range:.2f}")
+            logger.info(f"  Best log-L: {np.max(recent_logl):.2f}")
+            logger.info(f"  Current log-L: {recent_logl[-1]:.2f}")
+            
+            # Calculate efficiency
+            eff = 100.0 * len(res.samples) / ncall_total if ncall_total > 0 else 0.0
+            logger.info(f"  Sampling efficiency: {eff:.2f}%")
+            
+            if logl_range < 1:
+                logger.info("  ⚠️  Small likelihood range - may be converged or stuck")
+            elif logl_range > 100:
+                logger.info("  ⚠️  Large likelihood range - still exploring")
+            else:
+                logger.info("  ✅ Reasonable likelihood exploration")
+        
+        # Evidence estimate
+        if hasattr(res, 'logz') and len(res.logz) > 0:
+            logger.info(f"\n🎲 EVIDENCE:")
+            logger.info(f"  Current log(Z): {res.logz[-1]:.2f}")
+            if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
+                logger.info(f"  Error estimate: ±{res.logzerr[-1]:.2f}")
+        
+        # Convergence check
+        if n_samples > 2000:
+            # Check parameter stability over recent samples
+            recent_frac = 0.3  # Last 30% of samples
+            split_point = int(n_samples * (1 - recent_frac))
+            
+            early_samples = samples[split_point//2:split_point]
+            late_samples = samples[split_point:]
+            
+            if len(early_samples) > 100 and len(late_samples) > 100:
+                logger.info(f"\n🎯 CONVERGENCE CHECK:")
+                stable_params = 0
+                
+                for i, param_name in enumerate(fitted_param_names):
+                    early_median = np.median(early_samples[:, i])
+                    late_median = np.median(late_samples[:, i])
+                    
+                    if early_median != 0:
+                        rel_change = abs(late_median - early_median) / abs(early_median)
+                        if rel_change < 0.1:  # Less than 10% change
+                            stable_params += 1
+                
+                stability = stable_params / n_params
+                logger.info(f"  Parameter stability: {stability:.1%} ({stable_params}/{n_params})")
+                
+                if stability > 0.8:
+                    logger.info("  ✅ Parameters appear to be converging")
+                elif stability > 0.5:
+                    logger.info("  ⚠️  Partial convergence - needs more time")
+                else:
+                    logger.info("  ❌ Parameters still changing significantly")
+        
+        logger.info("="*60)
+        
+    except Exception as e:
+        logger.warning(f"Error in monitoring: {e}")
 
 
 # --- Likelihood and Prior Transform Functions ---
@@ -226,6 +425,7 @@ def main_dynesty():
     parser.add_argument('--update_interval', type=float, default=0.6, help="Dynesty update_interval.")
     parser.add_argument('--maxcall', type=int, default=2000000, help="Hard limit on likelihood calls.")
     parser.add_argument('--progress_update_interval_s', type=int, default=60, help="Interval in seconds for printing custom progress.")
+    parser.add_argument('--monitor_interval_s', type=int, default=1800, help="Interval in seconds for detailed monitoring (default 30 min).")
     parser.add_argument('--debug_likelihood_params', type=str, default=None, help="Comma-separated physical parameters to test likelihood function.")
     parser.add_argument('--use_run_nested', action='store_true', default=False, 
                         help="Use run_nested instead of custom sampling loop (recommended for stability).")
@@ -313,6 +513,8 @@ def main_dynesty():
     logger.info(f"  Max calls: {args.maxcall:,}")
     logger.info(f"  Target dlogz: {args.dlogz_target}")
     logger.info(f"  Threads: {args.num_threads}")
+    logger.info(f"  Progress update interval: {args.progress_update_interval_s}s")
+    logger.info(f"  Detailed monitor interval: {args.monitor_interval_s}s")
     logger.info(f"  Components included: " + 
                  ("Thin disk " if args.include_disk_thin else "") +
                  ("Thick disk " if args.include_disk_thick else "") +
@@ -330,6 +532,7 @@ def main_dynesty():
     
     run_start_time = time.time()
     last_progress_log_time = time.time()
+    last_monitor_time = time.time()  # Track last detailed monitoring time
     best_rmse_so_far = np.inf
     
     # Create output directory if it doesn't exist
@@ -354,8 +557,11 @@ def main_dynesty():
             # Original custom sampling loop (kept for compatibility)
             logger.info(f"Running initial sampling with nlive_init = {args.nlive_init}...")
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
-                if time.time() - last_progress_log_time > args.progress_update_interval_s:
-                    last_progress_log_time = time.time()
+                current_time = time.time()
+                
+                # Regular progress update
+                if current_time - last_progress_log_time > args.progress_update_interval_s:
+                    last_progress_log_time = current_time
                     # Handle ncall being an array during initial sampling
                     ncall_val = sampler.results.ncall
                     if isinstance(ncall_val, np.ndarray):
@@ -365,6 +571,11 @@ def main_dynesty():
                         logger.info(f"Initial Sampling | Total calls: {ncall_total:,} | Mean/point: {ncall_mean:.1f} | Max/point: {ncall_max} | Live: {len(sampler.live_logl)}")
                     else:
                         logger.info(f"Initial Sampling | Calls: {ncall_val}/{args.maxcall} | Live: {len(sampler.live_logl)}")
+                
+                # Detailed monitoring update
+                if current_time - last_monitor_time > args.monitor_interval_s:
+                    last_monitor_time = current_time
+                    monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, run_start_time, logger)
 
             logger.info("Initial sampling complete. Starting batch processing...")
             
@@ -396,8 +607,11 @@ def main_dynesty():
                     # Update ncall_total after batch
                     ncall_total = sampler.results.ncall if not isinstance(sampler.results.ncall, np.ndarray) else np.sum(sampler.results.ncall)
                     
-                    if time.time() - last_progress_log_time > args.progress_update_interval_s:
-                        last_progress_log_time = time.time()
+                    current_time = time.time()
+                    
+                    # Regular progress update
+                    if current_time - last_progress_log_time > args.progress_update_interval_s:
+                        last_progress_log_time = current_time
                         res = sampler.results
                         
                         # Handle ncall properly
@@ -438,6 +652,11 @@ def main_dynesty():
                             f"| logZ: {logz_str} | RMSE: {current_rmse:.2f} (best: {best_rmse_so_far:.2f}) km/s "
                             f"| Eff: {eff:.1f}% | ETA: {eta_str}"
                         )
+                    
+                    # Detailed monitoring update
+                    if current_time - last_monitor_time > args.monitor_interval_s:
+                        last_monitor_time = current_time
+                        monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, run_start_time, logger)
             
             logger.info("Sampling loop finished.")
     
@@ -468,6 +687,10 @@ def main_dynesty():
         if pool_obj:
             logger.info("Closing and joining multiprocessing Pool.")
             pool_obj.close(); pool_obj.join()
+
+    # Final detailed monitoring report
+    logger.info("\n🏁 FINAL MONITORING REPORT:")
+    monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, run_start_time, logger)
 
     # Process results (moved outside try block to ensure execution)
     if not hasattr(sampler, 'results'):
