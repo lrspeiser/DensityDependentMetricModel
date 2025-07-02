@@ -399,7 +399,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
     all_results = {}
     cumulative_params = {}
     
-    # Define curriculum stages
+    # Define curriculum stages with smart resource allocation
     curriculum = [
         {
             'name': 'Stage 1: Xi Parameters Only',
@@ -424,23 +424,25 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                 'h_z_gas_kpc': 0.15
             },
             'nlive': 500,
-            'maxcall': 200000
+            'dlogz': 0.1,  # Looser convergence for quick exploration
+            'maxcall': int(args.maxcall * 0.15)  # 15% of total budget
         },
         {
-            'name': 'Stage 2: Xi + Thin Disk',
+            'name': 'Stage 2: Xi + Both Disk Components',
             'fit_flags': {
-                'fit_xi_params': False,  # Use from stage 1
+                'fit_xi_params': True,  # Refit with disks
                 'fit_disk_thin': True,
-                'fit_disk_thick': False,
+                'fit_disk_thick': True,  # Include thick disk too
                 'fit_bulge': False,
                 'fit_gas': False
             },
-            'use_previous': ['rho_c_solar_kpc3', 'n_exp'],
-            'nlive': 600,
-            'maxcall': 300000
+            'use_previous': ['rho_c_solar_kpc3', 'n_exp'],  # Use Stage 1 Xi as starting point
+            'nlive': 800,
+            'dlogz': 0.05,  # Tighter convergence
+            'maxcall': int(args.maxcall * 0.35)  # 35% of total budget
         },
         {
-            'name': 'Stage 3: Full Model',
+            'name': 'Stage 3: Full Model Fine-Tuning',
             'fit_flags': {
                 'fit_xi_params': True,
                 'fit_disk_thin': True,
@@ -448,9 +450,10 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                 'fit_bulge': True,
                 'fit_gas': True
             },
-            'use_previous': 'all',
-            'nlive': 800,
-            'maxcall': 500000
+            'use_previous': 'all',  # Use all previous results
+            'nlive': args.nlive_init,  # Use full requested live points
+            'dlogz': args.dlogz_target,  # Use final target precision
+            'maxcall': int(args.maxcall * 0.50)  # 50% of total budget
         }
     ]
     
@@ -458,6 +461,8 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
         logger.info(f"\n{'='*60}")
         logger.info(f"📚 {stage['name']}")
         logger.info(f"{'='*60}")
+        logger.info(f"Settings: nlive={stage.get('nlive')}, dlogz={stage.get('dlogz')}, "
+                   f"maxcall={stage.get('maxcall'):,} ({stage.get('maxcall')/args.maxcall*100:.0f}% of total)")
         
         # Create stage-specific configuration
         stage_args = argparse.Namespace(**vars(args))  # Copy args
@@ -485,9 +490,10 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                         fixed_name = param.replace('_solar', '_fixed').replace('_kpc3', '_fixed').replace('_kpc', '_fixed')
                         setattr(stage_args, fixed_name, cumulative_params[param]['median'])
         
-        # Update sampler settings
+        # Update sampler settings with stage-specific values
         stage_args.nlive_init = stage.get('nlive', 500)
         stage_args.maxcall = stage.get('maxcall', 200000)
+        stage_args.dlogz_target = stage.get('dlogz', args.dlogz_target)
         stage_args.output_dir = Path(args.output_dir) / f"stage_{i+1}"
         
         # Run this stage
@@ -495,28 +501,51 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
         
         if results is None:
             logger.error(f"Stage {i+1} failed!")
+            logger.error("This could be due to:")
+            logger.error("  - Prior bounds too restrictive")
+            logger.error("  - Likelihood calculation errors")
+            logger.error("  - Insufficient maxcall allocation")
+            logger.info(f"Successfully completed stages: {list(all_results.keys())}")
             break
         
         all_results[f'stage_{i+1}'] = results
         
         # Extract parameters for next stage
         if hasattr(results, 'samples'):
-            samples = results.samples
-            weights = np.exp(results.logwt - results.logz[-1])
+            # Use dynesty's resampling to get equal-weight samples
+            try:
+                from dynesty import utils as dyfunc
+                samples = dyfunc.resample_equal(results.samples, np.exp(results.logwt - results.logz[-1]))
+            except:
+                # Fallback to weighted average if dynesty utils not available
+                samples = results.samples
+                weights = np.exp(results.logwt - results.logz[-1])
             
             # Get parameter names for this stage
             fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(stage_args)
             
-            # Calculate weighted statistics
+            # Calculate weighted statistics for all fitted parameters
             for j, param in enumerate(fitted_p_names):
-                weighted_samples = samples[:, j]
-                cumulative_params[param] = {
-                    'median': np.average(weighted_samples, weights=weights),
-                    'std': np.sqrt(np.average((weighted_samples - np.average(weighted_samples, weights=weights))**2, weights=weights))
-                }
-                logger.info(f"  {param}: {cumulative_params[param]['median']:.3e} ± {cumulative_params[param]['std']:.3e}")
+                if len(samples.shape) == 2 and j < samples.shape[1]:
+                    param_samples = samples[:, j]
+                    weighted_median = np.median(param_samples)
+                    weighted_std = np.std(param_samples)
+                    
+                    cumulative_params[param] = {
+                        'median': weighted_median,
+                        'std': weighted_std
+                    }
+                    logger.info(f"  {param}: {weighted_median:.3e} ± {weighted_std:.3e}")
     
     logger.info(f"\n🎉 Curriculum learning complete!")
+    
+    # Summarize efficiency gains
+    total_calls_used = sum(stage.get('maxcall', 0) for stage in curriculum)
+    logger.info(f"\n📊 Curriculum Learning Summary:")
+    logger.info(f"  Total maxcall budget allocated: {total_calls_used:,} / {args.maxcall:,} ({total_calls_used/args.maxcall*100:.0f}%)")
+    logger.info(f"  Stages completed: {len(all_results)}")
+    logger.info(f"  Final parameters found: {len(cumulative_params)}")
+    
     return all_results
 
 
@@ -949,11 +978,11 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     try:
         if args.use_run_nested:
             # Use run_nested for more stable sampling (recommended)
-            logger.info(f"Using run_nested() with nlive_init={args.nlive_init}, checkpoint_every={args.checkpoint_every}s")
+            logger.info(f"Using run_nested() with nlive_init={args.nlive_init}, dlogz_target={args.dlogz_target}, checkpoint_every={args.checkpoint_every}s")
             sampler.run_nested(nlive_init=args.nlive_init, 
                               nlive_batch=args.nlive_batch,
-                              dlogz_init=args.dlogz_target, 
-                              maxcall=args.maxcall,
+                              dlogz_init=args.dlogz_target,  # Uses stage-specific target
+                              maxcall=args.maxcall,  # Uses stage-specific maxcall
                               print_progress=True, 
                               checkpoint_file=str(checkpoint_file),
                               checkpoint_every=args.checkpoint_every)
