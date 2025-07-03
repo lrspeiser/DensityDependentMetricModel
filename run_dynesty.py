@@ -1120,11 +1120,12 @@ def get_param_labels_and_bounds(ARGS):
             np.array([p['low'] for p in fitted_params_info]), np.array([p['high'] for p in fitted_params_info]),
             use_log_flags)  # Return the log_prior flags
 
-
 def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     """
     Run a single dynesty sampling (extracted for reuse in curriculum learning)
     """
+    import threading
+    from io import StringIO
 
     R_data_for_run, v_data_for_run, sigma_data_for_run = gaia_data_dict["R_kpc"], gaia_data_dict["v_obs"], gaia_data_dict["sigma_v"]
     
@@ -1200,34 +1201,122 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     
     try:
         if args.use_run_nested:
-            # Use run_nested for more stable sampling (recommended)
-            logger.info(f"Using run_nested() with nlive_init={args.nlive_init}, dlogz_target={args.dlogz_target}, checkpoint_every={args.checkpoint_every}s")
+            logger.info(f"Using run_nested() with background monitoring")
+            logger.info(f"Settings: nlive_init={args.nlive_init}, dlogz_target={args.dlogz_target}, checkpoint_every={args.checkpoint_every}s")
             
-            # Add periodic monitoring callback
-            last_monitor_check = [time.time()]  # Use list to make it mutable in closure
+            # Create a monitoring log file for detailed output
+            monitor_log_path = Path(args.output_dir) / f"monitor_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            monitor_file = open(monitor_log_path, 'w', buffering=1)  # Line buffered
             
-            def monitor_callback(res):
-                """Callback function for run_nested to provide monitoring"""
-                current_time = time.time()
-                if current_time - last_monitor_check[0] > args.monitor_interval_s:
-                    last_monitor_check[0] = current_time
-                    # Create a dummy sampler object with results
-                    class DummySampler:
-                        def __init__(self, results):
-                            self.results = results
-                    dummy_sampler = DummySampler(res)
-                    monitor_sampler_progress(dummy_sampler, fitted_p_names, fitted_p_labels, 
-                                        run_start_time, logger, gp_surrogate)
+            logger.info(f"📝 Monitoring output will be saved to: {monitor_log_path}")
+            logger.info(f"📊 Check this file every {args.monitor_interval_s//60} minutes for detailed progress")
             
-            # Run nested sampling with monitoring callback
-            sampler.run_nested(nlive_init=args.nlive_init, 
-                nlive_batch=args.nlive_batch,
-                dlogz_init=args.dlogz_target,
-                maxcall=args.maxcall,
-                print_progress=True, 
-                checkpoint_file=str(checkpoint_file),
-                checkpoint_every=args.checkpoint_every)
+            # Create monitoring thread
+            stop_monitoring = threading.Event()
+            
+            def monitor_thread():
+                """Background thread to monitor progress"""
+                last_check = time.time()
+                
+                try:
+                    while not stop_monitoring.is_set():
+                        time.sleep(10)  # Check every 10 seconds
+                        
+                        current_time = time.time()
+                        if current_time - last_check > args.monitor_interval_s:
+                            last_check = current_time
+                            
+                            # Check if sampler has results
+                            if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
+                                if len(sampler.results.samples) > 50:  # Need enough samples
+                                    # Write to both file and console with a clear break
+                                    monitor_output = []
+                                    
+                                    # Temporarily store stdout
+                                    old_stdout = sys.stdout
+                                    sys.stdout = StringIO()
+                                    
+                                    # Run monitoring
+                                    monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, 
+                                                           run_start_time, logger, gp_surrogate)
+                                    
+                                    # Get the output
+                                    monitor_text = sys.stdout.getvalue()
+                                    sys.stdout = old_stdout
+                                    
+                                    # Write to file
+                                    monitor_file.write(f"\n{monitor_text}\n")
+                                    monitor_file.flush()
+                                    
+                                    # Also print to console with clear breaks
+                                    print("\n" * 3)  # Clear some space
+                                    print("🔔 " + "="*70)
+                                    print("🔔 MONITORING UPDATE - See details in: " + str(monitor_log_path))
+                                    print("🔔 " + "="*70)
+                                    
+                                    # Extract key metrics for console
+                                    if hasattr(sampler.results, 'logz') and len(sampler.results.logz) > 0:
+                                        current_logz = sampler.results.logz[-1]
+                                        if len(sampler.results.logz) > 1:
+                                            dlogz = sampler.results.logz[-1] - sampler.results.logz[-2]
+                                        else:
+                                            dlogz = np.inf
+                                        
+                                        print(f"🔔 Log(Z): {current_logz:.3f} | dlogz: {dlogz:.4f} (target: {args.dlogz_target})")
+                                        
+                                        if dlogz < args.dlogz_target * 2:
+                                            print(f"🔔 ✅ Getting close to convergence!")
+                                        elif dlogz > 10:
+                                            print(f"🔔 ⏳ Still far from convergence...")
+                                    
+                                    # Quick parameter summary
+                                    recent_samples = sampler.results.samples[-min(1000, len(sampler.results.samples)):]
+                                    print(f"🔔 Quick Parameter Check:")
+                                    for i, name in enumerate(fitted_p_names[:min(5, len(fitted_p_names))]):
+                                        median = np.median(recent_samples[:, i])
+                                        print(f"🔔   {name}: {median:.3e}")
+                                    
+                                    if len(fitted_p_names) > 5:
+                                        print(f"🔔   ... and {len(fitted_p_names)-5} more parameters")
+                                    
+                                    print("🔔 " + "="*70)
+                                    print("\n")  # Return to progress bar
+                                    
+                except Exception as e:
+                    logger.error(f"Error in monitoring thread: {e}")
+                    import traceback
+                    monitor_file.write(f"ERROR: {e}\n{traceback.format_exc()}\n")
+                finally:
+                    monitor_file.close()
+            
+            # Start monitoring thread
+            monitor = threading.Thread(target=monitor_thread, daemon=True)
+            monitor.start()
+            
+            try:
+                # Run nested sampling
+                sampler.run_nested(nlive_init=args.nlive_init, 
+                                nlive_batch=args.nlive_batch,
+                                dlogz_init=args.dlogz_target,
+                                maxcall=args.maxcall,
+                                print_progress=True, 
+                                checkpoint_file=str(checkpoint_file),
+                                checkpoint_every=args.checkpoint_every)
+            finally:
+                # Stop monitoring thread
+                stop_monitoring.set()
+                monitor.join(timeout=5)
+                
+                # Make sure file is closed
+                try:
+                    monitor_file.close()
+                except:
+                    pass
+                
+                logger.info(f"\n📊 Final monitoring report saved to: {monitor_log_path}")
+            
             logger.info("run_nested() completed.")
+            
         else:
             # Custom sampling loop with adaptive monitoring
             logger.info(f"Running initial sampling with nlive_init = {args.nlive_init}...")
@@ -1291,7 +1380,6 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                     if stop_val < args.dlogz_target:
                         logger.info(f"Stopping criterion met: dlogz ({stop_val:.4f}) < target ({args.dlogz_target:.4f}).")
                         break
-
                     
                     sampler.add_batch(nlive=args.nlive_batch, maxcall=args.maxcall, save_samples=True)
                     
@@ -1302,7 +1390,8 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                     # Progress and monitoring updates
                     if current_time - last_progress_log_time > args.progress_update_interval_s:
                         last_progress_log_time = current_time
-                        # ... (existing progress logging code)
+                        eff = 100.0 * len(sampler.results.samples) / ncall_total if ncall_total > 0 else 0.0
+                        logger.info(f"Batch Processing | Calls: {ncall_total}/{args.maxcall} | Samples: {len(sampler.results.samples)} | Eff: {eff:.2f}%")
                     
                     if current_time - last_monitor_time > args.monitor_interval_s:
                         last_monitor_time = current_time
@@ -1323,7 +1412,6 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         return sampler.results
     
     return None
-
 
 def main_dynesty():
     global logger
