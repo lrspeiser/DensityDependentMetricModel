@@ -99,6 +99,40 @@ MW_MULTI_COMP_PARAM_CONFIG = {
 }
 
 
+def load_checkpoint_and_extract_params(checkpoint_path):
+    """Load checkpoint and extract best parameters without needing all imports"""
+    import pickle
+    import numpy as np
+    
+    try:
+        # Try to load with minimal dependencies
+        with open(checkpoint_path, 'rb') as f:
+            # This is a hack to load the pickle without the functions
+            import types
+            sys.modules['__main__'].log_likelihood_dynesty = lambda: None
+            sys.modules['__main__'].prior_transform_dynesty = lambda: None
+            
+            res = pickle.load(f)
+            
+        # Extract parameters
+        weights = np.exp(res.logwt - res.logz[-1])
+        weighted_mean = np.average(res.samples, weights=weights, axis=0)
+        
+        # Get the last dlogz
+        if len(res.logz) > 1:
+            final_dlogz = res.logz[-1] - res.logz[-2]
+        else:
+            final_dlogz = np.inf
+            
+        print(f"Loaded checkpoint: {len(res.samples)} samples, dlogz={final_dlogz:.4f}")
+        
+        return weighted_mean, final_dlogz
+        
+    except Exception as e:
+        print(f"Failed to load checkpoint: {e}")
+        return None, None
+
+
 # --- Gaussian Process Surrogate Model ---
 class GPSurrogateModel:
     """
@@ -1439,6 +1473,11 @@ def main_dynesty():
                         help="Use run_nested instead of custom sampling loop (recommended for stability).")
     parser.add_argument('--checkpoint_every', type=int, default=300, 
                         help="Checkpoint interval in seconds (only for run_nested).")
+    parser.add_argument('--init_from_checkpoint', type=str, default=None,
+                   help="Path to checkpoint file to initialize parameters from")
+    parser.add_argument('--init_from_best', action='store_true',
+                   help="Initialize from the best known parameters (hardcoded)")
+
     
     # Enhanced Dynesty sampler settings
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
@@ -1481,6 +1520,51 @@ def main_dynesty():
                                 help=f"Fixed/initial value for {p_name_cfg}.")
     
     args = parser.parse_args()
+    if args.init_from_checkpoint:
+    params, dlogz = load_checkpoint_and_extract_params(args.init_from_checkpoint)
+    if params is not None:
+        # Map parameters to fixed values - adjust indices based on your parameter order
+        param_mapping = [
+            ('rho_c_fixed', 0),
+            ('n_exp_fixed', 1),
+            ('M_disk_thin_fixed', 2),
+            ('R_d_thin_fixed', 3),
+            ('h_z_thin_fixed', 4),
+            ('M_disk_thick_fixed', 5),
+            ('R_d_thick_fixed', 6),
+            ('h_z_thick_fixed', 7),
+            ('M_bulge_fixed', 8),
+            ('a_bulge_fixed', 9),
+            ('M_gas_fixed', 10),
+            ('R_d_gas_fixed', 11),
+            ('h_z_gas_fixed', 12)
+        ]
+        
+        for arg_name, idx in param_mapping:
+            if idx < len(params):
+                setattr(args, arg_name, float(params[idx]))
+                logger.info(f"Set {arg_name} = {params[idx]:.3e}")
+        
+        logger.info(f"Initialized from checkpoint with dlogz={dlogz:.4f}")
+
+# Add hardcoded best parameters option
+if args.init_from_best:
+    # These are your best parameters from the monitoring output
+    args.rho_c_fixed = 2.516e8
+    args.n_exp_fixed = 0.9394
+    args.M_disk_thin_fixed = 6.825e10
+    args.R_d_thin_fixed = 1.524
+    args.h_z_thin_fixed = 0.3763
+    args.M_disk_thick_fixed = 7.635e10
+    args.R_d_thick_fixed = 5.924
+    args.h_z_thick_fixed = 0.5749
+    args.M_bulge_fixed = 2.406e10
+    args.a_bulge_fixed = 0.1011
+    args.M_gas_fixed = 1.978e10
+    args.R_d_gas_fixed = 8.616
+    args.h_z_gas_fixed = 0.2422
+    logger.info("Initialized with best known parameters from previous run")
+
     
     _check_flag_consistency(args, logger)
     run_physics_self_tests()
