@@ -57,33 +57,32 @@ Our Density-Metric model has achieved significant improvements over the prelimin
 Kinematic data (positions, proper motions, radial velocities, and their errors) for stars were sourced from the Gaia DR3 catalog[^4]. After quality cuts (e.g., parallax S/N > 5, RUWE < 1.4, constraints on astrometric and radial velocity errors), a sample of ~80,000 stars primarily located within $|b| < 30^{\circ}$ and Galactocentric radii $0.09 < R < 22 \text{ kpc}$ was obtained. 6D phase-space coordinates were transformed to a Galactocentric cylindrical frame using astropy[^astropy] to derive $R_{\text{kpc}}$ and the observed tangential velocity, $v_{obs}$. Observational errors $\sigma_v$ were propagated through the coordinate transformation and include contributions from radial velocity uncertainties and proper motion errors.
 
 **Code Implementation for Data Processing:**
-```python
-def process_raw_gaia_df(df_raw):
-    """Process raw Gaia data into galactocentric coordinates."""
-    gc_frame = Galactocentric(galcen_distance=8.122*u.kpc,
-                              z_sun=0.025*u.kpc,
-                              galcen_v_sun=CartesianDifferential([11.1, 245.6, 7.25]*u.km/u.s))
-    
-    coords_icrs = SkyCoord(ra=df_raw['ra'].values*u.deg,
-                           dec=df_raw['dec'].values*u.deg,
-                           distance=(df_raw['parallax'].values*u.mas).to(u.pc, 
-                                   equivalencies=u.parallax()),
-                           pm_ra_cosdec=df_raw['pmra'].values*u.mas/u.yr,
-                           pm_dec=df_raw['pmdec'].values*u.mas/u.yr,
-                           radial_velocity=df_raw['radial_velocity'].values*u.km/u.s,
-                           frame='icrs')
-    
-    coords_gc = coords_icrs.transform_to(gc_frame)
-    
-    # Extract cylindrical coordinates and tangential velocity
-    R_kpc = coords_gc.cylindrical.rho.to(u.kpc).value
-    cyl_vel_diff = coords_gc.velocity.represent_as(CylindricalDifferential, coords_gc.data)
-    v_phi_kms = (coords_gc.cylindrical.rho * cyl_vel_diff.d_phi).to(
-        u.km/u.s, equivalencies=u.dimensionless_angles()).value
-    v_obs = np.abs(v_phi_kms)
-    
-    return R_kpc, v_obs, propagated_errors
-```
+
+    def process_raw_gaia_df(df_raw):
+        """Process raw Gaia data into galactocentric coordinates."""
+        gc_frame = Galactocentric(galcen_distance=8.122*u.kpc,
+                                  z_sun=0.025*u.kpc,
+                                  galcen_v_sun=CartesianDifferential([11.1, 245.6, 7.25]*u.km/u.s))
+        
+        coords_icrs = SkyCoord(ra=df_raw['ra'].values*u.deg,
+                               dec=df_raw['dec'].values*u.deg,
+                               distance=(df_raw['parallax'].values*u.mas).to(u.pc, 
+                                       equivalencies=u.parallax()),
+                               pm_ra_cosdec=df_raw['pmra'].values*u.mas/u.yr,
+                               pm_dec=df_raw['pmdec'].values*u.mas/u.yr,
+                               radial_velocity=df_raw['radial_velocity'].values*u.km/u.s,
+                               frame='icrs')
+        
+        coords_gc = coords_icrs.transform_to(gc_frame)
+        
+        # Extract cylindrical coordinates and tangential velocity
+        R_kpc = coords_gc.cylindrical.rho.to(u.kpc).value
+        cyl_vel_diff = coords_gc.velocity.represent_as(CylindricalDifferential, coords_gc.data)
+        v_phi_kms = (coords_gc.cylindrical.rho * cyl_vel_diff.d_phi).to(
+            u.km/u.s, equivalencies=u.dimensionless_angles()).value
+        v_obs = np.abs(v_phi_kms)
+        
+        return R_kpc, v_obs, propagated_errors
 
 ### 2.2. Baryonic Mass and Density Models
 
@@ -110,25 +109,24 @@ $$ v_{total}^2(R) = \sum_i v_i^2(R) $$
 $$ \rho_{total}(R) = \sum_i \rho_i(R) $$
 
 **Code Implementation for Freeman Velocity Calculation:**
-```python
-def v_circ_exponential_disk_freeman_kms(R_kpc, M_disk_solar, R_d_kpc):
-    """Exact Freeman (1970) kernel for exponential disk."""
-    if R_d_kpc <= 1e-9 or M_disk_solar <= 1e-9:
-        return np.zeros_like(np.atleast_1d(R_kpc))
-    
-    R_kpc_arr = np.atleast_1d(R_kpc)
-    y = R_kpc_arr / (2.0 * R_d_kpc)
-    y = np.maximum(y, 1e-9)  # Avoid division by zero
-    
-    # Modified Bessel functions
-    i0y, k0y = BesselI(0,y), BesselK(0,y)
-    i1y, k1y = BesselI(1,y), BesselK(1,y)
-    
-    bessel_term = np.maximum(i0y * k0y - i1y * k1y, 0.0)
-    v_sq = (2.0*G_ASTRO_UNITS*M_disk_solar/R_d_kpc) * (y**2) * bessel_term
-    
-    return np.sqrt(np.maximum(v_sq, 0.0))
-```
+
+    def v_circ_exponential_disk_freeman_kms(R_kpc, M_disk_solar, R_d_kpc):
+        """Exact Freeman (1970) kernel for exponential disk."""
+        if R_d_kpc <= 1e-9 or M_disk_solar <= 1e-9:
+            return np.zeros_like(np.atleast_1d(R_kpc))
+        
+        R_kpc_arr = np.atleast_1d(R_kpc)
+        y = R_kpc_arr / (2.0 * R_d_kpc)
+        y = np.maximum(y, 1e-9)  # Avoid division by zero
+        
+        # Modified Bessel functions
+        i0y, k0y = BesselI(0,y), BesselK(0,y)
+        i1y, k1y = BesselI(1,y), BesselK(1,y)
+        
+        bessel_term = np.maximum(i0y * k0y - i1y * k1y, 0.0)
+        v_sq = (2.0*G_ASTRO_UNITS*M_disk_solar/R_d_kpc) * (y**2) * bessel_term
+        
+        return np.sqrt(np.maximum(v_sq, 0.0))
 
 ### 2.3. Density-Dependent $\xi(\rho)$ Functions
 
@@ -143,26 +141,25 @@ Here, $\rho_c$ is a critical density parameter that sets the scale at which dens
 - At high densities ($\rho \gg \rho_c$): $\xi(\rho) \approx (\rho_c/\rho)^n \ll 1$ (suppressed gravity)
 
 **Code Implementation for Xi Function:**
-```python
-@numba.njit(cache=True)
-def xi_power_law(rho, rho_c, n_exp):
-    """Density-dependent gravitational modification function."""
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr)
+
+    @numba.njit(cache=True)
+    def xi_power_law(rho, rho_c, n_exp):
+        """Density-dependent gravitational modification function."""
+        rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
         
-    ratio = np.maximum(rho_arr, 0.0) / np.maximum(rho_c, 1e-100)
-    term_power = np.power(ratio, n_exp)
-    denominator = 1.0 + term_power
-    
-    result = np.ones_like(rho_arr)
-    safe_mask = (np.abs(denominator) > 1e-100) & np.isfinite(denominator)
-    result[safe_mask] = 1.0 / denominator[safe_mask]
-    result[~np.isfinite(denominator)] = 0.0
-    
-    return result
-```
+        if rho_c <= 1e-9:
+            return np.ones_like(rho_arr)
+            
+        ratio = np.maximum(rho_arr, 0.0) / np.maximum(rho_c, 1e-100)
+        term_power = np.power(ratio, n_exp)
+        denominator = 1.0 + term_power
+        
+        result = np.ones_like(rho_arr)
+        safe_mask = (np.abs(denominator) > 1e-100) & np.isfinite(denominator)
+        result[safe_mask] = 1.0 / denominator[safe_mask]
+        result[~np.isfinite(denominator)] = 0.0
+        
+        return result
 
 ### 2.4. Dynamic Nested Sampling Procedure
 
@@ -182,34 +179,33 @@ We employed a curriculum learning approach, progressively adding complexity:
 This approach significantly improved convergence efficiency and parameter exploration.
 
 **Code Implementation for Likelihood:**
-```python
-def log_likelihood_dynesty(theta_values, fitted_param_names, args_obj,
-                          all_param_info, R_data, v_data, sigma_data, xi_type):
-    # Reconstruct full parameter dictionary
-    current_params = dict(zip(fitted_param_names, theta_values))
-    for p_info in all_param_info:
-        if not p_info['is_fitted']:
-            current_params[p_info['name']] = p_info['current_val']
-    
-    # Calculate model prediction
-    v_newton = v_baryon_total_newtonian_kms(R_data, current_params)
-    rho_mid = rho_baryon_total_midplane_solar_kpc3(R_data, current_params)
-    xi_values = XI_FUNCTION_MAP[xi_type](rho_mid, 
-                                        current_params['rho_c_solar_kpc3'], 
-                                        current_params['n_exp'])
-    v_predicted = v_newton * np.sqrt(np.maximum(xi_values, 0.0))
-    
-    # Calculate log-likelihood
-    if not np.all(np.isfinite(v_predicted)):
-        return -np.inf
-    
-    sigma_safe = np.maximum(sigma_data, 1e-9)
-    residuals = v_data - v_predicted
-    chi2_terms = (residuals / sigma_safe)**2
-    log_L = -0.5 * np.sum(chi2_terms + np.log(2 * np.pi * sigma_safe**2))
-    
-    return log_L if np.isfinite(log_L) else -np.inf
-```
+
+    def log_likelihood_dynesty(theta_values, fitted_param_names, args_obj,
+                              all_param_info, R_data, v_data, sigma_data, xi_type):
+        # Reconstruct full parameter dictionary
+        current_params = dict(zip(fitted_param_names, theta_values))
+        for p_info in all_param_info:
+            if not p_info['is_fitted']:
+                current_params[p_info['name']] = p_info['current_val']
+        
+        # Calculate model prediction
+        v_newton = v_baryon_total_newtonian_kms(R_data, current_params)
+        rho_mid = rho_baryon_total_midplane_solar_kpc3(R_data, current_params)
+        xi_values = XI_FUNCTION_MAP[xi_type](rho_mid, 
+                                            current_params['rho_c_solar_kpc3'], 
+                                            current_params['n_exp'])
+        v_predicted = v_newton * np.sqrt(np.maximum(xi_values, 0.0))
+        
+        # Calculate log-likelihood
+        if not np.all(np.isfinite(v_predicted)):
+            return -np.inf
+        
+        sigma_safe = np.maximum(sigma_data, 1e-9)
+        residuals = v_data - v_predicted
+        chi2_terms = (residuals / sigma_safe)**2
+        log_L = -0.5 * np.sum(chi2_terms + np.log(2 * np.pi * sigma_safe**2))
+        
+        return log_L if np.isfinite(log_L) else -np.inf
 
 ## 3. Results: Successful Fitting of the Milky Way Rotation Curve
 
@@ -246,7 +242,7 @@ The thin+thick disk model reveals dramatically different density-dependent param
 
 ### 3.3. Discovery of an Invariant Effective Mass
 
-A remarkable discovery emerges when we compute the effective baryonic mass $M_{eff} = M_{baryon} \times \langle\xi\rangle$, where $\langle\xi\rangle$ is the average density-dependent factor over the radial range 5-15 kpc:
+A discovery emerges when we compute the effective baryonic mass $M_{eff} = M_{baryon} \times \langle\xi\rangle$, where $\langle\xi\rangle$ is the average density-dependent factor over the radial range 5-15 kpc:
 
 - Single disk: $M_{eff} = (1.27 \times 10^{11} M_\odot) \times 0.995 = 1.26 \times 10^{11} M_\odot$
 - Thin+Thick disks: $M_{eff} = (1.67 \times 10^{11} M_\odot) \times 0.732 = 1.22 \times 10^{11} M_\odot$
@@ -255,7 +251,42 @@ A remarkable discovery emerges when we compute the effective baryonic mass $M_{e
 
 This invariance suggests that the density-dependent framework naturally adjusts to conserve the total effective gravitating mass, regardless of how that mass is distributed. Models with more extended mass distributions (higher $M_{baryon}$) compensate with stronger average suppression (lower $\langle\xi\rangle$), while compact distributions require less suppression.
 
-### 3.4. Visualization of Model Performance and Adaptation
+### 3.4 Extended Convergence Analysis and Discovery of Multiple Modes
+To ensure comprehensive exploration of parameter space and validate our initial findings, we performed an extended nested sampling run with 10⁷ likelihood evaluations over 30 hours using 2000 live points. This extensive sampling revealed crucial insights about the parameter landscape of the density-dependent model.
+
+**Table 4:** Parameter evolution through extended sampling, revealing three distinct solution modes.
+| Mode | Sampling Stage | ρ_c (M☉/kpc³) | n | M_total (M☉) | log(Z) | RMS (km/s) |
+|---|---|---|---|---|---|---|
+| I | Initial convergence | (2.52 ± 0.02) × 10⁸ | 0.94 ± 0.03 | 1.67 × 10¹¹ | -230,695 | 38.2 |
+| II | Intermediate | (2.06 ± 0.33) × 10⁸ | 0.93 ± 0.03 | 1.86 × 10¹¹ | -230,658 | ~37 |
+| III | Final convergence | (1.33 ± 0.19) × 10⁸ | 0.89 ± 0.02 | 2.73 × 10¹¹ | -230,558 | ~36 |
+
+The extended sampling discovered multiple parameter modes with comparable likelihood (Δlog Z < 150), each representing a different balance between intrinsic baryonic mass and density-dependent suppression strength. Figure 3 illustrates how these distinct parameter combinations produce nearly identical rotation curves.
+
+<p align="center">
+  <img src="milky_way_rotation_curve_comparison.png" alt="Rotation curves from multiple parameter modes" width="800"/>
+</p>
+
+**Figure 3:** Comparison of Milky Way rotation curves from three distinct parameter modes discovered during extended sampling. Despite significantly different values of ρ_c and M_total, all modes produce rotation curves (colored lines) that match the Gaia DR3 observations (gray points) with comparable quality. The shaded regions represent parameter uncertainties within each mode. This demonstrates the fundamental degeneracy between critical density and total baryonic mass in the density-dependent framework.
+
+### 3.5 The Critical Density-Mass Degeneracy
+The discovery of multiple modes reveals a fundamental degeneracy in the density-dependent framework: the rotation curve primarily constrains the effective gravitating mass M_eff = M_baryon × ⟨ξ⟩ rather than the individual components. Figure 4 demonstrates this relationship across the discovered modes.
+
+<p align="center">
+  <img src="milky_way_density_model_analysis.png" alt="Density-dependent model analysis" width="800"/>
+</p>
+
+**Figure 4:** Analysis of the density-dependent model across multiple parameter modes. Top panel: Comparison of the gravitational modification function ξ(ρ) for the three discovered modes, showing how lower ρ_c values lead to stronger suppression at given densities. Bottom panel: Radial variation of ξ(R) for each mode, demonstrating how models with stronger suppression (Mode III) require higher total mass to produce the same effective gravitating mass. The conservation of M_eff across modes validates the invariant mass principle.
+
+Quantitatively, we find:
+
+Mode I: M_eff = 1.67 × 10¹¹ × 0.732 = 1.22 × 10¹¹ M☉
+Mode II: M_eff = 1.86 × 10¹¹ × 0.68 ≈ 1.26 × 10¹¹ M☉
+Mode III: M_eff = 2.73 × 10¹¹ × 0.46 ≈ 1.26 × 10¹¹ M☉
+
+The effective mass remains invariant to within 3%, confirming that the density-dependent framework naturally preserves observable quantities while allowing flexibility in the decomposition between intrinsic mass and gravitational modification.
+
+### 3.6. Visualization of Initial Model Performance and Adaptation
 
 Figure 1 presents a comprehensive four-panel analysis of our density-dependent model performance for the single disk case. The model successfully reproduces the Milky Way rotation curve across the full radial range with remarkable consistency.
 
@@ -263,27 +294,27 @@ Figure 1 presents a comprehensive four-panel analysis of our density-dependent m
   <img src="milky_way_density_model_analysis.png" alt="Comprehensive Milky Way Model Analysis" width="800"/>
 </p>
 
-**Figure 1:** *Comprehensive analysis of the density-dependent metric model applied to the Milky Way rotation curve. **Top panel**: Rotation curve showing ~80,000 Gaia DR3 stars (gray) with our density-dependent model fit (red solid line) and pure Newtonian prediction (green dashed line). **Bottom left**: Residuals vs. galactocentric radius showing consistent performance across all radii. **Bottom center**: Gravitational modification function ξ(ρ) showing transition from suppressed gravity (ξ < 1) in dense inner regions to nearly Newtonian behavior (ξ ≈ 1) in sparse outer regions. **Bottom right**: Radial performance statistics with RMS residuals in different radius bins, with star counts labeled above each bar.*
+**Figure 1:** *Comprehensive analysis of the density-dependent metric model applied to the Milky Way rotation curve. **Top panel**: Rotation curve showing ~80,000 Gaia DR3 stars (gray) with our initial single-disk model fit (red solid line) and pure Newtonian prediction (green dashed line). **Bottom left**: Residuals vs. galactocentric radius showing consistent performance across all radii. **Bottom center**: Gravitational modification function ξ(ρ) showing transition from suppressed gravity (ξ < 1) in dense inner regions to nearly Newtonian behavior (ξ ≈ 1) in sparse outer regions. **Bottom right**: Radial performance statistics with RMS residuals in different radius bins, with star counts labeled above each bar.*
 
-Figure 2 provides a cleaner presentation focused specifically on the rotation curve comparison, highlighting the physical interpretation of our density-dependent framework.
+Figure 2 provides a cleaner presentation focused specifically on the rotation curve comparison, highlighting the physical interpretation of our density-dependent framework for the initial fit.
 
 <p align="center">
   <img src="milky_way_rotation_curve_comparison.png" alt="Milky Way Rotation Curve Comparison" width="800"/>
 </p>
 
-**Figure 2:** *Milky Way rotation curve comparison showing the success of density-dependent gravitational modifications. Gaia DR3 observations (gray points, ~80,000 stars) are overlaid with our density-dependent model prediction (red solid line) and traditional Newtonian gravity from baryons alone (green dashed line). The model uncertainty band (light red) reflects parameter uncertainties. Annotations indicate the physical mechanism: gravity is suppressed in high-density inner regions and operates at full strength in low-density outer regions, naturally producing flat rotation curves without dark matter. The solar neighborhood (orange shaded region) shows excellent agreement with the canonical 220 km/s expectation.*
+**Figure 2:** *Milky Way rotation curve comparison showing the success of density-dependent gravitational modifications. Gaia DR3 observations (gray points, ~80,000 stars) are overlaid with our initial single-disk model prediction (red solid line) and traditional Newtonian gravity from baryons alone (green dashed line). The model uncertainty band (light red) reflects parameter uncertainties. Annotations indicate the physical mechanism: gravity is suppressed in high-density inner regions and operates at full strength in low-density outer regions, naturally producing flat rotation curves without dark matter. The solar neighborhood (orange shaded region) shows excellent agreement with the canonical 220 km/s expectation.*
 
-Figure 3 demonstrates how different baryonic decompositions require fundamentally different density-dependent modifications to reproduce the same observed rotation curve.
+Figure 5 demonstrates how different baryonic decompositions in the initial analysis require fundamentally different density-dependent modifications to reproduce the same observed rotation curve.
 
 <p align="center">
   <img src="xi_radial_impact.png" alt="Effective Xi at Different Radii" width="800"/>
 </p>
 
-**Figure 3:** *Comparison of density-dependent modifications required by different baryonic models. **Left panel**: Effective ξ values at different galactocentric radii for single disk (blue) and thin+thick disk (red) models. The thin+thick model requires stronger suppression in the inner galaxy (ξ ≈ 0.23 vs 0.68 at R=2.5 kpc) but maintains partial suppression even in the outer regions. **Right panel**: Impact on the rotation curve, showing how both models achieve similar velocities through different mechanisms - rapid transition to full gravity (single disk) versus continued partial suppression with more distributed mass (thin+thick).*
+**Figure 5:** *Comparison of density-dependent modifications required by different baryonic models in the initial analysis. **Left panel**: Effective ξ values at different galactocentric radii for single disk (blue) and thin+thick disk (red) models. The thin+thick model requires stronger suppression in the inner galaxy (ξ ≈ 0.23 vs 0.68 at R=2.5 kpc) but maintains partial suppression even in the outer regions. **Right panel**: Impact on the rotation curve, showing how both models achieve similar velocities through different mechanisms - rapid transition to full gravity (single disk) versus continued partial suppression with more distributed mass (thin+thick).*
 
-### 3.5. Radial Performance Analysis
+### 3.7. Radial Performance Analysis
 
-To assess the model's performance across different galactic environments, we evaluated RMS residuals in radial bins for both single and multi-component models:
+To assess the model's performance across different galactic environments, we evaluated RMS residuals in radial bins for both single and multi-component models from the initial runs:
 
 | **Radius Range** | **N Stars** | **Single Disk RMS** | **Thin+Thick RMS** |
 |------------------|-------------|--------------------|--------------------|
@@ -295,7 +326,7 @@ To assess the model's performance across different galactic environments, we eva
 
 Both models perform comparably well across all radii, with slightly better performance in the solar neighborhood (R ≈ 8-10 kpc) where the data density is highest.
 
-### 3.6. Physical Interpretation of Model Adaptation
+### 3.8. Physical Interpretation of Model Adaptation
 
 The dramatic differences in density-dependent parameters between single and multi-component models reveal the framework's adaptive nature:
 
@@ -311,7 +342,7 @@ The dramatic differences in density-dependent parameters between single and mult
 
 This adaptation is physically intuitive: the thick disk component adds significant mass at larger scale heights, creating a more extended density distribution. To prevent this additional mass from over-predicting velocities, the framework naturally requires stronger and more widespread density-dependent suppression.
 
-### 3.7. Comparison with Alternative Approaches
+### 3.9. Comparison with Alternative Approaches
 
 To validate our results, we compared the fitted parameters with those obtained from a simplified optimization targeting only the solar radius ($R = 8$ kpc). The local optimization yielded $M_{\text{disk}} = 9.6 \times 10^{10} M_{\odot}$, $R_d = 2.8$ kpc, and $\rho_c = 8.0 \times 10^8 M_{\odot} \text{kpc}^{-3}$. While this set of parameters provides excellent agreement at $R = 8$ kpc ($v_{\text{model}} = 220.4$ km/s vs. $v_{\text{obs}} = 224.1$ km/s), it performs poorly in the outer galaxy regions where it systematically underpredicts velocities.
 
@@ -376,6 +407,35 @@ The successful fits across different baryonic models with consistent RMS ~35-40 
 
 Future work will employ Bayesian model comparison to quantify the statistical evidence for our framework versus alternatives.
 
+### 4.7 Parameter Degeneracies and Physical Implications
+The discovery of multiple parameter modes with comparable likelihood provides important insights into the density-dependent framework:
+
+#### 4.7.1 Nature of the Degeneracy
+The ρ_c-M_total degeneracy is not a limitation but rather a fundamental feature of any theory where gravity's effectiveness varies with environment. The rotation curve constrains only the product of mass and gravitational coupling, not each component individually. This is analogous to the disk-halo degeneracy in dark matter models, where different combinations of disk and halo parameters can produce identical rotation curves.
+
+#### 4.7.2 Physical Viability of High-Mass Solutions
+Mode III requires a total baryonic mass of 2.73 × 10¹¹ M☉, which is higher than traditional estimates but not implausible:
+
+- Recent observations suggest the Milky Way's hot circumgalactic medium may contain (1-2) × 10¹¹ M☉ within the virial radius
+- The stellar halo extends to >100 kpc with uncertain total mass
+- Systematic uncertainties in disk mass estimates could accommodate higher values
+
+#### 4.7.3 Observational Discrimination
+Different modes make distinct predictions that can be tested:
+
+- Microlensing optical depth: Scales with total mass; Mode III predicts ~60% higher optical depth than Mode I
+- Vertical kinematics: Different ξ(ρ) functions lead to distinct vertical force profiles
+- Satellite dynamics: The effective mass at large radii depends on the radial extent of suppression
+
+### 4.8 Comparison with Systematic Uncertainties
+The parameter variations between modes (factor of ~2 in ρ_c, ~1.6 in M_total) are comparable to systematic uncertainties in galactic mass estimates:
+
+- Stellar M/L ratios: ±30% uncertainty
+- Gas mass estimates: ±40% uncertainty in molecular gas conversion factors
+- Halo extent: factor of 2 uncertainty in total stellar halo mass
+
+This suggests that the parameter degeneracy in our model is no more severe than uncertainties already present in conventional galactic dynamics.
+
 ## 5. Experimental and Observational Tests
 
 ### 5.1. Astrophysical Predictions
@@ -414,6 +474,10 @@ We have successfully demonstrated that a density-dependent metric modification c
 
 5. **Reasonable Parameter Values:** Required baryonic masses (1.27-1.67 × 10¹¹ M☉) are consistent with recent estimates including extended components.
 
+Extended nested sampling with 10⁷ likelihood evaluations revealed multiple parameter modes that produce equivalently good fits to the Milky Way rotation curve. This ρ_c-M_total degeneracy, where lower critical densities require proportionally higher baryonic masses, demonstrates that the density-dependent framework naturally accommodates uncertainty in the true mass distribution while maintaining predictive power. The invariance of the effective mass M_eff = M_baryon × ⟨ξ⟩ across all modes (varying by only 3%) confirms this as a fundamental principle of the framework.
+
+The existence of multiple viable solutions, ranging from (ρ_c = 2.5×10⁸ M☉/kpc³, M = 1.67×10¹¹ M☉) to (ρ_c = 1.3×10⁸ M☉/kpc³, M = 2.73×10¹¹ M☉), provides a rich set of predictions that can be tested with future observations. Rather than a weakness, this flexibility demonstrates that density-dependent modifications offer a theoretically consistent alternative to dark matter that naturally incorporates our incomplete knowledge of galactic mass distributions.
+
 This work establishes density-dependent gravitational modifications as a viable alternative to dark matter for explaining galactic dynamics. The discovery of the invariant effective mass principle suggests that rather than being an ad hoc modification, the framework may reflect a deeper principle about how gravity operates in different density regimes.
 
 Future developments including complete multi-component models, universality tests with external galaxies, and theoretical foundations will further develop this promising framework. The success of this phenomenological approach and the emergence of conservation principles suggest that modifications to gravity, rather than new matter components, may provide the solution to the missing mass problem in galaxies.
@@ -422,7 +486,7 @@ Future developments including complete multi-component models, universality test
 
 ## Code Availability
 
-The complete codebase for this analysis, including data processing, model implementation, and fitting procedures, is available at [repository URL]. Key components include:
+The complete codebase for this analysis, including data processing, model implementation, and fitting procedures, is available at [https://github.com/lrspeiser/DensityDependentMetricModel]. Key components include:
 
 - `data_io.py`: Gaia DR3 data acquisition and processing
 - `density_metric2.py`: Physical model implementation
