@@ -1,0 +1,57 @@
+{
+  "model_params": {
+    "rho_c_solar_kpc3": 126884213.99925183,
+    "n_exp": 0.8883542954048295,
+    "M_bulge_solar": 149991161033.68344,
+    "a_bulge_kpc": 1.5002490716135488,
+    "M_disk_thin_solar": 0.6167683579866097,
+    "R_d_thin_kpc": 67790333991.4401,
+    "h_z_thin_kpc": 5.989638211137137,
+    "M_disk_thick_solar": 0.6699920937979795,
+    "R_d_thick_kpc": 38405280995.48715,
+    "h_z_thick_kpc": 0.10178188405733528,
+    "M_gas_solar": 19820567296.328857,
+    "R_d_gas_kpc": 9.709098364541436,
+    "h_z_gas_kpc": 0.05587088101402077,
+    "include_disk_thin": true,
+    "include_disk_thick": true,
+    "include_bulge": true,
+    "include_gas": true,
+    "include_bulge_density": true
+  },
+  "n_tests": 5,
+  "n_passed": 0,
+  "overall_score": 0.10000000000000005,
+  "test_results": [
+    {
+      "name": "Dwarf Galaxy Dynamics",
+      "passed": false,
+      "score": 0.0,
+      "message": "\u03c7\u00b2/dof = 16.95. FAIL: Dwarfs are NOT consistent with \u03be\u22481 prediction"
+    },
+    {
+      "name": "Tidal Stream Dynamics",
+      "passed": false,
+      "score": 0.5,
+      "message": "Mean score: 0.50. FAIL: Stream properties are NOT consistent with model"
+    },
+    {
+      "name": "Vertical Disk Kinematics",
+      "passed": false,
+      "score": 0.0,
+      "message": "K_z at 1 kpc: model=9.941e-31 vs obs=2.300e-03 (km/s)\u00b2/pc. FAIL"
+    },
+    {
+      "name": "Effective Mass Conservation",
+      "passed": false,
+      "score": 2.220446049250313e-16,
+      "message": "M_eff conservation: max deviation = 5.0%. FAIL (claimed <3%)"
+    },
+    {
+      "name": "SPARC Galaxy Universality",
+      "passed": false,
+      "score": 0.0,
+      "message": "3/3 galaxies failed. FAIL: Model lacks universality"
+    }
+  ]
+}

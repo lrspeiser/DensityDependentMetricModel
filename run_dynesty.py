@@ -1451,6 +1451,14 @@ def main_dynesty():
     global logger
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
     logger = logging.getLogger("run_dynesty")
+
+    # Add this block to also log to file
+    file_handler = logging.FileHandler("dynesty_run.log")
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
     logger.info("Starting main_dynesty function (AI-Enhanced Version).")
 
     if not DYNESTY_AVAILABLE: logger.error("Dynesty library not found."); sys.exit(1)
