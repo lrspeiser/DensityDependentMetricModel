@@ -99,28 +99,28 @@ logger = None
 # Physical bounds for parameters (based on MW observations and theory)
 PHYSICAL_BOUNDS = {
     # Mass parameters (M_sun)
-    'M_disk_thin_solar': {'min': 2e10, 'max': 8e10, 'typical': 4e10},
-    'M_disk_thick_solar': {'min': 0.5e10, 'max': 3e10, 'typical': 1e10},
-    'M_bulge_solar': {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
-    'M_gas_solar': {'min': 0.5e10, 'max': 2e10, 'typical': 1e10},
-    
+    'M_disk_thin_solar':   {'min': 2e10, 'max': 1.2e11, 'typical': 7.5e10},
+    'M_disk_thick_solar':  {'min': 5e9,  'max': 4e10,   'typical': 2.5e10},
+    'M_bulge_solar':       {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
+    'M_gas_solar':         {'min': 5e9,  'max': 3e10,   'typical': 2.0e10},
+
     # Scale lengths (kpc)
-    'R_d_thin_kpc': {'min': 2.0, 'max': 4.0, 'typical': 2.5},
-    'R_d_thick_kpc': {'min': 2.5, 'max': 5.0, 'typical': 3.5},
-    'R_d_gas_kpc': {'min': 4.0, 'max': 12.0, 'typical': 7.0},
-    'a_bulge_kpc': {'min': 0.2, 'max': 1.5, 'typical': 0.7},
-    
+    'R_d_thin_kpc':        {'min': 2.0,  'max': 5.0,    'typical': 3.9},
+    'R_d_thick_kpc':       {'min': 2.5,  'max': 6.0,    'typical': 4.7},
+    'R_d_gas_kpc':         {'min': 4.0,  'max': 12.0,   'typical': 7.0},
+    'a_bulge_kpc':         {'min': 0.2,  'max': 1.5,    'typical': 0.7},
+
     # Scale heights (kpc)
-    'h_z_thin_kpc': {'min': 0.2, 'max': 0.4, 'typical': 0.3},
-    'h_z_thick_kpc': {'min': 0.7, 'max': 1.3, 'typical': 0.9},
-    'h_z_gas_kpc': {'min': 0.08, 'max': 0.25, 'typical': 0.15},
-    
+    'h_z_thin_kpc':        {'min': 0.2,  'max': 0.6,    'typical': 0.3},
+    'h_z_thick_kpc':       {'min': 0.6,  'max': 1.3,    'typical': 0.9},
+    'h_z_gas_kpc':         {'min': 0.05, 'max': 0.3,    'typical': 0.15},
+
     # Total mass constraint
-    'M_total': {'min': 5e10, 'max': 2e11, 'typical': 1e11},
-    
+    'M_total':             {'min': 5e10, 'max': 2e11,   'typical': 1e11},
+
     # Density parameters
-    'rho_c_solar_kpc3': {'min': 5e6, 'max': 5e9, 'typical': 1e8},
-    'n_exp': {'min': 0.3, 'max': 2.5, 'typical': 1.0}
+    'rho_c_solar_kpc3':    {'min': 1e8,  'max': 2e9,    'typical': 1.66e9},
+    'n_exp':               {'min': 0.7,  'max': 2.0,    'typical': 1.43}
 }
 
 # Expected ranges for validation
