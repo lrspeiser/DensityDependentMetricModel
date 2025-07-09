@@ -386,7 +386,7 @@ This configuration provides the best-performing, fully general model to date usi
 
 The corner plot in **Figure 6** illustrates the full posterior distributions and correlations across all 13 fitted parameters.
 
-![Figure 6: Posterior distributions from the full multi-component model](parameter_posteriors.png)
+![Figure 6: Posterior distributions from the full multi-component model](parameter_posteriors.jpg)
 
 Clear multimodal structure and boundary-hitting behavior are observed in several parameters, confirming:
 
