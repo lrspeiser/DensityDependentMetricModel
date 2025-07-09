@@ -832,7 +832,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Validate density-dependent metric model against independent constraints"
     )
-    
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose console output')
+    parser.add_argument('--save_report', type=str, default=None, help='Path to save the summary report')
+
     parser.add_argument('--params_file', type=str, 
                        help='Path to dynesty results .npz file')
     parser.add_argument('--params_json', type=str,
@@ -885,6 +887,36 @@ def main():
     # Run validation
     validator = DensityModelValidator(params, output_dir=args.output_dir)
     summary = validator.run_all_validations()
+    
+    # ✅ Save summary report if requested
+    if args.save_report:
+        report_path = Path(args.save_report)
+        
+        def convert_types(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, (np.integer, np.floating)):
+                return float(obj)
+            elif isinstance(obj, (np.bool_, bool)):
+                return bool(obj)
+            elif isinstance(obj, dict):
+                return {k: convert_types(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_types(item) for item in obj]
+            return obj
+        
+        summary_cleaned = convert_types(summary)
+        
+        with open(report_path, "w") as f:
+            f.write(json.dumps(summary_cleaned, indent=2))
+        print(f"\n📄 Summary report saved to: {report_path}")
+
+
+    # ✅ Print full summary if verbose
+    if args.verbose:
+        summary_cleaned = convert_types(summary)
+        print(json.dumps(summary_cleaned, indent=2))
+
     
     # Print final verdict
     print("\n" + "="*60)

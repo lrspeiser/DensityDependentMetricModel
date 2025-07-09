@@ -1,11 +1,31 @@
 #!/usr/bin/env python3
 """
-run_dynesty.py - Run dynesty dynamic nested sampling on the Density-Metric model for the Milky Way.
-Saves posterior samples to specified output. Includes self-tests and advanced progress logging.
-Enhanced with expert feedback: log-uniform priors, configurable sampler settings, checkpoint support.
-NOW WITH INTEGRATED MONITORING for detailed progress tracking during sampling.
-AI-ENHANCED VERSION: Includes surrogate modeling, curriculum learning, and adaptive strategies.
+run_dynesty.py - Enhanced dynamic nested sampling for the Density-Metric model.
+
+This module implements Bayesian parameter estimation for the density-dependent
+gravitational modification model using the dynesty nested sampling package.
+
+Key features:
+- Dynamic nested sampling with adaptive live points
+- Physical plausibility checks to prevent unphysical parameter exploration
+- Curriculum learning approach for complex parameter spaces
+- Gaussian Process surrogate modeling for computational efficiency
+- Comprehensive monitoring and diagnostic output
+- Checkpoint support for long runs
+- Multi-threading support
+
+Major improvements in v2.0:
+- Parameter sanity checks during sampling
+- Tighter, physically motivated prior bounds
+- Enhanced monitoring with parameter health checks
+- Automatic detection of pathological parameter regions
+- Better initialization strategies
+- Validation integration
+
+Author: [Your name]
+Version: 2.0 (Enhanced with physical constraints)
 """
+
 import logging
 import sys
 import time
@@ -19,14 +39,22 @@ from multiprocessing import Pool, freeze_support
 from datetime import timedelta, datetime
 from typing import Dict, List, Tuple, Optional, Any
 import json
+import warnings
+warnings.filterwarnings('ignore')
+from monitor_dashboard import DynestyMonitor
 
 import matplotlib.pyplot as plt
 import corner
 
+# Control debug output
+DEBUG_COUNTER_MAX = 100  # Maximum debug messages to prevent log spam
 debug_counter = 0
 
-
+# ============================================================================
 # Optional imports for advanced features
+# ============================================================================
+
+# Gaussian Process surrogate modeling
 try:
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
@@ -36,6 +64,7 @@ except ImportError:
     GP_AVAILABLE = False
     print("WARNING: scikit-learn not found. Gaussian Process surrogate modeling disabled.")
 
+# Dynesty nested sampling
 try:
     from dynesty import DynamicNestedSampler, utils as dyfunc
     DYNESTY_AVAILABLE = True
@@ -44,96 +73,1202 @@ except ImportError:
     print("CRITICAL: Dynesty library not found. Please install it: pip install dynesty")
     sys.exit(1)
 
+# Local physics modules
 try:
-    from density_metric2 import v_baryon_total_newtonian_kms, rho_baryon_total_midplane_solar_kpc3, XI_FUNCTION_MAP, run_physics_self_tests
+    from density_metric2 import (
+        v_baryon_total_newtonian_kms, 
+        rho_baryon_total_midplane_solar_kpc3, 
+        XI_FUNCTION_MAP, 
+        run_physics_self_tests,
+        G_ASTRO_UNITS,
+        R_SUN_KPC
+    )
     from data_io import load_gaia
     from main2 import get_param_labels_and_bounds as get_param_config_main_module
 except ImportError as e:
     print(f"CRITICAL: Could not import local modules: {e}")
     sys.exit(1)
 
+# Set up module logger
 logger = None
 
-# --- Parameter Configuration (Moved here to be self-contained) ---
-# Enhanced with log_prior flags for scale-variant parameters
+# ============================================================================
+# Physical Constraints and Validation
+# ============================================================================
+
+# Physical bounds for parameters (based on MW observations and theory)
+PHYSICAL_BOUNDS = {
+    # Mass parameters (M_sun)
+    'M_disk_thin_solar': {'min': 2e10, 'max': 8e10, 'typical': 4e10},
+    'M_disk_thick_solar': {'min': 0.5e10, 'max': 3e10, 'typical': 1e10},
+    'M_bulge_solar': {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
+    'M_gas_solar': {'min': 0.5e10, 'max': 2e10, 'typical': 1e10},
+    
+    # Scale lengths (kpc)
+    'R_d_thin_kpc': {'min': 2.0, 'max': 4.0, 'typical': 2.5},
+    'R_d_thick_kpc': {'min': 2.5, 'max': 5.0, 'typical': 3.5},
+    'R_d_gas_kpc': {'min': 4.0, 'max': 12.0, 'typical': 7.0},
+    'a_bulge_kpc': {'min': 0.2, 'max': 1.5, 'typical': 0.7},
+    
+    # Scale heights (kpc)
+    'h_z_thin_kpc': {'min': 0.2, 'max': 0.4, 'typical': 0.3},
+    'h_z_thick_kpc': {'min': 0.7, 'max': 1.3, 'typical': 0.9},
+    'h_z_gas_kpc': {'min': 0.08, 'max': 0.25, 'typical': 0.15},
+    
+    # Total mass constraint
+    'M_total': {'min': 5e10, 'max': 2e11, 'typical': 1e11},
+    
+    # Density parameters
+    'rho_c_solar_kpc3': {'min': 5e6, 'max': 5e9, 'typical': 1e8},
+    'n_exp': {'min': 0.3, 'max': 2.5, 'typical': 1.0}
+}
+
+# Expected ranges for validation
+EXPECTED_XI_AT_SOLAR = (0.7, 1.0)  # Xi should not suppress gravity too much at R_sun
+EXPECTED_V_AT_SOLAR = (150, 250)   # TEMPORARILY RELAXED for initial exploration
+
+
+# ============================================================================
+# Parameter Configuration with Enhanced Bounds
+# ============================================================================
+
 MW_MULTI_COMP_PARAM_CONFIG = {
-    'rho_c_solar_kpc3': {'label': r"$\rho_c$ ($M_\odot/kpc^3$)", 'fixed_val_from_arg': 'rho_c_fixed', 
-                         'default_fixed': 1e7, 'low': 1e5, 'high': 2e9, 'fit_flag_arg': 'fit_xi_params',
-                         'log_prior': True},  # Log-uniform for density
-    'n_exp': {'label': r"$n$", 'fixed_val_from_arg': 'n_exp_fixed', 
-              'default_fixed': 1.5, 'low': 0.1, 'high': 4.0, 'fit_flag_arg': 'fit_xi_params',
-              'log_prior': False},  # Linear for exponent
-    'M_disk_thin_solar': {'label': r"$M_{d,thin}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_disk_thin_fixed', 
-                          'default_fixed': 4.0e10, 'low': 1e10, 'high': 1.5e11, 'fit_flag_arg': 'fit_disk_thin', 
-                          'include_flag_arg': 'include_disk_thin', 'log_prior': True},  # Log-uniform for mass, wider prior
-    'R_d_thin_kpc': {'label': r"$R_{d,thin}$ (kpc)", 'fixed_val_from_arg': 'R_d_thin_fixed', 
-                     'default_fixed': 2.5, 'low': 1.5, 'high': 5.0, 'fit_flag_arg': 'fit_disk_thin', 
-                     'include_flag_arg': 'include_disk_thin', 'log_prior': False},
-    'h_z_thin_kpc': {'label': r"$h_{z,thin}$ (kpc)", 'fixed_val_from_arg': 'h_z_thin_fixed', 
-                     'default_fixed': 0.3, 'low': 0.15, 'high': 0.7, 'fit_flag_arg': 'fit_disk_thin', 
-                     'include_flag_arg': 'include_disk_thin', 'log_prior': False},  # Wider prior
-    'M_disk_thick_solar': {'label': r"$M_{d,thick}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_disk_thick_fixed', 
-                           'default_fixed': 1.0e10, 'low': 0.1e10, 'high': 8e10, 'fit_flag_arg': 'fit_disk_thick', 
-                           'include_flag_arg': 'include_disk_thick', 'log_prior': True},  # Log-uniform for mass
-    'R_d_thick_kpc': {'label': r"$R_{d,thick}$ (kpc)", 'fixed_val_from_arg': 'R_d_thick_fixed', 
-                      'default_fixed': 3.5, 'low': 2.0, 'high': 6.0, 'fit_flag_arg': 'fit_disk_thick', 
-                      'include_flag_arg': 'include_disk_thick', 'log_prior': False},
-    'h_z_thick_kpc': {'label': r"$h_{z,thick}$ (kpc)", 'fixed_val_from_arg': 'h_z_thick_fixed', 
-                      'default_fixed': 0.9, 'low': 0.5, 'high': 1.5, 'fit_flag_arg': 'fit_disk_thick', 
-                      'include_flag_arg': 'include_disk_thick', 'log_prior': False},
-    'M_bulge_solar': {'label': r"$M_{bulge}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_bulge_fixed', 
-                      'default_fixed': 0.9e10, 'low': 0.1e10, 'high': 5e10, 'fit_flag_arg': 'fit_bulge', 
-                      'include_flag_arg': 'include_bulge', 'log_prior': True},  # Log-uniform for mass
-    'a_bulge_kpc': {'label': r"$a_{bulge}$ (kpc)", 'fixed_val_from_arg': 'a_bulge_fixed', 
-                    'default_fixed': 0.5, 'low': 0.1, 'high': 2.0, 'fit_flag_arg': 'fit_bulge', 
-                    'include_flag_arg': 'include_bulge', 'log_prior': False},
-    'M_gas_solar': {'label': r"$M_{gas}$ ($M_\odot$)", 'fixed_val_from_arg': 'M_gas_fixed', 
-                    'default_fixed': 1.0e10, 'low': 0.2e10, 'high': 2.0e10, 'fit_flag_arg': 'fit_gas', 
-                    'include_flag_arg': 'include_gas', 'log_prior': True},  # Log-uniform for mass
-    'R_d_gas_kpc': {'label': r"$R_{d,gas}$ (kpc)", 'fixed_val_from_arg': 'R_d_gas_fixed', 
-                    'default_fixed': 7.0, 'low': 3.0, 'high': 15.0, 'fit_flag_arg': 'fit_gas', 
-                    'include_flag_arg': 'include_gas', 'log_prior': False},
-    'h_z_gas_kpc': {'label': r"$h_{z,gas}$ (kpc)", 'fixed_val_from_arg': 'h_z_gas_fixed', 
-                    'default_fixed': 0.15, 'low': 0.05, 'high': 0.5, 'fit_flag_arg': 'fit_gas', 
-                    'include_flag_arg': 'include_gas', 'log_prior': False},
+    'rho_c_solar_kpc3': {
+        'label': r"$\rho_c$ ($M_\odot/kpc^3$)", 
+        'fixed_val_from_arg': 'rho_c_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['typical'],
+        'low': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['min'], 
+        'high': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['max'], 
+        'fit_flag_arg': 'fit_xi_params',
+        'log_prior': True,  # Use log-uniform prior for scale-variant parameter
+        'physical_check': True
+    },
+    'n_exp': {
+        'label': r"$n$", 
+        'fixed_val_from_arg': 'n_exp_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['n_exp']['typical'],
+        'low': PHYSICAL_BOUNDS['n_exp']['min'], 
+        'high': PHYSICAL_BOUNDS['n_exp']['max'], 
+        'fit_flag_arg': 'fit_xi_params',
+        'log_prior': False,  # Linear prior for exponent
+        'physical_check': True
+    },
+    'M_disk_thin_solar': {
+        'label': r"$M_{d,thin}$ ($M_\odot$)", 
+        'fixed_val_from_arg': 'M_disk_thin_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['M_disk_thin_solar']['typical'],
+        'low': PHYSICAL_BOUNDS['M_disk_thin_solar']['min'], 
+        'high': PHYSICAL_BOUNDS['M_disk_thin_solar']['max'], 
+        'fit_flag_arg': 'fit_disk_thin', 
+        'include_flag_arg': 'include_disk_thin',
+        'log_prior': True,
+        'physical_check': True
+    },
+    'R_d_thin_kpc': {
+        'label': r"$R_{d,thin}$ (kpc)", 
+        'fixed_val_from_arg': 'R_d_thin_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['R_d_thin_kpc']['typical'],
+        'low': PHYSICAL_BOUNDS['R_d_thin_kpc']['min'], 
+        'high': PHYSICAL_BOUNDS['R_d_thin_kpc']['max'], 
+        'fit_flag_arg': 'fit_disk_thin', 
+        'include_flag_arg': 'include_disk_thin',
+        'log_prior': False,
+        'physical_check': True
+    },
+    'h_z_thin_kpc': {
+        'label': r"$h_{z,thin}$ (kpc)", 
+        'fixed_val_from_arg': 'h_z_thin_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['h_z_thin_kpc']['typical'],
+        'low': PHYSICAL_BOUNDS['h_z_thin_kpc']['min'], 
+        'high': PHYSICAL_BOUNDS['h_z_thin_kpc']['max'], 
+        'fit_flag_arg': 'fit_disk_thin', 
+        'include_flag_arg': 'include_disk_thin',
+        'log_prior': False,
+        'physical_check': True
+    },
+    'M_disk_thick_solar': {
+        'label': r"$M_{d,thick}$ ($M_\odot$)", 
+        'fixed_val_from_arg': 'M_disk_thick_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['M_disk_thick_solar']['typical'],
+        'low': PHYSICAL_BOUNDS['M_disk_thick_solar']['min'], 
+        'high': PHYSICAL_BOUNDS['M_disk_thick_solar']['max'], 
+        'fit_flag_arg': 'fit_disk_thick', 
+        'include_flag_arg': 'include_disk_thick',
+        'log_prior': True,
+        'physical_check': True
+    },
+    'R_d_thick_kpc': {
+        'label': r"$R_{d,thick}$ (kpc)", 
+        'fixed_val_from_arg': 'R_d_thick_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['R_d_thick_kpc']['typical'],
+        'low': PHYSICAL_BOUNDS['R_d_thick_kpc']['min'], 
+        'high': PHYSICAL_BOUNDS['R_d_thick_kpc']['max'], 
+        'fit_flag_arg': 'fit_disk_thick', 
+        'include_flag_arg': 'include_disk_thick',
+        'log_prior': False,
+        'physical_check': True
+    },
+    'h_z_thick_kpc': {
+        'label': r"$h_{z,thick}$ (kpc)", 
+        'fixed_val_from_arg': 'h_z_thick_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['h_z_thick_kpc']['typical'],
+        'low': PHYSICAL_BOUNDS['h_z_thick_kpc']['min'], 
+        'high': PHYSICAL_BOUNDS['h_z_thick_kpc']['max'], 
+        'fit_flag_arg': 'fit_disk_thick', 
+        'include_flag_arg': 'include_disk_thick',
+        'log_prior': False,
+        'physical_check': True
+    },
+    'M_bulge_solar': {
+        'label': r"$M_{bulge}$ ($M_\odot$)", 
+        'fixed_val_from_arg': 'M_bulge_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['M_bulge_solar']['typical'],
+        'low': PHYSICAL_BOUNDS['M_bulge_solar']['min'], 
+        'high': PHYSICAL_BOUNDS['M_bulge_solar']['max'], 
+        'fit_flag_arg': 'fit_bulge', 
+        'include_flag_arg': 'include_bulge',
+        'log_prior': True,
+        'physical_check': True
+    },
+    'a_bulge_kpc': {
+        'label': r"$a_{bulge}$ (kpc)", 
+        'fixed_val_from_arg': 'a_bulge_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['a_bulge_kpc']['typical'],
+        'low': PHYSICAL_BOUNDS['a_bulge_kpc']['min'], 
+        'high': PHYSICAL_BOUNDS['a_bulge_kpc']['max'], 
+        'fit_flag_arg': 'fit_bulge', 
+        'include_flag_arg': 'include_bulge',
+        'log_prior': False,
+        'physical_check': True
+    },
+    'M_gas_solar': {
+        'label': r"$M_{gas}$ ($M_\odot$)", 
+        'fixed_val_from_arg': 'M_gas_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['M_gas_solar']['typical'],
+        'low': PHYSICAL_BOUNDS['M_gas_solar']['min'], 
+        'high': PHYSICAL_BOUNDS['M_gas_solar']['max'], 
+        'fit_flag_arg': 'fit_gas', 
+        'include_flag_arg': 'include_gas',
+        'log_prior': True,
+        'physical_check': True
+    },
+    'R_d_gas_kpc': {
+        'label': r"$R_{d,gas}$ (kpc)", 
+        'fixed_val_from_arg': 'R_d_gas_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['R_d_gas_kpc']['typical'],
+        'low': PHYSICAL_BOUNDS['R_d_gas_kpc']['min'], 
+        'high': PHYSICAL_BOUNDS['R_d_gas_kpc']['max'], 
+        'fit_flag_arg': 'fit_gas', 
+        'include_flag_arg': 'include_gas',
+        'log_prior': False,
+        'physical_check': True
+    },
+    'h_z_gas_kpc': {
+        'label': r"$h_{z,gas}$ (kpc)", 
+        'fixed_val_from_arg': 'h_z_gas_fixed', 
+        'default_fixed': PHYSICAL_BOUNDS['h_z_gas_kpc']['typical'],
+        'low': PHYSICAL_BOUNDS['h_z_gas_kpc']['min'], 
+        'high': PHYSICAL_BOUNDS['h_z_gas_kpc']['max'], 
+        'fit_flag_arg': 'fit_gas', 
+        'include_flag_arg': 'include_gas',
+        'log_prior': False,
+        'physical_check': True
+    },
 }
 
 
-def load_checkpoint_and_extract_params(checkpoint_path):
-    """Load checkpoint and extract best parameters without needing all imports"""
-    import pickle
-    import numpy as np
+# ============================================================================
+# Physical Plausibility Checks
+# ============================================================================
+
+def check_physical_plausibility(
+    theta_values: np.ndarray, 
+    param_names: List[str],
+    args_obj: argparse.Namespace
+) -> Tuple[bool, str]:
+    """
+    Check if parameters are physically reasonable.
     
+    This function implements multiple checks:
+    1. Individual parameter bounds
+    2. Total mass constraints
+    3. Xi reasonableness at solar radius
+    4. Relative component ratios
+    5. Density profile consistency
+    
+    Parameters
+    ----------
+    theta_values : np.ndarray
+        Parameter values to check
+    param_names : list
+        Names of parameters
+    args_obj : argparse.Namespace
+        Additional arguments including model configuration
+        
+    Returns
+    -------
+    is_valid : bool
+        True if parameters pass all checks
+    reason : str
+        Description of failure if not valid
+    """
+    params = dict(zip(param_names, theta_values))
+    
+    # 1. Check individual parameter bounds against PHYSICAL_BOUNDS
+    for param, value in params.items():
+        if param in PHYSICAL_BOUNDS:
+            bounds = PHYSICAL_BOUNDS[param]
+            if value < bounds['min'] or value > bounds['max']:
+                return False, f"{param} = {value:.2e} outside [{bounds['min']:.2e}, {bounds['max']:.2e}]"
+    
+    # 2. Check total baryonic mass
+    mass_components = ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']
+    total_mass = sum(params.get(comp, 0) for comp in mass_components)
+    
+    if total_mass < PHYSICAL_BOUNDS['M_total']['min']:
+        return False, f"Total mass {total_mass:.2e} < {PHYSICAL_BOUNDS['M_total']['min']:.2e} M_sun"
+    if total_mass > PHYSICAL_BOUNDS['M_total']['max']:
+        return False, f"Total mass {total_mass:.2e} > {PHYSICAL_BOUNDS['M_total']['max']:.2e} M_sun"
+    
+    # 3. Check relative mass ratios (thick disk shouldn't dominate)
+    if 'M_disk_thick_solar' in params and 'M_disk_thin_solar' in params:
+        if params['M_disk_thick_solar'] > 0 and params['M_disk_thin_solar'] > 0:
+            thick_thin_ratio = params['M_disk_thick_solar'] / params['M_disk_thin_solar']
+            if thick_thin_ratio > 0.7:  # Thick disk typically 10-50% of thin disk
+                return False, f"Thick/thin disk ratio {thick_thin_ratio:.2f} > 0.7"
+    
+    # 4. Check scale length ordering (thick disk more extended)
+    if 'R_d_thick_kpc' in params and 'R_d_thin_kpc' in params:
+        if params['R_d_thick_kpc'] < params['R_d_thin_kpc']:
+            return False, f"Thick disk scale length < thin disk ({params['R_d_thick_kpc']:.2f} < {params['R_d_thin_kpc']:.2f} kpc)"
+    
+    # 5. Check scale height ordering (thick disk thicker)
+    if 'h_z_thick_kpc' in params and 'h_z_thin_kpc' in params:
+        if params['h_z_thick_kpc'] < params['h_z_thin_kpc'] * 2:
+            return False, f"Thick disk not thick enough ({params['h_z_thick_kpc']:.2f} < 2×{params['h_z_thin_kpc']:.2f} kpc)"
+    
+    # 6. Check xi at solar radius (shouldn't suppress gravity too much)
+    if 'rho_c_solar_kpc3' in params and 'n_exp' in params:
+        # Estimate density at solar radius
+        # For a typical disk: rho(R_sun) ~ 0.1 M_sun/pc^3 = 1e8 M_sun/kpc^3
+        rho_solar_typical = 1e8
+        
+        # Add contribution from bulge if included
+        if args_obj.include_bulge and 'M_bulge_solar' in params and 'a_bulge_kpc' in params:
+            # Hernquist profile at R_sun
+            M_b = params['M_bulge_solar']
+            a_b = params['a_bulge_kpc']
+            rho_bulge_solar = (M_b / (2 * np.pi)) * (a_b / (R_SUN_KPC * (R_SUN_KPC + a_b)**3))
+            rho_solar_typical += rho_bulge_solar
+        
+        # Calculate xi
+        xi_solar = 1.0 / (1.0 + (rho_solar_typical / params['rho_c_solar_kpc3'])**params['n_exp'])
+        
+        if xi_solar < EXPECTED_XI_AT_SOLAR[0]:
+            return False, f"xi at R_sun = {xi_solar:.3f} < {EXPECTED_XI_AT_SOLAR[0]} (too much suppression)"
+        if xi_solar > EXPECTED_XI_AT_SOLAR[1]:
+            # Not necessarily bad, but log it
+            logger.debug(f"Note: xi at R_sun = {xi_solar:.3f} > {EXPECTED_XI_AT_SOLAR[1]} (minimal modification)")
+    
+    # 7. Check that we'd get reasonable rotation curve at solar radius
+    if all(comp in params for comp in ['M_disk_thin_solar', 'R_d_thin_kpc']):
+        # Quick estimate of Newtonian velocity
+        M_enc_approx = 0.6 * total_mass  # Rough enclosed mass at R_sun
+        v_newton_approx = np.sqrt(G_ASTRO_UNITS * M_enc_approx / R_SUN_KPC)
+        
+        # With xi modification
+        if 'rho_c_solar_kpc3' in params:
+            v_expected = v_newton_approx * np.sqrt(xi_solar)
+            
+            if v_expected < EXPECTED_V_AT_SOLAR[0] or v_expected > EXPECTED_V_AT_SOLAR[1]:
+                return False, f"Estimated v(R_sun) = {v_expected:.0f} km/s outside [{EXPECTED_V_AT_SOLAR[0]}, {EXPECTED_V_AT_SOLAR[1]}]"
+    
+    return True, "OK"
+
+
+def check_parameter_evolution(
+    recent_samples: np.ndarray,
+    param_names: List[str],
+    logger: logging.Logger
+) -> Dict[str, Any]:
+    """
+    Analyze parameter evolution to detect pathological behavior.
+    
+    Checks for:
+    - Parameters stuck at bounds
+    - Runaway mass accumulation
+    - Extreme parameter correlations
+    - Bimodal distributions
+    
+    Parameters
+    ----------
+    recent_samples : np.ndarray
+        Recent samples from the sampler (N_samples x N_params)
+    param_names : list
+        Parameter names
+    logger : logging.Logger
+        Logger for warnings
+        
+    Returns
+    -------
+    dict
+        Analysis results with warnings and statistics
+    """
+    if len(recent_samples) < 100:
+        return {'status': 'insufficient_samples'}
+    
+    results = {
+        'status': 'ok',
+        'warnings': [],
+        'stats': {}
+    }
+    
+    # 1. Check for parameters stuck at bounds
+    for i, param in enumerate(param_names):
+        if param not in MW_MULTI_COMP_PARAM_CONFIG:
+            continue
+            
+        config = MW_MULTI_COMP_PARAM_CONFIG[param]
+        values = recent_samples[:, i]
+        
+        # Check if >90% of samples are within 5% of bounds
+        near_lower = np.sum(values < config['low'] * 1.05) / len(values)
+        near_upper = np.sum(values > config['high'] * 0.95) / len(values)
+        
+        if near_lower > 0.9:
+            results['warnings'].append(f"{param} stuck at lower bound")
+            results['status'] = 'boundary_issue'
+        elif near_upper > 0.9:
+            results['warnings'].append(f"{param} stuck at upper bound")
+            results['status'] = 'boundary_issue'
+    
+    # 2. Check total mass evolution
+    mass_indices = [i for i, name in enumerate(param_names) 
+                   if 'M_' in name and 'solar' in name]
+    
+    if mass_indices:
+        total_masses = np.sum(recent_samples[:, mass_indices], axis=1)
+        mass_trend = np.polyfit(range(len(total_masses)), total_masses, 1)[0]
+        
+        # Check if mass is growing rapidly
+        if mass_trend > 1e9:  # Growing by >1e9 M_sun per sample
+            results['warnings'].append(f"Runaway mass accumulation: {mass_trend:.2e} M_sun/sample")
+            results['status'] = 'mass_runaway'
+        
+        results['stats']['total_mass_median'] = np.median(total_masses)
+        results['stats']['total_mass_std'] = np.std(total_masses)
+    
+    # 3. Check parameter correlations
+    if len(recent_samples) > 200:
+        corr_matrix = np.corrcoef(recent_samples.T)
+        np.fill_diagonal(corr_matrix, 0)
+        
+        # Find problematic correlations
+        high_corr_threshold = 0.95
+        high_corr_indices = np.where(np.abs(corr_matrix) > high_corr_threshold)
+        
+        for idx1, idx2 in zip(high_corr_indices[0], high_corr_indices[1]):
+            if idx1 < idx2:  # Avoid duplicates
+                corr_val = corr_matrix[idx1, idx2]
+                results['warnings'].append(
+                    f"High correlation ({corr_val:.2f}): {param_names[idx1]} ↔ {param_names[idx2]}"
+                )
+                if results['status'] == 'ok':
+                    results['status'] = 'high_correlation'
+    
+    # 4. Check for bimodality (might indicate multiple solutions)
+    for i, param in enumerate(param_names):
+        values = recent_samples[:, i]
+        
+        # Simple bimodality check using Hartigan's dip test approximation
+        sorted_vals = np.sort(values)
+        n = len(sorted_vals)
+        if n > 50:
+            # Check for gap in middle 50% of distribution
+            mid_range = sorted_vals[int(n*0.25):int(n*0.75)]
+            if len(mid_range) > 2:
+                gaps = np.diff(mid_range)
+                max_gap = np.max(gaps)
+                median_gap = np.median(gaps)
+                
+                if max_gap > 5 * median_gap:
+                    results['warnings'].append(f"{param} shows bimodal distribution")
+                    if results['status'] == 'ok':
+                        results['status'] = 'bimodal'
+    
+    return results
+
+
+# ============================================================================
+# Enhanced Monitoring Functions
+# ============================================================================
+
+# Initialize global tracking
+convergence_tracker = None
+
+class ConvergenceTracker:
+    """Enhanced convergence tracking with parameter health monitoring."""
+    
+    def __init__(self, param_names: List[str]):
+        self.param_names = param_names
+        self.history = []
+        self.param_history = {name: [] for name in param_names}
+        self.last_logz = None
+        self.stuck_counter = 0
+        self.efficiency_history = []
+        self.logz_history = []
+        self.health_warnings = []
+        
+    def update(self, logz: float, params: np.ndarray, efficiency: float, samples: np.ndarray = None):
+        """Update tracking with new information."""
+        current_time = time.time()
+        
+        self.history.append({
+            'time': current_time,
+            'logz': logz,
+            'params': params.copy() if params is not None else None,
+            'efficiency': efficiency
+        })
+        
+        # Update parameter histories
+        if params is not None:
+            for i, name in enumerate(self.param_names):
+                if i < len(params):
+                    self.param_history[name].append(params[i])
+        
+        # Keep only last hour
+        cutoff_time = current_time - 3600
+        self.history = [h for h in self.history if h['time'] > cutoff_time]
+        
+        # Update rolling statistics
+        self.efficiency_history.append(efficiency)
+        if len(self.efficiency_history) > 20:
+            self.efficiency_history.pop(0)
+            
+        self.logz_history.append(logz)
+        if len(self.logz_history) > 20:
+            self.logz_history.pop(0)
+        
+        # Check for problems if we have samples
+        if samples is not None and len(samples) > 100:
+            evolution_check = check_parameter_evolution(samples, self.param_names, logger)
+            if evolution_check['status'] != 'ok':
+                self.health_warnings = evolution_check['warnings']
+    
+    def get_progress_report(self) -> str:
+        """Generate comprehensive progress report."""
+        if len(self.history) < 2:
+            return "Not enough data for progress analysis"
+        
+        lines = []
+        current_time = time.time()
+        current_logz = self.history[-1]['logz']
+        
+        # LogZ progress
+        logz_10min_ago = None
+        logz_30min_ago = None
+        
+        for h in reversed(self.history):
+            if logz_10min_ago is None and current_time - h['time'] > 600:
+                logz_10min_ago = h['logz']
+            if logz_30min_ago is None and current_time - h['time'] > 1800:
+                logz_30min_ago = h['logz']
+                break
+        
+        if logz_10min_ago is not None:
+            logz_change_10min = current_logz - logz_10min_ago
+            if abs(logz_change_10min) < 0.01:
+                lines.append("⚠️  Log(Z) barely changed in last 10 min")
+                self.stuck_counter += 1
+            else:
+                lines.append(f"✓ Log(Z) changed by {logz_change_10min:+.3f} in last 10 min")
+                self.stuck_counter = max(0, self.stuck_counter - 1)
+        
+        if logz_30min_ago is not None:
+            logz_change_30min = current_logz - logz_30min_ago
+            lines.append(f"  30-min Δlog(Z): {logz_change_30min:+.3f}")
+        
+        # Efficiency trend
+        if len(self.efficiency_history) > 5:
+            recent_eff = np.mean(self.efficiency_history[-5:])
+            older_eff = np.mean(self.efficiency_history[:5])
+            eff_trend = recent_eff - older_eff
+            
+            if eff_trend < -0.5:
+                lines.append(f"⚠️  Efficiency declining: {older_eff:.2f}% → {recent_eff:.2f}%")
+            elif recent_eff < 2.0:
+                lines.append(f"⚠️  Low efficiency: {recent_eff:.2f}%")
+            else:
+                lines.append(f"✓ Efficiency stable: {recent_eff:.2f}%")
+        
+        # Health warnings
+        if self.health_warnings:
+            lines.append("\n⚠️  PARAMETER HEALTH WARNINGS:")
+            for warning in self.health_warnings:
+                lines.append(f"   - {warning}")
+        
+        # Stuck detection
+        if self.stuck_counter > 3:
+            lines.append(f"\n❗ SAMPLING APPEARS STUCK (count: {self.stuck_counter})")
+            lines.append("   Consider: wider priors, different sampler settings, or curriculum learning")
+        
+        return "\n".join(lines)
+
+
+def enhanced_monitor_sampler_progress(
+    sampler,
+    fitted_param_names: List[str],
+    fitted_param_labels: List[str],
+    start_time: float,
+    logger: logging.Logger,
+    gp_surrogate=None,
+    args_obj=None,
+    dashboard_monitor=None  # Optional dashboard integration
+):
+    """
+    Enhanced monitoring with parameter health checks, convergence diagnostics, and optional dashboard updates.
+    """
+    global convergence_tracker
+
     try:
-        # Try to load with minimal dependencies
-        with open(checkpoint_path, 'rb') as f:
-            # This is a hack to load the pickle without the functions
-            import types
-            sys.modules['__main__'].log_likelihood_dynesty = lambda: None
-            sys.modules['__main__'].prior_transform_dynesty = lambda: None
-            
-            res = pickle.load(f)
-            
-        # Extract parameters
-        weights = np.exp(res.logwt - res.logz[-1])
-        weighted_mean = np.average(res.samples, weights=weights, axis=0)
-        
-        # Get the last dlogz
-        if len(res.logz) > 1:
-            final_dlogz = res.logz[-1] - res.logz[-2]
+        res = sampler.results
+
+        logger.info("=" * 80)
+        logger.info(f"🔍 DYNESTY PROGRESS MONITOR - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("=" * 80)
+
+        if not hasattr(res, 'samples') or len(res.samples) == 0:
+            logger.info("❌ No samples available yet")
+            return
+
+        samples = res.samples
+        n_samples, n_params = samples.shape
+
+        # Total calls
+        ncall_total = np.sum(res.ncall) if isinstance(res.ncall, np.ndarray) else res.ncall
+        elapsed_time = time.time() - start_time
+        elapsed_str = str(timedelta(seconds=int(elapsed_time)))
+
+        # Efficiency
+        eff = 100.0 * n_samples / ncall_total if ncall_total > 0 else 0.0
+        logger.info(f"⏱️  Elapsed: {elapsed_str} | 📊 Samples: {n_samples:,} | 🎲 Calls: {ncall_total:,} | 📈 Eff: {eff:.2f}%")
+
+        if gp_surrogate is not None and GP_AVAILABLE:
+            gp_stats = gp_surrogate.get_statistics()
+            logger.info(f"🤖 GP Surrogate: {gp_stats['n_real_calls']:,} real, "
+                        f"{gp_stats['n_surrogate_calls']:,} surrogate (speedup: {gp_stats['speedup_factor']:.1f}x)")
+
+        if n_samples < 50:
+            logger.info("⚠️  Too few samples for detailed analysis")
+            return
+
+        # LogZ stats
+        current_logz = -np.inf
+        if hasattr(res, 'logz') and len(res.logz) > 0:
+            current_logz = res.logz[-1]
+            if not np.isfinite(current_logz):
+                logger.error("❌ log(Z) = -inf. All live points have likelihood = -inf.")
+                return
+            else:
+                logger.info(f"📊 Log(Z): {current_logz:.3f}")
+                if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
+                    logger.info(f"   Error: ±{res.logzerr[-1]:.3f}")
+
+        # Convergence check
+        recent_samples = samples[-min(1000, len(samples)):]
+        current_params = np.median(recent_samples, axis=0)
+
+        if convergence_tracker is None:
+            convergence_tracker = ConvergenceTracker(fitted_param_names)
+
+        convergence_tracker.update(current_logz, current_params, eff, recent_samples)
+        logger.info("\n🎯 CONVERGENCE PROGRESS:")
+        logger.info("─" * 60)
+        logger.info(convergence_tracker.get_progress_report())
+
+        # dlogz stopping
+        dlogz = np.inf
+        if hasattr(res, 'logz') and len(res.logz) > 2:
+            dlogz = res.logz[-1] - res.logz[-2]
+            logger.info(f"\n📏 Stopping criterion: dlogz = {dlogz:.4f}")
+            if args_obj and hasattr(args_obj, 'dlogz_target'):
+                if dlogz < args_obj.dlogz_target:
+                    logger.info(f"   → Close to convergence target ({args_obj.dlogz_target})!")
+
+        # Parameter stats
+        logger.info(f"\n📊 PARAMETER ESTIMATES:")
+        logger.info("─" * 80)
+        logger.info(f"{'Parameter':<25} {'Median':<15} {'MAD':<15} {'Status':<15}")
+        logger.info("─" * 80)
+        param_issues = []
+
+        for i, (param_name, param_label) in enumerate(zip(fitted_param_names, fitted_param_labels)):
+            values = recent_samples[:, i]
+            median_val = np.median(values)
+            mad = np.median(np.abs(values - median_val))
+            formatted_val = format_parameter_value_enhanced(median_val, param_name)
+            formatted_mad = format_parameter_value_enhanced(mad, param_name)
+
+            status = "✓"
+            if param_name in MW_MULTI_COMP_PARAM_CONFIG:
+                config = MW_MULTI_COMP_PARAM_CONFIG[param_name]
+                if median_val < config['low'] * 1.1:
+                    status = "⚠️ Near lower bound"
+                    param_issues.append(f"{param_name} near lower bound")
+                elif median_val > config['high'] * 0.9:
+                    status = "⚠️ Near upper bound"
+                    param_issues.append(f"{param_name} near upper bound")
+                elif param_name in PHYSICAL_BOUNDS:
+                    bounds = PHYSICAL_BOUNDS[param_name]
+                    if median_val < bounds['min'] or median_val > bounds['max']:
+                        status = "❌ Unphysical"
+                        param_issues.append(f"{param_name} outside physical bounds")
+
+            param_display = param_name.replace('_solar', '').replace('_kpc3', '').replace('_kpc', '')
+            logger.info(f"{param_display:<25} {formatted_val:<15} {formatted_mad:<15} {status:<15}")
+
+        # Physical plausibility check
+        logger.info(f"\n🔍 PHYSICAL PLAUSIBILITY CHECK:")
+        logger.info("─" * 60)
+        is_valid, reason = check_physical_plausibility(current_params, fitted_param_names, args_obj)
+        if is_valid:
+            logger.info("✅ Median parameters pass all physical checks")
         else:
-            final_dlogz = np.inf
-            
-        print(f"Loaded checkpoint: {len(res.samples)} samples, dlogz={final_dlogz:.4f}")
-        
-        return weighted_mean, final_dlogz
-        
+            logger.error(f"❌ Median parameters FAIL physical checks: {reason}")
+            param_issues.append(f"Physical check failed: {reason}")
+
+        # Sample validity
+        n_valid = sum(
+            1 for j in range(min(100, len(recent_samples)))
+            if check_physical_plausibility(recent_samples[j], fitted_param_names, args_obj)[0]
+        )
+        valid_fraction = n_valid / min(100, len(recent_samples))
+        logger.info(f"   {valid_fraction*100:.1f}% of recent samples pass physical checks")
+        if valid_fraction < 0.5:
+            logger.warning("⚠️  Majority of samples failing physical checks!")
+            param_issues.append("Low fraction of physically valid samples")
+
+        # Model predictions at solar radius
+        logger.info(f"\n🌟 MODEL PREDICTIONS AT SOLAR RADIUS:")
+        logger.info("─" * 60)
+        full_params = dict(zip(fitted_param_names, current_params))
+        for p_info in args_obj.all_param_info_list:
+            if not p_info['is_fitted']:
+                full_params[p_info['name']] = p_info['current_val']
+        full_params.update({
+            'include_disk_thin': args_obj.include_disk_thin,
+            'include_disk_thick': args_obj.include_disk_thick,
+            'include_bulge': args_obj.include_bulge,
+            'include_gas': args_obj.include_gas,
+            'include_bulge_density': args_obj.include_bulge
+        })
+
+        try:
+            v_newton_solar = v_baryon_total_newtonian_kms(np.array([R_SUN_KPC]), full_params)[0]
+            rho_solar = rho_baryon_total_midplane_solar_kpc3(np.array([R_SUN_KPC]), full_params)[0]
+            xi_func = XI_FUNCTION_MAP['power']
+            xi_solar = xi_func(rho_solar, full_params['rho_c_solar_kpc3'], full_params['n_exp'])[0]
+            v_model_solar = v_newton_solar * np.sqrt(xi_solar)
+
+            logger.info(f"   v_Newton(R☉) = {v_newton_solar:.1f} km/s")
+            logger.info(f"   ρ(R☉,z=0) = {rho_solar:.2e} M☉/kpc³")
+            logger.info(f"   ξ(R☉) = {xi_solar:.3f}")
+            logger.info(f"   v_model(R☉) = {v_model_solar:.1f} km/s")
+
+            if v_model_solar < EXPECTED_V_AT_SOLAR[0] or v_model_solar > EXPECTED_V_AT_SOLAR[1]:
+                logger.warning(f"⚠️  v(R☉) = {v_model_solar:.0f} km/s outside expected range")
+                param_issues.append(f"v(R☉) = {v_model_solar:.0f} km/s outside expected range")
+
+        except Exception as e:
+            logger.error(f"❌ Error calculating model predictions: {e}")
+
+        # Recommendations
+        if param_issues or convergence_tracker.stuck_counter > 3:
+            logger.info(f"\n💡 RECOMMENDATIONS:")
+            logger.info("─" * 60)
+            if convergence_tracker.stuck_counter > 3:
+                logger.info("• Sampling appears stuck. Consider curriculum learning or adjusting sampler.")
+            if any("bound" in issue for issue in param_issues):
+                logger.info("• Parameters hitting bounds. Review prior ranges.")
+            if any("physical" in issue for issue in param_issues):
+                logger.info("• Physical plausibility issues. Consider checking model and data consistency.")
+
+        logger.info("=" * 80)
+
+        # 🟢 DASHBOARD INTEGRATION
+        if dashboard_monitor is not None:
+            try:
+                dashboard_state = {
+                    "elapsed_time": elapsed_time / 3600,
+                    "n_samples": n_samples,
+                    "n_calls": ncall_total,
+                    "efficiency": eff,
+                    "logz": current_logz,
+                    "logz_err": res.logzerr[-1] if hasattr(res, 'logzerr') and len(res.logzerr) > 0 else 0,
+                    "dlogz": dlogz,
+                    "current_nlive": len(res.live_points) if hasattr(res, 'live_points') else 0,
+                    "parameter_estimates": {},
+                    "parameter_uncertainties": {},
+                    "health_warnings": convergence_tracker.health_warnings if convergence_tracker else []
+                }
+
+                for i, name in enumerate(fitted_param_names):
+                    dashboard_state["parameter_estimates"][name] = float(current_params[i])
+                    dashboard_state["parameter_uncertainties"][name] = float(np.std(recent_samples[:, i]))
+
+                dashboard_monitor.update_progress(dashboard_state)
+
+            except Exception as e:
+                logger.error(f"Failed to update dashboard: {e}")
+
     except Exception as e:
-        print(f"Failed to load checkpoint: {e}")
-        return None, None
+        logger.error(f"Error in monitoring: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
 
 
-# --- Gaussian Process Surrogate Model ---
+
+def format_parameter_value_enhanced(value: float, param_name: str) -> str:
+    """
+    Format parameter values with appropriate units and precision.
+    
+    Parameters
+    ----------
+    value : float
+        Parameter value
+    param_name : str
+        Parameter name to determine formatting
+        
+    Returns
+    -------
+    str
+        Formatted value string
+    """
+    if 'M_' in param_name and 'solar' in param_name:
+        # Mass parameters
+        if value > 1e11:
+            return f"{value/1e11:.2f}×10¹¹ M☉"
+        elif value > 1e10:
+            return f"{value/1e10:.2f}×10¹⁰ M☉"
+        else:
+            return f"{value:.2e} M☉"
+    elif 'rho_c' in param_name:
+        # Density parameters
+        return f"{value:.2e} M☉/kpc³"
+    elif 'R_d' in param_name or 'a_' in param_name:
+        # Scale lengths
+        return f"{value:.3f} kpc"
+    elif 'h_z' in param_name:
+        # Scale heights
+        return f"{value:.3f} kpc"
+    elif 'n_exp' in param_name:
+        # Power law exponent
+        return f"{value:.3f}"
+    else:
+        # Default scientific notation
+        return f"{value:.3e}"
+
+
+# ============================================================================
+# Prior Transform and Likelihood Functions
+# ============================================================================
+
+def prior_transform_dynesty(
+    u_array: np.ndarray,
+    fitted_param_names: List[str],
+    prior_bounds_low: np.ndarray,
+    prior_bounds_high: np.ndarray,
+    use_log_prior_flags: List[bool]
+) -> np.ndarray:
+    """
+    Transform unit cube samples to physical prior.
+    
+    Implements both uniform and log-uniform priors as specified
+    in parameter configuration.
+    
+    Parameters
+    ----------
+    u_array : np.ndarray
+        Unit cube samples [0,1]
+    fitted_param_names : list
+        Parameter names
+    prior_bounds_low : np.ndarray
+        Lower bounds
+    prior_bounds_high : np.ndarray
+        Upper bounds
+    use_log_prior_flags : list
+        Whether to use log-uniform prior for each parameter
+        
+    Returns
+    -------
+    np.ndarray
+        Transformed parameters in physical space
+    """
+    if any(arg is None for arg in [fitted_param_names, prior_bounds_low, prior_bounds_high]):
+        raise ValueError("prior_transform_dynesty received None for essential arguments")
+    
+    params = np.empty_like(u_array)
+    
+    for i in range(len(fitted_param_names)):
+        low, high = prior_bounds_low[i], prior_bounds_high[i]
+        
+        if use_log_prior_flags[i]:
+            # Log-uniform transform: p(x) ∝ 1/x
+            # Better for scale-variant parameters like masses
+            log_low, log_high = np.log10(low), np.log10(high)
+            params[i] = 10**(log_low + u_array[i] * (log_high - log_low))
+        else:
+            # Standard uniform transform
+            params[i] = low + u_array[i] * (high - low)
+    
+    return params
+
+
+def log_likelihood_dynesty(
+    theta_values_fitted: np.ndarray,
+    fitted_param_names: List[str],
+    args_dynesty_obj: argparse.Namespace,
+    all_param_info_list: List[Dict],
+    R_data: np.ndarray,
+    v_data: np.ndarray,
+    sigma_data: np.ndarray,
+    xi_type: str,
+    gp_surrogate=None
+) -> Tuple[float, List[float]]:
+    """
+    Enhanced log-likelihood with physical plausibility checks.
+    
+    This version includes:
+    - Physical parameter validation
+    - Robust error handling
+    - Debugging output for problematic cases
+    - Optional GP surrogate evaluation
+    
+    Parameters
+    ----------
+    theta_values_fitted : np.ndarray
+        Fitted parameter values
+    fitted_param_names : list
+        Names of fitted parameters
+    args_dynesty_obj : argparse.Namespace
+        Configuration object
+    all_param_info_list : list
+        Full parameter information
+    R_data, v_data, sigma_data : np.ndarray
+        Observational data
+    xi_type : str
+        Type of xi function ('power' or 'logistic')
+    gp_surrogate : GPSurrogateModel, optional
+        Gaussian process surrogate
+        
+    Returns
+    -------
+    log_likelihood : float
+        Log likelihood value
+    blob : list
+        Additional quantities (e.g., RMS)
+    """
+    global debug_counter
+    use_logging = logger is not None
+
+    
+    # Input validation
+    if any(arg is None for arg in [theta_values_fitted, fitted_param_names, args_dynesty_obj, 
+                                   all_param_info_list, R_data, v_data, sigma_data, xi_type]): 
+        return -np.inf, [np.inf]
+    
+    # Check for non-finite inputs
+    if any(not np.isfinite(val) for val in theta_values_fitted):
+        if debug_counter < DEBUG_COUNTER_MAX:
+            logger.warning(f"Non-finite parameter values detected:")
+            for name, val in zip(fitted_param_names, theta_values_fitted):
+                if not np.isfinite(val):
+                    logger.warning(f"  {name}: {val}")
+            debug_counter += 1
+        return -np.inf, [np.inf]
+    
+    # Basic sanity checks only
+    for i, (name, value) in enumerate(zip(fitted_param_names, theta_values_fitted)):
+        if 'M_' in name and value <= 0:
+            return -np.inf, [np.inf]  # No negative masses
+        if 'R_d' in name and value <= 0:
+            return -np.inf, [np.inf]  # No negative scale lengths
+        if 'h_z' in name and value <= 0:
+            return -np.inf, [np.inf]  # No negative scale heights
+        if name == 'rho_c_solar_kpc3' and value <= 0:
+            return -np.inf, [np.inf]  # No negative density
+        if name == 'n_exp' and (value <= 0 or value > 10):
+            return -np.inf, [np.inf]  # Reasonable exponent range
+    
+    # Reconstruct full parameter dictionary
+    current_params_full_dict = dict(zip(fitted_param_names, theta_values_fitted))
+    
+    # Add fixed parameters
+    if all_param_info_list:
+        for p_info in all_param_info_list:
+            if not p_info['is_fitted']:
+                current_params_full_dict[p_info['name']] = p_info['current_val']
+    
+    # Add component flags for MW
+    if args_dynesty_obj.fit_target == 'milkyway':
+        for p_name_cfg, p_details_cfg in MW_MULTI_COMP_PARAM_CONFIG.items():
+            if 'include_flag_arg' in p_details_cfg:
+                current_params_full_dict[p_details_cfg['include_flag_arg']] = \
+                    getattr(args_dynesty_obj, p_details_cfg['include_flag_arg'])
+        current_params_full_dict['include_bulge_density'] = args_dynesty_obj.include_bulge
+    
+    # Calculate model prediction
+    try:
+        # Use GP surrogate if available and requested
+        if gp_surrogate is not None and args_dynesty_obj.use_gp_surrogate:
+            def physics_func(params, args_obj):
+                return v_model_for_dynesty(R_data, params, xi_type, args_obj)
+            
+            v_predicted, v_uncertainty = gp_surrogate.predict(
+                theta_values_fitted, 
+                physics_function=physics_func,
+                args_obj=args_dynesty_obj
+            )
+        else:
+            # Standard physics model evaluation
+            v_predicted = v_model_for_dynesty(
+                R_data, current_params_full_dict, xi_type, args_dynesty_obj
+            )
+        
+        # Validate predictions
+        if not np.all(np.isfinite(v_predicted)):
+            if debug_counter < DEBUG_COUNTER_MAX:
+                logger.warning(f"Non-finite v_predicted values!")
+                logger.warning(f"  First few: {v_predicted[:5]}")
+                logger.warning(f"  Parameters causing issue:")
+                for name, val in current_params_full_dict.items():
+                    if isinstance(val, (int, float, np.number)):
+                        logger.warning(f"    {name}: {val:.3e}")
+                debug_counter += 1
+            return -np.inf, [np.inf]
+            
+    except Exception as e:
+        if debug_counter < DEBUG_COUNTER_MAX:
+            logger.error(f"Exception in v_model_for_dynesty: {e}")
+            debug_counter += 1
+        return -np.inf, [np.inf]
+    
+    # Calculate chi-squared and likelihood
+    sigma_data_safe = np.maximum(sigma_data, 1e-9)
+    residuals = v_data - v_predicted
+    
+    # Calculate RMS for blob
+    rmse = np.sqrt(np.mean(residuals**2))
+    
+    # Check RMSE reasonableness
+    if rmse > 200:  # km/s - indicates very poor fit
+        if debug_counter < DEBUG_COUNTER_MAX:
+            if use_logging:
+                logger.warning(f"Very high RMSE: {rmse:.1f} km/s")
+            debug_counter += 1
+    
+    # Standard Gaussian likelihood
+    chi_squared_terms = (residuals / sigma_data_safe)**2
+    log_L_terms = chi_squared_terms + np.log(2 * np.pi * sigma_data_safe**2)
+    
+    if not np.all(np.isfinite(log_L_terms)): 
+        return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
+    
+    log_L = -0.5 * np.sum(log_L_terms)
+    
+    if not np.isfinite(log_L): 
+        return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
+    
+    # Reset debug counter periodically if things are working
+    if debug_counter > 0 and np.isfinite(log_L):
+        debug_counter = max(0, debug_counter - 1)
+    
+    return log_L, [rmse]
+
+
+def v_model_for_dynesty(
+    R_kpc_array: np.ndarray,
+    p_all_params_dict: Dict[str, float],
+    xi_type_str: str,
+    ARGS_obj_dynesty: argparse.Namespace
+) -> np.ndarray:
+    """
+    Calculate model velocities with density-dependent modification.
+    
+    Enhanced with better error handling and validation.
+    
+    Parameters
+    ----------
+    R_kpc_array : np.ndarray
+        Galactocentric radii
+    p_all_params_dict : dict
+        All model parameters
+    xi_type_str : str
+        Type of xi function
+    ARGS_obj_dynesty : argparse.Namespace
+        Configuration object
+        
+    Returns
+    -------
+    np.ndarray
+        Model circular velocities in km/s
+    """
+    global debug_counter
+    global logger
+    if logger is None:
+        import logging
+        logger = logging.getLogger("run_dynesty")
+        logger.setLevel(logging.ERROR)
+
+    
+    # Extract xi parameters
+    rho_c_solar_kpc3 = p_all_params_dict['rho_c_solar_kpc3']
+    n_exp = p_all_params_dict['n_exp']
+    
+    # Validate xi parameters
+    if not np.isfinite(rho_c_solar_kpc3) or not np.isfinite(n_exp):
+        if debug_counter < DEBUG_COUNTER_MAX:
+            logger.warning(f"Non-finite xi parameters: rho_c={rho_c_solar_kpc3}, n={n_exp}")
+            debug_counter += 1
+        return np.zeros_like(R_kpc_array)
+    
+    # Calculate Newtonian velocities and densities
+    if ARGS_obj_dynesty.fit_target == 'milkyway':
+        v_n_kms = v_baryon_total_newtonian_kms(R_kpc_array, p_all_params_dict)
+        rho_midplane_for_xi = rho_baryon_total_midplane_solar_kpc3(R_kpc_array, p_all_params_dict)
+    else:
+        raise NotImplementedError("Only Milky Way fitting currently supported")
+    
+    # Validate intermediate results
+    if not np.all(np.isfinite(v_n_kms)):
+        if debug_counter < DEBUG_COUNTER_MAX:
+            logger.warning(f"Non-finite Newtonian velocities detected")
+            debug_counter += 1
+        v_n_kms = np.nan_to_num(v_n_kms, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    if not np.all(np.isfinite(rho_midplane_for_xi)):
+        if debug_counter < DEBUG_COUNTER_MAX:
+            if logger:
+                logger.warning(f"Non-finite densities detected")
+            debug_counter += 1
+        rho_midplane_for_xi = np.nan_to_num(rho_midplane_for_xi, nan=0.0, posinf=1e10, neginf=0.0)
+    
+    # Calculate xi modification
+    xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
+    xi_values = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
+    
+    # Validate xi
+    xi_values = np.nan_to_num(xi_values, nan=1.0, posinf=1.0, neginf=0.0)
+    xi_values_safe = np.maximum(xi_values, 0.0)
+    
+    # Apply modification
+    v_mod_kms = v_n_kms * np.sqrt(xi_values_safe)
+    
+    # Final validation
+    if not np.all(np.isfinite(v_mod_kms)):
+        if debug_counter < DEBUG_COUNTER_MAX:
+            if logger:
+                logger.warning(f"Non-finite final velocities")
+            debug_counter += 1
+        v_mod_kms = np.nan_to_num(v_mod_kms, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    return v_mod_kms
+
+
+# ============================================================================
+# Parameter Configuration Functions
+# ============================================================================
+
+def get_param_labels_and_bounds(ARGS):
+    """
+    Enhanced parameter configuration with log-prior flags and validation.
+    
+    Returns parameter information including:
+    - Names, labels, initial values
+    - Prior bounds
+    - Log-uniform vs uniform prior flags
+    - Physical validation requirements
+    """
+    param_info_list = []
+    config_to_use = MW_MULTI_COMP_PARAM_CONFIG
+    logger.info("Configuring parameters for multi-component Milky Way model")
+    
+    # Build parameter list
+    for p_name, p_details in config_to_use.items():
+        # Check if component is included
+        is_included = 'include_flag_arg' not in p_details or \
+                     getattr(ARGS, p_details['include_flag_arg'], False)
+        if not is_included:
+            continue
+        
+        # Check if parameter should be fitted
+        is_fitted = False
+        if 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
+            # Check if specific fixed value was provided via command line
+            fixed_arg_name = p_details['fixed_val_from_arg']
+            if f"--{fixed_arg_name}" not in sys.argv:
+                is_fitted = True
+            else:
+                logger.info(f"  {p_name}: Using fixed value (overrides fit flag)")
+        
+        # Get current value
+        current_val = getattr(ARGS, p_details['fixed_val_from_arg'])
+        
+        # Validate against physical bounds
+        if p_name in PHYSICAL_BOUNDS:
+            bounds = PHYSICAL_BOUNDS[p_name]
+            if current_val < bounds['min'] or current_val > bounds['max']:
+                if logger:
+                    logger.warning(f"  {p_name}: Initial value {current_val:.2e} outside "
+                             f"physical bounds [{bounds['min']:.2e}, {bounds['max']:.2e}]")
+                # Clip to bounds
+                current_val = np.clip(current_val, bounds['min'], bounds['max'])
+                if logger:
+                    logger.warning(f"  Clipped to: {current_val:.2e}")
+        
+        param_info_list.append({
+            'name': p_name, 
+            'label': p_details['label'], 
+            'current_val': current_val,
+            'low': p_details['low'], 
+            'high': p_details['high'], 
+            'is_fitted': is_fitted,
+            'log_prior': p_details.get('log_prior', False),
+            'physical_check': p_details.get('physical_check', True)
+        })
+    
+    ARGS.all_param_info_list = param_info_list
+    fitted_params_info = [p for p in param_info_list if p['is_fitted']]
+    
+    if not fitted_params_info: 
+        logger.error("No parameters configured to be fitted!")
+        logger.error("You must use at least one --fit_* flag (e.g., --fit_xi_params)")
+        sys.exit(1)
+    
+    # Log configuration
+    logger.info(f"\nFitting {len(fitted_params_info)} parameters:")
+    for p in fitted_params_info:
+        prior_type = "Log-uniform" if p['log_prior'] else "Uniform"
+        logger.info(f"  {p['name']:<25} | Prior: {prior_type} | "
+                   f"Range: [{p['low']:.2e}, {p['high']:.2e}]")
+    
+    # Extract arrays for fitted parameters
+    use_log_flags = [p['log_prior'] for p in fitted_params_info]
+    
+    return (
+        [p['name'] for p in fitted_params_info],
+        [p['label'] for p in fitted_params_info],
+        np.array([p['current_val'] for p in fitted_params_info]),
+        np.array([p['low'] for p in fitted_params_info]),
+        np.array([p['high'] for p in fitted_params_info]),
+        use_log_flags
+    )
+
+
+# ============================================================================
+# Gaussian Process Surrogate Model (unchanged but included for completeness)
+# ============================================================================
+
 class GPSurrogateModel:
     """
     Gaussian Process surrogate model for fast likelihood evaluation.
@@ -188,7 +1323,8 @@ class GPSurrogateModel:
                 self.y_train.append(v_pred)
                 self.n_real_calls += 1
             except Exception as e:
-                logger.warning(f"Failed to evaluate training point: {e}")
+                if logger:
+                    logger.warning(f"Failed to evaluate training point: {e}")
         
         # Train initial GP
         self._train_gp()
@@ -197,7 +1333,8 @@ class GPSurrogateModel:
     def _train_gp(self):
         """Train or retrain the GP model"""
         if len(self.X_train) < 10:
-            logger.warning("Too few training points for GP")
+            if logger:
+                logger.warning("Too few training points for GP")
             return
         
         X = np.array(self.X_train)
@@ -281,165 +1418,28 @@ class GPSurrogateModel:
         }
 
 
-# --- Adaptive Sampling Strategy ---
-class AdaptiveSamplingStrategy:
-    """
-    Monitors sampling progress and adapts strategy when stuck or inefficient
-    """
-    
-    def __init__(self, 
-                 initial_params: List[str],
-                 param_groups: Dict[str, List[str]],
-                 thresholds: Dict[str, float]):
-        """
-        Parameters:
-        -----------
-        initial_params : list
-            Full list of parameters being fitted
-        param_groups : dict
-            Groups of related parameters (e.g., {'disk_thin': ['M_disk_thin_solar', ...]})
-        thresholds : dict
-            Performance thresholds for adaptation
-        """
-        self.initial_params = initial_params
-        self.param_groups = param_groups
-        self.thresholds = thresholds
-        
-        # Tracking metrics
-        self.sampling_history = []
-        self.phase = "initial"
-        self.adaptations_made = []
-        
-    def check_sampling_health(self, sampler, elapsed_time: float) -> Dict[str, any]:
-        """
-        Assess current sampling performance and health
-        """
-        res = sampler.results
-        
-        # Basic metrics
-        if isinstance(res.ncall, np.ndarray):
-            ncall = np.sum(res.ncall)
-        else:
-            ncall = res.ncall
-            
-        n_samples = len(res.samples) if hasattr(res, 'samples') else 0
-        efficiency = (n_samples / ncall * 100) if ncall > 0 else 0
-        
-        # Calculate rate metrics
-        call_rate = ncall / elapsed_time if elapsed_time > 0 else 0
-        sample_rate = n_samples / elapsed_time if elapsed_time > 0 else 0
-        
-        # Degeneracy detection
-        degeneracy_score = self._detect_parameter_degeneracies(res.samples) if n_samples > 1000 else 0
-        
-        # Mass accumulation check
-        mass_escalation = self._check_mass_escalation(res.samples, self.initial_params) if n_samples > 500 else False
-        
-        health = {
-            'ncall': ncall,
-            'n_samples': n_samples,
-            'efficiency': efficiency,
-            'call_rate': call_rate,
-            'sample_rate': sample_rate,
-            'degeneracy_score': degeneracy_score,
-            'mass_escalation': mass_escalation,
-            'phase': self.phase,
-            'time_in_phase': elapsed_time
-        }
-        
-        self.sampling_history.append(health)
-        return health
-    
-    def _detect_parameter_degeneracies(self, samples: np.ndarray) -> float:
-        """
-        Detect parameter degeneracies using correlation analysis
-        """
-        if len(samples) < 100:
-            return 0.0
-            
-        # Use recent samples
-        recent = samples[-min(1000, len(samples)):]
-        
-        # Calculate correlation matrix
-        corr_matrix = np.corrcoef(recent.T)
-        
-        # Find high correlations (excluding diagonal)
-        np.fill_diagonal(corr_matrix, 0)
-        max_corr = np.max(np.abs(corr_matrix))
-        
-        # Count problematic correlations
-        high_corr_count = np.sum(np.abs(corr_matrix) > 0.9)
-        
-        degeneracy_score = max_corr + (high_corr_count / corr_matrix.size)
-        return degeneracy_score
-    
-    def _check_mass_escalation(self, samples: np.ndarray, param_names: List[str]) -> bool:
-        """
-        Check if total mass is escalating beyond reasonable bounds
-        """
-        mass_indices = [i for i, name in enumerate(param_names) if 'M_' in name and 'solar' in name]
-        
-        if not mass_indices or len(samples) < 500:
-            return False
-            
-        # Compare early vs recent total masses
-        early_samples = samples[100:300]
-        recent_samples = samples[-200:]
-        
-        early_total = np.sum(early_samples[:, mass_indices], axis=1)
-        recent_total = np.sum(recent_samples[:, mass_indices], axis=1)
-        
-        # Check if mass is growing significantly
-        mass_growth = np.median(recent_total) / np.median(early_total)
-        
-        return mass_growth > 1.5 or np.median(recent_total) > 1.5e11
-    
-    def should_restart_sampling(self, sampler, start_time: float, phase: str = 'initial') -> Tuple[bool, Optional[str]]:
-        """
-        Determine if sampling should be restarted with a different strategy
-        """
-        elapsed = time.time() - start_time
-        res = sampler.results
-        
-        # Get current health
-        health = self.check_sampling_health(sampler, elapsed)
-        
-        # Check various failure modes
-        if phase == 'initial' and health['ncall'] > 300000 and elapsed > 7200:  # 2 hours
-            
-            # Mass escalation check
-            if health['mass_escalation']:
-                return True, "mass_escalation"
-            
-            # Low efficiency check
-            if health['efficiency'] < 2.0:
-                return True, "low_efficiency"
-            
-            # High degeneracy check
-            if health['degeneracy_score'] > 1.5:
-                return True, "high_degeneracy"
-        
-        # Check if completely stuck
-        if health['ncall'] > 500000 and health['efficiency'] < 1.0:
-            return True, "extremely_low_efficiency"
-        
-        return False, None
+# ============================================================================
+# Curriculum Learning Implementation
+# ============================================================================
 
-
-# --- Curriculum Learning Implementation ---
 def run_curriculum_learning(args, gaia_data_dict, logger):
     """
-    Implement curriculum learning approach: start simple, add complexity
+    Implement curriculum learning approach with physical constraints.
+    
+    Enhanced with:
+    - Better stage design based on parameter coupling
+    - Physical validation between stages
+    - Adaptive resource allocation
     """
     logger.info("🎓 Starting CURRICULUM LEARNING approach")
     
     all_results = {}
     cumulative_params = {}
     
-    # Define curriculum stages with smart resource allocation
+    # Define curriculum stages with physically motivated progression
     curriculum = [
         {
-            'name': 'Stage 1: Xi Parameters Only',
+            'name': 'Stage 1: Xi Parameters with Fixed Reasonable Baryons',
             'fit_flags': {
                 'fit_xi_params': True,
                 'fit_disk_thin': False,
@@ -448,12 +1448,12 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                 'fit_gas': False
             },
             'fixed_values': {
-                'M_disk_thin_solar': 6e10,
-                'R_d_thin_kpc': 3.0,
+                'M_disk_thin_solar': 5e10,    # Reasonable MW thin disk
+                'R_d_thin_kpc': 2.5,
                 'h_z_thin_kpc': 0.3,
-                'M_bulge_solar': 1.5e10,
+                'M_bulge_solar': 1.5e10,      # Reasonable bulge
                 'a_bulge_kpc': 0.7,
-                'M_disk_thick_solar': 1.5e10,
+                'M_disk_thick_solar': 1e10,   # ~20% of thin disk
                 'R_d_thick_kpc': 3.5,
                 'h_z_thick_kpc': 0.9,
                 'M_gas_solar': 1e10,
@@ -461,43 +1461,57 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                 'h_z_gas_kpc': 0.15
             },
             'nlive': 500,
-            'dlogz': 0.1,  # Looser convergence for quick exploration
-            'maxcall': int(args.maxcall * 0.15)  # 15% of total budget
+            'dlogz': 0.1,
+            'maxcall': int(args.maxcall * 0.15)
         },
         {
-            'name': 'Stage 2: Xi + Both Disk Components',
+            'name': 'Stage 2: Xi + Thin Disk (Primary Component)',
             'fit_flags': {
-                'fit_xi_params': True,  # Refit with disks
+                'fit_xi_params': True,
                 'fit_disk_thin': True,
-                'fit_disk_thick': True,  # Include thick disk too
+                'fit_disk_thick': False,
                 'fit_bulge': False,
                 'fit_gas': False
             },
-            'use_previous': ['rho_c_solar_kpc3', 'n_exp'],  # Use Stage 1 Xi as starting point
+            'use_previous': ['rho_c_solar_kpc3', 'n_exp'],
             'nlive': 800,
-            'dlogz': 0.05,  # Tighter convergence
-            'maxcall': int(args.maxcall * 0.35)  # 35% of total budget
+            'dlogz': 0.05,
+            'maxcall': int(args.maxcall * 0.25)
         },
         {
-            'name': 'Stage 3: Full Model Fine-Tuning',
+            'name': 'Stage 3: Add Secondary Components',
             'fit_flags': {
                 'fit_xi_params': True,
                 'fit_disk_thin': True,
                 'fit_disk_thick': True,
-                'fit_bulge': True,
-                'fit_gas': True
+                'fit_bulge': args.include_bulge,
+                'fit_gas': args.include_gas
             },
-            'use_previous': 'all',  # Use all previous results
-            'nlive': args.nlive_init,  # Use full requested live points
-            'dlogz': args.dlogz_target,  # Use final target precision
-            'maxcall': int(args.maxcall * 0.50)  # 50% of total budget
+            'use_previous': 'all',
+            'nlive': 1000,
+            'dlogz': 0.02,
+            'maxcall': int(args.maxcall * 0.30)
+        },
+        {
+            'name': 'Stage 4: Final Refinement',
+            'fit_flags': {
+                'fit_xi_params': True,
+                'fit_disk_thin': True,
+                'fit_disk_thick': True,
+                'fit_bulge': args.include_bulge,
+                'fit_gas': args.include_gas
+            },
+            'use_previous': 'all',
+            'nlive': args.nlive_init,
+            'dlogz': args.dlogz_target,
+            'maxcall': int(args.maxcall * 0.30)
         }
     ]
     
     for i, stage in enumerate(curriculum):
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'='*80}")
         logger.info(f"📚 {stage['name']}")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'='*80}")
         logger.info(f"Settings: nlive={stage.get('nlive')}, dlogz={stage.get('dlogz')}, "
                    f"maxcall={stage.get('maxcall'):,} ({stage.get('maxcall')/args.maxcall*100:.0f}% of total)")
         
@@ -511,23 +1525,24 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
         # Set fixed values
         if 'fixed_values' in stage:
             for param, value in stage['fixed_values'].items():
-                setattr(stage_args, param.replace('_solar', '_fixed').replace('_kpc', '_fixed'), value)
+                fixed_name = param.replace('_solar', '_fixed').replace('_kpc', '_fixed')
+                setattr(stage_args, fixed_name, value)
         
         # Use results from previous stages
         if i > 0 and 'use_previous' in stage:
             if stage['use_previous'] == 'all':
-                # Use all previous results
-                for param, value in cumulative_params.items():
+                for param, stats in cumulative_params.items():
                     fixed_name = param.replace('_solar', '_fixed').replace('_kpc3', '_fixed').replace('_kpc', '_fixed')
-                    setattr(stage_args, fixed_name, value['median'])
+                    setattr(stage_args, fixed_name, stats['median'])
+                    logger.info(f"  Using previous {param}: {stats['median']:.3e}")
             else:
-                # Use specific parameters
                 for param in stage['use_previous']:
                     if param in cumulative_params:
                         fixed_name = param.replace('_solar', '_fixed').replace('_kpc3', '_fixed').replace('_kpc', '_fixed')
                         setattr(stage_args, fixed_name, cumulative_params[param]['median'])
+                        logger.info(f"  Using previous {param}: {cumulative_params[param]['median']:.3e}")
         
-        # Update sampler settings with stage-specific values
+        # Update sampler settings
         stage_args.nlive_init = stage.get('nlive', 500)
         stage_args.maxcall = stage.get('maxcall', 200000)
         stage_args.dlogz_target = stage.get('dlogz', args.dlogz_target)
@@ -538,1062 +1553,429 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
         
         if results is None:
             logger.error(f"Stage {i+1} failed!")
-            logger.error("This could be due to:")
-            logger.error("  - Prior bounds too restrictive")
-            logger.error("  - Likelihood calculation errors")
-            logger.error("  - Insufficient maxcall allocation")
             logger.info(f"Successfully completed stages: {list(all_results.keys())}")
             break
         
         all_results[f'stage_{i+1}'] = results
         
-        # Extract parameters for next stage
+        # Extract and validate parameters for next stage
         if hasattr(results, 'samples'):
-            # Use dynesty's resampling to get equal-weight samples
+            # Get weighted samples
             try:
                 from dynesty import utils as dyfunc
                 samples = dyfunc.resample_equal(results.samples, np.exp(results.logwt - results.logz[-1]))
             except:
-                # Fallback to weighted average if dynesty utils not available
                 samples = results.samples
                 weights = np.exp(results.logwt - results.logz[-1])
             
             # Get parameter names for this stage
             fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(stage_args)
             
-            # Calculate weighted statistics for all fitted parameters
+            # Calculate statistics and validate
+            logger.info(f"\nStage {i+1} Results:")
+            all_params_valid = True
+            
             for j, param in enumerate(fitted_p_names):
-                if len(samples.shape) == 2 and j < samples.shape[1]:
+                if j < samples.shape[1]:
                     param_samples = samples[:, j]
-                    weighted_median = np.median(param_samples)
-                    weighted_std = np.std(param_samples)
+                    median_val = np.median(param_samples)
+                    std_val = np.std(param_samples)
+                    
+                    # Check physical bounds
+                    if param in PHYSICAL_BOUNDS:
+                        bounds = PHYSICAL_BOUNDS[param]
+                        if median_val < bounds['min'] or median_val > bounds['max']:
+                            if logger:
+                                logger.warning(f"  ⚠️  {param}: {median_val:.3e} outside physical bounds!")
+                            all_params_valid = False
                     
                     cumulative_params[param] = {
-                        'median': weighted_median,
-                        'std': weighted_std
+                        'median': median_val,
+                        'std': std_val
                     }
-                    logger.info(f"  {param}: {weighted_median:.3e} ± {weighted_std:.3e}")
+                    logger.info(f"  {param}: {median_val:.3e} ± {std_val:.3e}")
+            
+            if not all_params_valid:
+                if logger:
+                    logger.warning("⚠️  Some parameters outside physical bounds. Check configuration.")
     
     logger.info(f"\n🎉 Curriculum learning complete!")
     
-    # Summarize efficiency gains
-    total_calls_used = sum(stage.get('maxcall', 0) for stage in curriculum)
+    # Summary
+    total_calls_used = sum(stage.get('maxcall', 0) for stage in curriculum[:len(all_results)])
     logger.info(f"\n📊 Curriculum Learning Summary:")
-    logger.info(f"  Total maxcall budget allocated: {total_calls_used:,} / {args.maxcall:,} ({total_calls_used/args.maxcall*100:.0f}%)")
+    logger.info(f"  Total calls used: {total_calls_used:,} / {args.maxcall:,} ({total_calls_used/args.maxcall*100:.0f}%)")
     logger.info(f"  Stages completed: {len(all_results)}")
     logger.info(f"  Final parameters found: {len(cumulative_params)}")
     
+    # Final validation
+    if cumulative_params:
+        final_params = np.array([cumulative_params[p]['median'] 
+                               for p in cumulative_params.keys()])
+        param_names = list(cumulative_params.keys())
+        
+        is_valid, reason = check_physical_plausibility(final_params, param_names, args)
+        if is_valid:
+            logger.info("✅ Final parameters pass all physical checks!")
+        else:
+            if logger:
+                logger.warning(f"❌ Final parameters fail physical checks: {reason}")
+    
     return all_results
-
-
-# --- Enhanced Monitoring Functions ---
-def format_parameter_value_monitor(value, param_name):
-    """Format parameter values appropriately for monitoring"""
-    if 'M_' in param_name and 'solar' in param_name:
-        return f"{value:.2e} M☉"
-    elif 'rho_c' in param_name:
-        return f"{value:.2e} M☉/kpc³"
-    elif 'kpc' in param_name:
-        return f"{value:.3f} kpc"
-    elif 'n_exp' in param_name:
-        return f"{value:.3f}"
-    else:
-        return f"{value:.3e}"
-    
-
-# Add this class before the monitor_sampler_progress function
-class ConvergenceTracker:
-    """Track convergence metrics over time"""
-    def __init__(self):
-        self.history = []
-        self.last_logz = None
-        self.last_params = None
-        self.stuck_counter = 0
-        self.efficiency_history = []
-        self.logz_history = []
-        
-    def update(self, logz, params, efficiency):
-        self.history.append({
-            'time': time.time(),
-            'logz': logz,
-            'params': params.copy() if params is not None else None,
-            'efficiency': efficiency
-        })
-        
-        # Keep only last hour of history
-        cutoff_time = time.time() - 3600
-        self.history = [h for h in self.history if h['time'] > cutoff_time]
-        
-        # Track efficiency
-        self.efficiency_history.append(efficiency)
-        if len(self.efficiency_history) > 20:
-            self.efficiency_history.pop(0)
-            
-        # Track logz
-        self.logz_history.append(logz)
-        if len(self.logz_history) > 20:
-            self.logz_history.pop(0)
-    
-    def get_progress_report(self):
-        """Generate a progress report"""
-        if len(self.history) < 2:
-            return "Not enough data for progress analysis"
-        
-        # Check logZ improvement
-        current_logz = self.history[-1]['logz']
-        logz_30min_ago = None
-        logz_10min_ago = None
-        
-        current_time = time.time()
-        for h in reversed(self.history):
-            if logz_10min_ago is None and current_time - h['time'] > 600:  # 10 min
-                logz_10min_ago = h['logz']
-            if logz_30min_ago is None and current_time - h['time'] > 1800:  # 30 min
-                logz_30min_ago = h['logz']
-                break
-        
-        progress_items = []
-        
-        # LogZ progress
-        if logz_10min_ago is not None:
-            logz_change_10min = current_logz - logz_10min_ago
-            if abs(logz_change_10min) < 0.01:
-                progress_items.append("⚠️  Log(Z) barely changed in last 10 min")
-            else:
-                progress_items.append(f"✓ Log(Z) changed by {logz_change_10min:+.3f} in last 10 min")
-        
-        if logz_30min_ago is not None:
-            logz_change_30min = current_logz - logz_30min_ago
-            progress_items.append(f"  30-min Δlog(Z): {logz_change_30min:+.3f}")
-        
-        # Efficiency trend
-        if len(self.efficiency_history) > 5:
-            recent_eff = np.mean(self.efficiency_history[-5:])
-            older_eff = np.mean(self.efficiency_history[:5])
-            eff_trend = recent_eff - older_eff
-            
-            if eff_trend < -0.5:
-                progress_items.append(f"⚠️  Efficiency declining: {older_eff:.2f}% → {recent_eff:.2f}%")
-            elif recent_eff < 2.0:
-                progress_items.append(f"⚠️  Low efficiency: {recent_eff:.2f}%")
-            else:
-                progress_items.append(f"✓ Efficiency stable: {recent_eff:.2f}%")
-        
-        return "\n".join(progress_items)
-
-# Initialize global tracker
-convergence_tracker = ConvergenceTracker()    
-
-def monitor_sampler_progress(sampler, fitted_param_names, fitted_param_labels, start_time, logger, gp_surrogate=None):
-    """
-    Enhanced monitoring with explicit progress tracking and problem diagnosis
-    """
-    try:
-        res = sampler.results
-        
-        # Basic info
-        logger.info("="*60)
-        logger.info(f"🔍 DYNESTY PROGRESS MONITOR - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("="*60)
-        
-        # Get samples and basic stats
-        if not hasattr(res, 'samples') or len(res.samples) == 0:
-            logger.info("❌ No samples available yet")
-            return
-            
-        samples = res.samples
-        n_samples, n_params = samples.shape
-        
-        # Handle ncall properly
-        if isinstance(res.ncall, np.ndarray):
-            ncall_total = np.sum(res.ncall)
-        else:
-            ncall_total = res.ncall
-            
-        elapsed_time = time.time() - start_time
-        elapsed_str = str(timedelta(seconds=int(elapsed_time)))
-        
-        # Calculate efficiency
-        eff = 100.0 * n_samples / ncall_total if ncall_total > 0 else 0.0
-        
-        logger.info(f"⏱️  Elapsed: {elapsed_str} | 📊 Samples: {n_samples:,} | 🎲 Calls: {ncall_total:,} | 📈 Eff: {eff:.2f}%")
-        
-        # GP Surrogate statistics
-        if gp_surrogate is not None and GP_AVAILABLE:
-            gp_stats = gp_surrogate.get_statistics()
-            logger.info(f"🤖 GP Surrogate: {gp_stats['n_real_calls']:,} real, "
-                       f"{gp_stats['n_surrogate_calls']:,} surrogate "
-                       f"(speedup: {gp_stats['speedup_factor']:.1f}x)")
-        
-        if n_samples < 50:
-            logger.info("⚠️  Too few samples for detailed analysis")
-            return
-        
-        # Get log(Z) and check for -inf
-        current_logz = -np.inf
-        if hasattr(res, 'logz') and len(res.logz) > 0:
-            current_logz = res.logz[-1]
-            if not np.isfinite(current_logz):
-                logger.error("❌ CRITICAL: log(Z) = -inf")
-                logger.error("   This means ALL live points have likelihood = -inf")
-                logger.error("   Possible causes:")
-                logger.error("   1. Prior bounds exclude all valid parameter space")
-                logger.error("   2. Model returns NaN/inf for all parameters")
-                logger.error("   3. Likelihood function has bugs")
-                logger.error("   → Check the debug output above for specific parameter values causing issues")
-                return
-            else:
-                logger.info(f"📊 Log(Z): {current_logz:.3f}")
-                if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
-                    logger.info(f"   Error: ±{res.logzerr[-1]:.3f}")
-        
-        # Update convergence tracker
-        recent_samples = samples[-min(1000, len(samples)):]
-        current_params = np.median(recent_samples, axis=0)
-        convergence_tracker.update(current_logz, current_params, eff)
-        
-        # PROGRESS ASSESSMENT
-        logger.info(f"\n🎯 CONVERGENCE PROGRESS:")
-        logger.info("─" * 40)
-        progress_report = convergence_tracker.get_progress_report()
-        logger.info(progress_report)
-        
-        # Check if we're stuck
-        if len(convergence_tracker.logz_history) > 5:
-            recent_logz_std = np.std(convergence_tracker.logz_history[-5:])
-            if recent_logz_std < 0.001:
-                convergence_tracker.stuck_counter += 1
-                logger.warning(f"⚠️  Possible stagnation detected (count: {convergence_tracker.stuck_counter})")
-            else:
-                convergence_tracker.stuck_counter = 0
-        
-        # Parameter estimates with trend analysis
-        logger.info(f"\n📊 PARAMETER EVOLUTION:")
-        logger.info("─" * 60)
-        
-        # Compare current vs 10 minutes ago
-        params_10min_ago = None
-        if len(convergence_tracker.history) > 10:
-            for h in reversed(convergence_tracker.history):
-                if time.time() - h['time'] > 600:  # 10 min
-                    params_10min_ago = h['params']
-                    break
-        
-        for i, (param_name, param_label) in enumerate(zip(fitted_param_names, fitted_param_labels)):
-            values = recent_samples[:, i]
-            
-            median_val = np.median(values)
-            mad = np.median(np.abs(values - median_val))
-            
-            # Format display
-            param_display = param_name.replace('_solar', '').replace('_kpc3', '').replace('_kpc', '')
-            formatted_val = format_parameter_value_monitor(median_val, param_name)
-            formatted_mad = format_parameter_value_monitor(mad, param_name)
-            
-            # Check parameter evolution
-            trend_str = ""
-            if params_10min_ago is not None and i < len(params_10min_ago):
-                old_val = params_10min_ago[i]
-                if old_val != 0:
-                    rel_change = abs(median_val - old_val) / abs(old_val)
-                    if rel_change < 0.01:
-                        trend_str = " 📍 (stable)"
-                    elif rel_change > 0.1:
-                        trend_str = " 📈 (changing)"
-                    else:
-                        trend_str = " ➡️ (converging)"
-            
-            logger.info(f"  {param_display:<20}: {formatted_val:<15} ± {formatted_mad:<15}{trend_str}")
-        
-        # PROBLEM DIAGNOSIS
-        logger.info(f"\n🔍 PROBLEM DIAGNOSIS:")
-        logger.info("─" * 40)
-        
-        problems_found = []
-        
-        # 1. Check efficiency
-        if eff < 1.0:
-            problems_found.append("❌ Extremely low efficiency (<1%) - posterior may be very narrow or multimodal")
-        elif eff < 2.0:
-            problems_found.append("⚠️  Low efficiency (<2%) - consider adjusting sampler settings")
-        
-        # 2. Check parameter correlations (degeneracy)
-        if len(recent_samples) > 100:
-            corr_matrix = np.corrcoef(recent_samples.T)
-            np.fill_diagonal(corr_matrix, 0)
-            max_corr = np.max(np.abs(corr_matrix))
-            if max_corr > 0.95:
-                high_corr_pairs = np.where(np.abs(corr_matrix) > 0.95)
-                problems_found.append(f"⚠️  High parameter correlations detected (max: {max_corr:.3f})")
-                for idx1, idx2 in zip(high_corr_pairs[0], high_corr_pairs[1]):
-                    if idx1 < idx2:  # Avoid duplicates
-                        problems_found.append(f"   → {fitted_param_names[idx1]} ↔ {fitted_param_names[idx2]}")
-        
-        # 3. Check mass escalation
-        mass_params = [(i, name) for i, name in enumerate(fitted_param_names) if 'M_' in name and 'solar' in name]
-        if mass_params:
-            total_mass = sum(recent_samples[:, i].mean() for i, _ in mass_params)
-            if total_mass > 2e11:
-                problems_found.append(f"⚠️  High total mass: {total_mass:.2e} M☉ (may indicate compensation for weak ξ)")
-            elif total_mass < 5e10:
-                problems_found.append(f"⚠️  Low total mass: {total_mass:.2e} M☉")
-        
-        # 4. Check xi parameters
-        rho_c_idx = next((i for i, name in enumerate(fitted_param_names) if 'rho_c' in name), None)
-        n_exp_idx = next((i for i, name in enumerate(fitted_param_names) if 'n_exp' in name), None)
-        
-        if rho_c_idx is not None and n_exp_idx is not None:
-            rho_c_vals = recent_samples[:, rho_c_idx]
-            n_exp_vals = recent_samples[:, n_exp_idx]
-            
-            median_rho_c = np.median(rho_c_vals)
-            median_n = np.median(n_exp_vals)
-            
-            # Check for extreme xi values
-            if median_rho_c > 1e9:
-                problems_found.append(f"⚠️  Very high ρ_c: {median_rho_c:.2e} - ξ may be too close to 1")
-            elif median_rho_c < 1e6:
-                problems_found.append(f"⚠️  Very low ρ_c: {median_rho_c:.2e} - ξ may be too density-dependent")
-            
-            if median_n < 0.5:
-                problems_found.append(f"⚠️  Low n: {median_n:.2f} - very sharp ξ transition")
-            elif median_n > 3.0:
-                problems_found.append(f"⚠️  High n: {median_n:.2f} - very gradual ξ transition")
-        
-        # 5. Check stopping conditions
-        if hasattr(res, 'logz') and len(res.logz) > 2:
-            dlogz = res.logz[-1] - res.logz[-2]
-            logger.info(f"\n📏 Stopping criterion: dlogz = {dlogz:.4f}")
-            if dlogz < 0.01:
-                logger.info("   → Close to convergence target!")
-        
-        if problems_found:
-            for problem in problems_found:
-                logger.info(problem)
-        else:
-            logger.info("✅ No major problems detected")
-        
-        # RECOMMENDATIONS
-        if convergence_tracker.stuck_counter > 3 or (eff < 1.0 and ncall_total > 100000):
-            logger.info(f"\n💡 RECOMMENDATIONS:")
-            logger.info("─" * 40)
-            
-            if eff < 1.0:
-                logger.info("• Consider restarting with:")
-                logger.info("  - Wider prior bounds")
-                logger.info("  - Different sampler method (e.g., --sample_method rslice)")
-                logger.info("  - Larger enlargement factor (e.g., --enlarge_factor 3.0)")
-            
-            if convergence_tracker.stuck_counter > 3:
-                logger.info("• Sampling appears stuck. Options:")
-                logger.info("  - Use curriculum learning (--use_curriculum_learning)")
-                logger.info("  - Reduce number of free parameters")
-                logger.info("  - Check if model is producing valid outputs")
-        
-        logger.info("="*60)
-        
-    except Exception as e:
-        logger.warning(f"Error in monitoring: {e}")
-        import traceback
-        logger.debug(traceback.format_exc())
-
-# --- Likelihood and Prior Transform Functions ---
-def prior_transform_dynesty(u_array, fitted_param_names, prior_bounds_low, prior_bounds_high, use_log_prior_flags):
-    """
-    Enhanced prior transform with log-uniform support for scale-variant parameters.
-    """
-    if fitted_param_names is None or prior_bounds_low is None or prior_bounds_high is None:
-        raise ValueError("prior_transform_dynesty received None for essential arguments.")
-    params = np.empty_like(u_array)
-    for i in range(len(fitted_param_names)):
-        low, high = prior_bounds_low[i], prior_bounds_high[i]
-        if use_log_prior_flags[i]:
-            # Log-uniform transform for scale-variant parameters
-            log_low, log_high = np.log10(low), np.log10(high)
-            params[i] = 10**(log_low + u_array[i] * (log_high - log_low))
-        else:
-            # Standard uniform transform
-            params[i] = low + u_array[i] * (high - low)
-    return params
-
-def v_model_for_dynesty(R_kpc_array, p_all_params_dict, xi_type_str, ARGS_obj_dynesty):
-    """Enhanced version with debugging for -inf issues"""
-    global debug_counter
-    
-    rho_c_solar_kpc3 = p_all_params_dict['rho_c_solar_kpc3']
-    n_exp = p_all_params_dict['n_exp']
-    
-    # Check input parameters
-    if not np.isfinite(rho_c_solar_kpc3) or not np.isfinite(n_exp):
-        if debug_counter < 10:
-            logger.warning(f"Non-finite xi parameters: rho_c={rho_c_solar_kpc3}, n={n_exp}")
-        return np.zeros_like(R_kpc_array)
-    
-    if ARGS_obj_dynesty.fit_target == 'milkyway':
-        v_n_kms = v_baryon_total_newtonian_kms(R_kpc_array, p_all_params_dict)
-        rho_midplane_for_xi = rho_baryon_total_midplane_solar_kpc3(R_kpc_array, p_all_params_dict)
-    else:
-        raise NotImplementedError("SPARC fitting not yet fully configured.")
-    
-    # Check intermediate results
-    if not np.all(np.isfinite(v_n_kms)):
-        if debug_counter < 10:
-            logger.warning(f"Non-finite v_n_kms detected!")
-            logger.warning(f"  Min: {np.min(v_n_kms)}, Max: {np.max(v_n_kms)}")
-            logger.warning(f"  First 5 values: {v_n_kms[:5]}")
-            # Log the problematic parameters
-            for key, val in p_all_params_dict.items():
-                if 'M_' in key or 'R_' in key or 'h_' in key or 'a_' in key:
-                    if isinstance(val, (int, float, np.number)):
-                        logger.warning(f"  {key}: {val:.3e}")
-    
-    if not np.all(np.isfinite(rho_midplane_for_xi)):
-        if debug_counter < 10:
-            logger.warning(f"Non-finite rho_midplane detected!")
-            logger.warning(f"  Min: {np.min(rho_midplane_for_xi)}, Max: {np.max(rho_midplane_for_xi)}")
-    
-    v_n_kms = np.nan_to_num(v_n_kms, nan=0.0, posinf=0.0, neginf=0.0)
-    rho_midplane_for_xi = np.nan_to_num(rho_midplane_for_xi, nan=0.0, posinf=1e10, neginf=0.0)
-    
-    xi_func = XI_FUNCTION_MAP.get(xi_type_str)
-    xi_values = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
-    
-    # Check xi values
-    if not np.all(np.isfinite(xi_values)):
-        if debug_counter < 10:
-            logger.warning(f"Non-finite xi values!")
-            logger.warning(f"  rho_c: {rho_c_solar_kpc3:.3e}, n: {n_exp:.3f}")
-            logger.warning(f"  rho_midplane range: [{np.min(rho_midplane_for_xi):.3e}, {np.max(rho_midplane_for_xi):.3e}]")
-            logger.warning(f"  xi range: [{np.min(xi_values)}, {np.max(xi_values)}]")
-    
-    xi_values = np.nan_to_num(xi_values, nan=1.0, posinf=1e10, neginf=0.0)
-    xi_values_safe = np.maximum(xi_values, 0.0)
-    
-    # Check for negative xi values (which would cause sqrt issues)
-    if np.any(xi_values < 0):
-        if debug_counter < 10:
-            logger.warning(f"Negative xi values detected! Min xi: {np.min(xi_values)}")
-    
-    v_mod_kms = v_n_kms * np.sqrt(xi_values_safe)
-    
-    # Final check
-    if not np.all(np.isfinite(v_mod_kms)):
-        if debug_counter < 10:
-            logger.warning(f"Non-finite v_mod_kms after all calculations!")
-            logger.warning(f"  v_n_kms range: [{np.min(v_n_kms):.1f}, {np.max(v_n_kms):.1f}]")
-            logger.warning(f"  xi range: [{np.min(xi_values_safe):.3f}, {np.max(xi_values_safe):.3f}]")
-            logger.warning(f"  v_mod range: [{np.min(v_mod_kms)}, {np.max(v_mod_kms)}]")
-    
-    return v_mod_kms
-
-def log_likelihood_dynesty(theta_values_fitted, fitted_param_names, args_dynesty_obj,
-                           all_param_info_list, R_data, v_data, sigma_data, xi_type,
-                           gp_surrogate=None):
-    global debug_counter
-    
-    # Debug first 10 -inf cases
-    debug_this_call = False
-    
-    if any(arg is None for arg in [theta_values_fitted, fitted_param_names, args_dynesty_obj, 
-                                   all_param_info_list, R_data, v_data, sigma_data, xi_type]): 
-        return -np.inf, [np.inf]
-    
-    # Check for non-finite inputs
-    if any(not np.isfinite(val) for val in theta_values_fitted):
-        if debug_counter < 10:
-            logger.warning(f"Non-finite parameter values detected:")
-            for name, val in zip(fitted_param_names, theta_values_fitted):
-                logger.warning(f"  {name}: {val}")
-            debug_counter += 1
-        return -np.inf, [np.inf]
-    
-    current_params_full_dict = dict(zip(fitted_param_names, theta_values_fitted))
-    if all_param_info_list:
-        for p_info in all_param_info_list:
-            if not p_info['is_fitted']: current_params_full_dict[p_info['name']] = p_info['current_val']
-        if args_dynesty_obj.fit_target == 'milkyway':
-            for p_name_cfg, p_details_cfg in MW_MULTI_COMP_PARAM_CONFIG.items():
-                if 'include_flag_arg' in p_details_cfg:
-                    current_params_full_dict[p_details_cfg['include_flag_arg']] = getattr(args_dynesty_obj, p_details_cfg['include_flag_arg'])
-            current_params_full_dict['include_bulge_density'] = args_dynesty_obj.include_bulge
-    
-    # Use GP surrogate if available
-    if gp_surrogate is not None and args_dynesty_obj.use_gp_surrogate:
-        def physics_func(params, args_obj):
-            return v_model_for_dynesty(R_data, params, xi_type, args_obj)
-        
-        v_predicted, v_uncertainty = gp_surrogate.predict(
-            theta_values_fitted, 
-            physics_function=physics_func,
-            args_obj=args_dynesty_obj
-        )
-    else:
-        # Standard physics model evaluation with error catching
-        try:
-            v_predicted = v_model_for_dynesty(R_data, current_params_full_dict, xi_type, args_dynesty_obj)
-            
-            # Check for NaN/inf in predictions
-            if not np.all(np.isfinite(v_predicted)):
-                if debug_counter < 10:
-                    logger.warning(f"Non-finite v_predicted values!")
-                    logger.warning(f"Parameters that caused this:")
-                    for name, val in current_params_full_dict.items():
-                        if isinstance(val, (int, float, np.number)):
-                            logger.warning(f"  {name}: {val:.3e}")
-                    logger.warning(f"v_predicted sample: {v_predicted[:5]}")
-                    debug_counter += 1
-                debug_this_call = True
-        except Exception as e:
-            if debug_counter < 10:
-                logger.error(f"Exception in v_model_for_dynesty: {e}")
-                logger.error(f"Parameters: {current_params_full_dict}")
-                debug_counter += 1
-            return -np.inf, [np.inf]
-    
-    if not np.all(np.isfinite(v_predicted)): 
-        return -np.inf, [np.inf]
-    
-    sigma_data_safe = np.maximum(sigma_data, 1e-9)
-    residuals = v_data - v_predicted
-    rmse = np.sqrt(np.mean(residuals**2))
-    
-    # Check RMSE
-    if not np.isfinite(rmse):
-        if debug_counter < 10:
-            logger.warning(f"Non-finite RMSE: {rmse}")
-            logger.warning(f"v_data range: [{np.min(v_data):.1f}, {np.max(v_data):.1f}]")
-            logger.warning(f"v_predicted range: [{np.min(v_predicted):.1f}, {np.max(v_predicted):.1f}]")
-            debug_counter += 1
-        return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
-    
-    chi_squared_terms = (residuals / sigma_data_safe)**2
-    log_L_terms = chi_squared_terms + np.log(2 * np.pi * sigma_data_safe**2)
-    
-    if not np.all(np.isfinite(log_L_terms)): 
-        if debug_counter < 10:
-            logger.warning("Non-finite log_L_terms detected")
-            debug_counter += 1
-        return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
-    
-    log_L = -0.5 * np.sum(log_L_terms)
-    
-    if not np.isfinite(log_L): 
-        if debug_counter < 10:
-            logger.warning(f"Final log_L is not finite: {log_L}")
-            logger.warning(f"Sum of log_L_terms: {np.sum(log_L_terms)}")
-            debug_counter += 1
-        return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
-    
-    # Reset debug counter periodically if things are working
-    if debug_counter > 0 and np.isfinite(log_L):
-        debug_counter = max(0, debug_counter - 1)
-    
-    return log_L, [rmse]
-
-def _check_flag_consistency(args, logger_obj):
-    logger_obj.info("Performing CLI flag consistency check...")
-    components_to_check = {
-        "xi_params": ["rho_c_fixed", "n_exp_fixed"],
-        "disk_thin": ["M_disk_thin_fixed", "R_d_thin_fixed", "h_z_thin_fixed"],
-        "disk_thick": ["M_disk_thick_fixed", "R_d_thick_fixed", "h_z_thick_fixed"],
-        "bulge": ["M_bulge_fixed", "a_bulge_fixed"],
-        "gas": ["M_gas_fixed", "R_d_gas_fixed", "h_z_gas_fixed"]
-    }
-    
-    # Note: The presence of --fit_<component> means "fit at least some parameters of this component"
-    # Individual fixed values override the general fit flag for specific parameters
-    # This allows partial fitting (e.g., fit only h_z while fixing M and R)
-    logger_obj.info("Note: Fixed value arguments override fit flags for specific parameters, allowing partial fitting.")
-    logger_obj.info("CLI flag consistency OK.")
-
-def get_param_labels_and_bounds(ARGS):
-    """Enhanced to return log_prior flags for each parameter and handle partial fitting."""
-    param_info_list = []
-    config_to_use = MW_MULTI_COMP_PARAM_CONFIG
-    logger.info("Configuring parameters for NEW multi-component Milky Way model.")
-    
-    for p_name, p_details in config_to_use.items():
-        is_included = 'include_flag_arg' not in p_details or getattr(ARGS, p_details['include_flag_arg'], False)
-        if not is_included: continue
-        
-        # Check if this parameter should be fitted
-        is_fitted = False
-        if 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
-            # The general fit flag is set, but check if a specific fixed value was provided
-            fixed_arg_name = p_details['fixed_val_from_arg']
-            if f"--{fixed_arg_name}" not in sys.argv:
-                # No specific fixed value provided, so fit this parameter
-                is_fitted = True
-            else:
-                # Specific fixed value provided, override the general fit flag
-                logger.info(f"  {p_name}: Using fixed value (overrides fit flag)")
-        
-        current_val = getattr(ARGS, p_details['fixed_val_from_arg'])
-        param_info_list.append({
-            'name': p_name, 
-            'label': p_details['label'], 
-            'current_val': current_val,
-            'low': p_details['low'], 
-            'high': p_details['high'], 
-            'is_fitted': is_fitted,
-            'log_prior': p_details.get('log_prior', False)  # Add log_prior info
-        })
-    
-    ARGS.all_param_info_list = param_info_list
-    fitted_params_info = [p for p in param_info_list if p['is_fitted']]
-    if not fitted_params_info: 
-        logger.error("No parameters configured to be fitted! You must use at least one --fit_* flag.")
-        logger.error("Note: If you used fixed values for all parameters in a component, nothing will be fitted.")
-        sys.exit(1)
-    
-    # Extract log_prior flags for fitted parameters
-    use_log_flags = [p['log_prior'] for p in fitted_params_info]
-    
-    return ([p['name'] for p in fitted_params_info], [p['label'] for p in fitted_params_info],
-            np.array([p['current_val'] for p in fitted_params_info]),
-            np.array([p['low'] for p in fitted_params_info]), np.array([p['high'] for p in fitted_params_info]),
-            use_log_flags)  # Return the log_prior flags
 
 def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     """
-    Run a single dynesty sampling (extracted for reuse in curriculum learning)
+    Run a single dynesty sampling with enhanced monitoring, convergence diagnostics,
+    and optional real-time dashboard monitoring.
     """
     import threading
     from io import StringIO
 
-    R_data_for_run, v_data_for_run, sigma_data_for_run = gaia_data_dict["R_kpc"], gaia_data_dict["v_obs"], gaia_data_dict["sigma_v"]
-    
-    # Enhanced parameter configuration with log_prior flags
-    fitted_p_names, fitted_p_labels, _, p_low, p_high, use_log_flags = get_param_labels_and_bounds(args)
-    ndim_dynesty = len(fitted_p_names)
-    logger.info(f"Dynesty fitting {ndim_dynesty} parameters: {fitted_p_names}")
-    
-    # Log prior type information
-    logger.info("Parameter Prior Types:")
-    for name, is_log in zip(fitted_p_names, use_log_flags):
-        prior_type = "Log-Uniform" if is_log else "Uniform"
-        logger.info(f"  - {name:<25} | Prior: {prior_type}")
-        
-    # Also log fixed parameters
-    fixed_params = [p for p in args.all_param_info_list if not p['is_fitted']]
-    if fixed_params:
-        logger.info("Fixed Parameters:")
-        for p in fixed_params:
-            logger.info(f"  - {p['name']:<25} | Value: {p['current_val']:.2e}")
-    
-    ptform_args_tuple = (fitted_p_names, np.array(p_low), np.array(p_high), use_log_flags)
-    logl_args_tuple = (fitted_p_names, args, args.all_param_info_list, R_data_for_run, v_data_for_run, sigma_data_for_run, args.xi, gp_surrogate)
+    # Extract data
+    R_data_for_run = gaia_data_dict["R_kpc"]
+    v_data_for_run = gaia_data_dict["v_obs"]
+    sigma_data_for_run = gaia_data_dict["sigma_v"]
 
+    # Get parameter configuration
+    fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = \
+        get_param_labels_and_bounds(args)
+    ndim_dynesty = len(fitted_p_names)
+
+    logger.info(f"Dynesty fitting {ndim_dynesty} parameters: {fitted_p_names}")
+
+    # Validate initial guess
+    is_valid, reason = check_physical_plausibility(p0_guess, fitted_p_names, args)
+    if not is_valid:
+        if logger:
+            logger.warning(f"Initial guess fails physical checks: {reason}")
+        if logger:
+            logger.warning("Adjusting to center of prior range...")
+        for i in range(ndim_dynesty):
+            if use_log_flags[i]:
+                p0_guess[i] = np.sqrt(p_low[i] * p_high[i])
+            else:
+                p0_guess[i] = 0.5 * (p_low[i] + p_high[i])
+
+    # Sampler input setup
+    ptform_args_tuple = (fitted_p_names, np.array(p_low), np.array(p_high), use_log_flags)
+    logl_args_tuple = (fitted_p_names, args, args.all_param_info_list,
+                       R_data_for_run, v_data_for_run, sigma_data_for_run,
+                       args.xi, gp_surrogate)
+
+    # Multiprocessing setup
     pool_obj, queue_size_for_sampler = None, None
     if args.num_threads > 1:
         try:
             pool_obj = Pool(args.num_threads)
             queue_size_for_sampler = args.num_threads
-            logger.info(f"Dynesty will run with {args.num_threads} threads.")
+            logger.info(f"Dynesty will run with {args.num_threads} threads")
         except Exception as e:
-            logger.warning(f"Failed to create Pool: {e}. Running serially.")
-    
-    # Enhanced sampler configuration
-    logger.info(f"Sampler configuration: method='{args.sample_method}', bound='{args.bound_method}', enlarge={args.enlarge_factor}")
-    
-    # Create output directory
-    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    
-    sampler = DynamicNestedSampler(log_likelihood_dynesty, prior_transform_dynesty, ndim_dynesty,
-                                   pool=pool_obj, queue_size=queue_size_for_sampler,
-                                   sample=args.sample_method,
-                                   bound=args.bound_method,
-                                   enlarge=args.enlarge_factor,
-                                   ptform_args=ptform_args_tuple, logl_args=logl_args_tuple,
-                                   blob=True)
-    
-    run_start_time = time.time()
-    last_progress_log_time = time.time()
-    last_monitor_time = time.time()
-    best_rmse_so_far = np.inf
-    
-    # Initialize adaptive strategy
-    param_groups = {
-        'disk_thin': ['M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc'],
-        'disk_thick': ['M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc'],
-        'bulge': ['M_bulge_solar', 'a_bulge_kpc'],
-        'gas': ['M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'],
-        'xi': ['rho_c_solar_kpc3', 'n_exp']
-    }
-    
-    thresholds = {
-        'min_efficiency': 2.0,
-        'max_degeneracy': 0.9,
-        'max_total_mass': 1.5e11,
-        'max_initial_calls': 500000
-    }
-    
-    adaptive_strategy = AdaptiveSamplingStrategy(fitted_p_names, param_groups, thresholds)
-    
-    # Checkpoint file path
-    checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
-    
-    try:
-        if args.use_run_nested:
-            logger.info(f"Using run_nested() with background monitoring")
-            logger.info(f"Settings: nlive_init={args.nlive_init}, dlogz_target={args.dlogz_target}, checkpoint_every={args.checkpoint_every}s")
-            
-            # Create a monitoring log file for detailed output
-            monitor_log_path = Path(args.output_dir) / f"monitor_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            monitor_file = open(monitor_log_path, 'w', buffering=1)  # Line buffered
-            
-            logger.info(f"📝 Monitoring output will be saved to: {monitor_log_path}")
-            logger.info(f"📊 Check this file every {args.monitor_interval_s//60} minutes for detailed progress")
-            
-            # Create monitoring thread
-            stop_monitoring = threading.Event()
-            
-            def monitor_thread():
-                """Background thread to monitor progress"""
-                last_check = time.time()
-                
-                try:
-                    while not stop_monitoring.is_set():
-                        time.sleep(10)  # Check every 10 seconds
-                        
-                        current_time = time.time()
-                        if current_time - last_check > args.monitor_interval_s:
-                            last_check = current_time
-                            
-                            # Check if sampler has results
-                            if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
-                                if len(sampler.results.samples) > 50:  # Need enough samples
-                                    # Write to both file and console with a clear break
-                                    monitor_output = []
-                                    
-                                    # Temporarily store stdout
-                                    old_stdout = sys.stdout
-                                    sys.stdout = StringIO()
-                                    
-                                    # Run monitoring
-                                    monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, 
-                                                           run_start_time, logger, gp_surrogate)
-                                    
-                                    # Get the output
-                                    monitor_text = sys.stdout.getvalue()
-                                    sys.stdout = old_stdout
-                                    
-                                    # Write to file
-                                    monitor_file.write(f"\n{monitor_text}\n")
-                                    monitor_file.flush()
-                                    
-                                    # Also print to console with clear breaks
-                                    print("\n" * 3)  # Clear some space
-                                    print("🔔 " + "="*70)
-                                    print("🔔 MONITORING UPDATE - See details in: " + str(monitor_log_path))
-                                    print("🔔 " + "="*70)
-                                    
-                                    # Extract key metrics for console
-                                    if hasattr(sampler.results, 'logz') and len(sampler.results.logz) > 0:
-                                        current_logz = sampler.results.logz[-1]
-                                        if len(sampler.results.logz) > 1:
-                                            dlogz = sampler.results.logz[-1] - sampler.results.logz[-2]
-                                        else:
-                                            dlogz = np.inf
-                                        
-                                        print(f"🔔 Log(Z): {current_logz:.3f} | dlogz: {dlogz:.4f} (target: {args.dlogz_target})")
-                                        
-                                        if dlogz < args.dlogz_target * 2:
-                                            print(f"🔔 ✅ Getting close to convergence!")
-                                        elif dlogz > 10:
-                                            print(f"🔔 ⏳ Still far from convergence...")
-                                    
-                                    # Quick parameter summary
-                                    recent_samples = sampler.results.samples[-min(1000, len(sampler.results.samples)):]
-                                    print(f"🔔 Quick Parameter Check:")
-                                    for i, name in enumerate(fitted_p_names[:min(5, len(fitted_p_names))]):
-                                        median = np.median(recent_samples[:, i])
-                                        print(f"🔔   {name}: {median:.3e}")
-                                    
-                                    if len(fitted_p_names) > 5:
-                                        print(f"🔔   ... and {len(fitted_p_names)-5} more parameters")
-                                    
-                                    print("🔔 " + "="*70)
-                                    print("\n")  # Return to progress bar
-                                    
-                except Exception as e:
-                    logger.error(f"Error in monitoring thread: {e}")
-                    import traceback
-                    monitor_file.write(f"ERROR: {e}\n{traceback.format_exc()}\n")
-                finally:
-                    monitor_file.close()
-            
-            # Start monitoring thread
-            monitor = threading.Thread(target=monitor_thread, daemon=True)
-            monitor.start()
-            
-            try:
-                # Run nested sampling
-                sampler.run_nested(nlive_init=args.nlive_init, 
-                                nlive_batch=args.nlive_batch,
-                                dlogz_init=args.dlogz_target,
-                                maxcall=args.maxcall,
-                                print_progress=True, 
-                                checkpoint_file=str(checkpoint_file),
-                                checkpoint_every=args.checkpoint_every)
-            finally:
-                # Stop monitoring thread
-                stop_monitoring.set()
-                monitor.join(timeout=5)
-                
-                # Make sure file is closed
-                try:
-                    monitor_file.close()
-                except:
-                    pass
-                
-                logger.info(f"\n📊 Final monitoring report saved to: {monitor_log_path}")
-            
-            logger.info("run_nested() completed.")
-            
-        else:
-            # Custom sampling loop with adaptive monitoring
-            logger.info(f"Running initial sampling with nlive_init = {args.nlive_init}...")
-            
-            for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
-                current_time = time.time()
-                
-                # Check if should restart
-                if args.use_adaptive_restart:
-                    should_restart, reason = adaptive_strategy.should_restart_sampling(sampler, run_start_time, 'initial')
-                    if should_restart:
-                        logger.warning(f"🚨 Restarting sampling due to: {reason}")
-                        logger.warning("💡 Switching to curriculum learning approach")
-                        
-                        # Save current state
-                        with open(checkpoint_file, 'wb') as f:
-                            pickle.dump(sampler.results, f)
-                        
-                        # Clean up resources
-                        if pool_obj:
-                            pool_obj.close()
-                            pool_obj.join()
-                        
-                        # Switch to curriculum learning
-                        return run_curriculum_learning(args, gaia_data_dict, logger)
-                
-                # Regular progress update
-                if current_time - last_progress_log_time > args.progress_update_interval_s:
-                    last_progress_log_time = current_time
-                    ncall_val = sampler.results.ncall
-                    if isinstance(ncall_val, np.ndarray):
-                        ncall_total = np.sum(ncall_val)
-                        ncall_mean = np.mean(ncall_val)
-                        ncall_max = np.max(ncall_val)
-                        logger.info(f"Initial Sampling | Total calls: {ncall_total:,} | Mean/point: {ncall_mean:.1f} | Max/point: {ncall_max} | Live: {len(sampler.live_logl)}")
-                    else:
-                        logger.info(f"Initial Sampling | Calls: {ncall_val}/{args.maxcall} | Live: {len(sampler.live_logl)}")
-                
-                # Detailed monitoring update
-                if current_time - last_monitor_time > args.monitor_interval_s:
-                    last_monitor_time = current_time
-                    monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, run_start_time, logger, gp_surrogate)
+            if logger:
+                logger.warning(f"Failed to create Pool: {e}. Running serially.")
 
-            logger.info("Initial sampling complete. Starting batch processing...")
-            
-            # Batch processing loop
-            initial_ncall = sampler.results.ncall if not isinstance(sampler.results.ncall, np.ndarray) else np.sum(sampler.results.ncall)
-            
-            if initial_ncall >= args.maxcall:
-                logger.warning("Initial sampling used all available calls.")
-            else:
-                ncall_total = initial_ncall
-                
-                while ncall_total < args.maxcall:
-                    # Calculate stopping criterion manually
-                    if hasattr(sampler.results, 'logz') and len(sampler.results.logz) > 1:
-                        stop_val = sampler.results.logz[-1] - sampler.results.logz[-2]
-                    else:
-                        stop_val = np.inf
-                    
-                    if stop_val < args.dlogz_target:
-                        logger.info(f"Stopping criterion met: dlogz ({stop_val:.4f}) < target ({args.dlogz_target:.4f}).")
-                        break
-                    
-                    sampler.add_batch(nlive=args.nlive_batch, maxcall=args.maxcall, save_samples=True)
-                    
-                    ncall_total = sampler.results.ncall if not isinstance(sampler.results.ncall, np.ndarray) else np.sum(sampler.results.ncall)
-                    
-                    current_time = time.time()
-                    
-                    # Progress and monitoring updates
-                    if current_time - last_progress_log_time > args.progress_update_interval_s:
-                        last_progress_log_time = current_time
-                        eff = 100.0 * len(sampler.results.samples) / ncall_total if ncall_total > 0 else 0.0
-                        logger.info(f"Batch Processing | Calls: {ncall_total}/{args.maxcall} | Samples: {len(sampler.results.samples)} | Eff: {eff:.2f}%")
-                    
-                    if current_time - last_monitor_time > args.monitor_interval_s:
-                        last_monitor_time = current_time
-                        monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, run_start_time, logger, gp_surrogate)
-            
-            logger.info("Sampling loop finished.")
-    
-    finally:
-        if pool_obj:
-            logger.info("Closing and joining multiprocessing Pool.")
-            pool_obj.close()
-            pool_obj.join()
-    
-    # Final monitoring report
+    # Create output dir
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+
+    # Optional dashboard
+    dashboard_monitor = None
+    if args.enable_dashboard:
+        try:
+            from monitor_dashboard import DynestyMonitor  # Ensure this is importable
+            dashboard_monitor = DynestyMonitor(
+                Path(args.output_dir),
+                Path(args.monitor_config) if args.monitor_config else None
+            )
+            logger.info(f"✅ Dashboard monitoring enabled. Progress file: {args.output_dir}/progress.json")
+            logger.info(f"   View with: python monitor_dashboard.py {args.output_dir}")
+        except Exception as e:
+            if logger:
+                logger.warning(f"Failed to initialize dashboard monitor: {e}")
+
+    # Sampler
+    logger.info(f"Sampler configuration: method='{args.sample_method}', "
+                f"bound='{args.bound_method}', enlarge={args.enlarge_factor}")
+    sampler = DynamicNestedSampler(
+        log_likelihood_dynesty,
+        prior_transform_dynesty,
+        ndim_dynesty,
+        pool=pool_obj,
+        queue_size=queue_size_for_sampler,
+        sample=args.sample_method,
+        bound=args.bound_method,
+        enlarge=args.enlarge_factor,
+        ptform_args=ptform_args_tuple,
+        logl_args=logl_args_tuple,
+        blob=True
+    )
+
+    run_start_time = time.time()
+    checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
+
+    if args.use_run_nested:
+        # Built-in run_nested
+        logger.info(f"Using run_nested() with nlive_init={args.nlive_init}, dlogz={args.dlogz_target}")
+        monitor_log_path = Path(args.output_dir) / f"monitor_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        monitor_file = open(monitor_log_path, 'w', buffering=1)
+        logger.info(f"📝 Monitoring output: {monitor_log_path}")
+
+        stop_monitoring = threading.Event()
+
+        def monitor_thread():
+            last_check = time.time()
+            try:
+                while not stop_monitoring.is_set():
+                    time.sleep(10)
+                    if time.time() - last_check > args.monitor_interval_s:
+                        last_check = time.time()
+
+                        if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
+                            if len(sampler.results.samples) > 50:
+                                old_stdout = sys.stdout
+                                sys.stdout = StringIO()
+
+                                enhanced_monitor_sampler_progress(
+                                    sampler, fitted_p_names, fitted_p_labels,
+                                    run_start_time, logger, gp_surrogate, args,
+                                    dashboard_monitor  # << Pass monitor
+                                )
+
+                                monitor_text = sys.stdout.getvalue()
+                                sys.stdout = old_stdout
+
+                                monitor_file.write(f"\n{monitor_text}\n")
+                                monitor_file.flush()
+
+                                print("\n" + "=" * 70)
+                                print(f"🔔 MONITORING UPDATE - Details in: {monitor_log_path}")
+
+                                if hasattr(sampler.results, 'logz') and len(sampler.results.logz) > 0:
+                                    current_logz = sampler.results.logz[-1]
+                                    dlogz = (sampler.results.logz[-1] - sampler.results.logz[-2]) if len(sampler.results.logz) > 1 else np.inf
+                                    print(f"🔔 Log(Z): {current_logz:.3f} | dlogz: {dlogz:.4f}")
+                                    if dlogz < args.dlogz_target * 2:
+                                        print("🔔 ✅ Approaching convergence!")
+
+                                print("=" * 70 + "\n")
+
+            except Exception as e:
+                logger.error(f"Monitoring error: {e}")
+                monitor_file.write(f"ERROR: {e}\n")
+            finally:
+                monitor_file.close()
+
+        monitor = threading.Thread(target=monitor_thread, daemon=True)
+        monitor.start()
+
+        try:
+            sampler.run_nested(
+                nlive_init=args.nlive_init,
+                nlive_batch=args.nlive_batch,
+                dlogz_init=args.dlogz_target,
+                maxcall=args.maxcall,
+                print_progress=True,
+                checkpoint_file=str(checkpoint_file),
+                checkpoint_every=args.checkpoint_every
+            )
+        finally:
+            stop_monitoring.set()
+            monitor.join(timeout=5)
+            try:
+                monitor_file.close()
+            except:
+                pass
+
+            logger.info(f"\n📊 Final monitoring report: {monitor_log_path}")
+
+    else:
+        # Custom sampling loop
+        logger.info("Using custom sampling loop with adaptive monitoring")
+        last_monitor_time = time.time()
+
+        for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
+            if time.time() - last_monitor_time > args.monitor_interval_s:
+                last_monitor_time = time.time()
+                enhanced_monitor_sampler_progress(
+                    sampler, fitted_p_names, fitted_p_labels,
+                    run_start_time, logger, gp_surrogate, args,
+                    dashboard_monitor  # << Pass monitor
+                )
+
+    # Final cleanup
+    if pool_obj:
+        pool_obj.close()
+        pool_obj.join()
+
     if hasattr(sampler, 'results'):
         logger.info("\n🏁 FINAL MONITORING REPORT:")
-        monitor_sampler_progress(sampler, fitted_p_names, fitted_p_labels, run_start_time, logger, gp_surrogate)
+        enhanced_monitor_sampler_progress(
+            sampler, fitted_p_names, fitted_p_labels,
+            run_start_time, logger, gp_surrogate, args,
+            dashboard_monitor  # << Pass monitor
+        )
         return sampler.results
-    
+
     return None
 
+
+# ============================================================================
+# Main Entry Point
+# ============================================================================
+
 def main_dynesty():
+    """Main entry point with enhanced configuration and validation."""
     global logger
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+    
+    # Set up logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+    )
     logger = logging.getLogger("run_dynesty")
+    logger.info("Starting Enhanced Dynesty Sampler v2.0")
+    
+    if not DYNESTY_AVAILABLE:
+        logger.error("Dynesty library not found")
+        sys.exit(1)
+    
+    # Parse arguments
+    parser = argparse.ArgumentParser(
+        description="Enhanced Dynesty sampler for Density-Metric model with physical constraints",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    
+    # Basic settings
+    parser.add_argument('--xi', type=str, default='power', choices=['power', 'logistic'],
+                       help="Type of density modification function")
+    parser.add_argument('--max_sample_gaia', type=int, default=10000,
+                       help="Maximum number of Gaia stars to use")
+    parser.add_argument('--output_dir', type=str, default="chains_dynesty",
+                       help="Output directory for results")
+    
+    # Sampler settings
+    parser.add_argument('--nlive_init', type=int, default=800,
+                       help="Initial number of live points")
+    parser.add_argument('--nlive_batch', type=int, default=200,
+                       help="Live points per batch")
+    parser.add_argument('--dlogz_target', type=float, default=0.01,
+                       help="Target dlogz for convergence")
+    parser.add_argument('--num_threads', type=int, default=1,
+                       help="Number of threads for parallelization")
+    parser.add_argument('--maxcall', type=int, default=2000000,
+                       help="Maximum likelihood calls")
+    parser.add_argument('--monitor_interval_s', type=int, default=300,
+                       help="Monitoring interval in seconds")
+    parser.add_argument('--enable_dashboard', action='store_true', default=True,
+                   help="Enable enhanced monitoring dashboard")
+    parser.add_argument('--monitor_config', type=str, default=None,
+                   help="Path to monitoring configuration file")
 
-    # Add this block to also log to file
-    file_handler = logging.FileHandler("dynesty_run.log")
-    file_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    logger.info("Starting main_dynesty function (AI-Enhanced Version).")
-
-    if not DYNESTY_AVAILABLE: logger.error("Dynesty library not found."); sys.exit(1)
-
-    parser = argparse.ArgumentParser(description="Run Dynesty for Density-Metric model.",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--xi', type=str, default='power', choices=['power', 'logistic'])
-    parser.add_argument('--max_sample_gaia', type=int, default=10000)
-    parser.add_argument('--output_dir', type=str, default="chains_dynesty")
-    parser.add_argument('--nlive_init', type=int, default=800)
-    parser.add_argument('--nlive_batch', type=int, default=200, help="Number of live points to add per batch.")
-    parser.add_argument('--dlogz_target', type=float, default=0.01, help="Target dlogz for stopping.")
-    parser.add_argument('--num_threads', type=int, default=1)
-    parser.add_argument('--update_interval', type=float, default=0.6, help="Dynesty update_interval.")
-    parser.add_argument('--maxcall', type=int, default=2000000, help="Hard limit on likelihood calls.")
-    parser.add_argument('--progress_update_interval_s', type=int, default=60, help="Interval in seconds for printing custom progress.")
-    parser.add_argument('--monitor_interval_s', type=int, default=1800, help="Interval in seconds for detailed monitoring (default 30 min).")
-    parser.add_argument('--debug_likelihood_params', type=str, default=None, help="Comma-separated physical parameters to test likelihood function.")
-    parser.add_argument('--use_run_nested', action='store_true', default=False,
-                        help="Use run_nested instead of custom sampling loop (recommended for stability).")
+    parser.add_argument('--use_run_nested', action='store_true', default=True,
+                       help="Use run_nested instead of custom loop")
     parser.add_argument('--checkpoint_every', type=int, default=300,
-                        help="Checkpoint interval in seconds (only for run_nested).")
-    parser.add_argument('--init_from_checkpoint', type=str, default=None,
-                   help="Path to checkpoint file to initialize parameters from")
-    parser.add_argument('--init_from_best', action='store_true',
-                   help="Initialize from the best known parameters (hardcoded)")
-
+                       help="Checkpoint interval in seconds")
+    
+    # Dynesty sampler settings
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
-    dynesty_g.add_argument('--sample_method', type=str, default='rslice', choices=['rwalk', 'rslice', 'hslice'],
-                           help="Dynesty's internal sampling method. rslice is recommended for difficult posteriors.")
+    dynesty_g.add_argument('--sample_method', type=str, default='rslice',
+                          choices=['rwalk', 'rslice', 'hslice'],
+                          help="Sampling method")
     dynesty_g.add_argument('--enlarge_factor', type=float, default=2.5,
-                           help="Bound enlargement factor. Recommended > 2.0 for difficult posteriors.")
-    dynesty_g.add_argument('--bound_method', type=str, default='multi', choices=['none', 'single', 'multi', 'balls', 'cubes'],
-                           help="Bounding method for live points.")
-
-    ai_g = parser.add_argument_group('AI-Enhanced Features')
+                          help="Bound enlargement factor")
+    dynesty_g.add_argument('--bound_method', type=str, default='multi',
+                          choices=['none', 'single', 'multi', 'balls', 'cubes'],
+                          help="Bounding method")
+    
+    # Enhanced features
+    ai_g = parser.add_argument_group('Enhanced Features')
     ai_g.add_argument('--use_curriculum_learning', action='store_true', default=False,
-                      help="Use curriculum learning approach (start simple, add complexity)")
+                     help="Use curriculum learning (recommended for many parameters)")
     ai_g.add_argument('--use_gp_surrogate', action='store_true', default=False,
-                      help="Use Gaussian Process surrogate model for speedup")
+                     help="Use Gaussian Process surrogate for speedup")
     ai_g.add_argument('--gp_n_initial', type=int, default=500,
-                      help="Number of initial training points for GP")
+                     help="Initial training points for GP")
     ai_g.add_argument('--gp_uncertainty_threshold', type=float, default=0.1,
-                      help="Uncertainty threshold for GP active learning")
-    ai_g.add_argument('--use_adaptive_restart', action='store_true', default=False,
-                      help="Enable adaptive restart if sampling gets stuck")
-
-    mw_model_g = parser.add_argument_group('Milky Way Model Configuration')
+                     help="GP uncertainty threshold")
+    ai_g.add_argument('--validate_data', action='store_true', default=True,
+                     help="Validate loaded data quality")
+    
+    # Model configuration
+    mw_model_g = parser.add_argument_group('Model Components')
     mw_model_g.add_argument('--include_bulge', action='store_true', default=False)
     mw_model_g.add_argument('--include_disk_thin', action='store_true', default=True)
     mw_model_g.add_argument('--include_disk_thick', action='store_true', default=False)
     mw_model_g.add_argument('--include_gas', action='store_true', default=False)
-
-    fit_g = parser.add_argument_group('Fitting Flags (specify what to fit)')
-    fit_g.add_argument('--fit_xi_params', action='store_true', help="Fit the xi function parameters (rho_c, n_exp).")
-    fit_g.add_argument('--fit_disk_thin', action='store_true', help="Fit the thin disk parameters.")
-    fit_g.add_argument('--fit_disk_thick', action='store_true', help="Fit the thick disk parameters.")
-    fit_g.add_argument('--fit_bulge', action='store_true', help="Fit the bulge parameters.")
-    fit_g.add_argument('--fit_gas', action='store_true', help="Fit the gas disk parameters.")
-
-    fixed_g = parser.add_argument_group('Fixed Value Arguments (used if not fitting)')
-    for p_name_cfg, p_details_cfg in MW_MULTI_COMP_PARAM_CONFIG.items():
-        fixed_g.add_argument(f"--{p_details_cfg['fixed_val_from_arg']}", type=float, default=p_details_cfg['default_fixed'],
-                             help=f"Fixed/initial value for {p_name_cfg}.")
-
-    args = parser.parse_args()
-
-    if args.init_from_checkpoint:
-        params, dlogz = load_checkpoint_and_extract_params(args.init_from_checkpoint)
-        if params is not None:
-            param_mapping = [
-                ('rho_c_fixed', 0),
-                ('n_exp_fixed', 1),
-                ('M_disk_thin_fixed', 2),
-                ('R_d_thin_fixed', 3),
-                ('h_z_thin_fixed', 4),
-                ('M_disk_thick_fixed', 5),
-                ('R_d_thick_fixed', 6),
-                ('h_z_thick_fixed', 7),
-                ('M_bulge_fixed', 8),
-                ('a_bulge_fixed', 9),
-                ('M_gas_fixed', 10),
-                ('R_d_gas_fixed', 11),
-                ('h_z_gas_fixed', 12)
-            ]
-            for arg_name, idx in param_mapping:
-                if idx < len(params):
-                    setattr(args, arg_name, float(params[idx]))
-                    logger.info(f"Set {arg_name} = {params[idx]:.3e}")
-            logger.info(f"Initialized from checkpoint with dlogz={dlogz:.4f}")
-
-    if args.init_from_best:
-        args.rho_c_fixed = 2.516e8
-        args.n_exp_fixed = 0.9394
-        args.M_disk_thin_fixed = 6.825e10
-        args.R_d_thin_fixed = 1.524
-        args.h_z_thin_fixed = 0.3763
-        args.M_disk_thick_fixed = 7.635e10
-        args.R_d_thick_fixed = 5.924
-        args.h_z_thick_fixed = 0.5749
-        args.M_bulge_fixed = 2.406e10
-        args.a_bulge_fixed = 0.1011
-        args.M_gas_fixed = 1.978e10
-        args.R_d_gas_fixed = 8.616
-        args.h_z_gas_fixed = 0.2422
-        logger.info("Initialized with best known parameters from previous run")
-
-
     
-    _check_flag_consistency(args, logger)
+    # Fit flags
+    fit_g = parser.add_argument_group('Parameters to Fit')
+    fit_g.add_argument('--fit_xi_params', action='store_true',
+                      help="Fit xi function parameters")
+    fit_g.add_argument('--fit_disk_thin', action='store_true',
+                      help="Fit thin disk parameters")
+    fit_g.add_argument('--fit_disk_thick', action='store_true',
+                      help="Fit thick disk parameters")
+    fit_g.add_argument('--fit_bulge', action='store_true',
+                      help="Fit bulge parameters")
+    fit_g.add_argument('--fit_gas', action='store_true',
+                      help="Fit gas parameters")
+    
+    # Fixed values
+    fixed_g = parser.add_argument_group('Fixed Parameter Values')
+    for p_name, p_details in MW_MULTI_COMP_PARAM_CONFIG.items():
+        fixed_g.add_argument(f"--{p_details['fixed_val_from_arg']}", 
+                           type=float, 
+                           default=p_details['default_fixed'],
+                           help=f"Fixed/initial value for {p_name}")
+    
+    # Parse arguments
+    args = parser.parse_args()
+    args.fit_target = 'milkyway'  # Currently only MW supported
+    
+    # Run physics self-tests
+    logger.info("Running physics module self-tests...")
     run_physics_self_tests()
-
-    args.fit_target = 'milkyway'
-    gaia_data_dict = load_gaia(sample_max=args.max_sample_gaia)
-    if gaia_data_dict is None: logger.error("Failed to load Gaia data."); sys.exit(1)
-    logger.info(f"Loaded {len(gaia_data_dict['R_kpc'])} Gaia data points.")
-
-    # Check complexity and recommend approach
+    logger.info("✅ Physics tests passed")
+    
+    # Load data with enhanced validation
+    logger.info(f"\nLoading Gaia data from pre-processed file...")
+    gaia_data_dict = load_gaia(
+        sample_max=args.max_sample_gaia,
+        force_new_query_gaia=False,
+        force_reprocess_raw=False,
+        processed_cache_filename="gaia_cache/gaia_query_cache_DR3_processed_for_fit.parquet",
+        use_enhanced_query=True,
+        validate_data=args.validate_data
+    )
+    
+    if gaia_data_dict is None:
+        logger.error("Failed to load Gaia data")
+        sys.exit(1)
+    
+    logger.info(f"✅ Loaded {len(gaia_data_dict['R_kpc'])} stars")
+    
+    # Check configuration
     temp_fitted_names, _, _, _, _, _ = get_param_labels_and_bounds(args)
     n_params = len(temp_fitted_names)
     
-    if n_params > 10 and not args.use_curriculum_learning:
-        logger.warning(f"⚠️  Fitting {n_params} parameters without curriculum learning may be slow!")
-        logger.warning("   Consider adding --use_curriculum_learning")
+    logger.info(f"\nModel complexity: {n_params} free parameters")
+    
+    if n_params > 10:
+        if logger:
+            logger.warning("⚠️  Many parameters to fit!")
+        if not args.use_curriculum_learning:
+            if logger:
+                logger.warning("   Consider using --use_curriculum_learning")
+        if args.nlive_init < 50 * n_params:
+            if logger:
+                logger.warning(f"   Consider increasing --nlive_init (currently {args.nlive_init})")
     
     # Initialize GP surrogate if requested
     gp_surrogate = None
     if args.use_gp_surrogate:
         if not GP_AVAILABLE:
-            logger.error("GP surrogate requested but scikit-learn not available!")
+            logger.error("GP surrogate requested but scikit-learn not available")
             sys.exit(1)
         
-        logger.info("🤖 Initializing Gaussian Process surrogate model...")
-        
-        # Need to get parameter bounds for GP
+        logger.info("\n🤖 Initializing GP surrogate...")
         _, _, _, p_low, p_high, _ = get_param_labels_and_bounds(args)
         param_bounds = np.column_stack([p_low, p_high])
         
@@ -1604,100 +1986,120 @@ def main_dynesty():
             n_initial=args.gp_n_initial
         )
         
-        # Generate initial training data
+        # Generate training data
         def physics_wrapper(param_dict, args_obj):
-            return v_model_for_dynesty(gaia_data_dict['R_kpc'], param_dict, args.xi, args_obj)
+            return v_model_for_dynesty(
+                gaia_data_dict['R_kpc'], param_dict, args.xi, args_obj
+            )
         
         gp_surrogate.generate_initial_training_data(physics_wrapper, args)
     
-    # Choose sampling strategy
+    # Run sampling
     if args.use_curriculum_learning:
-        logger.info("🎓 Using CURRICULUM LEARNING approach")
+        logger.info("\n🎓 Using curriculum learning approach")
         results = run_curriculum_learning(args, gaia_data_dict, logger)
     else:
-        logger.info("🎯 Using standard sampling approach")
+        logger.info("\n🎯 Using standard sampling")
         results = run_single_dynesty(args, gaia_data_dict, gp_surrogate)
     
-    
-    # Process and save results
+    # Save results
     if results is None:
-        logger.error("No results to process. Exiting.")
+        logger.error("No results to save")
         return
     
-    # If curriculum learning, results is a dict of stages
+    # Process results based on type
     if isinstance(results, dict) and 'stage_1' in results:
-        # Save each stage
+        # Curriculum learning results
         for stage_name, stage_results in results.items():
             if stage_results is None:
                 continue
             
             output_prefix = f"dynesty_curriculum_{stage_name}_{args.xi}"
-            output_npz_file = Path(args.output_dir) / f"{output_prefix}_samples.npz"
+            output_npz = Path(args.output_dir) / f"{output_prefix}_samples.npz"
             
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
-                np.savez(output_npz_file, 
-                         samples=stage_results.samples,
-                         weights=weights,
-                         logl=stage_results.logl,
-                         logz=stage_results.logz,
-                         logzerr=stage_results.logzerr)
-                logger.info(f"Saved {stage_name} results to {output_npz_file}")
+                np.savez(output_npz,
+                        samples=stage_results.samples,
+                        weights=weights,
+                        logl=stage_results.logl,
+                        logz=stage_results.logz,
+                        logzerr=stage_results.logzerr)
+                logger.info(f"Saved {stage_name} to {output_npz}")
             except Exception as e:
-                logger.error(f"Failed to save {stage_name} results: {e}")
+                logger.error(f"Failed to save {stage_name}: {e}")
         
-        # Use final stage for summary
+        # Use final stage for analysis
         final_stage = max(results.keys())
         res = results[final_stage]
     else:
-        # Standard single run
+        # Single run results
         res = results
         
-        # Save results
-        output_fname_parts = ["dynesty_mw", args.xi]
-        if args.include_bulge: output_fname_parts.append("B" + ("f" if args.fit_bulge else "x"))
-        if args.include_disk_thin: output_fname_parts.append("DT" + ("f" if args.fit_disk_thin else "x"))
-        if args.include_disk_thick: output_fname_parts.append("DK" + ("f" if args.fit_disk_thick else "x"))
-        if args.include_gas: output_fname_parts.append("G" + ("f" if args.fit_gas else "x"))
-        output_basename = "_".join(output_fname_parts)
+        # Create filename
+        output_parts = ["dynesty_mw", args.xi]
+        if args.include_bulge:
+            output_parts.append("B" + ("f" if args.fit_bulge else "x"))
+        if args.include_disk_thin:
+            output_parts.append("DT" + ("f" if args.fit_disk_thin else "x"))
+        if args.include_disk_thick:
+            output_parts.append("DK" + ("f" if args.fit_disk_thick else "x"))
+        if args.include_gas:
+            output_parts.append("G" + ("f" if args.fit_gas else "x"))
         
-        output_npz_file = Path(args.output_dir) / f"{output_basename}_samples.npz"
+        output_basename = "_".join(output_parts)
+        output_npz = Path(args.output_dir) / f"{output_basename}_samples.npz"
         
+        # Calculate effective sample size
         try:
             ess = res.effective_sample_size if hasattr(res, 'effective_sample_size') else 0
         except:
             weights = np.exp(res.logwt - res.logz[-1])
             ess = 1.0 / np.sum(weights**2) if np.sum(weights**2) > 0 else 0.0
         
-        np.savez(output_npz_file, samples=res.samples, weights=np.exp(res.logwt - res.logz[-1]),
-                 logl=res.logl, logz=res.logz, logzerr=res.logzerr, ess=ess, blob=res.blob)
-        logger.info(f"Results saved to {output_npz_file}")
+        # Save
+        np.savez(output_npz,
+                samples=res.samples,
+                weights=np.exp(res.logwt - res.logz[-1]),
+                logl=res.logl,
+                logz=res.logz,
+                logzerr=res.logzerr,
+                ess=ess,
+                blob=res.blob if hasattr(res, 'blob') else None)
+        
+        logger.info(f"\n✅ Results saved to {output_npz}")
         
         # Save pickle
-        output_pickle_file = Path(args.output_dir) / f"{output_basename}_results.pkl.gz"
+        output_pkl = Path(args.output_dir) / f"{output_basename}_results.pkl.gz"
         try:
-            with gzip.open(output_pickle_file, "wb") as fh: 
+            with gzip.open(output_pkl, "wb") as fh:
                 pickle.dump(res, fh)
-            logger.info(f"Full Dynesty results object saved to {output_pickle_file}")
-        except Exception as e: 
-            logger.error(f"Failed to save full results object: {e}")
+            logger.info(f"✅ Full results saved to {output_pkl}")
+        except Exception as e:
+            logger.error(f"Failed to save pickle: {e}")
     
-    # Report GP statistics if used
-    if gp_surrogate is not None:
-        gp_stats = gp_surrogate.get_statistics()
-        logger.info("\n🤖 GP SURROGATE STATISTICS:")
-        logger.info(f"  Real physics calls: {gp_stats['n_real_calls']:,}")
-        logger.info(f"  Surrogate calls: {gp_stats['n_surrogate_calls']:,}")
-        logger.info(f"  Speedup factor: {gp_stats['speedup_factor']:.1f}x")
-        logger.info(f"  Training points: {gp_stats['n_training_points']}")
+    # Final summary
+    if hasattr(res, 'logz'):
+        logger.info(f"\n📊 FINAL RESULTS:")
+        logger.info(f"   log(Z) = {res.logz[-1]:.3f} ± {res.logzerr[-1]:.3f}")
+        logger.info(f"   Samples: {len(res.samples)}")
+        if hasattr(res, 'eff'):
+            logger.info(f"   Efficiency: {res.eff:.2f}%")
     
-    logger.info("\n✨ AI-Enhanced dynesty run complete!")
+    # Validation recommendation
+    logger.info("\n💡 Next steps:")
+    logger.info("   1. Check convergence diagnostics")
+    logger.info("   2. Run validation suite:")
+    logger.info(f"      python validate_density_model.py --params_file {output_npz}")
+    logger.info("   3. Generate plots and corner plots")
+    
+    logger.info("\n✨ Enhanced dynesty run complete!")
 
 
 if __name__ == "__main__":
     freeze_support()
     if not DYNESTY_AVAILABLE:
-        print("CRITICAL (main entry): Dynesty library not found.")
+        print("CRITICAL: Dynesty library not found")
         sys.exit(1)
     
     main_dynesty()

@@ -24,7 +24,7 @@ ZSUN_KPC = 0.025 * u.kpc
 VSUN_KMS = CartesianDifferential([11.1, 245.6, 7.25] * u.km/u.s)
 
 
-def query_gaia_disk_stars(n_stars_per_bin=200, r_bins=None, cache_file="gaia_disk_stars_raw.parquet"):
+def query_gaia_disk_stars(n_stars_per_bin=5000, r_bins=None, cache_file="gaia_disk_stars_raw.parquet"):
     """
     Query Gaia for disk stars with good radial coverage.
     
@@ -82,15 +82,15 @@ def query_gaia_disk_stars(n_stars_per_bin=200, r_bins=None, cache_file="gaia_dis
             phot_g_mean_mag, ruwe
         FROM gaiadr3.gaia_source
         WHERE l BETWEEN {l_min} AND {l_max}
-          AND b BETWEEN -5 AND 5
+          AND b BETWEEN -10 AND 10
           AND parallax > {1000.0/dist_max}
           AND parallax < {1000.0/dist_min}
           AND parallax_over_error > 5
           AND pmra IS NOT NULL AND pmdec IS NOT NULL
           AND pmra_error < 1 AND pmdec_error < 1
           AND radial_velocity IS NOT NULL
-          AND radial_velocity_error < 20
-          AND ruwe < 1.4
+          AND ruwe < 1.6
+          AND radial_velocity_error < 30
           AND phot_g_mean_mag < 17
         ORDER BY random_index
         """

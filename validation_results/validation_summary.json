@@ -1,18 +1,18 @@
 {
   "model_params": {
-    "rho_c_solar_kpc3": 126884213.99925183,
-    "n_exp": 0.8883542954048295,
-    "M_bulge_solar": 149991161033.68344,
-    "a_bulge_kpc": 1.5002490716135488,
-    "M_disk_thin_solar": 0.6167683579866097,
-    "R_d_thin_kpc": 67790333991.4401,
-    "h_z_thin_kpc": 5.989638211137137,
-    "M_disk_thick_solar": 0.6699920937979795,
-    "R_d_thick_kpc": 38405280995.48715,
-    "h_z_thick_kpc": 0.10178188405733528,
-    "M_gas_solar": 19820567296.328857,
-    "R_d_gas_kpc": 9.709098364541436,
-    "h_z_gas_kpc": 0.05587088101402077,
+    "rho_c_solar_kpc3": 1369056628.3872273,
+    "n_exp": 1.8795792919589973,
+    "M_bulge_solar": 77702441482.20125,
+    "a_bulge_kpc": 3.9736582855831415,
+    "M_disk_thin_solar": 0.27242281528644785,
+    "R_d_thin_kpc": 28254990882.07636,
+    "h_z_thin_kpc": 4.822883219119076,
+    "M_disk_thick_solar": 0.9625527303182063,
+    "R_d_thick_kpc": 23405944068.299446,
+    "h_z_thick_kpc": 1.4898482718150932,
+    "M_gas_solar": 19887542238.06188,
+    "R_d_gas_kpc": 9.79338583126297,
+    "h_z_gas_kpc": 0.10736829250582829,
     "include_disk_thin": true,
     "include_disk_thick": true,
     "include_bulge": true,
@@ -20,31 +20,31 @@
     "include_bulge_density": true
   },
   "n_tests": 5,
-  "n_passed": 0,
-  "overall_score": 0.10000000000000005,
+  "n_passed": 1,
+  "overall_score": 0.2,
   "test_results": [
     {
       "name": "Dwarf Galaxy Dynamics",
       "passed": false,
       "score": 0.0,
-      "message": "\u03c7\u00b2/dof = 16.95. FAIL: Dwarfs are NOT consistent with \u03be\u22481 prediction"
+      "message": "\u03c7\u00b2/dof = 13.39. FAIL: Dwarfs are NOT consistent with \u03be\u22481 prediction"
     },
     {
       "name": "Tidal Stream Dynamics",
-      "passed": false,
-      "score": 0.5,
-      "message": "Mean score: 0.50. FAIL: Stream properties are NOT consistent with model"
+      "passed": true,
+      "score": 1.0,
+      "message": "Mean score: 1.00. PASS: Stream properties are consistent with model"
     },
     {
       "name": "Vertical Disk Kinematics",
       "passed": false,
       "score": 0.0,
-      "message": "K_z at 1 kpc: model=9.941e-31 vs obs=2.300e-03 (km/s)\u00b2/pc. FAIL"
+      "message": "K_z at 1 kpc: model=3.954e-30 vs obs=2.300e-03 (km/s)\u00b2/pc. FAIL"
     },
     {
       "name": "Effective Mass Conservation",
       "passed": false,
-      "score": 2.220446049250313e-16,
+      "score": 0.0,
       "message": "M_eff conservation: max deviation = 5.0%. FAIL (claimed <3%)"
     },
     {

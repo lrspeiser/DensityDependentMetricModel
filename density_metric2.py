@@ -281,7 +281,80 @@ def xi_logistic_law(rho, rho_c, n_exp):
     
     return result_arr
 
-XI_FUNCTION_MAP = { "power": xi_power_law, "logistic": xi_logistic_law }
+def xi_nonlocal(rho_local, M_enclosed, R_kpc, rho_c=1e8, M_c=5e10):
+    """
+    Non-local model: depends on both local density and mass interior to R.
+    """
+    rho_local = np.atleast_1d(np.asarray(rho_local, dtype=np.float64))
+    M_enclosed = np.atleast_1d(np.asarray(M_enclosed, dtype=np.float64))
+    R_kpc = np.atleast_1d(np.asarray(R_kpc, dtype=np.float64))
+
+    xi_arr = np.ones_like(rho_local)
+
+    for i in range(len(rho_local)):
+        rho = rho_local[i]
+        M_enc = M_enclosed[i]
+        R = R_kpc[i]
+
+        xi_local = 1.0 / (1.0 + (rho / rho_c)**1.5)
+
+        M_expected = M_c * (1 - np.exp(-R / 3.0))
+        if M_expected < 1e-6:
+            xi_global = 1.0
+        else:
+            mass_ratio = M_enc / M_expected
+            if mass_ratio < 1:
+                xi_global = 1.0 / np.sqrt(mass_ratio)
+            else:
+                xi_global = 1.0
+
+        xi_arr[i] = xi_local * xi_global
+
+    return xi_arr
+
+def xi_anisotropic(rho, direction='radial', rho_c_rad=5e8, rho_c_vert=1e7):
+    """
+    Different behavior depending on direction.
+    'radial' can enhance; 'vertical' always suppresses.
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    xi_arr = np.ones_like(rho_arr)
+
+    for i in range(len(rho_arr)):
+        rho_val = rho_arr[i]
+        if direction == 'radial':
+            x = np.log10(rho_val / rho_c_rad)
+            if x < 0:
+                xi_arr[i] = 1.0 + 0.3 * np.exp(-x**2)
+            else:
+                xi_arr[i] = 1.0 / (1.0 + (rho_val / rho_c_rad)**1.5)
+        elif direction == 'vertical':
+            xi_arr[i] = 1.0 / (1.0 + (rho_val / rho_c_vert)**0.5)
+
+    return xi_arr
+
+def v_model_for_dynesty_anisotropic(R_kpc_array, p_all_params_dict, ARGS_obj_dynesty):
+    """Modified to use anisotropic xi."""
+    
+    # Get Newtonian velocities
+    v_n_kms = v_baryon_total_newtonian_kms(R_kpc_array, p_all_params_dict)
+    rho_midplane = rho_baryon_total_midplane_solar_kpc3(R_kpc_array, p_all_params_dict)
+    
+    # Use RADIAL xi for rotation curve
+    xi_radial = xi_anisotropic(rho_midplane, direction='radial', 
+                               rho_c_rad=p_all_params_dict.get('rho_c_radial', 5e8))
+    
+    v_mod_kms = v_n_kms * np.sqrt(np.maximum(xi_radial, 0.0))
+    return v_mod_kms
+
+# And for K_z calculation, use VERTICAL xi
+
+
+XI_FUNCTION_MAP = { "power": xi_power_law, "logistic": xi_logistic_law, "nonlocal": xi_nonlocal,
+    "anisotropic_radial": lambda rho, *_: xi_anisotropic(rho, direction='radial'),
+    "anisotropic_vertical": lambda rho, *_: xi_anisotropic(rho, direction='vertical')}
+
+
 
 # ---------- Milky Way Internal Consistency Checks (Unchanged) ----------
 def get_total_volume_density_at_R_z_solar_kpc3_multi(R_kpc_scalar, z_kpc_scalar, p_baryons):
