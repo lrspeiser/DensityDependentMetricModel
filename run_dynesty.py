@@ -50,6 +50,30 @@ import corner
 DEBUG_COUNTER_MAX = 100  # Maximum debug messages to prevent log spam
 debug_counter = 0
 
+prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
+samples = prior_data['samples']
+weights = prior_data['weights']
+
+param_names = [
+    'rho_c_solar_kpc3', 'n_exp',
+    'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+    'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+    'M_bulge_solar', 'a_bulge_kpc',
+    'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+]
+
+median_vals = np.average(samples, weights=weights, axis=0)
+previous_best = dict(zip(param_names, median_vals))
+
+# Optionally tighten bounds around previous best-fit to accelerate convergence
+for param, value in previous_best.items():
+    if param in PHYSICAL_BOUNDS:
+        delta = 0.1 * value  # 10% window
+        lower = max(PHYSICAL_BOUNDS[param]['min'], value - delta)
+        upper = min(PHYSICAL_BOUNDS[param]['max'], value + delta)
+        PHYSICAL_BOUNDS[param]['min'] = lower
+        PHYSICAL_BOUNDS[param]['max'] = upper
+
 # ============================================================================
 # Optional imports for advanced features
 # ============================================================================
@@ -1439,74 +1463,35 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
     # Define curriculum stages with physically motivated progression
     curriculum = [
         {
-            'name': 'Stage 1: Xi Parameters with Fixed Reasonable Baryons',
-            'fit_flags': {
-                'fit_xi_params': True,
-                'fit_disk_thin': False,
-                'fit_disk_thick': False,
-                'fit_bulge': False,
-                'fit_gas': False
-            },
-            'fixed_values': {
-                'M_disk_thin_solar': 5e10,    # Reasonable MW thin disk
-                'R_d_thin_kpc': 2.5,
-                'h_z_thin_kpc': 0.3,
-                'M_bulge_solar': 1.5e10,      # Reasonable bulge
-                'a_bulge_kpc': 0.7,
-                'M_disk_thick_solar': 1e10,   # ~20% of thin disk
-                'R_d_thick_kpc': 3.5,
-                'h_z_thick_kpc': 0.9,
-                'M_gas_solar': 1e10,
-                'R_d_gas_kpc': 7.0,
-                'h_z_gas_kpc': 0.15
-            },
-            'nlive': 500,
-            'dlogz': 0.1,
-            'maxcall': int(args.maxcall * 0.15)
-        },
-        {
-            'name': 'Stage 2: Xi + Thin Disk (Primary Component)',
-            'fit_flags': {
-                'fit_xi_params': True,
-                'fit_disk_thin': True,
-                'fit_disk_thick': False,
-                'fit_bulge': False,
-                'fit_gas': False
-            },
-            'use_previous': ['rho_c_solar_kpc3', 'n_exp'],
-            'nlive': 800,
-            'dlogz': 0.05,
-            'maxcall': int(args.maxcall * 0.25)
-        },
-        {
-            'name': 'Stage 3: Add Secondary Components',
+            'name': 'Stage 1: Reinitialize with previous full-run medians',
             'fit_flags': {
                 'fit_xi_params': True,
                 'fit_disk_thin': True,
                 'fit_disk_thick': True,
-                'fit_bulge': args.include_bulge,
-                'fit_gas': args.include_gas
+                'fit_bulge': True,
+                'fit_gas': True
             },
-            'use_previous': 'all',
+            'fixed_values': previous_best,
             'nlive': 1000,
-            'dlogz': 0.02,
-            'maxcall': int(args.maxcall * 0.30)
+            'dlogz': 0.05,
+            'maxcall': int(args.maxcall * 0.5)
         },
         {
-            'name': 'Stage 4: Final Refinement',
+            'name': 'Stage 2: Final Refinement',
             'fit_flags': {
                 'fit_xi_params': True,
                 'fit_disk_thin': True,
                 'fit_disk_thick': True,
-                'fit_bulge': args.include_bulge,
-                'fit_gas': args.include_gas
+                'fit_bulge': True,
+                'fit_gas': True
             },
             'use_previous': 'all',
             'nlive': args.nlive_init,
             'dlogz': args.dlogz_target,
-            'maxcall': int(args.maxcall * 0.30)
+            'maxcall': int(args.maxcall * 0.5)
         }
     ]
+
     
     for i, stage in enumerate(curriculum):
         logger.info(f"\n{'='*80}")
