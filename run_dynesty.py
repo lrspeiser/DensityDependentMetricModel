@@ -65,14 +65,6 @@ param_names = [
 median_vals = np.average(samples, weights=weights, axis=0)
 previous_best = dict(zip(param_names, median_vals))
 
-# Optionally tighten bounds around previous best-fit to accelerate convergence
-for param, value in previous_best.items():
-    if param in PHYSICAL_BOUNDS:
-        delta = 0.1 * value  # 10% window
-        lower = max(PHYSICAL_BOUNDS[param]['min'], value - delta)
-        upper = min(PHYSICAL_BOUNDS[param]['max'], value + delta)
-        PHYSICAL_BOUNDS[param]['min'] = lower
-        PHYSICAL_BOUNDS[param]['max'] = upper
 
 # ============================================================================
 # Optional imports for advanced features
@@ -150,6 +142,27 @@ PHYSICAL_BOUNDS = {
 # Expected ranges for validation
 EXPECTED_XI_AT_SOLAR = (0.7, 1.0)  # Xi should not suppress gravity too much at R_sun
 EXPECTED_V_AT_SOLAR = (150, 250)   # TEMPORARILY RELAXED for initial exploration
+
+def load_previous_best_params():
+    """Load previous best parameters if available."""
+    try:
+        prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
+        samples = prior_data['samples']
+        weights = prior_data['weights']
+        
+        param_names = [
+            'rho_c_solar_kpc3', 'n_exp',
+            'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+            'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+            'M_bulge_solar', 'a_bulge_kpc',
+            'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+        ]
+        
+        median_vals = np.average(samples, weights=weights, axis=0)
+        return dict(zip(param_names, median_vals))
+    except Exception as e:
+        logger.warning(f"Could not load previous results: {e}")
+        return None
 
 
 # ============================================================================
@@ -638,6 +651,58 @@ class ConvergenceTracker:
         
         return "\n".join(lines)
 
+class AdaptiveModeMonitor:
+    """Monitor sampling and adapt strategy in real-time."""
+    
+    def __init__(self, param_names, switch_threshold=0.7):
+        self.param_names = param_names
+        self.switch_threshold = switch_threshold
+        self.mode_history = []
+        self.current_mode = None
+        self.mode_lifetimes = {}
+        
+    def update(self, samples, weights):
+        """Check current mode and recommend actions."""
+        if len(samples) < 500:
+            return None
+            
+        # Identify current dominant mode
+        analyzer = BimodalAnalyzer(None)  # Modify to accept arrays
+        analyzer.samples = samples
+        analyzer.weights = weights
+        analyzer.param_names = self.param_names
+        
+        physical_mode, unphysical_mode = analyzer.separate_physical_modes()
+        
+        # Track mode evolution
+        mode_info = {
+            'iteration': len(self.mode_history),
+            'physical_weight': physical_mode['weight_fraction'],
+            'n_physical': len(physical_mode['samples']),
+            'n_unphysical': len(unphysical_mode['samples'])
+        }
+        self.mode_history.append(mode_info)
+        
+        # Decide on action
+        if physical_mode['weight_fraction'] > self.switch_threshold:
+            if self.current_mode != 'physical':
+                logger.info("🎯 Switching focus to PHYSICAL mode")
+                self.current_mode = 'physical'
+                return {
+                    'action': 'tighten_bounds',
+                    'mode_params': analyzer.get_mode_parameters(
+                        physical_mode['samples'], 
+                        physical_mode['weights']
+                    )[0]
+                }
+        elif physical_mode['weight_fraction'] < 0.3:
+            logger.warning("⚠️ Sampling dominated by unphysical mode!")
+            return {
+                'action': 'add_constraints',
+                'constraint_strength': 200
+            }
+            
+        return None
 
 def enhanced_monitor_sampler_progress(
     sampler,
@@ -823,24 +888,27 @@ def enhanced_monitor_sampler_progress(
         if dashboard_monitor is not None:
             try:
                 dashboard_state = {
-                    "elapsed_time": elapsed_time / 3600,
-                    "n_samples": n_samples,
-                    "n_calls": ncall_total,
-                    "efficiency": eff,
-                    "logz": current_logz,
-                    "logz_err": res.logzerr[-1] if hasattr(res, 'logzerr') and len(res.logzerr) > 0 else 0,
-                    "dlogz": dlogz,
-                    "current_nlive": len(res.live_points) if hasattr(res, 'live_points') else 0,
+                    "elapsed_time": float(elapsed_time / 3600),  # Convert to float
+                    "n_samples": int(n_samples),  # Convert to int
+                    "n_calls": int(ncall_total),
+                    "efficiency": float(eff),
+                    "logz": float(current_logz),
+                    "logz_err": float(res.logzerr[-1]) if hasattr(res, 'logzerr') and len(res.logzerr) > 0 else 0,
+                    "dlogz": float(dlogz),
+                    "current_nlive": int(len(res.live_points)) if hasattr(res, 'live_points') else 0,
                     "parameter_estimates": {},
                     "parameter_uncertainties": {},
                     "health_warnings": convergence_tracker.health_warnings if convergence_tracker else []
                 }
-
+                
+                # Ensure all parameter values are JSON serializable
                 for i, name in enumerate(fitted_param_names):
                     dashboard_state["parameter_estimates"][name] = float(current_params[i])
                     dashboard_state["parameter_uncertainties"][name] = float(np.std(recent_samples[:, i]))
 
+                dashboard_state = make_json_serializable(dashboard_state)
                 dashboard_monitor.update_progress(dashboard_state)
+
 
             except Exception as e:
                 logger.error(f"Failed to update dashboard: {e}")
@@ -849,6 +917,7 @@ def enhanced_monitor_sampler_progress(
         logger.error(f"Error in monitoring: {e}")
         import traceback
         logger.debug(traceback.format_exc())
+
 
 
 
@@ -1205,80 +1274,113 @@ def v_model_for_dynesty(
 
 def get_param_labels_and_bounds(ARGS):
     """
-    Enhanced parameter configuration with log-prior flags and validation.
-    
-    Returns parameter information including:
-    - Names, labels, initial values
-    - Prior bounds
-    - Log-uniform vs uniform prior flags
-    - Physical validation requirements
+    Enhanced parameter configuration with log-prior flags, optional prior tightening,
+    and validation. Supports starting from previous best-fit and narrowing bounds.
     """
     param_info_list = []
     config_to_use = MW_MULTI_COMP_PARAM_CONFIG
     logger.info("Configuring parameters for multi-component Milky Way model")
-    
-    # Build parameter list
+
+    # === OPTIONAL: Load previous best-fit medians ===
+    previous_best = None
+    bounds_modified = {}
+
+    if getattr(ARGS, 'use_previous_best', False):
+        try:
+            prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
+            samples = prior_data['samples']
+            weights = prior_data['weights']
+            param_names = [
+                'rho_c_solar_kpc3', 'n_exp',
+                'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+                'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+                'M_bulge_solar', 'a_bulge_kpc',
+                'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+            ]
+            medians = np.average(samples, weights=weights, axis=0)
+            previous_best = dict(zip(param_names, medians))
+            logger.info("✅ Loaded previous best-fit medians successfully.")
+
+            # Apply tightened bounds if requested
+            if getattr(ARGS, 'tighten_bounds_factor', 0) > 0:
+                factor = ARGS.tighten_bounds_factor
+                for param, val in previous_best.items():
+                    if param in PHYSICAL_BOUNDS:
+                        delta = factor * abs(val)
+                        bounds_modified[param] = {
+                            'low': max(PHYSICAL_BOUNDS[param]['min'], val - delta),
+                            'high': min(PHYSICAL_BOUNDS[param]['max'], val + delta)
+                        }
+                        logger.info(f"🔒 Tightened bounds for {param}: [{bounds_modified[param]['low']:.2e}, {bounds_modified[param]['high']:.2e}]")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load previous_best: {e}")
+            previous_best = None
+
+    # === Main parameter loop ===
     for p_name, p_details in config_to_use.items():
         # Check if component is included
         is_included = 'include_flag_arg' not in p_details or \
-                     getattr(ARGS, p_details['include_flag_arg'], False)
+                      getattr(ARGS, p_details['include_flag_arg'], False)
         if not is_included:
             continue
-        
-        # Check if parameter should be fitted
+
+        # Should we fit this parameter?
         is_fitted = False
         if 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
-            # Check if specific fixed value was provided via command line
             fixed_arg_name = p_details['fixed_val_from_arg']
             if f"--{fixed_arg_name}" not in sys.argv:
                 is_fitted = True
             else:
                 logger.info(f"  {p_name}: Using fixed value (overrides fit flag)")
-        
+
         # Get current value
         current_val = getattr(ARGS, p_details['fixed_val_from_arg'])
-        
-        # Validate against physical bounds
+
+        # Bounds (tightened if available)
+        if p_name in bounds_modified:
+            low = bounds_modified[p_name]['low']
+            high = bounds_modified[p_name]['high']
+        else:
+            low = p_details['low']
+            high = p_details['high']
+
+        # Validate initial value against PHYSICAL_BOUNDS
         if p_name in PHYSICAL_BOUNDS:
-            bounds = PHYSICAL_BOUNDS[p_name]
-            if current_val < bounds['min'] or current_val > bounds['max']:
-                if logger:
-                    logger.warning(f"  {p_name}: Initial value {current_val:.2e} outside "
-                             f"physical bounds [{bounds['min']:.2e}, {bounds['max']:.2e}]")
-                # Clip to bounds
-                current_val = np.clip(current_val, bounds['min'], bounds['max'])
-                if logger:
-                    logger.warning(f"  Clipped to: {current_val:.2e}")
-        
+            pb = PHYSICAL_BOUNDS[p_name]
+            if current_val < pb['min'] or current_val > pb['max']:
+                logger.warning(f"  {p_name}: Initial value {current_val:.2e} outside "
+                               f"physical bounds [{pb['min']:.2e}, {pb['max']:.2e}]")
+                current_val = np.clip(current_val, pb['min'], pb['max'])
+                logger.warning(f"  Clipped to: {current_val:.2e}")
+
         param_info_list.append({
-            'name': p_name, 
-            'label': p_details['label'], 
+            'name': p_name,
+            'label': p_details['label'],
             'current_val': current_val,
-            'low': p_details['low'], 
-            'high': p_details['high'], 
+            'low': low,
+            'high': high,
             'is_fitted': is_fitted,
             'log_prior': p_details.get('log_prior', False),
             'physical_check': p_details.get('physical_check', True)
         })
-    
+
     ARGS.all_param_info_list = param_info_list
     fitted_params_info = [p for p in param_info_list if p['is_fitted']]
-    
-    if not fitted_params_info: 
+
+    if not fitted_params_info:
         logger.error("No parameters configured to be fitted!")
         logger.error("You must use at least one --fit_* flag (e.g., --fit_xi_params)")
         sys.exit(1)
-    
-    # Log configuration
+
+    # Logging fitted params
     logger.info(f"\nFitting {len(fitted_params_info)} parameters:")
     for p in fitted_params_info:
         prior_type = "Log-uniform" if p['log_prior'] else "Uniform"
-        logger.info(f"  {p['name']:<25} | Prior: {prior_type} | "
-                   f"Range: [{p['low']:.2e}, {p['high']:.2e}]")
-    
-    # Extract arrays for fitted parameters
+        logger.info(f"  {p['name']:<25} | Prior: {prior_type} | Range: [{p['low']:.2e}, {p['high']:.2e}]")
+
+    # Return as required
     use_log_flags = [p['log_prior'] for p in fitted_params_info]
-    
     return (
         [p['name'] for p in fitted_params_info],
         [p['label'] for p in fitted_params_info],
@@ -1287,6 +1389,26 @@ def get_param_labels_and_bounds(ARGS):
         np.array([p['high'] for p in fitted_params_info]),
         use_log_flags
     )
+
+
+# ============================================================================
+# Convert numpy types to Python native types for JSON serialization
+# ============================================================================
+
+def make_json_serializable(obj):
+    """Convert numpy types to Python native types for JSON serialization."""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_serializable(v) for v in obj]
+    else:
+        return obj
 
 
 # ============================================================================
@@ -1460,10 +1582,15 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
     all_results = {}
     cumulative_params = {}
     
+    # Load previous best if requested
+    previous_best = None
+    if args.use_previous_best:
+        previous_best = load_previous_best_params()
+    
     # Define curriculum stages with physically motivated progression
     curriculum = [
         {
-            'name': 'Stage 1: Reinitialize with previous full-run medians',
+            'name': 'Stage 1: Initialize from previous best' if previous_best else 'Stage 1: Xi parameters only',
             'fit_flags': {
                 'fit_xi_params': True,
                 'fit_disk_thin': True,
@@ -1471,7 +1598,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                 'fit_bulge': True,
                 'fit_gas': True
             },
-            'fixed_values': previous_best,
+            'fixed_values': previous_best if previous_best else {},
             'nlive': 1000,
             'dlogz': 0.05,
             'maxcall': int(args.maxcall * 0.5)
@@ -1882,6 +2009,15 @@ def main_dynesty():
                      help="GP uncertainty threshold")
     ai_g.add_argument('--validate_data', action='store_true', default=True,
                      help="Validate loaded data quality")
+    parser.add_argument('--use_previous_best', action='store_true', default=False,
+                   help="Initialize from previous best-fit parameters")
+    parser.add_argument('--previous_results_file', type=str, 
+                    default="chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz",
+                    help="Path to previous results for initialization")
+    parser.add_argument('--tighten_bounds_factor', type=float, default=0.1,
+                    help="Factor for tightening bounds around previous best (0.1 = 10% window)")
+    parser.add_argument('--disable_dashboard', action='store_true', default=False,
+                    help="Disable dashboard monitoring to avoid JSON errors")
     
     # Model configuration
     mw_model_g = parser.add_argument_group('Model Components')
@@ -1914,6 +2050,22 @@ def main_dynesty():
     # Parse arguments
     args = parser.parse_args()
     args.fit_target = 'milkyway'  # Currently only MW supported
+
+    
+    # Safety check: previous results file must exist if using previous best
+    if args.use_previous_best and not os.path.exists(args.previous_results_file):
+        logger.warning(f"⚠️ Previous results file not found: {args.previous_results_file}")
+        args.use_previous_best = False
+
+    # Safety check: disable dashboard if explicitly turned off or import fails
+    if args.enable_dashboard and not args.disable_dashboard:
+        try:
+            from monitor_dashboard import DynestyMonitor
+        except ImportError:
+            logger.warning("⚠️ Dashboard module not available, disabling dashboard")
+            args.enable_dashboard = False
+
+    
     
     # Run physics self-tests
     logger.info("Running physics module self-tests...")
