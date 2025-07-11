@@ -30,6 +30,8 @@ import logging
 import sys
 import time
 import numpy as np
+from datetime import datetime
+import csv
 import argparse
 import os
 from pathlib import Path
@@ -118,11 +120,11 @@ PHYSICAL_BOUNDS = {
     'M_disk_thin_solar':   {'min': 2e10, 'max': 1.2e11, 'typical': 7.5e10},
     'M_disk_thick_solar':  {'min': 5e9,  'max': 4e10,   'typical': 2.5e10},
     'M_bulge_solar':       {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
-    'M_gas_solar':         {'min': 5e9,  'max': 3e10,   'typical': 2.0e10},
+    'M_gas_solar':         {'min': 5e9,  'max': 5e10,   'typical': 3e10},    # Was 5e9-3e10
 
-    # Scale lengths (kpc)
-    'R_d_thin_kpc':        {'min': 2.0,  'max': 5.0,    'typical': 3.9},
-    'R_d_thick_kpc':       {'min': 2.5,  'max': 6.0,    'typical': 4.7},
+     # Scale lengths (kpc) - UPDATED based on what sampler wanted
+    'R_d_thin_kpc':        {'min': 3.5,  'max': 7.0,    'typical': 5.0},    # Was 2.0-5.0
+    'R_d_thick_kpc':       {'min': 4.5,  'max': 9.0,    'typical': 6.0},    # Was 2.5-6.0
     'R_d_gas_kpc':         {'min': 4.0,  'max': 12.0,   'typical': 7.0},
     'a_bulge_kpc':         {'min': 0.2,  'max': 1.5,    'typical': 0.7},
 
@@ -136,7 +138,7 @@ PHYSICAL_BOUNDS = {
 
     # Density parameters
     'rho_c_solar_kpc3':    {'min': 1e8,  'max': 2e9,    'typical': 1.66e9},
-    'n_exp':               {'min': 0.7,  'max': 2.0,    'typical': 1.43}
+    'n_exp':               {'min': 0.7,  'max': 3.0,    'typical': 2.0},     # Was 0.7-2.0
 }
 
 # Expected ranges for validation
@@ -1110,6 +1112,18 @@ def log_likelihood_dynesty(
                     getattr(args_dynesty_obj, p_details_cfg['include_flag_arg'])
         current_params_full_dict['include_bulge_density'] = args_dynesty_obj.include_bulge
     
+    # Hard constraint: R_d_thick must be > R_d_thin
+    if 'R_d_thick_kpc' in current_params_full_dict and 'R_d_thin_kpc' in current_params_full_dict:
+        if current_params_full_dict['R_d_thick_kpc'] <= current_params_full_dict['R_d_thin_kpc'] * 1.1:
+            return -np.inf, [np.inf]  # Hard reject: violates expected scale hierarchy
+
+    # Soft prior: prefer reasonable thick/thin disk mass ratio
+    if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
+        ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
+        if ratio > 0.5:
+            penalty = -50 * (ratio - 0.5)**2  # Apply a soft Gaussian penalty
+            log_L += penalty
+        
     # Calculate model prediction
     try:
         # Use GP surrogate if available and requested
@@ -1817,7 +1831,8 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         enlarge=args.enlarge_factor,
         ptform_args=ptform_args_tuple,
         logl_args=logl_args_tuple,
-        blob=True
+        blob=True,
+        walks=args.walks
     )
 
     run_start_time = time.time()
@@ -1833,7 +1848,14 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         stop_monitoring = threading.Event()
 
         def monitor_thread():
+            import csv
+            from datetime import datetime
+            from pathlib import Path
+            import numpy as np
+
+            csv_log_path = Path(args.output_dir) / "dynesty_live_progress.csv"
             last_check = time.time()
+
             try:
                 while not stop_monitoring.is_set():
                     time.sleep(10)
@@ -1842,13 +1864,14 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
 
                         if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
                             if len(sampler.results.samples) > 50:
+                                # === Update terminal + monitor_log.txt ===
                                 old_stdout = sys.stdout
                                 sys.stdout = StringIO()
 
                                 enhanced_monitor_sampler_progress(
                                     sampler, fitted_p_names, fitted_p_labels,
                                     run_start_time, logger, gp_surrogate, args,
-                                    dashboard_monitor  # << Pass monitor
+                                    dashboard_monitor
                                 )
 
                                 monitor_text = sys.stdout.getvalue()
@@ -1862,18 +1885,49 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
 
                                 if hasattr(sampler.results, 'logz') and len(sampler.results.logz) > 0:
                                     current_logz = sampler.results.logz[-1]
-                                    dlogz = (sampler.results.logz[-1] - sampler.results.logz[-2]) if len(sampler.results.logz) > 1 else np.inf
+                                    dlogz = (
+                                        sampler.results.logz[-1] - sampler.results.logz[-2]
+                                        if len(sampler.results.logz) > 1 else np.inf
+                                    )
                                     print(f"🔔 Log(Z): {current_logz:.3f} | dlogz: {dlogz:.4f}")
                                     if dlogz < args.dlogz_target * 2:
                                         print("🔔 ✅ Approaching convergence!")
-
                                 print("=" * 70 + "\n")
+
+                                # === Append to dynesty_live_progress.csv ===
+                                try:
+                                    logz = sampler.results.logz[-1]
+                                    dlogz = sampler.results.logz[-1] - sampler.results.logz[-2] if len(sampler.results.logz) > 1 else float('nan')
+                                    weights = np.exp(sampler.results.logwt - logz)
+                                    ess = 1.0 / np.sum(weights**2) if np.sum(weights**2) > 0 else 0.0
+                                    n_samples = len(sampler.results.samples)
+                                    n_calls = np.sum(sampler.results.ncall) if hasattr(sampler.results, 'ncall') else float('nan')
+
+                                    new_row = [
+                                        datetime.utcnow().isoformat(),
+                                        f"{logz:.6f}",
+                                        f"{dlogz:.6f}",
+                                        f"{ess:.2f}",
+                                        f"{n_samples}",
+                                        f"{n_calls}"
+                                    ]
+
+                                    write_header = not csv_log_path.exists()
+                                    with open(csv_log_path, "a", newline="") as csvfile:
+                                        writer = csv.writer(csvfile)
+                                        if write_header:
+                                            writer.writerow(["timestamp", "logz", "dlogz", "ess", "n_samples", "n_calls"])
+                                        writer.writerow(new_row)
+
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Failed to write to dynesty_live_progress.csv: {e}")
 
             except Exception as e:
                 logger.error(f"Monitoring error: {e}")
                 monitor_file.write(f"ERROR: {e}\n")
             finally:
                 monitor_file.close()
+
 
         monitor = threading.Thread(target=monitor_thread, daemon=True)
         monitor.start()
@@ -1970,7 +2024,7 @@ def main_dynesty():
                        help="Live points per batch")
     parser.add_argument('--dlogz_target', type=float, default=0.01,
                        help="Target dlogz for convergence")
-    parser.add_argument('--num_threads', type=int, default=1,
+    parser.add_argument('--num_threads', type=int, default=8,
                        help="Number of threads for parallelization")
     parser.add_argument('--maxcall', type=int, default=2000000,
                        help="Maximum likelihood calls")
@@ -1991,6 +2045,9 @@ def main_dynesty():
     dynesty_g.add_argument('--sample_method', type=str, default='rslice',
                           choices=['rwalk', 'rslice', 'hslice'],
                           help="Sampling method")
+    dynesty_g.add_argument('--walks', type=int, default=25,
+                      help="Number of walks for rwalk sampler (ignored if not using rwalk)")
+
     dynesty_g.add_argument('--enlarge_factor', type=float, default=2.5,
                           help="Bound enlargement factor")
     dynesty_g.add_argument('--bound_method', type=str, default='multi',

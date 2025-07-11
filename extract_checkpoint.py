@@ -1,50 +1,77 @@
-import pickle
+import os
 import numpy as np
+import dill as pickle
+from pathlib import Path
+from dynesty import utils as dyfunc
 
-# This avoids the need to import dynesty by just loading the raw data
-with open('chains_full_precision/stage_3/dynesty_checkpoint.pkl', 'rb') as f:
-    res = pickle.load(f)
+# === Configuration ===
+CHECKPOINT_PATH = Path("chains_truly_data_driven/dynesty_checkpoint.pkl")
+RESULTS_PATH = Path("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
+FALLBACK_OUTPUT = Path("chains_truly_data_driven/resumed_results.npz")
 
-print('From checkpoint file:')
-print(f'  Number of samples: {len(res.samples)}')
-print(f'  Final log(Z): {res.logz[-1]:.3f}')
-print(f'  Log(Z) error: {res.logzerr[-1]:.3f}')
+# === Try loading existing .npz results ===
+if RESULTS_PATH.exists():
+    print(f"📦 Found final results: {RESULTS_PATH}")
+    data = np.load(RESULTS_PATH)
+    samples = data["samples"]
+    weights = data["weights"]
+    logz = data["logz"]
+    logzerr = data["logzerr"]
+    logl = data["logl"]
+    print("✅ Loaded final .npz results.")
+else:
+    print(f"🔄 No .npz results found. Attempting to resume from checkpoint: {CHECKPOINT_PATH}")
+    if not CHECKPOINT_PATH.exists():
+        raise FileNotFoundError("❌ No checkpoint or final results found.")
 
-# Calculate dlogz
-if len(res.logz) > 1:
-    dlogz_values = np.diff(res.logz)
-    print(f'  Final dlogz: {dlogz_values[-1]:.4f}')
-    print(f'  Last 5 dlogz values: {dlogz_values[-5:]}')
+    with open(CHECKPOINT_PATH, "rb") as f:
+        sampler = pickle.load(f)
 
-# Calculate weights
-weights = np.exp(res.logwt - res.logz[-1])
-print(f'  Sum of weights: {np.sum(weights):.3f}')
-print(f'  Effective samples: {1.0 / np.sum(weights**2):.1f}')
+    # Resume sampling to complete it
+    print("▶️ Resuming dynesty sampling...")
+    sampler.run_nested(dlogz_init=0.01, maxcall=2_000_000, print_progress=True)
 
-# Get parameter estimates
-weighted_mean = np.average(res.samples, weights=weights, axis=0)
-weighted_std = np.sqrt(np.average((res.samples - weighted_mean)**2, weights=weights, axis=0))
+    res = sampler.results
+    samples = res.samples
+    logz = res.logz
+    logzerr = res.logzerr
+    logl = res.logl
+    logwt = res.logwt
+    weights = np.exp(logwt - logz[-1])
 
-print('\nFinal parameters from checkpoint:')
-param_names = ['rho_c', 'n', 'M_thin', 'R_thin', 'h_thin', 'M_thick', 'R_thick', 'h_thick', 
-               'M_bulge', 'a_bulge', 'M_gas', 'R_gas', 'h_gas']
+    # Save to .npz
+    np.savez(FALLBACK_OUTPUT,
+             samples=samples,
+             weights=weights,
+             logl=logl,
+             logz=logz,
+             logzerr=logzerr,
+             logwt=logwt,
+             ncall=res.ncall if hasattr(res, 'ncall') else None)
 
+    print(f"✅ Resumed and saved final results to: {FALLBACK_OUTPUT}")
+
+# === Compute and print summary stats ===
+print(f"\n🔍 Analysis Summary:")
+print(f"  Total samples: {len(samples)}")
+print(f"  log(Z): {logz[-1]:.3f} ± {logzerr[-1]:.3f}")
+if len(logz) > 1:
+    print(f"  dlogz: {logz[-1] - logz[-2]:.4f}")
+eff_samples = 1.0 / np.sum(weights**2)
+print(f"  Effective samples: {eff_samples:.1f}")
+
+# Weighted mean and std
+weighted_mean = np.average(samples, weights=weights, axis=0)
+weighted_std = np.sqrt(np.average((samples - weighted_mean)**2, weights=weights, axis=0))
+
+# Parameter names (can be adjusted)
+param_names = [
+    'rho_c', 'n', 'M_thin', 'R_thin', 'h_thin', 
+    'M_thick', 'R_thick', 'h_thick', 
+    'M_bulge', 'a_bulge', 'M_gas', 'R_gas', 'h_gas'
+]
+
+print("\n📊 Final Parameter Estimates:")
 for i in range(len(weighted_mean)):
-    if i < len(param_names):
-        print(f'  {param_names[i]}: {weighted_mean[i]:.3e} ± {weighted_std[i]:.3e}')
-    else:
-        print(f'  Param {i}: {weighted_mean[i]:.3e} ± {weighted_std[i]:.3e}')
-
-# Save the proper results
-np.savez('chains_full_precision/final_results_stage3_corrected.npz',
-         samples=res.samples,
-         weights=weights,
-         logl=res.logl,
-         logz=res.logz,
-         logzerr=res.logzerr,
-         logwt=res.logwt,
-         ncall=res.ncall if hasattr(res, 'ncall') else None)
-
-print(f'\nSaved corrected results to final_results_stage3_corrected.npz')
-print(f'This file contains {len(res.samples)} samples with proper weights')
-
+    name = param_names[i] if i < len(param_names) else f"param_{i}"
+    print(f"  {name:10s}: {weighted_mean[i]:.3e} ± {weighted_std[i]:.3e}")

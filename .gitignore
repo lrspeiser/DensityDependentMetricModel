@@ -180,6 +180,7 @@ chains_dynesty*/
 *.npy
 *.pkl.gz
 *.sav
+*.fits
 
 # Ignore image and text output files. It's better to regenerate them from code.
 *.png
