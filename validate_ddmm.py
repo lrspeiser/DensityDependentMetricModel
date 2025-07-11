@@ -70,6 +70,17 @@ OMEGA_LAMBDA = 0.7  # Dark energy density parameter
 A0_MOND = 1.2e-10  # MOND acceleration scale in m/s^2
 A0_MOND_KPC_S2 = A0_MOND * 1e-3 * (3.156e7)**2 / 3.086e19  # Convert to kpc/s^2
 
+def safe_cast(o):
+    """Recursively convert NumPy types to native Python types for JSON serialization."""
+    if isinstance(o, dict):
+        return {k: safe_cast(v) for k, v in o.items()}
+    elif isinstance(o, list):
+        return [safe_cast(v) for v in o]
+    elif isinstance(o, np.generic):
+        return o.item()
+    return o
+
+
 # Test result structure
 @dataclass
 class TestResult:
@@ -325,7 +336,7 @@ class DDMMValidator:
         successful_fits = 0
         
         for galaxy in galaxies:
-            logger.info(f"\nTesting galaxy: {galaxy['name']}")
+            # logger.info(f"\nTesting galaxy: {galaxy['name']}")
             
             try:
                 # Fit with DDMM
@@ -1639,7 +1650,8 @@ class DDMMValidator:
         
         # Save report
         with open(output_file, 'w') as f:
-            json.dump(report, f, indent=2)
+            json.dump(safe_cast(report), f, indent=2)
+
         
         logger.info(f"\nValidation report saved to: {output_file}")
         

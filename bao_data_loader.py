@@ -1,8 +1,7 @@
-# bao_data_loader.py
 import numpy as np
 from pathlib import Path
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 class BAODataLoader:
     """Load SDSS BAO measurements from DR16 cosmo release"""
@@ -19,10 +18,9 @@ class BAODataLoader:
             print(f"Warning: {filepath} not found")
             return None
             
-        # Extract info from filename
         parts = filename.split('_')
-        survey = parts[1]  # DR12, DR16, etc.
-        tracer = parts[2]  # LRG, QSO, MGS, LYAUTO, LYxQSO
+        survey = parts[1] if len(parts) > 1 else 'UNKNOWN'
+        tracer = parts[2] if len(parts) > 2 else 'UNKNOWN'
         
         data = {
             'filename': filename,
@@ -33,50 +31,48 @@ class BAODataLoader:
         
         with open(filepath, 'r') as f:
             lines = f.readlines()
-            
-        # Parse header to understand format
+        
         in_data = False
         headers = []
         
         for line in lines:
             line = line.strip()
-            
-            # Skip empty lines
-            if not line:
-                continue
-                
-            # Comments often contain redshift info
-            if line.startswith('#'):
+            if not line or line.startswith('#'):
                 if 'z =' in line or 'redshift' in line.lower():
                     z_match = re.search(r'z\s*=\s*([\d.]+)', line)
                     if z_match:
                         data['redshift'] = float(z_match.group(1))
                 continue
-            
-            # First non-comment line is usually headers
-            if not in_data and not line.startswith('#'):
-                headers = line.split()
-                in_data = True
+
+            # Attempt to parse the first valid header
+            if not in_data:
+                tokens = line.split()
+                if all(re.match(r'^[A-Za-z_/]+$', tok) for tok in tokens):
+                    headers = tokens
+                    in_data = True
+                    continue
+
+            # Skip if no headers found yet
+            if not headers:
                 continue
-                
-            # Data lines
-            if in_data:
+
+            try:
                 values = [float(x) for x in line.split()]
-                if len(values) >= 2:
+                if len(values) >= len(headers):
                     measurement = dict(zip(headers, values))
                     data['measurements'].append(measurement)
+            except ValueError:
+                print(f"[WARN] Skipping non-numeric line in {filename}: {line}")
+                continue
         
-        # For grid files (Lyman-alpha), extract the best-fit values
         if 'grid' in filename:
             data['type'] = 'grid'
-            # These files contain chi2 grids, need to find minimum
             if data['measurements']:
                 chi2_values = [m.get('chi2', float('inf')) for m in data['measurements']]
                 min_idx = np.argmin(chi2_values)
                 data['best_fit'] = data['measurements'][min_idx]
         else:
             data['type'] = 'measurement'
-            # Regular files have direct measurements
             if data['measurements']:
                 data['best_fit'] = data['measurements'][0]
         
@@ -93,11 +89,9 @@ class BAODataLoader:
             data = self.parse_bao_file(filename)
             
             if data:
-                # Key by tracer and survey
                 key = f"{data['survey']}_{data['tracer']}"
                 self.measurements[key] = data
                 
-                # Print summary
                 if 'best_fit' in data:
                     bf = data['best_fit']
                     z = data.get('redshift', 'unknown')
@@ -112,7 +106,7 @@ class BAODataLoader:
         for key, data in self.measurements.items():
             if 'best_fit' not in data:
                 continue
-                
+            
             bf = data['best_fit']
             entry = {
                 'name': key,
@@ -120,13 +114,12 @@ class BAODataLoader:
                 'survey': data['survey']
             }
             
-            # Extract redshift
+            # Redshift extraction
             if 'redshift' in data:
                 entry['z'] = data['redshift']
             elif 'z' in bf:
                 entry['z'] = bf['z']
             else:
-                # Try to infer from tracer type
                 z_estimates = {
                     'MGS': 0.15,
                     'LRG': 0.7,
@@ -134,27 +127,23 @@ class BAODataLoader:
                     'LYAUTO': 2.3,
                     'LYxQSO': 2.3
                 }
-                entry['z'] = z_estimates.get(data['tracer'], 1.0)
+                entry['z'] = z_estimates.get(data['tracer'].upper(), 1.0)
             
-            # Extract distance measurements
-            # DV: spherically averaged distance
-            # DM: comoving angular diameter distance  
-            # DH: Hubble distance (c/H(z))
-            
+            # Distance measurements
             if 'DV/rd' in bf:
                 entry['DV_over_rd'] = bf['DV/rd']
                 entry['DV_over_rd_err'] = bf.get('DV/rd_err', bf.get('sigma_DV/rd', 0))
             elif 'DV_over_rd' in bf:
                 entry['DV_over_rd'] = bf['DV_over_rd']
                 entry['DV_over_rd_err'] = bf.get('sigma_DV_over_rd', 0)
-                
+            
             if 'DM/rd' in bf:
                 entry['DM_over_rd'] = bf['DM/rd']
                 entry['DM_over_rd_err'] = bf.get('DM/rd_err', bf.get('sigma_DM/rd', 0))
             elif 'DM_over_rd' in bf:
                 entry['DM_over_rd'] = bf['DM_over_rd']
                 entry['DM_over_rd_err'] = bf.get('sigma_DM_over_rd', 0)
-                
+            
             if 'DH/rd' in bf:
                 entry['DH_over_rd'] = bf['DH/rd']
                 entry['DH_over_rd_err'] = bf.get('DH/rd_err', bf.get('sigma_DH/rd', 0))
@@ -162,7 +151,7 @@ class BAODataLoader:
                 entry['DH_rd'] = bf['DH_rd']
                 entry['DH_rd_err'] = bf.get('sigma_DH_rd', 0)
             
-            # Growth rate measurements
+            # Growth rate
             if 'fs8' in bf:
                 entry['fs8'] = bf['fs8']
                 entry['fs8_err'] = bf.get('fs8_err', bf.get('sigma_fs8', 0))
@@ -172,9 +161,7 @@ class BAODataLoader:
             
             results.append(entry)
         
-        # Sort by redshift
         results.sort(key=lambda x: x['z'])
-        
         return results
 
 # Test the loader
@@ -184,7 +171,6 @@ if __name__ == "__main__":
     
     print(f"\nLoaded {len(measurements)} BAO measurements")
     
-    # Get distance measurements
     distances = loader.get_distance_measurements()
     
     print("\nDistance measurements summary:")
@@ -192,12 +178,11 @@ if __name__ == "__main__":
     print("-" * 70)
     
     for d in distances:
-        dv = d.get('DV_over_rd', '-')
+        dv = d.get('DV_over_rd', '-') 
         dm = d.get('DM_over_rd', '-') 
-        dh = d.get('DH_over_rd', '-')
+        dh = d.get('DH_over_rd', '-') 
         fs8 = d.get('fs8', '-')
         
-        # Format numbers
         if isinstance(dv, float): dv = f"{dv:.2f}"
         if isinstance(dm, float): dm = f"{dm:.2f}"
         if isinstance(dh, float): dh = f"{dh:.2f}"

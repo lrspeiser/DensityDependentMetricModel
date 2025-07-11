@@ -1,9 +1,9 @@
-# sparc_data_loader.py
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import re
 from typing import Dict, List, Optional
+import random
 
 class SPARCDataLoader:
     """Load and process SPARC rotation curve data"""
@@ -38,7 +38,6 @@ class SPARCDataLoader:
         dict
             Galaxy data including velocities, radii, etc.
         """
-        # This is where we use self.sparc_dir!
         filepath = self.sparc_dir / filename
         
         if not filepath.exists():
@@ -54,16 +53,18 @@ class SPARCDataLoader:
                         distance_mpc = float(match.group(1))
                     break
         
-        # Load data - skip comment lines
-        data = pd.read_csv(filepath, comment='#', delim_whitespace=True,
-                          names=['Rad_kpc', 'Vobs', 'errV', 'Vgas', 'Vdisk', 
-                                'Vbul', 'SBdisk', 'SBbul'])
+        # Load data with updated syntax
+        data = pd.read_csv(
+            filepath, 
+            comment='#', 
+            sep=r'\s+',  # replaces deprecated delim_whitespace=True
+            names=['Rad_kpc', 'Vobs', 'errV', 'Vgas', 'Vdisk', 'Vbul', 'SBdisk', 'SBbul']
+        )
         
         # Calculate total baryonic velocity
         v_baryon_sq = data['Vgas']**2 + data['Vdisk']**2 + data['Vbul']**2
         v_baryon = np.sqrt(np.maximum(v_baryon_sq, 0))
         
-        # Extract galaxy name from filename
         galaxy_name = filename.replace('_rotmod.dat', '')
         
         return {
@@ -91,7 +92,6 @@ class SPARCDataLoader:
         dict
             Dictionary mapping galaxy names to their data
         """
-        # This is where self.sparc_dir is crucial!
         rotmod_files = list(self.sparc_dir.glob('*_rotmod.dat'))
         
         if not rotmod_files:
@@ -117,3 +117,22 @@ class SPARCDataLoader:
     def list_galaxies(self) -> List[str]:
         """List all loaded galaxy names"""
         return list(self.galaxies.keys())
+
+    def get_galaxy_sample(self, n: int = 20) -> List[Dict]:
+        """
+        Return a sample of n galaxy dictionaries from the loaded galaxies.
+
+        Parameters
+        ----------
+        n : int
+            Number of galaxies to return
+
+        Returns
+        -------
+        List[Dict]
+            List of galaxy data dictionaries
+        """
+        if not self.galaxies:
+            raise ValueError("No galaxies loaded. Run load_all_galaxies() first.")
+        
+        return random.sample(list(self.galaxies.values()), min(n, len(self.galaxies)))

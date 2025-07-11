@@ -229,36 +229,40 @@ def rho_baryon_total_midplane_solar_kpc3(R_kpc, p_baryons_for_density):
 @nb.njit(cache=True)
 def xi_power_law(rho, rho_c, n_exp):
     """
-    Numba-compiled power law for xi.
-    This version always works with arrays and returns an array.
-    The caller is responsible for handling scalar input/output.
+    Numerically stable, bounded version of ξ(ρ) = 1 / (1 + (ρ/ρ_c)^n_exp)
+    
+    - Returns an array, handles scalar input correctly via np.atleast_1d
+    - Prevents ξ from going to exactly 0 or above 1
+    - Safe for use with extremely high or low density values
     """
-    # Numba handles np.atleast_1d correctly if it's the first operation.
+    # Convert to array, dtype-safe
     rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
 
+    # Edge case: if rho_c is too small, we default to Newtonian everywhere
     if rho_c <= 1e-9:
         return np.ones_like(rho_arr, dtype=np.float64)
-        
-    rho_safe_for_ratio = np.maximum(rho_arr, 0.0)
-    # Ensure rho_c is not zero to prevent division errors.
-    safe_rho_c = np.maximum(rho_c, 1e-100)
-    ratio = rho_safe_for_ratio / safe_rho_c
-    
-    # Handle 0**negative_power case to avoid inf/nan
+
+    # Clip densities to a wide range to avoid overflow in (rho / rho_c)**n_exp
+    rho_clipped = np.clip(rho_arr, 1e-15, 1e25)
+    safe_rho_c = np.maximum(rho_c, 1e-15)
+    ratio = rho_clipped / safe_rho_c
+
+    # Compute (rho / rho_c)^n
     term_power = np.power(ratio, n_exp)
-    
+
+    # Standard power-law denominator
     denominator = 1.0 + term_power
-    
-    # Create the result array, default to 1.0
+
+    # Initialize ξ with ones
     result_arr = np.ones_like(rho_arr, dtype=np.float64)
-    
-    # Calculate inverse where denominator is safe
-    safe_denom_mask = (np.abs(denominator) > 1e-100) & np.isfinite(denominator)
-    result_arr[safe_denom_mask] = 1.0 / denominator[safe_denom_mask]
-    
-    # Set result to 0 where denominator was infinite (i.e., term_power was infinite)
-    result_arr[~np.isfinite(denominator)] = 0.0
-    
+
+    # Where denominator is valid, compute 1 / (1 + (rho/rho_c)^n)
+    safe_mask = np.isfinite(denominator) & (denominator > 1e-100)
+    result_arr[safe_mask] = 1.0 / denominator[safe_mask]
+
+    # Clip ξ to physically meaningful range to avoid zero-gravity regions
+    result_arr = np.clip(result_arr, 1e-6, 1.0)
+
     return result_arr
 
 @nb.njit(cache=True)

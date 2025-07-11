@@ -185,6 +185,7 @@ chains_dynesty*/
 # Ignore image and text output files. It's better to regenerate them from code.
 *.png
 *.txt
+!progress_plots.png
 # If you want to keep specific plots or summary files, you can "un-ignore" them with !
 # Example:
 # !info_summary_best_run.txt

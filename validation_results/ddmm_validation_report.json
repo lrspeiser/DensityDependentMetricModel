@@ -1,0 +1,145 @@
+{
+  "model_parameters": {
+    "rho_c_solar_kpc3": 1329193519.550747,
+    "n_exp": 1.9670121946951387,
+    "M_disk_thin_solar": 78493565754.55786,
+    "R_d_thin_kpc": 3.955388381800625,
+    "h_z_thin_kpc": 0.2637869037120057,
+    "M_disk_thick_solar": 28748466095.950546,
+    "R_d_thick_kpc": 5.038347829623325,
+    "h_z_thick_kpc": 0.9655082117361375,
+    "M_bulge_solar": 22850028420.7535,
+    "a_bulge_kpc": 1.4805432782186958,
+    "M_gas_solar": 20517969190.20505,
+    "R_d_gas_kpc": 9.805471137041446,
+    "h_z_gas_kpc": 0.10870862636064303,
+    "include_disk_thin": true,
+    "include_disk_thick": true,
+    "include_bulge": true,
+    "include_gas": true,
+    "xi_type": "power"
+  },
+  "test_results": [
+    {
+      "test_name": "Solar System Consistency",
+      "passed": true,
+      "score": 0.9999988849637611,
+      "details": {
+        "mercury_precession": {
+          "passed": true,
+          "score": 0.9999999902506927,
+          "xi_solar_system": 0.9999999999999902,
+          "deviation_ppm": 9.749307304615328e-09
+        },
+        "cassini_delay": {
+          "passed": true,
+          "score": 0.9999962985164359,
+          "max_xi_deviation": 7.402967128200544e-13
+        },
+        "lunar_ranging": {
+          "passed": true,
+          "score": 0.999999997695177,
+          "nordtvedt_eta": 2.304822999121825e-13
+        }
+      },
+      "recommendations": []
+    },
+    {
+      "test_name": "CMB Predictions",
+      "passed": true,
+      "score": 0.9999999798945403,
+      "details": {
+        "sound_horizon": {
+          "passed": true,
+          "score": 0.9999999637495984,
+          "xi_recombination": 0.999999999274992,
+          "sound_horizon_deviation": 3.6250401622272053e-10
+        },
+        "peak_ratios": {
+          "passed": true,
+          "score": 0.9999999960394822,
+          "peak_ratio_deviation": 1.9802589198055406e-10
+        }
+      },
+      "recommendations": []
+    },
+    {
+      "test_name": "Type Ia Supernovae",
+      "passed": true,
+      "score": 0.9999999785856368,
+      "details": {
+        "chi2_reduced": 2.141436342128739e-08,
+        "max_distance_modulus_diff": 0.00011115883937762305,
+        "n_supernovae": 50
+      },
+      "recommendations": []
+    },
+    {
+      "test_name": "Laboratory Constraints",
+      "passed": false,
+      "score": 0.5,
+      "details": {
+        "eotwash": {
+          "passed": false,
+          "score": 0.0,
+          "fifth_force_alpha": 0.999999
+        },
+        "microscope": {
+          "passed": true,
+          "score": 1.0,
+          "eotvos_eta": 0.0
+        }
+      },
+      "recommendations": [
+        "Consider screening mechanisms for high-density environments"
+      ]
+    },
+    {
+      "test_name": "Self-Consistency",
+      "passed": false,
+      "score": 0.0,
+      "details": {
+        "xi_conservation": {
+          "passed": false,
+          "score": 0.0,
+          "integral_ratio": 1.381119132250737
+        },
+        "mass_invariance": {
+          "passed": false,
+          "score": 0.0,
+          "M_eff_ratio": 1.2749713756200103
+        }
+      },
+      "recommendations": [
+        "Check xi normalization across models",
+        "Effective mass principle may be violated"
+      ]
+    }
+  ],
+  "overall_score": 0.6999997686887877,
+  "tests_passed": 3,
+  "tests_failed": 2,
+  "critical_issues": [
+    {
+      "test": "Self-Consistency",
+      "score": 0.0,
+      "details": {
+        "xi_conservation": {
+          "passed": false,
+          "score": 0.0,
+          "integral_ratio": 1.381119132250737
+        },
+        "mass_invariance": {
+          "passed": false,
+          "score": 0.0,
+          "M_eff_ratio": 1.2749713756200103
+        }
+      }
+    }
+  ],
+  "recommendations": [
+    "Check xi normalization across models",
+    "Consider screening mechanisms for high-density environments",
+    "Effective mass principle may be violated"
+  ]
+}

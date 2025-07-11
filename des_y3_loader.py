@@ -19,8 +19,8 @@ class DESY3Loader:
         
         with fits.open(twopoint_file) as hdul:
             # Print structure to understand the file
-            print("DES Y3 file structure:")
-            hdul.info()
+            # print("DES Y3 file structure:")
+            # hdul.info()
             
             # Usually contains:
             # - xi_plus: ξ₊(θ) correlation function
@@ -36,7 +36,6 @@ class DESY3Loader:
                     'data': hdu.data,
                     'columns': hdu.columns.names if hasattr(hdu, 'columns') else []
                 }
-                print(f"  Extension '{name}': {len(hdu.data)} rows")
         
         return self.data
     
