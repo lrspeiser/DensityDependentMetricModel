@@ -44,7 +44,8 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 from monitor_dashboard import DynestyMonitor
-
+import matplotlib
+matplotlib.use("Agg")  # Headless backend for servers / background threads
 import matplotlib.pyplot as plt
 import corner
 
@@ -780,7 +781,13 @@ def enhanced_monitor_sampler_progress(
         # dlogz stopping
         dlogz = np.inf
         if hasattr(res, 'logz') and len(res.logz) > 2:
-            dlogz = res.logz[-1] - res.logz[-2]
+            logz = float(res.logz[-1])
+            sampler.saved_logz.append(logz)
+            if len(sampler.saved_logz) > 2:
+                dlogz = float(sampler.saved_logz[-1] - sampler.saved_logz[-2])
+            else:
+                dlogz = float("nan")
+
             logger.info(f"\n📏 Stopping criterion: dlogz = {dlogz:.4f}")
             if args_obj and hasattr(args_obj, 'dlogz_target'):
                 if dlogz < args_obj.dlogz_target:
@@ -1834,6 +1841,16 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         blob=True,
         walks=args.walks
     )
+    # Safely restore saved_logz if res already populated (e.g. checkpoint resume)
+    try:
+        if hasattr(sampler, 'results') and hasattr(sampler.results, 'logz') and len(sampler.results.logz) >= 2:
+            sampler.saved_logz = list(sampler.results.logz[-2:])
+        else:
+            sampler.saved_logz = []
+    except Exception as e:
+        print(f"WARNING: Could not initialize saved_logz: {e}")
+        sampler.saved_logz = []
+
 
     run_start_time = time.time()
     checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
@@ -1848,11 +1865,6 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         stop_monitoring = threading.Event()
 
         def monitor_thread():
-            import csv
-            from datetime import datetime
-            from pathlib import Path
-            import numpy as np
-
             csv_log_path = Path(args.output_dir) / "dynesty_live_progress.csv"
             last_check = time.time()
 
@@ -1903,20 +1915,35 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                                     n_samples = len(sampler.results.samples)
                                     n_calls = np.sum(sampler.results.ncall) if hasattr(sampler.results, 'ncall') else float('nan')
 
-                                    new_row = [
-                                        datetime.utcnow().isoformat(),
-                                        f"{logz:.6f}",
-                                        f"{dlogz:.6f}",
-                                        f"{ess:.2f}",
-                                        f"{n_samples}",
-                                        f"{n_calls}"
-                                    ]
+                                    # Get parameter medians
+                                    sample_medians = np.median(sampler.results.samples, axis=0)
+                                    param_values = {f"{param}": float(val) for param, val in zip(fitted_p_names, sample_medians)}
 
-                                    write_header = not csv_log_path.exists()
+                                    # Build row with expanded data
+                                    new_row = {
+                                        "timestamp": datetime.utcnow().isoformat(),
+                                        "logz": round(float(logz), 6),
+                                        "dlogz": round(float(dlogz), 6),
+                                        "ess": round(float(ess), 2),
+                                        "n_samples": n_samples,
+                                        "n_calls": n_calls,
+                                        **param_values
+                                    }
+
+                                    # Check if header is missing
+                                    write_header = True
+                                    if csv_log_path.exists():
+                                        try:
+                                            with open(csv_log_path, "r") as f:
+                                                first_line = f.readline().strip()
+                                                write_header = not (first_line and "timestamp" in first_line)
+                                        except Exception:
+                                            write_header = True
+
                                     with open(csv_log_path, "a", newline="") as csvfile:
-                                        writer = csv.writer(csvfile)
+                                        writer = csv.DictWriter(csvfile, fieldnames=new_row.keys())
                                         if write_header:
-                                            writer.writerow(["timestamp", "logz", "dlogz", "ess", "n_samples", "n_calls"])
+                                            writer.writeheader()
                                         writer.writerow(new_row)
 
                                 except Exception as e:
@@ -1927,7 +1954,6 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                 monitor_file.write(f"ERROR: {e}\n")
             finally:
                 monitor_file.close()
-
 
         monitor = threading.Thread(target=monitor_thread, daemon=True)
         monitor.start()
@@ -2028,7 +2054,7 @@ def main_dynesty():
                        help="Number of threads for parallelization")
     parser.add_argument('--maxcall', type=int, default=2000000,
                        help="Maximum likelihood calls")
-    parser.add_argument('--monitor_interval_s', type=int, default=300,
+    parser.add_argument('--monitor_interval_s', type=int, default=60,
                        help="Monitoring interval in seconds")
     parser.add_argument('--enable_dashboard', action='store_true', default=True,
                    help="Enable enhanced monitoring dashboard")
@@ -2037,7 +2063,7 @@ def main_dynesty():
 
     parser.add_argument('--use_run_nested', action='store_true', default=True,
                        help="Use run_nested instead of custom loop")
-    parser.add_argument('--checkpoint_every', type=int, default=300,
+    parser.add_argument('--checkpoint_every', type=int, default=60,
                        help="Checkpoint interval in seconds")
     
     # Dynesty sampler settings
