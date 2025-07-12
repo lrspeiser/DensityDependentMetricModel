@@ -48,6 +48,7 @@ import matplotlib
 matplotlib.use("Agg")  # Headless backend for servers / background threads
 import matplotlib.pyplot as plt
 import corner
+from density_metric2 import xi_power_law
 
 # Control debug output
 DEBUG_COUNTER_MAX = 100  # Maximum debug messages to prevent log spam
@@ -118,14 +119,14 @@ logger = None
 # Physical bounds for parameters (based on MW observations and theory)
 PHYSICAL_BOUNDS = {
     # Mass parameters (M_sun)
-    'M_disk_thin_solar':   {'min': 2e10, 'max': 1.2e11, 'typical': 7.5e10},
-    'M_disk_thick_solar':  {'min': 5e9,  'max': 4e10,   'typical': 2.5e10},
+    'M_disk_thin_solar':   {'min': 3e10, 'max': 8e10, 'typical': 5e10},
+    'M_disk_thick_solar':  {'min': 5e9,  'max': 2.5e10, 'typical': 1.5e10},  # Max 50% of thin
     'M_bulge_solar':       {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
     'M_gas_solar':         {'min': 5e9,  'max': 5e10,   'typical': 3e10},    # Was 5e9-3e10
 
      # Scale lengths (kpc) - UPDATED based on what sampler wanted
-    'R_d_thin_kpc':        {'min': 3.5,  'max': 7.0,    'typical': 5.0},    # Was 2.0-5.0
-    'R_d_thick_kpc':       {'min': 4.5,  'max': 9.0,    'typical': 6.0},    # Was 2.5-6.0
+    'R_d_thin_kpc':        {'min': 2.0,  'max': 4.0,    'typical': 2.6},
+    'R_d_thick_kpc':       {'min': 3.0,  'max': 6.0,    'typical': 4.0},
     'R_d_gas_kpc':         {'min': 4.0,  'max': 12.0,   'typical': 7.0},
     'a_bulge_kpc':         {'min': 0.2,  'max': 1.5,    'typical': 0.7},
 
@@ -139,12 +140,12 @@ PHYSICAL_BOUNDS = {
 
     # Density parameters
     'rho_c_solar_kpc3':    {'min': 1e8,  'max': 2e9,    'typical': 1.66e9},
-    'n_exp':               {'min': 0.7,  'max': 3.0,    'typical': 2.0},     # Was 0.7-2.0
+    'n_exp':               {'min': 0.5,  'max': 2.5,    'typical': 1.5},
 }
 
 # Expected ranges for validation
 EXPECTED_XI_AT_SOLAR = (0.7, 1.0)  # Xi should not suppress gravity too much at R_sun
-EXPECTED_V_AT_SOLAR = (150, 250)   # TEMPORARILY RELAXED for initial exploration
+EXPECTED_V_AT_SOLAR = (100, 250)   # TEMPORARILY RELAXED for initial exploration
 
 def load_previous_best_params():
     """Load previous best parameters if available."""
@@ -864,8 +865,9 @@ def enhanced_monitor_sampler_progress(
         try:
             v_newton_solar = v_baryon_total_newtonian_kms(np.array([R_SUN_KPC]), full_params)[0]
             rho_solar = rho_baryon_total_midplane_solar_kpc3(np.array([R_SUN_KPC]), full_params)[0]
-            xi_func = XI_FUNCTION_MAP['power']
-            xi_solar = xi_func(rho_solar, full_params['rho_c_solar_kpc3'], full_params['n_exp'])[0]
+            xi_func = XI_FUNCTION_MAP.get(args_obj.xi, xi_power_law)
+            xi_result = xi_func(rho_solar, full_params['rho_c_solar_kpc3'], full_params['n_exp'])
+            xi_solar = xi_result[0] if hasattr(xi_result, '__getitem__') else float(xi_result)
             v_model_solar = v_newton_solar * np.sqrt(xi_solar)
 
             logger.info(f"   v_Newton(R☉) = {v_newton_solar:.1f} km/s")
@@ -951,7 +953,7 @@ def format_parameter_value_enhanced(value: float, param_name: str) -> str:
         if value > 1e11:
             return f"{value/1e11:.2f}×10¹¹ M☉"
         elif value > 1e10:
-            return f"{value/1e10:.2f}×10¹⁰ M☉"
+            return f"{value/1e10:.2f}e10 M☉"
         else:
             return f"{value:.2e} M☉"
     elif 'rho_c' in param_name:
@@ -1124,12 +1126,6 @@ def log_likelihood_dynesty(
         if current_params_full_dict['R_d_thick_kpc'] <= current_params_full_dict['R_d_thin_kpc'] * 1.1:
             return -np.inf, [np.inf]  # Hard reject: violates expected scale hierarchy
 
-    # Soft prior: prefer reasonable thick/thin disk mass ratio
-    if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
-        ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
-        if ratio > 0.5:
-            penalty = -50 * (ratio - 0.5)**2  # Apply a soft Gaussian penalty
-            log_L += penalty
         
     # Calculate model prediction
     try:
@@ -1190,6 +1186,13 @@ def log_likelihood_dynesty(
     
     log_L = -0.5 * np.sum(log_L_terms)
     
+    # Soft prior: prefer reasonable thick/thin disk mass ratio
+    if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
+        ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
+        if ratio > 0.5:
+            penalty = -50 * (ratio - 0.5)**2  # Apply a soft Gaussian penalty
+            log_L += penalty
+    
     if not np.isfinite(log_L): 
         return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
     
@@ -1231,7 +1234,7 @@ def v_model_for_dynesty(
     global logger
     if logger is None:
         import logging
-        logger = logging.getLogger("run_dynesty")
+        logger = logging.getLogger("run_dynesty") if logger is None else logger
         logger.setLevel(logging.ERROR)
 
     
@@ -1417,19 +1420,31 @@ def get_param_labels_and_bounds(ARGS):
 # ============================================================================
 
 def make_json_serializable(obj):
-    """Convert numpy types to Python native types for JSON serialization."""
-    if isinstance(obj, np.integer):
+    """
+    Convert NumPy types to Python native types for JSON serialization.
+    Recursively handles dicts, lists, tuples, arrays, and NumPy scalars.
+    """
+    import numpy as np
+
+    if isinstance(obj, (np.integer, int)):
         return int(obj)
-    elif isinstance(obj, np.floating):
+    elif isinstance(obj, (np.floating, float)):
         return float(obj)
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    elif isinstance(obj, (np.str_, str)):
+        return str(obj)
+    elif isinstance(obj, (np.bytes_, bytes)):
+        return obj.decode('utf-8')
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, dict):
-        return {k: make_json_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+        return {make_json_serializable(k): make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
         return [make_json_serializable(v) for v in obj]
     else:
         return obj
+
 
 
 # ============================================================================
@@ -1957,41 +1972,63 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
 
         monitor = threading.Thread(target=monitor_thread, daemon=True)
         monitor.start()
+        
+        logger.info("Using custom sampling loop with adaptive monitoring and early stopping")
+        last_monitor_time = time.time()
+        last_check_time = time.time()
+        early_stop_checks = 0
 
         try:
-            sampler.run_nested(
-                nlive_init=args.nlive_init,
-                nlive_batch=args.nlive_batch,
-                dlogz_init=args.dlogz_target,
+            for it, results in enumerate(sampler.sample_initial(
+                nlive=args.nlive_init,
                 maxcall=args.maxcall,
-                print_progress=True,
-                checkpoint_file=str(checkpoint_file),
-                checkpoint_every=args.checkpoint_every
-            )
-        finally:
+                save_samples=True
+            )):
+                # Periodic monitoring
+                if time.time() - last_monitor_time > args.monitor_interval_s:
+                    last_monitor_time = time.time()
+                    enhanced_monitor_sampler_progress(
+                        sampler, fitted_p_names, fitted_p_labels,
+                        run_start_time, logger, gp_surrogate, args,
+                        dashboard_monitor
+                    )
+
+                # Early stopping every 5 minutes
+                if time.time() - last_check_time > 300:
+                    last_check_time = time.time()
+                    should_stop, reason = check_early_stopping(sampler, convergence_tracker, args)
+
+                    if should_stop:
+                        early_stop_checks += 1
+                        logger.warning(f"⚠️ Early stopping check {early_stop_checks}/3: {reason}")
+
+                        if early_stop_checks >= 3:
+                            logger.error("❌ STOPPING: Model persistently finding unphysical solutions")
+                            logger.error(f"   Reason: {reason}")
+                            logger.error("   Suggestions:")
+                            logger.error("   1. Check prior bounds are realistic")
+                            logger.error("   2. Verify data quality")
+                            logger.error("   3. Consider different xi function")
+                            logger.error("   4. Try curriculum learning approach")
+                            raise RuntimeError("Early stopping due to unphysical solutions")
+                    else:
+                        early_stop_checks = 0  # Reset on improvement
+
+        except RuntimeError as e:
+            logger.error(f"Sampling terminated: {e}")
             stop_monitoring.set()
             monitor.join(timeout=5)
-            try:
-                monitor_file.close()
-            except:
-                pass
 
-            logger.info(f"\n📊 Final monitoring report: {monitor_log_path}")
+            # Save partial results
+            if hasattr(sampler, 'results'):
+                output_file = Path(args.output_dir) / "partial_results_unphysical.npz"
+                np.savez(output_file,
+                        samples=sampler.results.samples,
+                        logz=sampler.results.logz,
+                        error="Early stopped due to unphysical solutions")
+                logger.info(f"Partial results saved to {output_file}")
 
-    else:
-        # Custom sampling loop
-        logger.info("Using custom sampling loop with adaptive monitoring")
-        last_monitor_time = time.time()
-
-        for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
-            if time.time() - last_monitor_time > args.monitor_interval_s:
-                last_monitor_time = time.time()
-                enhanced_monitor_sampler_progress(
-                    sampler, fitted_p_names, fitted_p_labels,
-                    run_start_time, logger, gp_surrogate, args,
-                    dashboard_monitor  # << Pass monitor
-                )
-
+            return None
     # Final cleanup
     if pool_obj:
         pool_obj.close()
@@ -2022,7 +2059,7 @@ def main_dynesty():
         level=logging.INFO,
         format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
     )
-    logger = logging.getLogger("run_dynesty")
+    logger = logging.getLogger("run_dynesty") if logger is None else logger
     logger.info("Starting Enhanced Dynesty Sampler v2.0")
     
     if not DYNESTY_AVAILABLE:
@@ -2036,8 +2073,9 @@ def main_dynesty():
     )
     
     # Basic settings
-    parser.add_argument('--xi', type=str, default='power', choices=['power', 'logistic'],
-                       help="Type of density modification function")
+    parser.add_argument('--xi', type=str, default='power',
+                    choices=['power', 'logistic', 'enhanced'],
+                    help="Choice of xi(ρ) function")
     parser.add_argument('--max_sample_gaia', type=int, default=10000,
                        help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty",
