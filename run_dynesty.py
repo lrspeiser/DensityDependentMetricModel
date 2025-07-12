@@ -120,7 +120,7 @@ logger = None
 PHYSICAL_BOUNDS = {
     # Mass parameters (M_sun)
     'M_disk_thin_solar':   {'min': 3e10, 'max': 8e10, 'typical': 5e10},
-    'M_disk_thick_solar':  {'min': 5e9,  'max': 2.5e10, 'typical': 1.5e10},  # Max 50% of thin
+    'M_disk_thick_solar':  {'min': 5e9,  'max': 3e10, 'typical': 1.5e10},  # Max 50% of thin
     'M_bulge_solar':       {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
     'M_gas_solar':         {'min': 5e9,  'max': 5e10,   'typical': 3e10},    # Was 5e9-3e10
 
@@ -175,27 +175,27 @@ def load_previous_best_params():
 
 MW_MULTI_COMP_PARAM_CONFIG = {
     'rho_c_solar_kpc3': {
-        'label': r"$\rho_c$ ($M_\odot/kpc^3$)", 
+        'label': "rho_c (M_sun/kpc^3)", 
         'fixed_val_from_arg': 'rho_c_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['typical'],
         'low': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['min'], 
         'high': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['max'], 
         'fit_flag_arg': 'fit_xi_params',
-        'log_prior': True,  # Use log-uniform prior for scale-variant parameter
+        'log_prior': True,
         'physical_check': True
     },
     'n_exp': {
-        'label': r"$n$", 
+        'label': "n", 
         'fixed_val_from_arg': 'n_exp_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['n_exp']['typical'],
         'low': PHYSICAL_BOUNDS['n_exp']['min'], 
         'high': PHYSICAL_BOUNDS['n_exp']['max'], 
         'fit_flag_arg': 'fit_xi_params',
-        'log_prior': False,  # Linear prior for exponent
+        'log_prior': False,
         'physical_check': True
     },
     'M_disk_thin_solar': {
-        'label': r"$M_{d,thin}$ ($M_\odot$)", 
+        'label': "M_disk_thin (M_sun)", 
         'fixed_val_from_arg': 'M_disk_thin_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['M_disk_thin_solar']['typical'],
         'low': PHYSICAL_BOUNDS['M_disk_thin_solar']['min'], 
@@ -206,7 +206,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'R_d_thin_kpc': {
-        'label': r"$R_{d,thin}$ (kpc)", 
+        'label': "R_d_thin (kpc)", 
         'fixed_val_from_arg': 'R_d_thin_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['R_d_thin_kpc']['typical'],
         'low': PHYSICAL_BOUNDS['R_d_thin_kpc']['min'], 
@@ -217,7 +217,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'h_z_thin_kpc': {
-        'label': r"$h_{z,thin}$ (kpc)", 
+        'label': "h_z_thin (kpc)", 
         'fixed_val_from_arg': 'h_z_thin_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['h_z_thin_kpc']['typical'],
         'low': PHYSICAL_BOUNDS['h_z_thin_kpc']['min'], 
@@ -228,7 +228,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'M_disk_thick_solar': {
-        'label': r"$M_{d,thick}$ ($M_\odot$)", 
+        'label': "M_disk_thick (M_sun)", 
         'fixed_val_from_arg': 'M_disk_thick_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['M_disk_thick_solar']['typical'],
         'low': PHYSICAL_BOUNDS['M_disk_thick_solar']['min'], 
@@ -239,7 +239,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'R_d_thick_kpc': {
-        'label': r"$R_{d,thick}$ (kpc)", 
+        'label': "R_d_thick (kpc)", 
         'fixed_val_from_arg': 'R_d_thick_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['R_d_thick_kpc']['typical'],
         'low': PHYSICAL_BOUNDS['R_d_thick_kpc']['min'], 
@@ -250,7 +250,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'h_z_thick_kpc': {
-        'label': r"$h_{z,thick}$ (kpc)", 
+        'label': "h_z_thick (kpc)", 
         'fixed_val_from_arg': 'h_z_thick_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['h_z_thick_kpc']['typical'],
         'low': PHYSICAL_BOUNDS['h_z_thick_kpc']['min'], 
@@ -261,7 +261,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'M_bulge_solar': {
-        'label': r"$M_{bulge}$ ($M_\odot$)", 
+        'label': "M_bulge (M_sun)", 
         'fixed_val_from_arg': 'M_bulge_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['M_bulge_solar']['typical'],
         'low': PHYSICAL_BOUNDS['M_bulge_solar']['min'], 
@@ -272,7 +272,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'a_bulge_kpc': {
-        'label': r"$a_{bulge}$ (kpc)", 
+        'label': "a_bulge (kpc)", 
         'fixed_val_from_arg': 'a_bulge_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['a_bulge_kpc']['typical'],
         'low': PHYSICAL_BOUNDS['a_bulge_kpc']['min'], 
@@ -283,7 +283,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'M_gas_solar': {
-        'label': r"$M_{gas}$ ($M_\odot$)", 
+        'label': "M_gas (M_sun)", 
         'fixed_val_from_arg': 'M_gas_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['M_gas_solar']['typical'],
         'low': PHYSICAL_BOUNDS['M_gas_solar']['min'], 
@@ -294,7 +294,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'R_d_gas_kpc': {
-        'label': r"$R_{d,gas}$ (kpc)", 
+        'label': "R_d_gas (kpc)", 
         'fixed_val_from_arg': 'R_d_gas_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['R_d_gas_kpc']['typical'],
         'low': PHYSICAL_BOUNDS['R_d_gas_kpc']['min'], 
@@ -305,7 +305,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
     'h_z_gas_kpc': {
-        'label': r"$h_{z,gas}$ (kpc)", 
+        'label': "h_z_gas (kpc)", 
         'fixed_val_from_arg': 'h_z_gas_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['h_z_gas_kpc']['typical'],
         'low': PHYSICAL_BOUNDS['h_z_gas_kpc']['min'], 
@@ -316,6 +316,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'physical_check': True
     },
 }
+
 
 
 # ============================================================================
@@ -1259,36 +1260,44 @@ def v_model_for_dynesty(
     # Validate intermediate results
     if not np.all(np.isfinite(v_n_kms)):
         if debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning(f"Non-finite Newtonian velocities detected")
+            logger.warning("⚠️ Non-finite Newtonian velocities detected — replacing with zeros")
             debug_counter += 1
         v_n_kms = np.nan_to_num(v_n_kms, nan=0.0, posinf=0.0, neginf=0.0)
-    
+
     if not np.all(np.isfinite(rho_midplane_for_xi)):
         if debug_counter < DEBUG_COUNTER_MAX:
-            if logger:
-                logger.warning(f"Non-finite densities detected")
+            logger.warning("⚠️ Non-finite densities detected — replacing with fallback values")
             debug_counter += 1
         rho_midplane_for_xi = np.nan_to_num(rho_midplane_for_xi, nan=0.0, posinf=1e10, neginf=0.0)
-    
-    # Calculate xi modification
+
+    # Select ξ(ρ) function
     xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
-    xi_values = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
-    
-    # Validate xi
+
+    # Calculate xi safely, supporting scalar or vectorized return
+    try:
+        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
+        if not hasattr(xi_raw, "__getitem__"):
+            xi_values = np.full_like(v_n_kms, float(xi_raw))  # scalar expanded
+        else:
+            xi_values = np.asarray(xi_raw, dtype=np.float64)
+    except Exception as e:
+        logger.error(f"❌ Error in xi function '{xi_type_str}': {e}")
+        xi_values = np.ones_like(v_n_kms)
+
+    # Sanitize xi values
     xi_values = np.nan_to_num(xi_values, nan=1.0, posinf=1.0, neginf=0.0)
     xi_values_safe = np.maximum(xi_values, 0.0)
-    
-    # Apply modification
+
+    # Apply modified gravity
     v_mod_kms = v_n_kms * np.sqrt(xi_values_safe)
-    
-    # Final validation
+
+    # Final velocity validation
     if not np.all(np.isfinite(v_mod_kms)):
         if debug_counter < DEBUG_COUNTER_MAX:
-            if logger:
-                logger.warning(f"Non-finite final velocities")
+            logger.warning("⚠️ Non-finite final velocities detected — zeroing invalid entries")
             debug_counter += 1
         v_mod_kms = np.nan_to_num(v_mod_kms, nan=0.0, posinf=0.0, neginf=0.0)
-    
+
     return v_mod_kms
 
 
