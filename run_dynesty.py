@@ -1284,23 +1284,24 @@ def v_model_for_dynesty(
     # Select ξ(ρ) function
     xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
 
-    # Add XI verification logging
-    if debug_counter < 5:
+    # Add XI verification logging (only once per process)
+    if not hasattr(v_model_for_dynesty, "_has_logged_xi"):
         logger.info(f"[XI VERIFICATION] Using xi_type: '{xi_type_str}'")
         logger.info(f"[XI VERIFICATION] Xi function: {xi_func.__name__}")
         
-        # Test xi behavior at different densities
-        test_densities = [1e6, 1e8, 1e10]  # Low, medium, high
+        test_densities = [1e6, 1e8, 1e10]
+        summary = []
         for test_rho in test_densities:
-            test_xi_raw = xi_func(test_rho, rho_c_solar_kpc3, n_exp)
             try:
-                test_xi = float(test_xi_raw[0]) if hasattr(test_xi_raw, '__getitem__') else float(test_xi_raw)
+                test_xi_raw = xi_func(test_rho, rho_c_solar_kpc3, n_exp)
+                test_xi = test_xi_raw[0] if hasattr(test_xi_raw, '__getitem__') else float(test_xi_raw)
+                summary.append(f"ρ={test_rho:.0e} → ξ={test_xi:.3f}")
             except Exception as e:
-                logger.warning(f"⚠️ Failed to parse xi output for test_rho={test_rho}: {e}")
-                test_xi = float('nan')
+                summary.append(f"ρ={test_rho:.0e} → error: {e}")
+        logger.info("[XI VERIFICATION SUMMARY] " + "; ".join(summary))
+        
+        v_model_for_dynesty._has_logged_xi = True  # Suppress future logs
 
-            logger.info(f"  ρ={test_rho:.0e} M☉/kpc³ → ξ={test_xi:.3f}")
-        debug_counter += 1
 
     # Calculate xi safely, supporting scalar or vectorized return
     try:
@@ -2347,6 +2348,27 @@ def main_dynesty():
     else:
         logger.info("\n🎯 Using standard sampling")
         results = run_single_dynesty(args, gaia_data_dict, gp_surrogate)
+    
+    if results is None:
+        # This only works if run_single_dynesty() ran far enough to initialize sampler
+        try:
+            if 'sampler' in locals() and hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
+                output_file = Path(args.output_dir) / "partial_results_unphysical.npz"
+                np.savez(output_file,
+                        samples=sampler.results.samples,
+                        logz=sampler.results.logz,
+                        logzerr=getattr(sampler.results, 'logzerr', None),
+                        logl=sampler.results.logl,
+                        blob=getattr(sampler.results, 'blob', None))
+                logger.info(f"🧪 Saved partial results to: {output_file}")
+            else:
+                logger.warning("⚠️ Sampler did not produce valid results. No partial output saved.")
+        except Exception as e:
+            logger.error(f"❌ Failed to save partial results: {e}")
+
+        logger.error("No results to save")
+        return
+
     
     # Save results
     if results is None:

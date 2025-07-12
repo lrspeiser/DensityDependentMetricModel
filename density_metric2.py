@@ -279,8 +279,25 @@ def xi_enhanced_bounded(rho, rho_c, n, A=1.0):
     val = 1.0 + A / (1.0 + (rho / rho_c)**n)
     return np.maximum(1e-3, np.minimum(val, 2.0))  # Numba-safe
 
-def xi_enhanced(rho, rho_c, n):
-    return xi_enhanced_bounded(rho, rho_c, n, 1.0)
+def xi_enhanced(rho, rho_c, n_exp):
+    """
+    Enhanced xi(ρ) = 1 / (1 + (rho / rho_c)^n), safely handles scalars and arrays.
+    """
+    try:
+        # Force numpy array for vectorized operation
+        rho_arr = np.asarray(rho, dtype=np.float64)
+        xi_vals = 1.0 / (1.0 + (rho_arr / rho_c)**n_exp)
+        
+        # Return scalar if input was scalar
+        if np.isscalar(rho) or np.ndim(rho) == 0:
+            return float(xi_vals)
+        return xi_vals
+    except Exception as e:
+        print(f"❌ Error in xi_enhanced: {e}")
+        if np.isscalar(rho) or np.ndim(rho) == 0:
+            return float('nan')
+        return np.full_like(rho, np.nan, dtype=np.float64)
+
 
 @njit
 def xi_mond_like(rho, rho_c, n):
