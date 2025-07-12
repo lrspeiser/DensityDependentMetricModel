@@ -48,7 +48,6 @@ import matplotlib
 matplotlib.use("Agg")  # Headless backend for servers / background threads
 import matplotlib.pyplot as plt
 import corner
-from density_metric2 import xi_power_law
 
 # Control debug output
 DEBUG_COUNTER_MAX = 100  # Maximum debug messages to prevent log spam
@@ -723,6 +722,8 @@ def enhanced_monitor_sampler_progress(
     Enhanced monitoring with parameter health checks, convergence diagnostics, and optional dashboard updates.
     """
     global convergence_tracker
+    from density_metric2 import XI_FUNCTION_MAP, xi_power_law
+
 
     try:
         res = sampler.results
@@ -1074,6 +1075,14 @@ def log_likelihood_dynesty(
         Additional quantities (e.g., RMS)
     """
     global debug_counter
+    global logger
+    if 'debug_counter' not in globals():
+        debug_counter = 0
+    if 'logger' not in globals() or logger is None:
+        import logging
+        logger = logging.getLogger("run_dynesty")
+        logger.setLevel(logging.INFO)
+
     use_logging = logger is not None
 
     
@@ -1233,10 +1242,12 @@ def v_model_for_dynesty(
     """
     global debug_counter
     global logger
-    if logger is None:
+    if 'debug_counter' not in globals():
+        debug_counter = 0
+    if 'logger' not in globals() or logger is None:
         import logging
-        logger = logging.getLogger("run_dynesty") if logger is None else logger
-        logger.setLevel(logging.ERROR)
+        logger = logging.getLogger("run_dynesty")
+        logger.setLevel(logging.INFO)
 
     
     # Extract xi parameters
@@ -1272,6 +1283,24 @@ def v_model_for_dynesty(
 
     # Select ξ(ρ) function
     xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
+
+    # Add XI verification logging
+    if debug_counter < 5:
+        logger.info(f"[XI VERIFICATION] Using xi_type: '{xi_type_str}'")
+        logger.info(f"[XI VERIFICATION] Xi function: {xi_func.__name__}")
+        
+        # Test xi behavior at different densities
+        test_densities = [1e6, 1e8, 1e10]  # Low, medium, high
+        for test_rho in test_densities:
+            test_xi_raw = xi_func(test_rho, rho_c_solar_kpc3, n_exp)
+            try:
+                test_xi = float(test_xi_raw[0]) if hasattr(test_xi_raw, '__getitem__') else float(test_xi_raw)
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to parse xi output for test_rho={test_rho}: {e}")
+                test_xi = float('nan')
+
+            logger.info(f"  ρ={test_rho:.0e} M☉/kpc³ → ξ={test_xi:.3f}")
+        debug_counter += 1
 
     # Calculate xi safely, supporting scalar or vectorized return
     try:
@@ -1780,6 +1809,35 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
     
     return all_results
 
+def check_early_stopping(sampler, convergence_tracker, args):
+    """Check if we should stop due to persistent unphysical solutions."""
+    if not hasattr(sampler, 'results') or len(sampler.results.samples) < 1000:
+        return False, "Not enough samples yet"
+    
+    # Check if we've been stuck with bad physics for too long
+    if convergence_tracker and hasattr(convergence_tracker, 'health_warnings'):
+        if len(convergence_tracker.health_warnings) > 5:
+            # Many parameters at bounds
+            bound_warnings = [w for w in convergence_tracker.health_warnings if 'bound' in w]
+            if len(bound_warnings) > 4:
+                return True, f"Too many parameters stuck at bounds ({len(bound_warnings)})"
+    
+    # Check recent sample validity
+    recent_samples = sampler.results.samples[-500:]
+    fitted_p_names = args.fitted_param_names  # You'll need to pass this through args
+    
+    n_valid = 0
+    for sample in recent_samples:
+        is_valid, _ = check_physical_plausibility(sample, fitted_p_names, args)
+        if is_valid:
+            n_valid += 1
+    
+    valid_fraction = n_valid / len(recent_samples)
+    if valid_fraction < 0.01:  # Less than 1% valid samples
+        return True, f"Only {valid_fraction*100:.1f}% of recent samples are physical"
+    
+    return False, "Continuing"
+
 def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     """
     Run a single dynesty sampling with enhanced monitoring, convergence diagnostics,
@@ -1787,6 +1845,8 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     """
     import threading
     from io import StringIO
+    global convergence_tracker
+
 
     # Extract data
     R_data_for_run = gaia_data_dict["R_kpc"]
@@ -1797,6 +1857,7 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = \
         get_param_labels_and_bounds(args)
     ndim_dynesty = len(fitted_p_names)
+    convergence_tracker = ConvergenceTracker(fitted_p_names)
 
     logger.info(f"Dynesty fitting {ndim_dynesty} parameters: {fitted_p_names}")
 
@@ -1878,6 +1939,8 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
 
     run_start_time = time.time()
     checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
+
+    convergence_tracker = ConvergenceTracker(fitted_p_names)
 
     if args.use_run_nested:
         # Built-in run_nested
@@ -1982,11 +2045,37 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         monitor = threading.Thread(target=monitor_thread, daemon=True)
         monitor.start()
         
+        try:
+            sampler.run_nested(
+                nlive_init=args.nlive_init,
+                nlive_batch=args.nlive_batch,
+                dlogz_init=args.dlogz_target,
+                maxcall=args.maxcall,
+                print_progress=True,
+                checkpoint_file=str(checkpoint_file),
+                checkpoint_every=args.checkpoint_every
+            )
+        finally:
+            stop_monitoring.set()
+            monitor.join(timeout=5)
+            try:
+                monitor_file.close()
+            except:
+                pass
+            
+            logger.info(f"\n📊 Final monitoring report: {monitor_log_path}")
+
+    else:
+        # Custom sampling loop with early stopping
         logger.info("Using custom sampling loop with adaptive monitoring and early stopping")
+        
+        # Store fitted_param_names in args for check_early_stopping
+        args.fitted_param_names = fitted_p_names
+        
         last_monitor_time = time.time()
         last_check_time = time.time()
         early_stop_checks = 0
-
+        
         try:
             for it, results in enumerate(sampler.sample_initial(
                 nlive=args.nlive_init,
@@ -2001,17 +2090,17 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                         run_start_time, logger, gp_surrogate, args,
                         dashboard_monitor
                     )
-
-                # Early stopping every 5 minutes
-                if time.time() - last_check_time > 300:
+                
+                # Early stopping check every 5 minutes
+                if time.time() - last_check_time > 300:  # 5 minutes
                     last_check_time = time.time()
                     should_stop, reason = check_early_stopping(sampler, convergence_tracker, args)
-
+                    
                     if should_stop:
                         early_stop_checks += 1
                         logger.warning(f"⚠️ Early stopping check {early_stop_checks}/3: {reason}")
-
-                        if early_stop_checks >= 3:
+                        
+                        if early_stop_checks >= 3:  # Consistent failures
                             logger.error("❌ STOPPING: Model persistently finding unphysical solutions")
                             logger.error(f"   Reason: {reason}")
                             logger.error("   Suggestions:")
@@ -2021,13 +2110,11 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                             logger.error("   4. Try curriculum learning approach")
                             raise RuntimeError("Early stopping due to unphysical solutions")
                     else:
-                        early_stop_checks = 0  # Reset on improvement
-
+                        early_stop_checks = 0  # Reset counter if things improve
+                        
         except RuntimeError as e:
             logger.error(f"Sampling terminated: {e}")
-            stop_monitoring.set()
-            monitor.join(timeout=5)
-
+            
             # Save partial results
             if hasattr(sampler, 'results'):
                 output_file = Path(args.output_dir) / "partial_results_unphysical.npz"
@@ -2036,23 +2123,13 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                         logz=sampler.results.logz,
                         error="Early stopped due to unphysical solutions")
                 logger.info(f"Partial results saved to {output_file}")
-
+            
+            # Clean up and return None to indicate failure
+            if pool_obj:
+                pool_obj.close()
+                pool_obj.join()
+            
             return None
-    # Final cleanup
-    if pool_obj:
-        pool_obj.close()
-        pool_obj.join()
-
-    if hasattr(sampler, 'results'):
-        logger.info("\n🏁 FINAL MONITORING REPORT:")
-        enhanced_monitor_sampler_progress(
-            sampler, fitted_p_names, fitted_p_labels,
-            run_start_time, logger, gp_surrogate, args,
-            dashboard_monitor  # << Pass monitor
-        )
-        return sampler.results
-
-    return None
 
 
 # ============================================================================
@@ -2061,7 +2138,9 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
 
 def main_dynesty():
     """Main entry point with enhanced configuration and validation."""
-    global logger
+    global logger, debug_counter
+    debug_counter = 0  # Reset debug counter
+
     
     # Set up logging
     logging.basicConfig(
@@ -2108,8 +2187,8 @@ def main_dynesty():
     parser.add_argument('--monitor_config', type=str, default=None,
                    help="Path to monitoring configuration file")
 
-    parser.add_argument('--use_run_nested', action='store_true', default=True,
-                       help="Use run_nested instead of custom loop")
+    parser.add_argument('--use_run_nested', action='store_true', default=False,
+                   help="Use run_nested instead of custom loop with early stopping")
     parser.add_argument('--checkpoint_every', type=int, default=60,
                        help="Checkpoint interval in seconds")
     
