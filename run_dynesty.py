@@ -37,6 +37,7 @@ import os
 from pathlib import Path
 import pickle
 import gzip
+import threading
 from multiprocessing import Pool, freeze_support
 from datetime import timedelta, datetime
 from typing import Dict, List, Tuple, Optional, Any
@@ -330,6 +331,24 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'log_prior': False,
         'physical_check': True
     },
+        'gamma_exp': {                             # NEW
+        'label': "γ (grav‑color)",
+        'fixed_val_from_arg': 'gamma_fixed',
+        'default_fixed': 2.7,
+        'low': 1.0, 'high': 4.0,
+        'fit_flag_arg': 'fit_gamma',
+        'log_prior': False,
+        'physical_check': False       # checked together with λ_g below
+    },
+    'lambda_g': {                                # NEW
+        'label': "λ_g",
+        'fixed_val_from_arg': 'lambda_g_fixed',
+        'default_fixed': 8.0,
+        'low': 1.0, 'high': 15.0,
+        'fit_flag_arg': 'fit_lambda_g',
+        'log_prior': False,
+        'physical_check': False
+    },
 }
 
 
@@ -418,9 +437,23 @@ def check_physical_plausibility(
             rho_bulge_solar = (M_b / (2 * np.pi)) * (a_b / (R_SUN_KPC * (R_SUN_KPC + a_b)**3))
             rho_solar_typical += rho_bulge_solar
         
-        # Calculate xi
-        xi_solar = 1.0 / (1.0 + (rho_solar_typical / params['rho_c_solar_kpc3'])**params['n_exp'])
+        # Calculate xi with the *selected* law
+        from density_metric2 import XI_FUNCTION_MAP
+        xi_mode = getattr(args_obj, 'xi', 'power')
         
+        if xi_mode == 'grav_color':
+            from density_metric2 import xi_gravitational_color
+            gamma = params.get('gamma_exp', 2.7)
+            lambda_g = params.get('lambda_g', 8.0)
+            xi_solar = xi_gravitational_color(rho_solar_typical,
+                                            params['rho_c_solar_kpc3'],
+                                            gamma, lambda_g)[0]
+        else:
+            xi_func = XI_FUNCTION_MAP.get(xi_mode, XI_FUNCTION_MAP['power'])
+            xi_solar = xi_func(rho_solar_typical,
+                             params['rho_c_solar_kpc3'],
+                             params['n_exp'])[0]        
+
         if xi_solar < EXPECTED_XI_AT_SOLAR[0]:
             return False, f"xi at R_sun = {xi_solar:.3f} < {EXPECTED_XI_AT_SOLAR[0]} (too much suppression)"
         if xi_solar > EXPECTED_XI_AT_SOLAR[1]:
@@ -554,6 +587,134 @@ def check_parameter_evolution(
                         results['status'] = 'bimodal'
     
     return results
+
+def setup_xi_parameters_for_mode(args):
+    """
+    Setup parameter configuration based on the xi mode.
+    This ensures all necessary parameters are included.
+    """
+    logger = logging.getLogger("run_dynesty")
+    
+    if args.xi == 'grav_color':
+        logger.info("📊 Setting up parameters for gravitational color confinement")
+        
+        # CRITICAL: Ensure rho_c is in the args with a default value
+        if not hasattr(args, 'rho_c_fixed') or args.rho_c_fixed is None:
+            args.rho_c_fixed = 5e8  # Default value
+            logger.info(f"   Setting default rho_c_fixed = {args.rho_c_fixed:.1e}")
+        
+        # CRITICAL: Ensure n_exp has a value (even if not used)
+        if not hasattr(args, 'n_exp_fixed') or args.n_exp_fixed is None:
+            args.n_exp_fixed = 2.0  # Not used but needed
+            logger.info(f"   Setting default n_exp_fixed = {args.n_exp_fixed}")
+
+        # Add/update rho_c (still needed!)
+        if 'rho_c_solar_kpc3' not in MW_MULTI_COMP_PARAM_CONFIG:
+            MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'] = {}
+        
+        MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'].update({
+            'label': "rho_c (M_sun/kpc^3)",
+            'fixed_val_from_arg': 'rho_c_fixed',
+            'default_fixed': 5e7,  # Galaxy-appropriate
+            'low': 1e6,
+            'high': 1e9,
+            'fit_flag_arg': 'fit_rho_c',
+            'log_prior': True,
+            'physical_check': True
+        })
+        
+        # Ensure gamma_exp is configured
+        if 'gamma_exp' not in MW_MULTI_COMP_PARAM_CONFIG:
+            MW_MULTI_COMP_PARAM_CONFIG['gamma_exp'] = {}
+            
+        MW_MULTI_COMP_PARAM_CONFIG['gamma_exp'].update({
+            'label': "γ (grav-color)",
+            'fixed_val_from_arg': 'gamma_fixed',
+            'default_fixed': 2.0,  # Galaxy-appropriate
+            'low': 1.0,
+            'high': 3.0,
+            'fit_flag_arg': 'fit_gamma',
+            'log_prior': False,
+            'physical_check': False
+        })
+        
+        # Ensure lambda_g is configured
+        if 'lambda_g' not in MW_MULTI_COMP_PARAM_CONFIG:
+            MW_MULTI_COMP_PARAM_CONFIG['lambda_g'] = {}
+            
+        MW_MULTI_COMP_PARAM_CONFIG['lambda_g'].update({
+            'label': "λ_g",
+            'fixed_val_from_arg': 'lambda_g_fixed',
+            'default_fixed': 1.5,  # Galaxy-appropriate (NOT 8!)
+            'low': 0.5,
+            'high': 4.0,
+            'fit_flag_arg': 'fit_lambda_g',
+            'log_prior': False,
+            'physical_check': False
+        })
+        
+        # n_exp is not used for grav_color but might be needed for compatibility
+        if 'n_exp' not in MW_MULTI_COMP_PARAM_CONFIG:
+            MW_MULTI_COMP_PARAM_CONFIG['n_exp'] = {}
+            
+        MW_MULTI_COMP_PARAM_CONFIG['n_exp'].update({
+            'label': "n",
+            'fixed_val_from_arg': 'n_exp_fixed',
+            'default_fixed': 2.0,
+            'low': 0.5,
+            'high': 4.0,
+            'fit_flag_arg': 'fit_n_exp',  # Different flag
+            'log_prior': False,
+            'physical_check': True
+        })
+        
+        # Set appropriate defaults if not specified
+        if not hasattr(args, 'rho_c_fixed') or args.rho_c_fixed is None:
+            args.rho_c_fixed = 5e7
+        if not hasattr(args, 'gamma_fixed') or args.gamma_fixed is None:
+            args.gamma_fixed = 2.0
+        if not hasattr(args, 'lambda_g_fixed') or args.lambda_g_fixed is None:
+            args.lambda_g_fixed = 1.5
+        if not hasattr(args, 'n_exp_fixed') or args.n_exp_fixed is None:
+            args.n_exp_fixed = 2.0  # Not used but needed for compatibility
+        
+        # Add fit_rho_c flag if using fit_xi_params
+        if hasattr(args, 'fit_xi_params') and args.fit_xi_params:
+            args.fit_rho_c = True
+            logger.info("   fit_xi_params enabled → fitting rho_c")
+        
+    else:
+        # Standard xi functions need rho_c and n_exp
+        logger.info(f"📊 Setting up parameters for {args.xi} xi function")
+        
+        # Ensure standard parameters are present
+        if 'rho_c_solar_kpc3' not in MW_MULTI_COMP_PARAM_CONFIG:
+            MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'] = {}
+            
+        MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'].update({
+            'label': "rho_c (M_sun/kpc^3)",
+            'fixed_val_from_arg': 'rho_c_fixed',
+            'default_fixed': 5e8,
+            'low': 1e7,
+            'high': 1e10,
+            'fit_flag_arg': 'fit_xi_params',
+            'log_prior': True,
+            'physical_check': True
+        })
+        
+        if 'n_exp' not in MW_MULTI_COMP_PARAM_CONFIG:
+            MW_MULTI_COMP_PARAM_CONFIG['n_exp'] = {}
+            
+        MW_MULTI_COMP_PARAM_CONFIG['n_exp'].update({
+            'label': "n",
+            'fixed_val_from_arg': 'n_exp_fixed',
+            'default_fixed': 1.5,
+            'low': 0.5,
+            'high': 4.0,
+            'fit_flag_arg': 'fit_xi_params',
+            'log_prior': False,
+            'physical_check': True
+        })
 
 
 # ============================================================================
@@ -1060,38 +1221,9 @@ def log_likelihood_dynesty(
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
     """
-    Enhanced log-likelihood with physical plausibility checks.
-    
-    This version includes:
-    - Physical parameter validation
-    - Robust error handling
-    - Debugging output for problematic cases
-    - Optional GP surrogate evaluation
-    
-    Parameters
-    ----------
-    theta_values_fitted : np.ndarray
-        Fitted parameter values
-    fitted_param_names : list
-        Names of fitted parameters
-    args_dynesty_obj : argparse.Namespace
-        Configuration object
-    all_param_info_list : list
-        Full parameter information
-    R_data, v_data, sigma_data : np.ndarray
-        Observational data
-    xi_type : str
-        Type of xi function ('power' or 'logistic')
-    gp_surrogate : GPSurrogateModel, optional
-        Gaussian process surrogate
-        
-    Returns
-    -------
-    log_likelihood : float
-        Log likelihood value
-    blob : list
-        Additional quantities (e.g., RMS)
+    Enhanced log-likelihood with physical plausibility checks and early RMSE rejection.
     """
+
     global debug_counter
     global logger
     if 'debug_counter' not in globals():
@@ -1102,46 +1234,41 @@ def log_likelihood_dynesty(
         logger.setLevel(logging.INFO)
 
     use_logging = logger is not None
+    HARD_RMSE_THRESHOLD = 500.0  # km/s threshold for auto-rejection
 
-    
     # Input validation
     if any(arg is None for arg in [theta_values_fitted, fitted_param_names, args_dynesty_obj, 
                                    all_param_info_list, R_data, v_data, sigma_data, xi_type]): 
         return -np.inf, [np.inf]
     
-    # Check for non-finite inputs
     if any(not np.isfinite(val) for val in theta_values_fitted):
         if debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning(f"Non-finite parameter values detected:")
+            logger.warning("Non-finite parameter values detected:")
             for name, val in zip(fitted_param_names, theta_values_fitted):
                 if not np.isfinite(val):
                     logger.warning(f"  {name}: {val}")
             debug_counter += 1
         return -np.inf, [np.inf]
-    
-    # Basic sanity checks only
-    for i, (name, value) in enumerate(zip(fitted_param_names, theta_values_fitted)):
+
+    for name, value in zip(fitted_param_names, theta_values_fitted):
         if 'M_' in name and value <= 0:
-            return -np.inf, [np.inf]  # No negative masses
+            return -np.inf, [np.inf]
         if 'R_d' in name and value <= 0:
-            return -np.inf, [np.inf]  # No negative scale lengths
+            return -np.inf, [np.inf]
         if 'h_z' in name and value <= 0:
-            return -np.inf, [np.inf]  # No negative scale heights
+            return -np.inf, [np.inf]
         if name == 'rho_c_solar_kpc3' and value <= 0:
-            return -np.inf, [np.inf]  # No negative density
+            return -np.inf, [np.inf]
         if name == 'n_exp' and (value <= 0 or value > 10):
-            return -np.inf, [np.inf]  # Reasonable exponent range
-    
-    # Reconstruct full parameter dictionary
+            return -np.inf, [np.inf]
+
     current_params_full_dict = dict(zip(fitted_param_names, theta_values_fitted))
-    
-    # Add fixed parameters
+
     if all_param_info_list:
         for p_info in all_param_info_list:
             if not p_info['is_fitted']:
                 current_params_full_dict[p_info['name']] = p_info['current_val']
-    
-    # Add component flags for MW
+
     if args_dynesty_obj.fit_target == 'milkyway':
         for p_name_cfg, p_details_cfg in MW_MULTI_COMP_PARAM_CONFIG.items():
             if 'include_flag_arg' in p_details_cfg:
@@ -1149,103 +1276,72 @@ def log_likelihood_dynesty(
                     getattr(args_dynesty_obj, p_details_cfg['include_flag_arg'])
         current_params_full_dict['include_bulge_density'] = args_dynesty_obj.include_bulge
 
-        
-    # Calculate model prediction
     try:
-        # Use GP surrogate if available and requested
         if gp_surrogate is not None and args_dynesty_obj.use_gp_surrogate:
             def physics_func(params, args_obj):
                 return v_model_for_dynesty(R_data, params, xi_type, args_obj)
-            
-            v_predicted, v_uncertainty = gp_surrogate.predict(
-                theta_values_fitted, 
-                physics_function=physics_func,
-                args_obj=args_dynesty_obj
+            v_predicted, _ = gp_surrogate.predict(
+                theta_values_fitted, physics_function=physics_func, args_obj=args_dynesty_obj
             )
         else:
-            # Standard physics model evaluation
-            v_predicted = v_model_for_dynesty(
-                R_data, current_params_full_dict, xi_type, args_dynesty_obj
-            )
-        
-        # Validate predictions
+            v_predicted = v_model_for_dynesty(R_data, current_params_full_dict, xi_type, args_dynesty_obj)
+
         if not np.all(np.isfinite(v_predicted)):
             if debug_counter < DEBUG_COUNTER_MAX:
-                logger.warning(f"Non-finite v_predicted values!")
+                logger.warning("Non-finite v_predicted values!")
                 logger.warning(f"  First few: {v_predicted[:5]}")
-                logger.warning(f"  Parameters causing issue:")
+                logger.warning("  Parameters causing issue:")
                 for name, val in current_params_full_dict.items():
                     if isinstance(val, (int, float, np.number)):
                         logger.warning(f"    {name}: {val:.3e}")
                 debug_counter += 1
             return -np.inf, [np.inf]
-            
+
     except Exception as e:
         if debug_counter < DEBUG_COUNTER_MAX:
             logger.error(f"Exception in v_model_for_dynesty: {e}")
             debug_counter += 1
         return -np.inf, [np.inf]
-    
-    # Calculate chi-squared and likelihood
+
     sigma_data_safe = np.maximum(sigma_data, 1e-9)
     residuals = v_data - v_predicted
-    
-    # Calculate RMS for blob
     rmse = np.sqrt(np.mean(residuals**2))
-    
-    # Check RMSE reasonableness
-    if rmse > 200:  # km/s - indicates very poor fit
+
+    if rmse > HARD_RMSE_THRESHOLD:
         if debug_counter < DEBUG_COUNTER_MAX:
-            if use_logging:
-                logger.warning(f"Very high RMSE: {rmse:.1f} km/s")
+            logger.warning(f"🚨 Very high RMSE: {rmse:.1f} km/s → rejecting sample.")
+            logger.debug(f"  Sample params: {current_params_full_dict}")
+            logger.debug(f"  v_predicted[:5]: {v_predicted[:5]}")
+            logger.debug(f"  v_obs[:5]: {v_data[:5]}")
             debug_counter += 1
-    
-    # Standard Gaussian likelihood
+        return -np.inf, [rmse]
+
     chi_squared_terms = (residuals / sigma_data_safe)**2
     log_L_terms = chi_squared_terms + np.log(2 * np.pi * sigma_data_safe**2)
-    
+
     if not np.all(np.isfinite(log_L_terms)): 
         return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
-    
+
     log_L = -0.5 * np.sum(log_L_terms)
-    
-        # Calculate standard Gaussian likelihood FIRST
-    chi_squared_terms = (residuals / sigma_data_safe)**2
-    log_L_terms = chi_squared_terms + np.log(2 * np.pi * sigma_data_safe**2)
-    
-    if not np.all(np.isfinite(log_L_terms)): 
-        return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
-    
-    log_L = -0.5 * np.sum(log_L_terms)
-    
-    # Soft constraint: R_d_thick should be > R_d_thin
+
     if 'R_d_thick_kpc' in current_params_full_dict and 'R_d_thin_kpc' in current_params_full_dict:
         if current_params_full_dict['R_d_thick_kpc'] < current_params_full_dict['R_d_thin_kpc']:
-            # Just a penalty, not hard rejection
-            log_L -= 100.0  # Penalty instead of -inf
-    
-    # Soft prior: prefer reasonable thick/thin disk mass ratio
+            log_L -= 100.0
+
     if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
         ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
         if ratio > 0.5:
-            penalty = -50 * (ratio - 0.5)**2  # Apply a soft Gaussian penalty
+            penalty = -50 * (ratio - 0.5)**2
             log_L += penalty
-    
-    # Soft prior: prefer reasonable thick/thin disk mass ratio
-    if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
-        ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
-        if ratio > 0.5:
-            penalty = -50 * (ratio - 0.5)**2  # Apply a soft Gaussian penalty
-            log_L += penalty
-    
+
     if not np.isfinite(log_L): 
         return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
-    
-    # Reset debug counter periodically if things are working
+
     if debug_counter > 0 and np.isfinite(log_L):
         debug_counter = max(0, debug_counter - 1)
-    
+
     return log_L, [rmse]
+
 
 
 def v_model_for_dynesty(
@@ -1254,46 +1350,66 @@ def v_model_for_dynesty(
     xi_type_str: str,
     ARGS_obj_dynesty: argparse.Namespace
 ) -> np.ndarray:
-
     """
     Calculate model velocities with density-dependent modification.
-    
-    Enhanced with better error handling and validation.
-    
-    Parameters
-    ----------
-    R_kpc_array : np.ndarray
-        Galactocentric radii
-    p_all_params_dict : dict
-        All model parameters
-    xi_type_str : str
-        Type of xi function
-    ARGS_obj_dynesty : argparse.Namespace
-        Configuration object
-        
-    Returns
-    -------
-    np.ndarray
-        Model circular velocities in km/s
     """
     global debug_counter
-    global logger
+    
+    # Initialize debug counter and logger
     if 'debug_counter' not in globals():
         debug_counter = 0
-    if 'logger' not in globals() or logger is None:
-        import logging
-        logger = logging.getLogger("run_dynesty")
-        logger.setLevel(logging.INFO)
-
     
-    # Extract xi parameters
-    rho_c_solar_kpc3 = p_all_params_dict['rho_c_solar_kpc3']
-    n_exp = p_all_params_dict['n_exp']
+    # Get logger safely
+    logger = get_or_create_logger()
+    
+    # Import needed functions
+    from density_metric2 import XI_FUNCTION_MAP, xi_gravitational_color
+
+    # DEBUG: Print what parameters we have (only once)
+    if not hasattr(v_model_for_dynesty, "_params_logged"):
+        logger.info(f"\n[PARAMS DEBUG] xi_type: {xi_type_str}")
+        logger.info(f"[PARAMS DEBUG] Available parameters: {list(p_all_params_dict.keys())}")
+        logger.info(f"[PARAMS DEBUG] Parameter values:")
+        for k, v in p_all_params_dict.items():
+            if isinstance(v, (int, float)):
+                logger.info(f"   {k}: {v:.3e}")
+        v_model_for_dynesty._params_logged = True
+    
+    # Extract parameters with proper error handling
+    try:
+        if xi_type_str == 'grav_color':
+            # For gravitational color, we need rho_c, gamma, and lambda_g
+            rho_c_solar_kpc3 = p_all_params_dict.get('rho_c_solar_kpc3', 5e7)
+            gamma = p_all_params_dict.get('gamma_exp', 
+                                         getattr(ARGS_obj_dynesty, 'fix_gamma', 2.0))
+            lambda_g = p_all_params_dict.get('lambda_g', 
+                                           getattr(ARGS_obj_dynesty, 'fix_lambda_g', 1.5))
+            n_exp = p_all_params_dict.get('n_exp', 2.0)  # Not used but might be needed
+        else:
+            # Standard xi functions need rho_c and n_exp
+            if 'rho_c_solar_kpc3' not in p_all_params_dict:
+                logger.error(f"ERROR: rho_c_solar_kpc3 missing!")
+                logger.error(f"Available: {list(p_all_params_dict.keys())}")
+                return np.zeros_like(R_kpc_array)
+            if 'n_exp' not in p_all_params_dict:
+                logger.error(f"ERROR: n_exp missing!")
+                return np.zeros_like(R_kpc_array)
+                
+            rho_c_solar_kpc3 = p_all_params_dict['rho_c_solar_kpc3']
+            n_exp = p_all_params_dict['n_exp']
+            gamma = None
+            lambda_g = None
+            
+    except Exception as e:
+        if debug_counter < DEBUG_COUNTER_MAX:
+            logger.error(f"Error extracting parameters: {e}")
+            debug_counter += 1
+        return np.zeros_like(R_kpc_array)
     
     # Validate xi parameters
-    if not np.isfinite(rho_c_solar_kpc3) or not np.isfinite(n_exp):
+    if not np.isfinite(rho_c_solar_kpc3):
         if debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning(f"Non-finite xi parameters: rho_c={rho_c_solar_kpc3}, n={n_exp}")
+            logger.warning(f"Non-finite rho_c: {rho_c_solar_kpc3}")
             debug_counter += 1
         return np.zeros_like(R_kpc_array)
     
@@ -1307,65 +1423,67 @@ def v_model_for_dynesty(
     # Validate intermediate results
     if not np.all(np.isfinite(v_n_kms)):
         if debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning("⚠️ Non-finite Newtonian velocities detected — replacing with zeros")
+            logger.warning("⚠️ Non-finite Newtonian velocities detected")
             debug_counter += 1
         v_n_kms = np.nan_to_num(v_n_kms, nan=0.0, posinf=0.0, neginf=0.0)
 
     if not np.all(np.isfinite(rho_midplane_for_xi)):
         if debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning("⚠️ Non-finite densities detected — replacing with fallback values")
+            logger.warning("⚠️ Non-finite densities detected")
             debug_counter += 1
         rho_midplane_for_xi = np.nan_to_num(rho_midplane_for_xi, nan=0.0, posinf=1e10, neginf=0.0)
 
-    # Select ξ(ρ) function
-    xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
-    
-    # For functions that need extra parameters, wrap them:
-    if xi_type_str == 'enhanced':
-        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp, 8.0)
-    elif xi_type_str == 'grav_color':
-        # Gravitational color confinement with theoretical values
-        gamma = getattr(ARGS_obj_dynesty, 'fix_gamma', None) or n_exp
-        lambda_g = getattr(ARGS_obj_dynesty, 'fix_lambda_g', None) or 8.0
-        
-        # You'll need to import or define xi_gravitational_color
-        from density_metric2 import xi_gravitational_color
-        xi_raw = xi_gravitational_color(rho_midplane_for_xi, rho_c_solar_kpc3, gamma, lambda_g)
-    elif xi_type_str in ['mond', 'exp_enhance']:
-        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
-    else:
-        # Standard 3-parameter call
-        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
+    # Calculate xi based on the selected type
+    try:
+        if xi_type_str == 'grav_color':
+            # Use gravitational color function directly
+            xi_raw = xi_gravitational_color(rho_midplane_for_xi, rho_c_solar_kpc3, gamma, lambda_g)
+        elif xi_type_str == 'enhanced':
+            xi_func = XI_FUNCTION_MAP['enhanced']
+            # For enhanced, use A=8.0 for theory test
+            xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp, 8.0)
+        else:
+            # Standard xi functions (power, logistic, etc.)
+            xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
+            xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
+            
+    except Exception as e:
+        if debug_counter < DEBUG_COUNTER_MAX:
+            logger.error(f"Error calculating xi with {xi_type_str}: {e}")
+            debug_counter += 1
+        xi_raw = np.ones_like(rho_midplane_for_xi)
 
-    # Add XI verification logging (only once per process)
-    if not hasattr(v_model_for_dynesty, "_has_logged_xi"):
+    # Log xi verification (only once)
+    if not hasattr(v_model_for_dynesty, "_has_logged_xi") and threading.current_thread() is threading.main_thread():
         logger.info(f"[XI VERIFICATION] Using xi_type: '{xi_type_str}'")
-        logger.info(f"[XI VERIFICATION] Xi function: {xi_func.__name__}")
-        
+        if xi_type_str == 'grav_color':
+            logger.info(f"[XI VERIFICATION] Parameters: ρ_c={rho_c_solar_kpc3:.2e}, γ={gamma:.2f}, λ_g={lambda_g:.2f}")
+        else:
+            logger.info(f"[XI VERIFICATION] Parameters: ρ_c={rho_c_solar_kpc3:.2e}, n={n_exp:.2f}")
+
+        # Test xi at different densities
         test_densities = [1e6, 1e8, 1e10]
         summary = []
         for test_rho in test_densities:
             try:
-                test_xi_raw = xi_func(test_rho, rho_c_solar_kpc3, n_exp)
+                if xi_type_str == 'grav_color':
+                    test_xi_raw = xi_gravitational_color(test_rho, rho_c_solar_kpc3, gamma, lambda_g)
+                else:
+                    xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
+                    test_xi_raw = xi_func(test_rho, rho_c_solar_kpc3, n_exp)
                 test_xi = test_xi_raw[0] if hasattr(test_xi_raw, '__getitem__') else float(test_xi_raw)
                 summary.append(f"ρ={test_rho:.0e} → ξ={test_xi:.3f}")
             except Exception as e:
                 summary.append(f"ρ={test_rho:.0e} → error: {e}")
         logger.info("[XI VERIFICATION SUMMARY] " + "; ".join(summary))
         
-        v_model_for_dynesty._has_logged_xi = True  # Suppress future logs
+        v_model_for_dynesty._has_logged_xi = True
 
-
-    # Calculate xi safely, supporting scalar or vectorized return
-    try:
-        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
-        if not hasattr(xi_raw, "__getitem__"):
-            xi_values = np.full_like(v_n_kms, float(xi_raw))  # scalar expanded
-        else:
-            xi_values = np.asarray(xi_raw, dtype=np.float64)
-    except Exception as e:
-        logger.error(f"❌ Error in xi function '{xi_type_str}': {e}")
-        xi_values = np.ones_like(v_n_kms)
+    # Convert xi_raw to array safely
+    if not hasattr(xi_raw, "__getitem__"):
+        xi_values = np.full_like(v_n_kms, float(xi_raw))
+    else:
+        xi_values = np.asarray(xi_raw, dtype=np.float64)
 
     # Sanitize xi values
     xi_values = np.nan_to_num(xi_values, nan=1.0, posinf=1.0, neginf=0.0)
@@ -1377,12 +1495,37 @@ def v_model_for_dynesty(
     # Final velocity validation
     if not np.all(np.isfinite(v_mod_kms)):
         if debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning("⚠️ Non-finite final velocities detected — zeroing invalid entries")
+            logger.warning("⚠️ Non-finite final velocities detected")
             debug_counter += 1
         v_mod_kms = np.nan_to_num(v_mod_kms, nan=0.0, posinf=0.0, neginf=0.0)
 
     return v_mod_kms
 
+
+# Also need to ensure the parameter configuration includes rho_c for grav_color
+def ensure_grav_color_params_in_config(args):
+    """
+    Ensure that when using grav_color xi, we still include rho_c_solar_kpc3
+    in the parameter configuration.
+    """
+    if args.xi == 'grav_color':
+        # Make sure rho_c is available even if not fitted
+        if not hasattr(args, 'rho_c_fixed') or args.rho_c_fixed is None:
+            args.rho_c_fixed = 5e7  # Galaxy-appropriate default
+            logger.info(f"Setting default rho_c_fixed = {args.rho_c_fixed:.1e} for grav_color")
+        
+        # Ensure it's in the parameter config
+        if 'rho_c_solar_kpc3' not in MW_MULTI_COMP_PARAM_CONFIG:
+            MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'] = {
+                'label': "rho_c (M_sun/kpc^3)", 
+                'fixed_val_from_arg': 'rho_c_fixed', 
+                'default_fixed': 5e7,  # Galaxy-appropriate
+                'low': 1e6,
+                'high': 1e9,
+                'fit_flag_arg': 'fit_rho_c',  # New flag
+                'log_prior': True,
+                'physical_check': True
+            }
 
 #!/usr/bin/env python3
 """
@@ -1480,6 +1623,16 @@ def get_param_labels_and_bounds(ARGS):
     previous_best = None
     bounds_modified = {}
 
+    # CRITICAL: For grav_color, ensure xi parameters are included
+    if ARGS.xi == 'grav_color':
+        # Make sure rho_c_solar_kpc3 is in the config
+        if 'rho_c_solar_kpc3' not in config_to_use:
+            logger.error("ERROR: rho_c_solar_kpc3 missing from config!")
+        
+        # Force include rho_c even if not fitting
+        if not hasattr(ARGS, 'include_rho_c'):
+            ARGS.include_rho_c = True
+
     if getattr(ARGS, 'use_previous_best', False):
         try:
             prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
@@ -1514,9 +1667,15 @@ def get_param_labels_and_bounds(ARGS):
 
     # === Main parameter loop ===
     for p_name, p_details in config_to_use.items():
-        # Check if component is included
-        is_included = 'include_flag_arg' not in p_details or \
-                      getattr(ARGS, p_details['include_flag_arg'], False)
+        # Special handling for xi parameters when using grav_color
+        if ARGS.xi == 'grav_color' and p_name in ['rho_c_solar_kpc3', 'n_exp', 'gamma_exp', 'lambda_g']:
+            # Always include these for grav_color mode
+            is_included = True
+        else:
+            # Standard component check
+            is_included = 'include_flag_arg' not in p_details or \
+                          getattr(ARGS, p_details['include_flag_arg'], False)
+        
         if not is_included:
             continue
 
@@ -1861,12 +2020,32 @@ def test_likelihood_at_typical_params(args, gaia_data):
     for name, val in zip(fitted_p_names, typical_params):
         logger.info(f"  {name}: {val:.3e}")
     
+    # CRITICAL: Also log the FIXED parameters that aren't being fitted
+    logger.info("\nFixed parameters:")
+    if hasattr(args, 'all_param_info_list'):
+        for p_info in args.all_param_info_list:
+            if not p_info['is_fitted']:
+                logger.info(f"  {p_info['name']}: {p_info['current_val']:.3e}")
+    
+    # For grav_color, make sure we have the xi parameters
+    if args.xi == 'grav_color':
+        logger.info(f"\nXi function parameters for grav_color:")
+        logger.info(f"  rho_c_fixed: {args.rho_c_fixed:.3e}")
+        logger.info(f"  gamma_fixed: {args.gamma_fixed:.3f}")
+        logger.info(f"  lambda_g_fixed: {args.lambda_g_fixed:.3f}")
+    
     # Evaluate likelihood
     logl_args_tuple = (fitted_p_names, args, args.all_param_info_list,
                        gaia_data['R_kpc'], gaia_data['v_obs'], gaia_data['sigma_v'],
                        args.xi, None)
     
-    log_L, blob = log_likelihood_dynesty(typical_params, *logl_args_tuple)
+    try:
+        log_L, blob = log_likelihood_dynesty(typical_params, *logl_args_tuple)
+    except Exception as e:
+        logger.error(f"Exception during likelihood evaluation: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
     
     logger.info(f"\nLog-likelihood at typical params: {log_L:.1f}")
     logger.info(f"RMSE: {blob[0]:.1f} km/s")
@@ -1874,6 +2053,13 @@ def test_likelihood_at_typical_params(args, gaia_data):
     if log_L == -np.inf:
         logger.error("ERROR: Typical parameters give -inf likelihood!")
         logger.error("This suggests a fundamental problem with the model or data.")
+        
+        # Additional debugging
+        logger.error("\nDEBUGGING INFO:")
+        logger.error(f"Number of data points: {len(gaia_data['R_kpc'])}")
+        logger.error(f"Xi type: {args.xi}")
+        logger.error(f"Fitted parameters: {fitted_p_names}")
+        
         return False
     
     if log_L < -1e6:
@@ -1881,6 +2067,7 @@ def test_likelihood_at_typical_params(args, gaia_data):
         logger.warning("Model may be incompatible with data.")
     
     return True
+
 
 
 # ============================================================================
@@ -2422,7 +2609,6 @@ def main_dynesty():
     global logger, debug_counter
     debug_counter = 0  # Reset debug counter
 
-    
     # Set up logging
     logging.basicConfig(
         level=logging.INFO,
@@ -2430,133 +2616,144 @@ def main_dynesty():
     )
     logger = logging.getLogger("run_dynesty") if logger is None else logger
     logger.info("Starting Enhanced Dynesty Sampler v2.0")
-    
+
     if not DYNESTY_AVAILABLE:
         logger.error("Dynesty library not found")
         sys.exit(1)
-    
-    # Parse arguments
+
+    # Argument parser
     parser = argparse.ArgumentParser(
         description="Enhanced Dynesty sampler for Density-Metric model with physical constraints",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--resume', action='store_true', default=False,
-                    help="Resume from checkpoint in output_dir/dynesty_checkpoint.pkl")
 
-    
-    
-    # Basic settings
+    # Core run options
+    parser.add_argument('--resume', action='store_true', default=False,
+                        help="Resume from checkpoint in output_dir/dynesty_checkpoint.pkl")
+
     parser.add_argument('--xi', type=str, default='power',
-                    choices=['power', 'logistic', 'enhanced', 'grav_color'],  # ADD 'grav_color'
-                    help="Choice of xi(ρ) function")
+                        choices=['power', 'logistic', 'enhanced', 'grav_color'],
+                        help="Choice of xi(ρ) function")
 
     parser.add_argument('--max_sample_gaia', type=int, default=10000,
-                       help="Maximum number of Gaia stars to use")
+                        help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty",
-                       help="Output directory for results")
-    
-    # Sampler settings
-    parser.add_argument('--nlive_init', type=int, default=800,
-                       help="Initial number of live points")
-    parser.add_argument('--nlive_batch', type=int, default=200,
-                       help="Live points per batch")
-    parser.add_argument('--dlogz_target', type=float, default=0.01,
-                       help="Target dlogz for convergence")
-    parser.add_argument('--num_threads', type=int, default=8,
-                       help="Number of threads for parallelization")
-    parser.add_argument('--maxcall', type=int, default=2000000,
-                       help="Maximum likelihood calls")
-    parser.add_argument('--monitor_interval_s', type=int, default=60,
-                       help="Monitoring interval in seconds")
-    parser.add_argument('--enable_dashboard', action='store_true', default=True,
-                   help="Enable enhanced monitoring dashboard")
-    parser.add_argument('--monitor_config', type=str, default=None,
-                   help="Path to monitoring configuration file")
+                        help="Output directory for results")
 
+    # Sampler options
+    parser.add_argument('--nlive_init', type=int, default=800,
+                        help="Initial number of live points")
+    parser.add_argument('--nlive_batch', type=int, default=200,
+                        help="Live points per batch")
+    parser.add_argument('--dlogz_target', type=float, default=0.01,
+                        help="Target dlogz for convergence")
+    parser.add_argument('--num_threads', type=int, default=8,
+                        help="Number of threads for parallelization")
+    parser.add_argument('--maxcall', type=int, default=2000000,
+                        help="Maximum likelihood calls")
+    parser.add_argument('--monitor_interval_s', type=int, default=60,
+                        help="Monitoring interval in seconds")
+    parser.add_argument('--enable_dashboard', action='store_true', default=True,
+                        help="Enable enhanced monitoring dashboard")
+    parser.add_argument('--monitor_config', type=str, default=None,
+                        help="Path to monitoring configuration file")
     parser.add_argument('--use_run_nested', action='store_true', default=False,
-                   help="Use run_nested instead of custom loop with early stopping")
+                        help="Use run_nested instead of custom loop with early stopping")
     parser.add_argument('--checkpoint_every', type=int, default=60,
-                       help="Checkpoint interval in seconds")
-    
-    # Dynesty sampler settings
+                        help="Checkpoint interval in seconds")
+
+    # Dynesty sampler group
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
     dynesty_g.add_argument('--sample_method', type=str, default='rslice',
-                          choices=['rwalk', 'rslice', 'hslice'],
-                          help="Sampling method")
+                           choices=['rwalk', 'rslice', 'hslice'],
+                           help="Sampling method")
     dynesty_g.add_argument('--walks', type=int, default=25,
-                      help="Number of walks for rwalk sampler (ignored if not using rwalk)")
-
+                           help="Number of walks for rwalk sampler (ignored if not using rwalk)")
     dynesty_g.add_argument('--enlarge_factor', type=float, default=2.5,
-                          help="Bound enlargement factor")
+                           help="Bound enlargement factor")
     dynesty_g.add_argument('--bound_method', type=str, default='multi',
-                          choices=['none', 'single', 'multi', 'balls', 'cubes'],
-                          help="Bounding method")
-    
+                           choices=['none', 'single', 'multi', 'balls', 'cubes'],
+                           help="Bounding method")
+
     # Enhanced features
     ai_g = parser.add_argument_group('Enhanced Features')
     ai_g.add_argument('--use_curriculum_learning', action='store_true', default=False,
-                     help="Use curriculum learning (recommended for many parameters)")
+                      help="Use curriculum learning (recommended for many parameters)")
     ai_g.add_argument('--use_gp_surrogate', action='store_true', default=False,
-                     help="Use Gaussian Process surrogate for speedup")
+                      help="Use Gaussian Process surrogate for speedup")
     ai_g.add_argument('--gp_n_initial', type=int, default=500,
-                     help="Initial training points for GP")
+                      help="Initial training points for GP")
     ai_g.add_argument('--gp_uncertainty_threshold', type=float, default=0.1,
-                     help="GP uncertainty threshold")
+                      help="GP uncertainty threshold")
     ai_g.add_argument('--validate_data', action='store_true', default=True,
-                     help="Validate loaded data quality")
+                      help="Validate loaded data quality")
     parser.add_argument('--use_previous_best', action='store_true', default=False,
-                   help="Initialize from previous best-fit parameters")
-    parser.add_argument('--previous_results_file', type=str, 
-                    default="chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz",
-                    help="Path to previous results for initialization")
+                        help="Initialize from previous best-fit parameters")
+    parser.add_argument('--previous_results_file', type=str,
+                        default="chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz",
+                        help="Path to previous results for initialization")
     parser.add_argument('--tighten_bounds_factor', type=float, default=0.1,
-                    help="Factor for tightening bounds around previous best (0.1 = 10% window)")
+                        help="Factor for tightening bounds around previous best (0.1 = 10% window)")
     parser.add_argument('--disable_dashboard', action='store_true', default=False,
-                    help="Disable dashboard monitoring to avoid JSON errors")
+                        help="Disable dashboard monitoring to avoid JSON errors")
     ai_g.add_argument('--fix_gamma', type=float, default=None,
-                  help="Fix gamma exponent (theory predicts 2.7)")
+                      help="Fix gamma exponent (theory predicts 2.7)")
     ai_g.add_argument('--fix_lambda_g', type=float, default=None,
-                    help="Fix lambda_g enhancement factor (theory predicts 8.0)")
+                      help="Fix lambda_g enhancement factor (theory predicts 8.0)")
     ai_g.add_argument('--theory_mode', action='store_true', default=False,
-                    help="Use theoretical values: gamma=2.7, lambda_g=8.0")
-    
-    # Model configuration
+                      help="Use theoretical values: gamma=2.7, lambda_g=8.0")
+
+    # Model components
     mw_model_g = parser.add_argument_group('Model Components')
     mw_model_g.add_argument('--include_bulge', action='store_true', default=False)
     mw_model_g.add_argument('--include_disk_thin', action='store_true', default=True)
     mw_model_g.add_argument('--include_disk_thick', action='store_true', default=False)
     mw_model_g.add_argument('--include_gas', action='store_true', default=False)
-    
-    # Fit flags
+
+    # Fit flags (original + grav_color extensions)
     fit_g = parser.add_argument_group('Parameters to Fit')
     fit_g.add_argument('--fit_xi_params', action='store_true',
-                      help="Fit xi function parameters")
+                       help="Fit xi function parameters")
+    fit_g.add_argument('--fit_rho_c', action='store_true',
+                       help="Fit rho_c (for grav_color mode)")
+    fit_g.add_argument('--fit_gamma', action='store_true',
+                       help="Fit gamma exponent (grav_color)")
+    fit_g.add_argument('--fit_lambda_g', action='store_true',
+                       help="Fit lambda_g enhancement (grav_color)")
     fit_g.add_argument('--fit_disk_thin', action='store_true',
-                      help="Fit thin disk parameters")
+                       help="Fit thin disk parameters")
     fit_g.add_argument('--fit_disk_thick', action='store_true',
-                      help="Fit thick disk parameters")
+                       help="Fit thick disk parameters")
     fit_g.add_argument('--fit_bulge', action='store_true',
-                      help="Fit bulge parameters")
+                       help="Fit bulge parameters")
     fit_g.add_argument('--fit_gas', action='store_true',
-                      help="Fit gas parameters")
-    
+                       help="Fit gas parameters")
+
     # Fixed values
     fixed_g = parser.add_argument_group('Fixed Parameter Values')
     for p_name, p_details in MW_MULTI_COMP_PARAM_CONFIG.items():
-        fixed_g.add_argument(f"--{p_details['fixed_val_from_arg']}", 
-                           type=float, 
-                           default=p_details['default_fixed'],
-                           help=f"Fixed/initial value for {p_name}")
-    
+        fixed_g.add_argument(f"--{p_details['fixed_val_from_arg']}",
+                             type=float,
+                             default=p_details['default_fixed'],
+                             help=f"Fixed/initial value for {p_name}")
+
     # Parse arguments
     args = parser.parse_args()
     args.fit_target = 'milkyway'  # Currently only MW supported
-    
+
+    # ✅ Inject dynamic xi setup logic
+    setup_xi_parameters_for_mode(args)
+        
     if args.theory_mode:
         logger.info("🧪 THEORY MODE: Using gravitational color confinement values")
         args.fix_gamma = 2.7
         args.fix_lambda_g = 8.0
-        args.n_exp_fixed = 2.7  # Fix n_exp to theoretical gamma
+        args.gamma_fixed    = 2.7
+        args.lambda_g_fixed = 8.0
+        # Only ρ_c is left free
+        args.fit_xi_params  = False
+        args.fit_gamma      = False
+        args.fit_lambda_g   = False
         
         # Only fit rho_c
         logger.info("   γ (gamma) = 2.7 (fixed from β_g = -11/3)")
