@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-07-12T00:22:40.871234",
+  "elapsed_time": 0.016736865043640137,
+  "n_samples": 1751,
+  "n_calls": 48423,
+  "efficiency": 3.6160502240670755,
+  "logz": -173186.26798284633,
+  "logz_err": 0.4014689676338699,
+  "dlogz": NaN,
+  "current_nlive": 0,
+  "parameter_estimates": {
+    "M_disk_thin_solar": 62158487677.51344,
+    "R_d_thin_kpc": 3.9943623896141602,
+    "h_z_thin_kpc": 0.30239522112837536
+  },
+  "parameter_uncertainties": {
+    "M_disk_thin_solar": 405724685.819735,
+    "R_d_thin_kpc": 0.023467162483078004,
+    "h_z_thin_kpc": 0.01982672528828726
+  },
+  "convergence_status": {
+    "converged": false,
+    "near_convergence": false,
+    "dlogz": NaN,
+    "efficiency_ok": true,
+    "stuck": false
+  },
+  "health_warnings": [
+    "R_d_thin_kpc stuck at upper bound",
+    "M_disk_thin_solar shows bimodal distribution",
+    "R_d_thin_kpc shows bimodal distribution",
+    "h_z_thin_kpc shows bimodal distribution"
+  ],
+  "estimated_completion": null
+}

@@ -108,8 +108,26 @@ except ImportError as e:
     print(f"CRITICAL: Could not import local modules: {e}")
     sys.exit(1)
 
+
+# ============================================================================
+# Set Up Multi-Thread Safe Logging
+# ============================================================================
+
+
 # Set up module logger
 logger = None
+
+def get_or_create_logger():
+    """Get or create the module logger. Safe for multiprocessing."""
+    import logging
+    logger = logging.getLogger("run_dynesty")
+    if not logger.handlers:  # Only add handler if none exist
+        logger.setLevel(logging.INFO)
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"))
+        logger.addHandler(handler)
+    return logger
+
 
 # ============================================================================
 # Physical Constraints and Validation
@@ -119,27 +137,25 @@ logger = None
 PHYSICAL_BOUNDS = {
     # Mass parameters (M_sun)
     'M_disk_thin_solar':   {'min': 3e10, 'max': 8e10, 'typical': 5e10},
-    'M_disk_thick_solar':  {'min': 5e9,  'max': 3e10, 'typical': 1.5e10},  # Max 50% of thin
+    'M_disk_thick_solar':  {'min': 5e9,  'max': 3e10, 'typical': 1.5e10},
     'M_bulge_solar':       {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
-    'M_gas_solar':         {'min': 5e9,  'max': 5e10,   'typical': 3e10},    # Was 5e9-3e10
+    'M_gas_solar':         {'min': 5e9,  'max': 5e10,   'typical': 3e10},
 
-     # Scale lengths (kpc) - UPDATED based on what sampler wanted
-    'R_d_thin_kpc':        {'min': 2.0,  'max': 4.0,    'typical': 2.6},
-    'R_d_thick_kpc':       {'min': 3.0,  'max': 6.0,    'typical': 4.0},
-    'R_d_gas_kpc':         {'min': 4.0,  'max': 12.0,   'typical': 7.0},
-    'a_bulge_kpc':         {'min': 0.2,  'max': 1.5,    'typical': 0.7},
+    # Scale lengths (kpc) - EXPANDED RANGES
+    'R_d_thin_kpc':        {'min': 1.5,  'max': 5.0,    'typical': 2.6},    # Was 2.0-4.0
+    'R_d_thick_kpc':       {'min': 2.5,  'max': 8.0,    'typical': 4.0},    # Was 3.0-6.0  
+    'R_d_gas_kpc':         {'min': 4.0,  'max': 15.0,   'typical': 7.0},    # Was 4.0-12.0
+    'a_bulge_kpc':         {'min': 0.2,  'max': 2.0,    'typical': 0.7},    # Was 0.2-1.5
 
     # Scale heights (kpc)
-    'h_z_thin_kpc':        {'min': 0.2,  'max': 0.6,    'typical': 0.3},
-    'h_z_thick_kpc':       {'min': 0.6,  'max': 1.3,    'typical': 0.9},
-    'h_z_gas_kpc':         {'min': 0.05, 'max': 0.3,    'typical': 0.15},
+    'h_z_thin_kpc':        {'min': 0.15, 'max': 0.8,    'typical': 0.3},    # Was 0.2-0.6
+    'h_z_thick_kpc':       {'min': 0.5,  'max': 1.5,    'typical': 0.9},    # Was 0.6-1.3
+    'h_z_gas_kpc':         {'min': 0.05, 'max': 0.4,    'typical': 0.15},   # Was 0.05-0.3
 
-    # Total mass constraint
+    # Other parameters
     'M_total':             {'min': 5e10, 'max': 2e11,   'typical': 1e11},
-
-    # Density parameters
-    'rho_c_solar_kpc3':    {'min': 1e8,  'max': 2e9,    'typical': 1.66e9},
-    'n_exp':               {'min': 0.5,  'max': 2.5,    'typical': 1.5},
+    'rho_c_solar_kpc3':    {'min': 1e7,  'max': 1e10,   'typical': 5e8},    # Was 5e7-5e9
+    'n_exp':               {'min': 0.5,  'max': 4.0,    'typical': 2.7},
 }
 
 # Expected ranges for validation
@@ -186,7 +202,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
     'n_exp': {
         'label': "n", 
         'fixed_val_from_arg': 'n_exp_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['n_exp']['typical'],
+        'default_fixed': 2.7,  # Update to theoretical value
         'low': PHYSICAL_BOUNDS['n_exp']['min'], 
         'high': PHYSICAL_BOUNDS['n_exp']['max'], 
         'fit_flag_arg': 'fit_xi_params',
@@ -920,8 +936,10 @@ def enhanced_monitor_sampler_progress(
                     dashboard_state["parameter_uncertainties"][name] = float(np.std(recent_samples[:, i]))
 
                 dashboard_state = make_json_serializable(dashboard_state)
-                dashboard_monitor.update_progress(dashboard_state)
-
+                try:
+                    dashboard_monitor.update_progress(dashboard_state)
+                except Exception as e:
+                    logger.warning(f"⚠️ Dashboard update failed: {e}")
 
             except Exception as e:
                 logger.error(f"Failed to update dashboard: {e}")
@@ -1130,11 +1148,6 @@ def log_likelihood_dynesty(
                 current_params_full_dict[p_details_cfg['include_flag_arg']] = \
                     getattr(args_dynesty_obj, p_details_cfg['include_flag_arg'])
         current_params_full_dict['include_bulge_density'] = args_dynesty_obj.include_bulge
-    
-    # Hard constraint: R_d_thick must be > R_d_thin
-    if 'R_d_thick_kpc' in current_params_full_dict and 'R_d_thin_kpc' in current_params_full_dict:
-        if current_params_full_dict['R_d_thick_kpc'] <= current_params_full_dict['R_d_thin_kpc'] * 1.1:
-            return -np.inf, [np.inf]  # Hard reject: violates expected scale hierarchy
 
         
     # Calculate model prediction
@@ -1196,6 +1209,28 @@ def log_likelihood_dynesty(
     
     log_L = -0.5 * np.sum(log_L_terms)
     
+        # Calculate standard Gaussian likelihood FIRST
+    chi_squared_terms = (residuals / sigma_data_safe)**2
+    log_L_terms = chi_squared_terms + np.log(2 * np.pi * sigma_data_safe**2)
+    
+    if not np.all(np.isfinite(log_L_terms)): 
+        return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
+    
+    log_L = -0.5 * np.sum(log_L_terms)
+    
+    # Soft constraint: R_d_thick should be > R_d_thin
+    if 'R_d_thick_kpc' in current_params_full_dict and 'R_d_thin_kpc' in current_params_full_dict:
+        if current_params_full_dict['R_d_thick_kpc'] < current_params_full_dict['R_d_thin_kpc']:
+            # Just a penalty, not hard rejection
+            log_L -= 100.0  # Penalty instead of -inf
+    
+    # Soft prior: prefer reasonable thick/thin disk mass ratio
+    if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
+        ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
+        if ratio > 0.5:
+            penalty = -50 * (ratio - 0.5)**2  # Apply a soft Gaussian penalty
+            log_L += penalty
+    
     # Soft prior: prefer reasonable thick/thin disk mass ratio
     if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
         ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
@@ -1219,6 +1254,7 @@ def v_model_for_dynesty(
     xi_type_str: str,
     ARGS_obj_dynesty: argparse.Namespace
 ) -> np.ndarray:
+
     """
     Calculate model velocities with density-dependent modification.
     
@@ -1283,6 +1319,23 @@ def v_model_for_dynesty(
 
     # Select ξ(ρ) function
     xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
+    
+    # For functions that need extra parameters, wrap them:
+    if xi_type_str == 'enhanced':
+        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp, 8.0)
+    elif xi_type_str == 'grav_color':
+        # Gravitational color confinement with theoretical values
+        gamma = getattr(ARGS_obj_dynesty, 'fix_gamma', None) or n_exp
+        lambda_g = getattr(ARGS_obj_dynesty, 'fix_lambda_g', None) or 8.0
+        
+        # You'll need to import or define xi_gravitational_color
+        from density_metric2 import xi_gravitational_color
+        xi_raw = xi_gravitational_color(rho_midplane_for_xi, rho_c_solar_kpc3, gamma, lambda_g)
+    elif xi_type_str in ['mond', 'exp_enhance']:
+        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
+    else:
+        # Standard 3-parameter call
+        xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
 
     # Add XI verification logging (only once per process)
     if not hasattr(v_model_for_dynesty, "_has_logged_xi"):
@@ -1330,6 +1383,85 @@ def v_model_for_dynesty(
 
     return v_mod_kms
 
+
+#!/usr/bin/env python3
+"""
+Debug patch to add to your run_dynesty.py to diagnose the crash.
+Add these modifications to your existing code.
+"""
+
+# 1. Add this debug version of log_likelihood_dynesty right after the original:
+
+def log_likelihood_dynesty_debug(
+    theta_values_fitted: np.ndarray,
+    fitted_param_names: List[str],
+    args_dynesty_obj: argparse.Namespace,
+    all_param_info_list: List[Dict],
+    R_data: np.ndarray,
+    v_data: np.ndarray,
+    sigma_data: np.ndarray,
+    xi_type: str,
+    gp_surrogate=None
+) -> Tuple[float, List[float]]:
+    """Debug version with extensive logging"""
+    
+    # Get logger safely for multiprocessing
+    logger = get_or_create_logger()
+    
+    # First check if we have valid data
+    if R_data is None or len(R_data) == 0:
+        logger.error("ERROR: R_data is None or empty!")
+        return -np.inf, [np.inf]
+    
+    # First check if we have valid data
+    if R_data is None or len(R_data) == 0:
+        logger.error("ERROR: R_data is None or empty!")
+        return -np.inf, [np.inf]
+    
+    if v_data is None or len(v_data) == 0:
+        logger.error("ERROR: v_data is None or empty!")
+        return -np.inf, [np.inf]
+    
+    if sigma_data is None or len(sigma_data) == 0:
+        logger.error("ERROR: sigma_data is None or empty!")
+        return -np.inf, [np.inf]
+    
+    # Log first few data points
+    if not hasattr(log_likelihood_dynesty_debug, '_logged_data'):
+        logger.info(f"DEBUG: Data shapes - R: {R_data.shape}, v: {v_data.shape}, sigma: {sigma_data.shape}")
+        logger.info(f"DEBUG: First 5 R values: {R_data[:5]}")
+        logger.info(f"DEBUG: First 5 v values: {v_data[:5]}")
+        logger.info(f"DEBUG: First 5 sigma values: {sigma_data[:5]}")
+        logger.info(f"DEBUG: R range: [{np.min(R_data):.2f}, {np.max(R_data):.2f}]")
+        logger.info(f"DEBUG: v range: [{np.min(v_data):.2f}, {np.max(v_data):.2f}]")
+        log_likelihood_dynesty_debug._logged_data = True
+    
+    # Now call the original function
+    return log_likelihood_dynesty(
+        theta_values_fitted, fitted_param_names, args_dynesty_obj,
+        all_param_info_list, R_data, v_data, sigma_data, xi_type, gp_surrogate
+    )
+
+def check_prior_bounds_compatibility(args):
+    """Check if prior bounds are compatible with constraints"""
+    
+    if args.fit_disk_thin and args.fit_disk_thick:
+        # Check R_d constraint compatibility
+        R_d_thin_max = MW_MULTI_COMP_PARAM_CONFIG['R_d_thin_kpc']['high']
+        R_d_thick_min = MW_MULTI_COMP_PARAM_CONFIG['R_d_thick_kpc']['low']
+        
+        if R_d_thin_max * 1.1 > R_d_thick_min:
+            logger.warning(f"WARNING: Prior bounds may be incompatible!")
+            logger.warning(f"  R_d_thin can go up to {R_d_thin_max} kpc")
+            logger.warning(f"  R_d_thick must be > {R_d_thin_max * 1.1:.2f} kpc")
+            logger.warning(f"  But R_d_thick minimum is {R_d_thick_min} kpc")
+            logger.warning("  Consider adjusting bounds or constraint")
+            
+            # Suggest fix
+            new_R_d_thin_max = R_d_thick_min / 1.1
+            logger.warning(f"  Suggestion: Set R_d_thin_kpc max to {new_R_d_thin_max:.2f}")
+
+    
 
 # ============================================================================
 # Parameter Configuration Functions
@@ -1638,6 +1770,118 @@ class GPSurrogateModel:
             'n_training_points': len(self.X_train)
         }
 
+# ============================================================================
+# Data Validation
+# ============================================================================
+
+
+def validate_gaia_data_for_fitting(gaia_data_dict):
+    """Validate Gaia data before fitting"""
+    logger.info("\n" + "="*60)
+    logger.info("VALIDATING GAIA DATA FOR FITTING")
+    logger.info("="*60)
+    
+    R = gaia_data_dict['R_kpc']
+    v = gaia_data_dict['v_obs']
+    sigma = gaia_data_dict['sigma_v']
+    
+    # Basic checks
+    n_stars = len(R)
+    logger.info(f"Number of stars: {n_stars}")
+    
+    if n_stars < 100:
+        logger.error(f"ERROR: Only {n_stars} stars! Need at least 100 for reliable fit.")
+        return False
+    
+    # Check for NaN/inf
+    n_bad_R = np.sum(~np.isfinite(R))
+    n_bad_v = np.sum(~np.isfinite(v))
+    n_bad_sigma = np.sum(~np.isfinite(sigma))
+    
+    if n_bad_R + n_bad_v + n_bad_sigma > 0:
+        logger.error(f"ERROR: Found non-finite values - R: {n_bad_R}, v: {n_bad_v}, sigma: {n_bad_sigma}")
+        return False
+    
+    # Check ranges
+    logger.info(f"R range: [{R.min():.2f}, {R.max():.2f}] kpc")
+    logger.info(f"v range: [{v.min():.1f}, {v.max():.1f}] km/s")
+    logger.info(f"sigma range: [{sigma.min():.1f}, {sigma.max():.1f}] km/s")
+    
+    # Check for outliers
+    v_median = np.median(v)
+    v_mad = np.median(np.abs(v - v_median))
+    outliers = np.abs(v - v_median) > 5 * v_mad
+    n_outliers = np.sum(outliers)
+    
+    if n_outliers > 0.1 * n_stars:
+        logger.warning(f"WARNING: {n_outliers} velocity outliers ({n_outliers/n_stars*100:.1f}%)")
+    
+    # Check error distribution
+    sigma_median = np.median(sigma)
+    if sigma_median < 1.0:
+        logger.warning(f"WARNING: Median error {sigma_median:.1f} km/s seems too small")
+    elif sigma_median > 50.0:
+        logger.warning(f"WARNING: Median error {sigma_median:.1f} km/s seems too large")
+    
+    # Radial coverage
+    R_bins = np.histogram(R, bins=[0, 5, 8, 12, 20, 30])[0]
+    logger.info("Radial distribution:")
+    bin_labels = ["0-5", "5-8", "8-12", "12-20", "20-30"]
+    for i, (label, count) in enumerate(zip(bin_labels, R_bins)):
+        logger.info(f"  {label} kpc: {count} stars")
+        if count < 10:
+            logger.warning(f"  WARNING: Very few stars in {label} kpc bin!")
+    
+    return True
+
+
+def test_likelihood_at_typical_params(args, gaia_data):
+    """Test likelihood at typical parameter values"""
+    logger.info("\n" + "="*60)
+    logger.info("TESTING LIKELIHOOD AT TYPICAL PARAMETERS")
+    logger.info("="*60)
+    
+    # Get parameter configuration
+    fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = \
+        get_param_labels_and_bounds(args)
+    
+    # Set all parameters to typical values
+    typical_params = []
+    for name in fitted_p_names:
+        if name in PHYSICAL_BOUNDS:
+            typical_params.append(PHYSICAL_BOUNDS[name]['typical'])
+        else:
+            # Use middle of prior range
+            idx = fitted_p_names.index(name)
+            typical_params.append((p_low[idx] + p_high[idx]) / 2)
+    
+    typical_params = np.array(typical_params)
+    
+    logger.info("Typical parameters:")
+    for name, val in zip(fitted_p_names, typical_params):
+        logger.info(f"  {name}: {val:.3e}")
+    
+    # Evaluate likelihood
+    logl_args_tuple = (fitted_p_names, args, args.all_param_info_list,
+                       gaia_data['R_kpc'], gaia_data['v_obs'], gaia_data['sigma_v'],
+                       args.xi, None)
+    
+    log_L, blob = log_likelihood_dynesty(typical_params, *logl_args_tuple)
+    
+    logger.info(f"\nLog-likelihood at typical params: {log_L:.1f}")
+    logger.info(f"RMSE: {blob[0]:.1f} km/s")
+    
+    if log_L == -np.inf:
+        logger.error("ERROR: Typical parameters give -inf likelihood!")
+        logger.error("This suggests a fundamental problem with the model or data.")
+        return False
+    
+    if log_L < -1e6:
+        logger.warning(f"WARNING: Very negative log-likelihood ({log_L:.1e})")
+        logger.warning("Model may be incompatible with data.")
+    
+    return True
+
 
 # ============================================================================
 # Curriculum Learning Implementation
@@ -1848,19 +2092,43 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     from io import StringIO
     global convergence_tracker
 
-
     # Extract data
     R_data_for_run = gaia_data_dict["R_kpc"]
     v_data_for_run = gaia_data_dict["v_obs"]
     sigma_data_for_run = gaia_data_dict["sigma_v"]
-
-    # Get parameter configuration
+    
+    logger.info(f"DEBUG: Loaded {len(R_data_for_run)} data points")
+    logger.info(f"DEBUG: R range: [{np.min(R_data_for_run):.2f}, {np.max(R_data_for_run):.2f}] kpc")
+    logger.info(f"DEBUG: v range: [{np.min(v_data_for_run):.2f}, {np.max(v_data_for_run):.2f}] km/s")
+    logger.info(f"DEBUG: sigma range: [{np.min(sigma_data_for_run):.2f}, {np.max(sigma_data_for_run):.2f}] km/s")
+    
+    # Check for any invalid values
+    if np.any(~np.isfinite(R_data_for_run)):
+        logger.error(f"ERROR: Found {np.sum(~np.isfinite(R_data_for_run))} non-finite R values!")
+    if np.any(~np.isfinite(v_data_for_run)):
+        logger.error(f"ERROR: Found {np.sum(~np.isfinite(v_data_for_run))} non-finite v values!")
+    if np.any(~np.isfinite(sigma_data_for_run)):
+        logger.error(f"ERROR: Found {np.sum(~np.isfinite(sigma_data_for_run))} non-finite sigma values!")
+    
+    # Get parameter configuration FIRST (before trying to use p0_guess!)
     fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = \
         get_param_labels_and_bounds(args)
     ndim_dynesty = len(fitted_p_names)
     convergence_tracker = ConvergenceTracker(fitted_p_names)
 
     logger.info(f"Dynesty fitting {ndim_dynesty} parameters: {fitted_p_names}")
+    
+    # NOW we can test the likelihood function with initial parameters
+    logger.info("DEBUG: Testing likelihood function with initial parameters...")
+    test_logl, test_blob = log_likelihood_dynesty_debug(
+        p0_guess, fitted_p_names, args, args.all_param_info_list,
+        R_data_for_run, v_data_for_run, sigma_data_for_run, args.xi, None
+    )
+    logger.info(f"DEBUG: Test log-likelihood = {test_logl}, RMSE = {test_blob[0]}")
+    
+    if test_logl == -np.inf:
+        logger.error("ERROR: Initial parameters give -inf likelihood! Check your model or data.")
+        # Don't continue if initial params are bad
 
     # Validate initial guess
     is_valid, reason = check_physical_plausibility(p0_guess, fitted_p_names, args)
@@ -1913,20 +2181,32 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     # Sampler
     logger.info(f"Sampler configuration: method='{args.sample_method}', "
                 f"bound='{args.bound_method}', enlarge={args.enlarge_factor}")
-    sampler = DynamicNestedSampler(
-        log_likelihood_dynesty,
-        prior_transform_dynesty,
-        ndim_dynesty,
-        pool=pool_obj,
-        queue_size=queue_size_for_sampler,
-        sample=args.sample_method,
-        bound=args.bound_method,
-        enlarge=args.enlarge_factor,
-        ptform_args=ptform_args_tuple,
-        logl_args=logl_args_tuple,
-        blob=True,
-        walks=args.walks
-    )
+
+    try:
+        # In run_single_dynesty, wrap the sampler creation in try/except:
+        logger.info("Creating sampler...")
+        sampler = DynamicNestedSampler(
+            log_likelihood_dynesty_debug,  # Use debug version temporarily
+            prior_transform_dynesty,
+            ndim_dynesty,
+            pool=pool_obj,
+            queue_size=queue_size_for_sampler,
+            sample=args.sample_method,
+            bound=args.bound_method,
+            enlarge=args.enlarge_factor,
+            ptform_args=ptform_args_tuple,
+            logl_args=logl_args_tuple,
+            blob=True,
+            walks=args.walks
+        )
+        logger.info("Sampler created successfully")
+        
+    except Exception as e:
+        logger.error(f"ERROR creating sampler: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
+
     # Safely restore saved_logz if res already populated (e.g. checkpoint resume)
     try:
         if hasattr(sampler, 'results') and hasattr(sampler.results, 'logz') and len(sampler.results.logz) >= 2:
@@ -1937,12 +2217,10 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         print(f"WARNING: Could not initialize saved_logz: {e}")
         sampler.saved_logz = []
 
-
     run_start_time = time.time()
     checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
 
-    convergence_tracker = ConvergenceTracker(fitted_p_names)
-
+    # Rest of the function continues as before...
     if args.use_run_nested:
         # Built-in run_nested
         logger.info(f"Using run_nested() with nlive_init={args.nlive_init}, dlogz={args.dlogz_target}")
@@ -2131,7 +2409,9 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                 pool_obj.join()
             
             return None
-
+    
+    # Return the results if we get here
+    return sampler.results
 
 # ============================================================================
 # Main Entry Point
@@ -2160,11 +2440,16 @@ def main_dynesty():
         description="Enhanced Dynesty sampler for Density-Metric model with physical constraints",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument('--resume', action='store_true', default=False,
+                    help="Resume from checkpoint in output_dir/dynesty_checkpoint.pkl")
+
+    
     
     # Basic settings
     parser.add_argument('--xi', type=str, default='power',
-                    choices=['power', 'logistic', 'enhanced'],
+                    choices=['power', 'logistic', 'enhanced', 'grav_color'],  # ADD 'grav_color'
                     help="Choice of xi(ρ) function")
+
     parser.add_argument('--max_sample_gaia', type=int, default=10000,
                        help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty",
@@ -2228,6 +2513,12 @@ def main_dynesty():
                     help="Factor for tightening bounds around previous best (0.1 = 10% window)")
     parser.add_argument('--disable_dashboard', action='store_true', default=False,
                     help="Disable dashboard monitoring to avoid JSON errors")
+    ai_g.add_argument('--fix_gamma', type=float, default=None,
+                  help="Fix gamma exponent (theory predicts 2.7)")
+    ai_g.add_argument('--fix_lambda_g', type=float, default=None,
+                    help="Fix lambda_g enhancement factor (theory predicts 8.0)")
+    ai_g.add_argument('--theory_mode', action='store_true', default=False,
+                    help="Use theoretical values: gamma=2.7, lambda_g=8.0")
     
     # Model configuration
     mw_model_g = parser.add_argument_group('Model Components')
@@ -2260,6 +2551,75 @@ def main_dynesty():
     # Parse arguments
     args = parser.parse_args()
     args.fit_target = 'milkyway'  # Currently only MW supported
+    
+    if args.theory_mode:
+        logger.info("🧪 THEORY MODE: Using gravitational color confinement values")
+        args.fix_gamma = 2.7
+        args.fix_lambda_g = 8.0
+        args.n_exp_fixed = 2.7  # Fix n_exp to theoretical gamma
+        
+        # Only fit rho_c
+        logger.info("   γ (gamma) = 2.7 (fixed from β_g = -11/3)")
+        logger.info("   λ (lambda_g) = 8.0 (fixed for 9x enhancement)")
+        logger.info("   Only fitting ρ_c (critical density)")
+
+    check_prior_bounds_compatibility(args)
+    
+    # Resume checkpoint logic
+    if args.resume:
+        checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
+        if not checkpoint_file.exists():
+            logger.error(f"❌ No checkpoint found at: {checkpoint_file}")
+            sys.exit(1)
+
+        logger.info(f"🔄 Resuming from checkpoint: {checkpoint_file}")
+
+        # === Rebuild parameter config ===
+        fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = \
+            get_param_labels_and_bounds(args)
+
+        # === Wrap likelihood and prior with fixed arguments ===
+        logl_args = (
+            fitted_p_names, args, args.all_param_info_list,
+            None, None, None,  # placeholder for R, v_obs, sigma — will be loaded anyway
+            args.xi, None
+        )
+        ptform_args = (fitted_p_names, np.array(p_low), np.array(p_high), use_log_flags)
+
+        log_likelihood = lambda theta: log_likelihood_dynesty(theta, *logl_args)
+        prior_transform = lambda u: prior_transform_dynesty(u, *ptform_args)
+
+        # === Create sampler with wrapped callables ===
+        sampler = DynamicNestedSampler(
+            log_likelihood,
+            prior_transform,
+            ndim=len(fitted_p_names),
+            sample=args.sample_method,
+            bound=args.bound_method,
+            enlarge=args.enlarge_factor,
+            blob=True,
+            walks=args.walks
+        )
+
+        # === Restore state ===
+        sampler.restore(str(checkpoint_file))
+        logger.info("✅ Checkpoint loaded. Continuing sampler...")
+
+        # === Resume sampling ===
+        sampler.run_nested(
+            nlive_init=args.nlive_init,
+            nlive_batch=args.nlive_batch,
+            dlogz_init=args.dlogz_target,
+            maxcall=args.maxcall,
+            print_progress=True,
+            checkpoint_file=str(checkpoint_file),
+            checkpoint_every=args.checkpoint_every
+        )
+
+        logger.info("✅ Resumed Dynesty run completed.")
+        return
+
+
 
     
     # Safety check: previous results file must exist if using previous best
@@ -2340,6 +2700,20 @@ def main_dynesty():
             )
         
         gp_surrogate.generate_initial_training_data(physics_wrapper, args)
+        
+    # Validate data
+    if not validate_gaia_data_for_fitting(gaia_data_dict):
+        logger.error("Data validation failed! Check your Gaia data.")
+        sys.exit(1)
+    
+    # Test likelihood function
+    if not test_likelihood_at_typical_params(args, gaia_data_dict):
+        logger.error("Likelihood test failed! Model may be incompatible with data.")
+        logger.error("Suggestions:")
+        logger.error("1. Check that data units match model expectations")
+        logger.error("2. Try simpler model (fewer components)")
+        logger.error("3. Check xi function is behaving correctly")
+        sys.exit(1)
     
     # Run sampling
     if args.use_curriculum_learning:

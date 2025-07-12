@@ -269,52 +269,154 @@ def xi_power_law(rho, rho_c, n_exp):
 
     return result_arr
 
-@vectorize([float64(float64, float64, float64, float64)], nopython=True)
+@nb.njit(cache=True)
 def xi_enhanced_bounded(rho, rho_c, n, A=1.0):
     """
     Enhanced gravity at low density, bounded maximum
-    ξ → 1 as ρ → ∞ (normal gravity in dense regions)
+    ξ → 1 as ρ → ∞ (normal gravity in dense regions)  
     ξ → 1+A as ρ → 0 (enhanced gravity in voids)
     """
-    val = 1.0 + A / (1.0 + (rho / rho_c)**n)
-    return np.maximum(1e-3, np.minimum(val, 2.0))  # Numba-safe
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    ratio = rho_arr / rho_c
+    result = 1.0 + A / (1.0 + np.power(ratio, n))
+    
+    # Clip to reasonable bounds
+    result = np.maximum(result, 1e-3)
+    result = np.minimum(result, 1.0 + A)  # <-- CHANGE THIS LINE! 
+    # With A=8, this allows up to ξ=9
+    
+    return result
 
-def xi_enhanced(rho, rho_c, n_exp):
+
+@nb.njit(cache=True)
+def xi_gravitational_color(rho, rho_c, gamma, lambda_g=8.0):
     """
-    Enhanced xi(ρ) = 1 / (1 + (rho / rho_c)^n), safely handles scalars and arrays.
+    Gravitational color confinement model
+    ξ = 1 + λ*exp(-(ρ/ρ_c)^γ)
+    
+    Theory predicts:
+    - λ ≈ 8 (for 9x total enhancement in voids)
+    - γ ≈ 2.7 (from β_g = -11/3 in QCD analogy)
     """
-    try:
-        # Force numpy array for vectorized operation
-        rho_arr = np.asarray(rho, dtype=np.float64)
-        xi_vals = 1.0 / (1.0 + (rho_arr / rho_c)**n_exp)
-        
-        # Return scalar if input was scalar
-        if np.isscalar(rho) or np.ndim(rho) == 0:
-            return float(xi_vals)
-        return xi_vals
-    except Exception as e:
-        print(f"❌ Error in xi_enhanced: {e}")
-        if np.isscalar(rho) or np.ndim(rho) == 0:
-            return float('nan')
-        return np.full_like(rho, np.nan, dtype=np.float64)
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    ratio = rho_arr / rho_c
+    exp_arg = -np.power(ratio, gamma)
+    
+    # Clip to prevent overflow
+    exp_arg = np.maximum(exp_arg, -700.0)
+    
+    # This gives total G_eff/G_N
+    result = 1.0 + lambda_g * np.exp(exp_arg)
+    
+    # Safety bounds (but allow up to ~10x enhancement)
+    result = np.maximum(result, 0.1)
+    result = np.minimum(result, 10.0)
+    
+    return result
 
-
-@njit
+@nb.njit(cache=True)
 def xi_mond_like(rho, rho_c, n):
     """
     MOND-inspired enhancement
     ξ → 1 as ρ → ∞
     ξ → sqrt(1 + (ρ_c/ρ)^n) as ρ → 0
     """
-    return np.sqrt(1.0 + (rho_c/rho)**n)
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    # Avoid division by zero
+    rho_safe = np.maximum(rho_arr, 1e-30)
+    ratio = rho_c / rho_safe
+    
+    result = np.sqrt(1.0 + np.power(ratio, n))
+    
+    # Cap maximum enhancement
+    result = np.minimum(result, 10.0)
+    
+    return result
 
-@njit  
-def xi_enhanced_exp(rho, rho_c, n):
+@nb.njit(cache=True)
+def xi_enhanced_exp(rho, rho_c, n, A=1.0):
     """
     Exponential enhancement at low density
-    ξ = exp(-(ρ/ρ_c)^n)
+    ξ = 1 + A*exp(-(ρ/ρ_c)^n)
     """
-    return np.exp(-(rho/rho_c)**n) + 1.0
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    ratio = rho_arr / rho_c
+    exp_arg = -np.power(ratio, n)
+    
+    # Clip to prevent overflow
+    exp_arg = np.maximum(exp_arg, -700.0)
+    
+    result = 1.0 + A * np.exp(exp_arg)
+    
+    return result
+
+def test_xi_functions():
+    """Test that xi functions enhance/suppress correctly"""
+    test_rho = np.array([1e6, 1e8, 1e10])  # Low, medium, high density
+    rho_c = 5e8
+    n = 1.5
+    
+    print("\nXi Function Test (ρ_c=5e8, n=1.5):")
+    print("ρ (M☉/kpc³) | power | enhanced | mond | exp")
+    print("-" * 60)
+    
+    for rho in test_rho:
+        xi_p = xi_power_law(rho, rho_c, n)[0]
+        xi_e = xi_enhanced_bounded(rho, rho_c, n, 1.0)[0]
+        xi_m = xi_mond_like(rho, rho_c, n)[0]
+        xi_x = xi_enhanced_exp(rho, rho_c, n, 1.0)[0]
+        
+        print(f"{rho:.1e} | {xi_p:.3f} | {xi_e:.3f} | {xi_m:.3f} | {xi_x:.3f}")
+    
+    print("\nExpected behavior:")
+    print("- power: HIGH at low ρ (wrong!), LOW at high ρ")
+    print("- enhanced: HIGH at low ρ (✓), NORMAL at high ρ")
+    print("- mond: HIGH at low ρ (✓), NORMAL at high ρ")
+    print("- exp: HIGH at low ρ (✓), NORMAL at high ρ")
+
+
+@nb.njit(cache=True)
+def xi_gravitational_color(rho, rho_c, gamma, lambda_g=8.0):
+    """
+    Gravitational color confinement model
+    ξ = 1 + λ*exp(-(ρ/ρ_c)^γ)
+    
+    Theory predicts:
+    - λ ≈ 8 (for 9x total enhancement in voids)
+    - γ ≈ 2.7 (from β_g = -11/3 in QCD analogy)
+    - ρ_c ≈ 10^-26 kg/m³ ≈ 10^8 M☉/kpc³
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    ratio = rho_arr / rho_c
+    exp_arg = -np.power(ratio, gamma)
+    
+    # Clip to prevent overflow
+    exp_arg = np.maximum(exp_arg, -700.0)
+    
+    # This gives total G_eff/G_N
+    result = 1.0 + lambda_g * np.exp(exp_arg)
+    
+    return result
 
 @nb.njit(cache=True)
 def xi_logistic_law(rho, rho_c, n_exp):
@@ -406,10 +508,11 @@ def v_model_for_dynesty_anisotropic(R_kpc_array, p_all_params_dict, ARGS_obj_dyn
 
 XI_FUNCTION_MAP = {
     'power': xi_power_law,
-    'enhanced': xi_enhanced,  # ✅ now safe: uses 3 args
+    'enhanced': xi_enhanced_bounded,
     'mond': xi_mond_like,
     'exp_enhance': xi_enhanced_exp,
-    'logistic': xi_logistic_law
+    'logistic': xi_logistic_law,
+    'grav_color': xi_gravitational_color  # ADD THIS
 }
 
 
