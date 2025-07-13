@@ -315,32 +315,6 @@ def xi_gravitational_color(rho, rho_c, gamma, lambda_g):
     
     return result
 
-@nb.njit(cache=True)
-def xi_gravitational_color_galaxy(rho, rho_c, gamma, lambda_g=1.5):
-    """
-    Gravitational color model tuned for galaxy rotation curves.
-    
-    For galaxies:
-    - λ_g ≈ 1-2 (not 8!) for realistic enhancement
-    - ρ_c ≈ 1e6-1e7 M☉/kpc³ for transition in outer disk
-    - γ ≈ 2-3 for smooth transition
-    
-    For cosmology (voids):
-    - λ_g ≈ 8 for strong enhancement
-    - ρ_c ≈ 1e3-1e4 M☉/kpc³ for cosmic voids
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    ratio = rho_arr / rho_c
-    exp_arg = -np.power(ratio, gamma)
-    exp_arg = np.maximum(exp_arg, -700.0)  # Prevent underflow
-    
-    result = 1.0 + lambda_g * np.exp(exp_arg)
-    
-    return result
 
 # Test the behavior
 def test_galaxy_xi():

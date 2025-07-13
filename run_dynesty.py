@@ -225,8 +225,8 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'label': "R_d_thin (kpc)", 
         'fixed_val_from_arg': 'R_d_thin_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['R_d_thin_kpc']['typical'],
-        'low': PHYSICAL_BOUNDS['R_d_thin_kpc']['min'], 
-        'high': PHYSICAL_BOUNDS['R_d_thin_kpc']['max'], 
+        'low': 1.5,    # Keep as is
+        'high': 3.5,   # Reduced from 5.0
         'fit_flag_arg': 'fit_disk_thin', 
         'include_flag_arg': 'include_disk_thin',
         'log_prior': False,
@@ -258,8 +258,8 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'label': "R_d_thick (kpc)", 
         'fixed_val_from_arg': 'R_d_thick_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['R_d_thick_kpc']['typical'],
-        'low': PHYSICAL_BOUNDS['R_d_thick_kpc']['min'], 
-        'high': PHYSICAL_BOUNDS['R_d_thick_kpc']['max'], 
+        'low': 4.0,    # Increased from 2.5
+        'high': 8.0,   # Keep as is
         'fit_flag_arg': 'fit_disk_thick', 
         'include_flag_arg': 'include_disk_thick',
         'log_prior': False,
@@ -1044,9 +1044,27 @@ def enhanced_monitor_sampler_progress(
         try:
             v_newton_solar = v_baryon_total_newtonian_kms(np.array([R_SUN_KPC]), full_params)[0]
             rho_solar = rho_baryon_total_midplane_solar_kpc3(np.array([R_SUN_KPC]), full_params)[0]
-            xi_func = XI_FUNCTION_MAP.get(args_obj.xi, xi_power_law)
-            xi_result = xi_func(rho_solar, full_params['rho_c_solar_kpc3'], full_params['n_exp'])
-            xi_solar = xi_result[0] if hasattr(xi_result, '__getitem__') else float(xi_result)
+            
+            # Calculate xi based on the selected function type
+            if args_obj.xi == 'grav_color':
+                # grav_color needs four arguments
+                from density_metric2 import xi_gravitational_color
+                xi_result = xi_gravitational_color(
+                    rho_solar,
+                    full_params['rho_c_solar_kpc3'],
+                    full_params.get('gamma_exp', 2.0),
+                    full_params.get('lambda_g', 1.5)
+                )
+                xi_solar = xi_result[0] if hasattr(xi_result, '__getitem__') else float(xi_result)
+            else:
+                xi_func = XI_FUNCTION_MAP.get(args_obj.xi, xi_power_law)
+                xi_result = xi_func(
+                    rho_solar,
+                    full_params['rho_c_solar_kpc3'],
+                    full_params.get('n_exp', 2.0)
+                )
+                xi_solar = xi_result[0] if hasattr(xi_result, '__getitem__') else float(xi_result)
+            
             v_model_solar = v_newton_solar * np.sqrt(xi_solar)
 
             logger.info(f"   v_Newton(R☉) = {v_newton_solar:.1f} km/s")
@@ -1324,10 +1342,6 @@ def log_likelihood_dynesty(
 
     log_L = -0.5 * np.sum(log_L_terms)
 
-    if 'R_d_thick_kpc' in current_params_full_dict and 'R_d_thin_kpc' in current_params_full_dict:
-        if current_params_full_dict['R_d_thick_kpc'] < current_params_full_dict['R_d_thin_kpc']:
-            log_L -= 100.0
-
     if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
         ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
         if ratio > 0.5:
@@ -1569,6 +1583,32 @@ def log_likelihood_dynesty_debug(
         logger.error("ERROR: sigma_data is None or empty!")
         return -np.inf, [np.inf]
     
+    # Hard constraint: thick disk scale length must be > thin disk scale length
+    if ('R_d_thick_kpc' in fitted_param_names and 'R_d_thin_kpc' in fitted_param_names):
+        idx_thick = fitted_param_names.index('R_d_thick_kpc')
+        idx_thin = fitted_param_names.index('R_d_thin_kpc')
+        R_d_thick = theta_values_fitted[idx_thick]
+        R_d_thin = theta_values_fitted[idx_thin]
+        
+        if R_d_thick < 1.05 * R_d_thin:
+            if debug_counter < DEBUG_COUNTER_MAX:
+                logger.warning(f"Rejecting: R_d_thick ({R_d_thick:.2f}) < 1.05 * R_d_thin ({R_d_thin:.2f})")
+                debug_counter += 1
+            return -np.inf, [np.inf]
+
+    # Hard constraint: thick disk scale height must be > thin disk scale height
+    if ('h_z_thick_kpc' in fitted_param_names and 'h_z_thin_kpc' in fitted_param_names):
+        idx_h_thick = fitted_param_names.index('h_z_thick_kpc')
+        idx_h_thin = fitted_param_names.index('h_z_thin_kpc')
+        h_z_thick = theta_values_fitted[idx_h_thick]
+        h_z_thin = theta_values_fitted[idx_h_thin]
+        
+        if h_z_thick < 2.0 * h_z_thin:
+            if debug_counter < DEBUG_COUNTER_MAX:
+                logger.warning(f"Rejecting: h_z_thick ({h_z_thick:.3f}) < 2 * h_z_thin ({h_z_thin:.3f})")
+                debug_counter += 1
+            return -np.inf, [np.inf]
+        
     # Log first few data points
     if not hasattr(log_likelihood_dynesty_debug, '_logged_data'):
         logger.info(f"DEBUG: Data shapes - R: {R_data.shape}, v: {v_data.shape}, sigma: {sigma_data.shape}")

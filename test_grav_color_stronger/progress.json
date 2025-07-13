@@ -1,0 +1,58 @@
+{
+  "timestamp": "2025-07-12T17:44:08.235919",
+  "elapsed_time": 0.16900867468780942,
+  "n_samples": 5609,
+  "n_calls": 190433,
+  "efficiency": 2.945392867832781,
+  "logz": -202076.68161273678,
+  "logz_err": 0.11347477919608251,
+  "dlogz": 5694.674444460106,
+  "current_nlive": 0,
+  "parameter_estimates": {
+    "M_disk_thin_solar": 59144399923.16461,
+    "R_d_thin_kpc": 3.3189871905959265,
+    "h_z_thin_kpc": 0.39604272672078233,
+    "M_disk_thick_solar": 14430894614.178093,
+    "R_d_thick_kpc": 5.087537496818673,
+    "h_z_thick_kpc": 0.9856208891239844,
+    "M_bulge_solar": 14075628659.997904,
+    "a_bulge_kpc": 1.079929480318093,
+    "M_gas_solar": 37939194559.5509,
+    "R_d_gas_kpc": 8.076436818252132,
+    "h_z_gas_kpc": 0.07484962669243087
+  },
+  "parameter_uncertainties": {
+    "M_disk_thin_solar": 13122708601.299528,
+    "R_d_thin_kpc": 0.8626602497449456,
+    "h_z_thin_kpc": 0.1985737753037417,
+    "M_disk_thick_solar": 7207342730.00827,
+    "R_d_thick_kpc": 1.6076598149713088,
+    "h_z_thick_kpc": 0.28544808046446773,
+    "M_bulge_solar": 7447285129.356422,
+    "a_bulge_kpc": 0.5296558418018553,
+    "M_gas_solar": 9545512594.777628,
+    "R_d_gas_kpc": 3.013279955045596,
+    "h_z_gas_kpc": 0.0391056282204989
+  },
+  "convergence_status": {
+    "converged": false,
+    "near_convergence": false,
+    "dlogz": 5694.674444460106,
+    "efficiency_ok": true,
+    "stuck": false
+  },
+  "health_warnings": [
+    "M_disk_thin_solar shows bimodal distribution",
+    "R_d_thin_kpc shows bimodal distribution",
+    "h_z_thin_kpc shows bimodal distribution",
+    "M_disk_thick_solar shows bimodal distribution",
+    "R_d_thick_kpc shows bimodal distribution",
+    "h_z_thick_kpc shows bimodal distribution",
+    "M_bulge_solar shows bimodal distribution",
+    "a_bulge_kpc shows bimodal distribution",
+    "M_gas_solar shows bimodal distribution",
+    "R_d_gas_kpc shows bimodal distribution",
+    "h_z_gas_kpc shows bimodal distribution"
+  ],
+  "estimated_completion": null
+}
