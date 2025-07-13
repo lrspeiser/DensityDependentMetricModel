@@ -1241,16 +1241,13 @@ def log_likelihood_dynesty(
     """
     Enhanced log-likelihood with physical plausibility checks and early RMSE rejection.
     """
-
-    global debug_counter
-    global logger
-    if 'debug_counter' not in globals():
-        debug_counter = 0
-    if 'logger' not in globals() or logger is None:
-        import logging
-        logger = logging.getLogger("run_dynesty")
-        logger.setLevel(logging.INFO)
-
+    # Handle debug counter for multiprocessing
+    if not hasattr(log_likelihood_dynesty, 'log_likelihood_dynesty.debug_counter'):
+        log_likelihood_dynesty.debug_counter = 0
+    
+    # Get logger safely for multiprocessing
+    logger = get_or_create_logger()
+    
     use_logging = logger is not None
     HARD_RMSE_THRESHOLD = 500.0  # km/s threshold for auto-rejection
 
@@ -1260,12 +1257,12 @@ def log_likelihood_dynesty(
         return -np.inf, [np.inf]
     
     if any(not np.isfinite(val) for val in theta_values_fitted):
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty.debug_counter < DEBUG_COUNTER_MAX:
             logger.warning("Non-finite parameter values detected:")
             for name, val in zip(fitted_param_names, theta_values_fitted):
                 if not np.isfinite(val):
                     logger.warning(f"  {name}: {val}")
-            debug_counter += 1
+            log_likelihood_dynesty.debug_counter += 1
         return -np.inf, [np.inf]
 
     for name, value in zip(fitted_param_names, theta_values_fitted):
@@ -1305,20 +1302,22 @@ def log_likelihood_dynesty(
             v_predicted = v_model_for_dynesty(R_data, current_params_full_dict, xi_type, args_dynesty_obj)
 
         if not np.all(np.isfinite(v_predicted)):
-            if debug_counter < DEBUG_COUNTER_MAX:
+            if log_likelihood_dynesty.debug_counter < DEBUG_COUNTER_MAX:
                 logger.warning("Non-finite v_predicted values!")
                 logger.warning(f"  First few: {v_predicted[:5]}")
                 logger.warning("  Parameters causing issue:")
                 for name, val in current_params_full_dict.items():
                     if isinstance(val, (int, float, np.number)):
                         logger.warning(f"    {name}: {val:.3e}")
-                debug_counter += 1
+                log_likelihood_dynesty.debug_counter += 1
+
+
             return -np.inf, [np.inf]
 
     except Exception as e:
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty.debug_counter < DEBUG_COUNTER_MAX:
             logger.error(f"Exception in v_model_for_dynesty: {e}")
-            debug_counter += 1
+            log_likelihood_dynesty.debug_counter += 1
         return -np.inf, [np.inf]
 
     sigma_data_safe = np.maximum(sigma_data, 1e-9)
@@ -1326,12 +1325,12 @@ def log_likelihood_dynesty(
     rmse = np.sqrt(np.mean(residuals**2))
 
     if rmse > HARD_RMSE_THRESHOLD:
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty.debug_counter < DEBUG_COUNTER_MAX:
             logger.warning(f"🚨 Very high RMSE: {rmse:.1f} km/s → rejecting sample.")
             logger.debug(f"  Sample params: {current_params_full_dict}")
             logger.debug(f"  v_predicted[:5]: {v_predicted[:5]}")
             logger.debug(f"  v_obs[:5]: {v_data[:5]}")
-            debug_counter += 1
+            log_likelihood_dynesty.debug_counter += 1
         return -np.inf, [rmse]
 
     chi_squared_terms = (residuals / sigma_data_safe)**2
@@ -1351,8 +1350,8 @@ def log_likelihood_dynesty(
     if not np.isfinite(log_L): 
         return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
 
-    if debug_counter > 0 and np.isfinite(log_L):
-        debug_counter = max(0, debug_counter - 1)
+    if log_likelihood_dynesty.debug_counter > 0 and np.isfinite(log_L):
+        log_likelihood_dynesty.debug_counter = max(0, log_likelihood_dynesty.debug_counter - 1)
 
     return log_L, [rmse]
 
