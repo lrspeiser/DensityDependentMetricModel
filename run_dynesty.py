@@ -1242,7 +1242,7 @@ def log_likelihood_dynesty(
     Enhanced log-likelihood with physical plausibility checks and early RMSE rejection.
     """
     # Handle debug counter for multiprocessing
-    if not hasattr(log_likelihood_dynesty, 'log_likelihood_dynesty.debug_counter'):
+    if not hasattr(log_likelihood_dynesty, 'debug_counter'):
         log_likelihood_dynesty.debug_counter = 0
     
     # Get logger safely for multiprocessing
@@ -1276,6 +1276,33 @@ def log_likelihood_dynesty(
             return -np.inf, [np.inf]
         if name == 'n_exp' and (value <= 0 or value > 10):
             return -np.inf, [np.inf]
+        
+            # Hard constraint: thick disk scale length must be > thin disk scale length
+    if ('R_d_thick_kpc' in fitted_param_names and 'R_d_thin_kpc' in fitted_param_names):
+        idx_thick = fitted_param_names.index('R_d_thick_kpc')
+        idx_thin = fitted_param_names.index('R_d_thin_kpc')
+        R_d_thick = theta_values_fitted[idx_thick]
+        R_d_thin = theta_values_fitted[idx_thin]
+        
+        if R_d_thick < 1.05 * R_d_thin:
+            if log_likelihood_dynesty.debug_counter < DEBUG_COUNTER_MAX:
+                logger.warning(f"Rejecting: R_d_thick ({R_d_thick:.2f}) < 1.05 * R_d_thin ({R_d_thin:.2f})")
+                log_likelihood_dynesty.debug_counter += 1
+            return -np.inf, [np.inf]
+
+    # Hard constraint: thick disk scale height must be > thin disk scale height
+    if ('h_z_thick_kpc' in fitted_param_names and 'h_z_thin_kpc' in fitted_param_names):
+        idx_h_thick = fitted_param_names.index('h_z_thick_kpc')
+        idx_h_thin = fitted_param_names.index('h_z_thin_kpc')
+        h_z_thick = theta_values_fitted[idx_h_thick]
+        h_z_thin = theta_values_fitted[idx_h_thin]
+        
+        if h_z_thick < 2.0 * h_z_thin:
+            if log_likelihood_dynesty.debug_counter < DEBUG_COUNTER_MAX:
+                logger.warning(f"Rejecting: h_z_thick ({h_z_thick:.3f}) < 2 * h_z_thin ({h_z_thin:.3f})")
+                log_likelihood_dynesty.debug_counter += 1
+            return -np.inf, [np.inf]
+
 
     current_params_full_dict = dict(zip(fitted_param_names, theta_values_fitted))
 
@@ -1340,12 +1367,6 @@ def log_likelihood_dynesty(
         return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
 
     log_L = -0.5 * np.sum(log_L_terms)
-
-    if 'M_disk_thick_solar' in current_params_full_dict and 'M_disk_thin_solar' in current_params_full_dict:
-        ratio = current_params_full_dict['M_disk_thick_solar'] / current_params_full_dict['M_disk_thin_solar']
-        if ratio > 0.5:
-            penalty = -50 * (ratio - 0.5)**2
-            log_L += penalty
 
     if not np.isfinite(log_L): 
         return -np.inf, [rmse if np.isfinite(rmse) else np.inf]
@@ -1414,14 +1435,14 @@ def v_model_for_dynesty(
             lambda_g = None
             
     except Exception as e:
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
             logger.error(f"Error extracting parameters: {e}")
             debug_counter += 1
         return np.zeros_like(R_kpc_array)
     
     # Validate xi parameters
     if not np.isfinite(rho_c_solar_kpc3):
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
             logger.warning(f"Non-finite rho_c: {rho_c_solar_kpc3}")
             debug_counter += 1
         return np.zeros_like(R_kpc_array)
@@ -1435,13 +1456,13 @@ def v_model_for_dynesty(
     
     # Validate intermediate results
     if not np.all(np.isfinite(v_n_kms)):
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
             logger.warning("⚠️ Non-finite Newtonian velocities detected")
             debug_counter += 1
         v_n_kms = np.nan_to_num(v_n_kms, nan=0.0, posinf=0.0, neginf=0.0)
 
     if not np.all(np.isfinite(rho_midplane_for_xi)):
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
             logger.warning("⚠️ Non-finite densities detected")
             debug_counter += 1
         rho_midplane_for_xi = np.nan_to_num(rho_midplane_for_xi, nan=0.0, posinf=1e10, neginf=0.0)
@@ -1461,7 +1482,7 @@ def v_model_for_dynesty(
             xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
             
     except Exception as e:
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
             logger.error(f"Error calculating xi with {xi_type_str}: {e}")
             debug_counter += 1
         xi_raw = np.ones_like(rho_midplane_for_xi)
@@ -1507,7 +1528,7 @@ def v_model_for_dynesty(
 
     # Final velocity validation
     if not np.all(np.isfinite(v_mod_kms)):
-        if debug_counter < DEBUG_COUNTER_MAX:
+        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
             logger.warning("⚠️ Non-finite final velocities detected")
             debug_counter += 1
         v_mod_kms = np.nan_to_num(v_mod_kms, nan=0.0, posinf=0.0, neginf=0.0)
@@ -1564,10 +1585,9 @@ def log_likelihood_dynesty_debug(
     # Get logger safely for multiprocessing
     logger = get_or_create_logger()
     
-    # First check if we have valid data
-    if R_data is None or len(R_data) == 0:
-        logger.error("ERROR: R_data is None or empty!")
-        return -np.inf, [np.inf]
+    # Handle debug counter for multiprocessing
+    if not hasattr(log_likelihood_dynesty_debug, 'debug_counter'):
+        log_likelihood_dynesty_debug.debug_counter = 0
     
     # First check if we have valid data
     if R_data is None or len(R_data) == 0:
@@ -1590,9 +1610,9 @@ def log_likelihood_dynesty_debug(
         R_d_thin = theta_values_fitted[idx_thin]
         
         if R_d_thick < 1.05 * R_d_thin:
-            if debug_counter < DEBUG_COUNTER_MAX:
+            if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
                 logger.warning(f"Rejecting: R_d_thick ({R_d_thick:.2f}) < 1.05 * R_d_thin ({R_d_thin:.2f})")
-                debug_counter += 1
+                log_likelihood_dynesty_debug.debug_counter += 1
             return -np.inf, [np.inf]
 
     # Hard constraint: thick disk scale height must be > thin disk scale height
@@ -1603,9 +1623,9 @@ def log_likelihood_dynesty_debug(
         h_z_thin = theta_values_fitted[idx_h_thin]
         
         if h_z_thick < 2.0 * h_z_thin:
-            if debug_counter < DEBUG_COUNTER_MAX:
+            if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
                 logger.warning(f"Rejecting: h_z_thick ({h_z_thick:.3f}) < 2 * h_z_thin ({h_z_thin:.3f})")
-                debug_counter += 1
+                log_likelihood_dynesty_debug.debug_counter += 1
             return -np.inf, [np.inf]
         
     # Log first few data points
