@@ -2704,33 +2704,18 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
 def main_dynesty():
     """Main entry point with enhanced configuration and validation."""
     global logger, debug_counter
+    logger = get_or_create_logger()  # ✅ Initialize logger properly here
+    
+    # Argument parser
+    parser = argparse.ArgumentParser(
+        description="Enhanced Dynesty sampler for Density-Metric model with physical constraints",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
     debug_counter = 0  # Reset debug counter
     from data_io import load_all_sky_gaia_slices
 
-    logger.info(f"\n📡 Loading full Gaia dataset from longitudinal slices...")
 
-    df_all_sky = load_all_sky_gaia_slices(
-        lon_bin_width=30,           # 12 longitude bins
-        stars_per_bin=8000,         # per bin
-        output_dir="gaia_sky_slices",
-        force_query=args.force_new_query_gaia,      # honors CLI flag
-        max_distance_kpc=30.0
-    )
-
-    if df_all_sky.empty:
-        logger.error("❌ Full-sky Gaia loading failed")
-        sys.exit(1)
-
-    # Convert to the dictionary format expected by run_dynesty
-    gaia_data_dict = {
-        "R_kpc": df_all_sky["R_kpc"].values,
-        "v_obs": df_all_sky["v_obs"].values,
-        "sigma_v": df_all_sky["sigma_v"].values
-    }
-    if "source_id" in df_all_sky.columns:
-        gaia_data_dict["source_id"] = df_all_sky["source_id"].values
-    if "quality_flag" in df_all_sky.columns:
-        gaia_data_dict["quality_flag"] = df_all_sky["quality_flag"].values
 
     # Set up logging
     logging.basicConfig(
@@ -2743,12 +2728,6 @@ def main_dynesty():
     if not DYNESTY_AVAILABLE:
         logger.error("Dynesty library not found")
         sys.exit(1)
-
-    # Argument parser
-    parser = argparse.ArgumentParser(
-        description="Enhanced Dynesty sampler for Density-Metric model with physical constraints",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
 
     # Core run options
     parser.add_argument('--resume', action='store_true', default=False,
@@ -2890,6 +2869,33 @@ def main_dynesty():
     checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
     RUN_ID = run_history.start_record(args)   # ✅ Now it's safe to call, because args is defined
     args.fit_target = 'milkyway'  # Currently only MW supported
+    from data_io import load_all_sky_gaia_slices
+    
+    logger.info(f"\n📡 Loading full Gaia dataset from longitudinal slices...")
+
+    df_all_sky = load_all_sky_gaia_slices(
+        lon_bin_width=30,           # 12 longitude bins
+        stars_per_bin=12000,         # per bin
+        output_dir="gaia_sky_slices",
+        force_query=args.force_new_query_gaia,      # honors CLI flag
+        max_distance_kpc=30.0
+    )
+
+    if df_all_sky.empty:
+        logger.error("❌ Full-sky Gaia loading failed")
+        sys.exit(1)
+
+    # Convert to the dictionary format expected by run_dynesty
+    gaia_data_dict = {
+        "R_kpc": df_all_sky["R_kpc"].values,
+        "v_obs": df_all_sky["v_obs"].values,
+        "sigma_v": df_all_sky["sigma_v"].values
+    }
+    if "source_id" in df_all_sky.columns:
+        gaia_data_dict["source_id"] = df_all_sky["source_id"].values
+    if "quality_flag" in df_all_sky.columns:
+        gaia_data_dict["quality_flag"] = df_all_sky["quality_flag"].values
+
 
     # Inject dynamic xi setup
     setup_xi_parameters_for_mode(args)
