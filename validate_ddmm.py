@@ -186,9 +186,10 @@ class DDMMValidator:
         rho_solar_system = 1e2  # M☉/kpc³
         
         xi_ss = self.xi_func(
-            rho_solar_system, 
+            rho_solar_system,
             self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp']
+            self.model_params['n_exp'],
+            self.model_params.get('A', 1.0)  # fallback to 1.0 if A not present
         )[0]
         
         # GR predicts 43 arcsec/century excess

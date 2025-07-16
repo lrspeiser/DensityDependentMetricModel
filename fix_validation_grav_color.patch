@@ -1,0 +1,46 @@
+--- validate_ddmm.py.orig
++++ validate_ddmm.py
+@@ -89,11 +89,13 @@ class DDMMValidator:
+         self.output_dir.mkdir(parents=True, exist_ok=True)
+         self.results = []
+         
+-        # Set xi function type
+-        self.xi_func = XI_FUNCTION_MAP.get(
+-            model_params.get('xi_type', 'power'), 
+-            XI_FUNCTION_MAP['power']
+-        )
++        # Set xi function type and mode
++        self.xi_type = model_params.get('xi_type', 'power')
++        if self.xi_type == 'grav_color':
++            from density_metric2 import xi_gravitational_color
++            self.xi_func = xi_gravitational_color
++        else:
++            self.xi_func = XI_FUNCTION_MAP.get(self.xi_type, XI_FUNCTION_MAP['power'])
+         
+         logger.info(f"Initialized DDMM Validator with parameters:")
+         logger.info(f"  ρ_c = {model_params.get('rho_c_solar_kpc3', 0):.2e} M☉/kpc³")
+@@ -183,11 +185,18 @@ class DDMMValidator:
+         # Solar System typical density ~ 10^-7 M☉/pc³ = 10^2 M☉/kpc³
+         rho_solar_system = 1e2  # M☉/kpc³
+         
+-        xi_ss = self.xi_func(
+-            rho_solar_system, 
+-            self.model_params['rho_c_solar_kpc3'],
+-            self.model_params['n_exp']
+-        )[0]
++        if self.xi_type == 'grav_color':
++            xi_ss = self.xi_func(
++                rho_solar_system, 
++                self.model_params['rho_c_solar_kpc3'],
++                self.model_params.get('gamma_exp', 2.5),
++                self.model_params.get('lambda_g', 3.0)
++            )[0]
++        else:
++            xi_ss = self.xi_func(
++                rho_solar_system, 
++                self.model_params['rho_c_solar_kpc3'],
++                self.model_params['n_exp']
++            )[0]
+         
+         # GR predicts 43 arcsec/century excess
+         gr_prediction = 43.0  # arcsec/century

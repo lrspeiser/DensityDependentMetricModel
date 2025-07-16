@@ -1,0 +1,58 @@
+{
+  "timestamp": "2025-07-13T08:04:43.168588",
+  "elapsed_time": 0.033355471624268426,
+  "n_samples": 1418,
+  "n_calls": 18123,
+  "efficiency": 7.824311648181868,
+  "logz": -195615.93405979848,
+  "logz_err": NaN,
+  "dlogz": NaN,
+  "current_nlive": 0,
+  "parameter_estimates": {
+    "M_disk_thin_solar": 60183413318.165504,
+    "R_d_thin_kpc": 2.801833450496429,
+    "h_z_thin_kpc": 0.3359117852690202,
+    "M_disk_thick_solar": 18749067554.67003,
+    "R_d_thick_kpc": 5.996652738750569,
+    "h_z_thick_kpc": 1.1695447304808368,
+    "M_bulge_solar": 18290086197.231567,
+    "a_bulge_kpc": 1.1218483133732442,
+    "M_gas_solar": 30481605423.97911,
+    "R_d_gas_kpc": 9.110267219018782,
+    "h_z_gas_kpc": 0.2359343185169498
+  },
+  "parameter_uncertainties": {
+    "M_disk_thin_solar": 11915508235.322649,
+    "R_d_thin_kpc": 0.46168308864495733,
+    "h_z_thin_kpc": 0.13799712322904872,
+    "M_disk_thick_solar": 6956595170.60091,
+    "R_d_thick_kpc": 1.1525827596793456,
+    "h_z_thick_kpc": 0.26594951377541776,
+    "M_bulge_solar": 7381739751.481236,
+    "a_bulge_kpc": 0.5195137971430874,
+    "M_gas_solar": 13099266933.62212,
+    "R_d_gas_kpc": 3.1408901357887986,
+    "h_z_gas_kpc": 0.10310758334309958
+  },
+  "convergence_status": {
+    "converged": false,
+    "near_convergence": false,
+    "dlogz": NaN,
+    "efficiency_ok": true,
+    "stuck": false
+  },
+  "health_warnings": [
+    "M_disk_thin_solar shows bimodal distribution",
+    "R_d_thin_kpc shows bimodal distribution",
+    "h_z_thin_kpc shows bimodal distribution",
+    "M_disk_thick_solar shows bimodal distribution",
+    "R_d_thick_kpc shows bimodal distribution",
+    "h_z_thick_kpc shows bimodal distribution",
+    "M_bulge_solar shows bimodal distribution",
+    "a_bulge_kpc shows bimodal distribution",
+    "M_gas_solar shows bimodal distribution",
+    "R_d_gas_kpc shows bimodal distribution",
+    "h_z_gas_kpc shows bimodal distribution"
+  ],
+  "estimated_completion": null
+}

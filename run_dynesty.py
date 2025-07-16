@@ -118,6 +118,9 @@ except ImportError as e:
 # Set up module logger
 logger = None
 
+import run_history
+from run_history import finalize_record
+
 def get_or_create_logger():
     """Get or create the module logger. Safe for multiprocessing."""
     import logging
@@ -161,7 +164,7 @@ PHYSICAL_BOUNDS = {
 
 # Expected ranges for validation
 EXPECTED_XI_AT_SOLAR = (0.7, 1.0)  # Xi should not suppress gravity too much at R_sun
-EXPECTED_V_AT_SOLAR = (100, 250)   # TEMPORARILY RELAXED for initial exploration
+EXPECTED_V_AT_SOLAR = (100, 300)   # TEMPORARILY RELAXED for initial exploration
 
 def load_previous_best_params():
     """Load previous best parameters if available."""
@@ -193,9 +196,9 @@ MW_MULTI_COMP_PARAM_CONFIG = {
     'rho_c_solar_kpc3': {
         'label': "rho_c (M_sun/kpc^3)", 
         'fixed_val_from_arg': 'rho_c_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['typical'],
-        'low': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['min'], 
-        'high': PHYSICAL_BOUNDS['rho_c_solar_kpc3']['max'], 
+        'default_fixed': 5e6,
+        'low': 1e6, 
+        'high': 2e7, 
         'fit_flag_arg': 'fit_xi_params',
         'log_prior': True,
         'physical_check': True
@@ -226,7 +229,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'fixed_val_from_arg': 'R_d_thin_fixed', 
         'default_fixed': PHYSICAL_BOUNDS['R_d_thin_kpc']['typical'],
         'low': 1.5,    # Keep as is
-        'high': 3.5,   # Reduced from 5.0
+        'high': 5.0,   # Widened again based on recommendation
         'fit_flag_arg': 'fit_disk_thin', 
         'include_flag_arg': 'include_disk_thin',
         'log_prior': False,
@@ -334,8 +337,9 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'gamma_exp': {                             # NEW
         'label': "γ (grav‑color)",
         'fixed_val_from_arg': 'gamma_fixed',
-        'default_fixed': 2.7,
-        'low': 1.0, 'high': 4.0,
+        'default_fixed': 2.8,
+        'low': 2.0, 
+        'high': 3.5,
         'fit_flag_arg': 'fit_gamma',
         'log_prior': False,
         'physical_check': False       # checked together with λ_g below
@@ -343,8 +347,9 @@ MW_MULTI_COMP_PARAM_CONFIG = {
     'lambda_g': {                                # NEW
         'label': "λ_g",
         'fixed_val_from_arg': 'lambda_g_fixed',
-        'default_fixed': 8.0,
-        'low': 1.0, 'high': 15.0,
+        'default_fixed': 1.2,
+        'low': 0.5, 
+        'high': 5.0,
         'fit_flag_arg': 'fit_lambda_g',
         'log_prior': False,
         'physical_check': False
@@ -410,9 +415,20 @@ def check_physical_plausibility(
     if 'M_disk_thick_solar' in params and 'M_disk_thin_solar' in params:
         if params['M_disk_thick_solar'] > 0 and params['M_disk_thin_solar'] > 0:
             thick_thin_ratio = params['M_disk_thick_solar'] / params['M_disk_thin_solar']
-            if thick_thin_ratio > 0.7:  # Thick disk typically 10-50% of thin disk
-                return False, f"Thick/thin disk ratio {thick_thin_ratio:.2f} > 0.7"
-    
+
+            # ---> NEW: choose limit from CLI or context
+            if args_obj.max_thick_thin_ratio is not None:
+                ratio_limit = args_obj.max_thick_thin_ratio
+            elif getattr(args_obj, 'fit_target', '') == 'milkyway':
+                ratio_limit = 0.7
+            else:
+                ratio_limit = np.inf          # no constraint
+
+            if thick_thin_ratio > ratio_limit:
+                # quadratic penalty,  Δχ² ≈ 20 for a 10 % violation
+                penalty = -20.0 * (thick_thin_ratio / ratio_limit - 1.0)**2
+                return (True, "Ratio penalty", penalty)   # adjust calling code to receive penalty
+
     # 4. Check scale length ordering (thick disk more extended)
     if 'R_d_thick_kpc' in params and 'R_d_thin_kpc' in params:
         if params['R_d_thick_kpc'] < params['R_d_thin_kpc']:
@@ -424,11 +440,13 @@ def check_physical_plausibility(
             return False, f"Thick disk not thick enough ({params['h_z_thick_kpc']:.2f} < 2×{params['h_z_thin_kpc']:.2f} kpc)"
     
     # 6. Check xi at solar radius (shouldn't suppress gravity too much)
-    if 'rho_c_solar_kpc3' in params and 'n_exp' in params:
+    xi_solar = 1.0  # <-- Default so it's always defined
+
+    if 'rho_c_solar_kpc3' in params:
         # Estimate density at solar radius
         # For a typical disk: rho(R_sun) ~ 0.1 M_sun/pc^3 = 1e8 M_sun/kpc^3
         rho_solar_typical = 1e8
-        
+
         # Add contribution from bulge if included
         if args_obj.include_bulge and 'M_bulge_solar' in params and 'a_bulge_kpc' in params:
             # Hernquist profile at R_sun
@@ -436,29 +454,30 @@ def check_physical_plausibility(
             a_b = params['a_bulge_kpc']
             rho_bulge_solar = (M_b / (2 * np.pi)) * (a_b / (R_SUN_KPC * (R_SUN_KPC + a_b)**3))
             rho_solar_typical += rho_bulge_solar
-        
-        # Calculate xi with the *selected* law
-        from density_metric2 import XI_FUNCTION_MAP
+
+        # Safely compute xi_solar using selected xi mode
         xi_mode = getattr(args_obj, 'xi', 'power')
-        
+
         if xi_mode == 'grav_color':
             from density_metric2 import xi_gravitational_color
             gamma = params.get('gamma_exp', 2.7)
-            lambda_g = params.get('lambda_g', 8.0)
-            xi_solar = xi_gravitational_color(rho_solar_typical,
-                                            params['rho_c_solar_kpc3'],
-                                            gamma, lambda_g)[0]
-        else:
-            xi_func = XI_FUNCTION_MAP.get(xi_mode, XI_FUNCTION_MAP['power'])
-            xi_solar = xi_func(rho_solar_typical,
-                             params['rho_c_solar_kpc3'],
-                             params['n_exp'])[0]        
+            lambda_g = params.get('lambda_g', 1.5)
+            rho_c = params['rho_c_solar_kpc3']
+            xi_solar = xi_gravitational_color(rho_solar_typical, rho_c, gamma, lambda_g)[0]
 
+        elif 'n_exp' in params:
+            from density_metric2 import XI_FUNCTION_MAP
+            xi_func = XI_FUNCTION_MAP.get(xi_mode, XI_FUNCTION_MAP['power'])
+            rho_c = params['rho_c_solar_kpc3']
+            n_exp = params['n_exp']
+            xi_solar = xi_func(rho_solar_typical, rho_c, n_exp)[0]
+
+        # Validate the xi_solar value
         if xi_solar < EXPECTED_XI_AT_SOLAR[0]:
             return False, f"xi at R_sun = {xi_solar:.3f} < {EXPECTED_XI_AT_SOLAR[0]} (too much suppression)"
         if xi_solar > EXPECTED_XI_AT_SOLAR[1]:
-            # Not necessarily bad, but log it
             logger.debug(f"Note: xi at R_sun = {xi_solar:.3f} > {EXPECTED_XI_AT_SOLAR[1]} (minimal modification)")
+
     
     # 7. Check that we'd get reasonable rotation curve at solar radius
     if all(comp in params for comp in ['M_disk_thin_solar', 'R_d_thin_kpc']):
@@ -1008,7 +1027,7 @@ def enhanced_monitor_sampler_progress(
         # Physical plausibility check
         logger.info(f"\n🔍 PHYSICAL PLAUSIBILITY CHECK:")
         logger.info("─" * 60)
-        is_valid, reason = check_physical_plausibility(current_params, fitted_param_names, args_obj)
+        is_valid, reason, *_ = check_physical_plausibility(current_params, fitted_param_names, args_obj)
         if is_valid:
             logger.info("✅ Median parameters pass all physical checks")
         else:
@@ -1167,6 +1186,8 @@ def format_parameter_value_enhanced(value: float, param_name: str) -> str:
     elif 'n_exp' in param_name:
         # Power law exponent
         return f"{value:.3f}"
+    elif param_name in ('gamma_exp', 'lambda_g'):
+        return f"{value:.3f}"      # dimensionless
     else:
         # Default scientific notation
         return f"{value:.3e}"
@@ -1215,7 +1236,7 @@ def prior_transform_dynesty(
     for i in range(len(fitted_param_names)):
         low, high = prior_bounds_low[i], prior_bounds_high[i]
         
-        if use_log_prior_flags[i]:
+        if use_log_prior_flags[i] and fitted_param_names[i] == 'lambda_g':
             # Log-uniform transform: p(x) ∝ 1/x
             # Better for scale-variant parameters like masses
             log_low, log_high = np.log10(low), np.log10(high)
@@ -2291,7 +2312,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                                for p in cumulative_params.keys()])
         param_names = list(cumulative_params.keys())
         
-        is_valid, reason = check_physical_plausibility(final_params, param_names, args)
+        is_valid, reason, *_ = check_physical_plausibility(final_params, param_names, args)
         if is_valid:
             logger.info("✅ Final parameters pass all physical checks!")
         else:
@@ -2319,7 +2340,7 @@ def check_early_stopping(sampler, convergence_tracker, args):
     
     n_valid = 0
     for sample in recent_samples:
-        is_valid, _ = check_physical_plausibility(sample, fitted_p_names, args)
+        is_valid, *_ = check_physical_plausibility(sample, fitted_p_names, args)
         if is_valid:
             n_valid += 1
     
@@ -2377,7 +2398,7 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
         # Don't continue if initial params are bad
 
     # Validate initial guess
-    is_valid, reason = check_physical_plausibility(p0_guess, fitted_p_names, args)
+    is_valid, reason, *_ = check_physical_plausibility(p0_guess, fitted_p_names, args)
     if not is_valid:
         if logger:
             logger.warning(f"Initial guess fails physical checks: {reason}")
@@ -2446,6 +2467,11 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
             walks=args.walks
         )
         logger.info("Sampler created successfully")
+        
+        # === Restore from checkpoint if resuming ===
+        if hasattr(args, "_resume_checkpoint_file"):
+            sampler.restore(args._resume_checkpoint_file)
+            logger.info("✅ Restored sampler from checkpoint")
         
     except Exception as e:
         logger.error(f"ERROR creating sampler: {e}")
@@ -2607,6 +2633,17 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
                 maxcall=args.maxcall,
                 save_samples=True
             )):
+                # Checkpoint every N seconds
+                if not hasattr(sampler, "_last_checkpoint_time"):
+                    sampler._last_checkpoint_time = time.time()
+
+                if time.time() - sampler._last_checkpoint_time > args.checkpoint_every:
+                    try:
+                        sampler.save(str(checkpoint_file))
+                        logger.info(f"💾 Checkpoint saved to {checkpoint_file}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to save checkpoint: {e}")
+                    sampler._last_checkpoint_time = time.time()
                 # Periodic monitoring
                 if time.time() - last_monitor_time > args.monitor_interval_s:
                     last_monitor_time = time.time()
@@ -2698,6 +2735,9 @@ def main_dynesty():
                         help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty",
                         help="Output directory for results")
+    parser.add_argument('--R_d_thin_high', type=float, default=None,
+                    help="Override upper prior bound for R_d_thin_kpc")
+
 
     # Sampler options
     parser.add_argument('--nlive_init', type=int, default=800,
@@ -2720,6 +2760,21 @@ def main_dynesty():
                         help="Use run_nested instead of custom loop with early stopping")
     parser.add_argument('--checkpoint_every', type=int, default=60,
                         help="Checkpoint interval in seconds")
+    parser.add_argument('--checkpoint_file', type=str, default=None,
+                        help="Path to a specific dynesty checkpoint to resume from")
+    parser.add_argument('--max_thick_thin_ratio', type=float, default=None, 
+                        help="Max allowed thick/thin disk mass ratio (default: 0.7 for Milky Way)")
+    parser.add_argument('--M_disk_thin_min', type=float, default=None,
+                        help="Override lower prior bound for M_disk_thin_solar")
+    parser.add_argument('--h_z_thin_min', type=float, default=None,
+                        help="Override lower prior bound for h_z_thin_kpc")
+    parser.add_argument('--R_d_thick_max', type=float, default=None,
+                        help="Override upper prior bound for R_d_thick_kpc")
+    parser.add_argument('--M_gas_max', type=float, default=None,
+                        help="Override upper prior bound for M_gas_solar")
+
+    
+
 
     # Dynesty sampler group
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
@@ -2798,11 +2853,16 @@ def main_dynesty():
 
     # Parse arguments
     args = parser.parse_args()
+    checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
+    RUN_ID = run_history.start_record(args)   # ✅ Now it's safe to call, because args is defined
     args.fit_target = 'milkyway'  # Currently only MW supported
 
-    # ✅ Inject dynamic xi setup logic
+    # Inject dynamic xi setup
     setup_xi_parameters_for_mode(args)
-        
+
+    # Start run logging
+    RUN_ID = run_history.start_record(args)
+
     if args.theory_mode:
         logger.info("🧪 THEORY MODE: Using gravitational color confinement values")
         args.fix_gamma = 2.7
@@ -2821,77 +2881,47 @@ def main_dynesty():
 
     check_prior_bounds_compatibility(args)
     
-    # Resume checkpoint logic
+    if args.R_d_thin_high is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['R_d_thin_kpc']['high'] = args.R_d_thin_high
+    if args.M_disk_thin_min is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_disk_thin_solar']['low'] = args.M_disk_thin_min
+    if args.h_z_thin_min is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['h_z_thin_kpc']['low'] = args.h_z_thin_min
+    if args.R_d_thick_max is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['R_d_thick_kpc']['high'] = args.R_d_thick_max
+    if args.M_gas_max is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_gas_solar']['high'] = args.M_gas_max
+    if args.checkpoint_file is None:
+        args.checkpoint_file = str(Path(args.output_dir) / "dynesty_checkpoint.pkl")
+    
+        
+    
+    # === Resume checkpoint logic - DEFER actual restore to sampler setup ===
     if args.resume:
-        checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
+        checkpoint_file = Path(args.checkpoint_file) if args.checkpoint_file else Path(args.output_dir) / "dynesty_checkpoint.pkl"
+        
         if not checkpoint_file.exists():
-            logger.error(f"❌ No checkpoint found at: {checkpoint_file}")
+            logger.error(f"No checkpoint found at {checkpoint_file}")
             sys.exit(1)
 
-        logger.info(f"🔄 Resuming from checkpoint: {checkpoint_file}")
+        # Flag this so we restore sampler after it's built
+        args._resume_checkpoint_file = str(checkpoint_file)
 
-        # === Rebuild parameter config ===
-        fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = \
-            get_param_labels_and_bounds(args)
+        
+        # Safety check: previous results file must exist if using previous best
+        if args.use_previous_best and not os.path.exists(args.previous_results_file):
+            logger.warning(f"⚠️ Previous results file not found: {args.previous_results_file}")
+            args.use_previous_best = False
 
-        # === Wrap likelihood and prior with fixed arguments ===
-        logl_args = (
-            fitted_p_names, args, args.all_param_info_list,
-            None, None, None,  # placeholder for R, v_obs, sigma — will be loaded anyway
-            args.xi, None
-        )
-        ptform_args = (fitted_p_names, np.array(p_low), np.array(p_high), use_log_flags)
+        # Safety check: disable dashboard if explicitly turned off or import fails
+        if args.enable_dashboard and not args.disable_dashboard:
+            try:
+                from monitor_dashboard import DynestyMonitor
+            except ImportError:
+                logger.warning("⚠️ Dashboard module not available, disabling dashboard")
+                args.enable_dashboard = False
 
-        log_likelihood = lambda theta: log_likelihood_dynesty(theta, *logl_args)
-        prior_transform = lambda u: prior_transform_dynesty(u, *ptform_args)
-
-        # === Create sampler with wrapped callables ===
-        sampler = DynamicNestedSampler(
-            log_likelihood,
-            prior_transform,
-            ndim=len(fitted_p_names),
-            sample=args.sample_method,
-            bound=args.bound_method,
-            enlarge=args.enlarge_factor,
-            blob=True,
-            walks=args.walks
-        )
-
-        # === Restore state ===
-        sampler.restore(str(checkpoint_file))
-        logger.info("✅ Checkpoint loaded. Continuing sampler...")
-
-        # === Resume sampling ===
-        sampler.run_nested(
-            nlive_init=args.nlive_init,
-            nlive_batch=args.nlive_batch,
-            dlogz_init=args.dlogz_target,
-            maxcall=args.maxcall,
-            print_progress=True,
-            checkpoint_file=str(checkpoint_file),
-            checkpoint_every=args.checkpoint_every
-        )
-
-        logger.info("✅ Resumed Dynesty run completed.")
-        return
-
-
-
-    
-    # Safety check: previous results file must exist if using previous best
-    if args.use_previous_best and not os.path.exists(args.previous_results_file):
-        logger.warning(f"⚠️ Previous results file not found: {args.previous_results_file}")
-        args.use_previous_best = False
-
-    # Safety check: disable dashboard if explicitly turned off or import fails
-    if args.enable_dashboard and not args.disable_dashboard:
-        try:
-            from monitor_dashboard import DynestyMonitor
-        except ImportError:
-            logger.warning("⚠️ Dashboard module not available, disabling dashboard")
-            args.enable_dashboard = False
-
-    
+        
     
     # Run physics self-tests
     logger.info("Running physics module self-tests...")
@@ -2997,24 +3027,39 @@ def main_dynesty():
             logger.error(f"❌ Failed to save partial results: {e}")
 
         logger.error("No results to save")
+        finalize_record(RUN_ID, success=False,
+                        logz=np.nan, logz_err=np.nan,
+                        eff=0, rmse=np.nan,
+                        n_samples=0, n_calls=0,
+                        param_stats={}, phys_ok=False,
+                        phys_reason="No results to save")
         return
+
 
     
     # Save results
     if results is None:
         logger.error("No results to save")
+        finalize_record(RUN_ID, success=False,
+                        logz=np.nan, logz_err=np.nan,
+                        eff=0, rmse=np.nan,
+                        n_samples=0, n_calls=0,
+                        param_stats={}, phys_ok=False,
+                        phys_reason="No results to save")
         return
-    
-    # Process results based on type
+
+    # Curriculum learning
     if isinstance(results, dict) and 'stage_1' in results:
-        # Curriculum learning results
-        for stage_name, stage_results in results.items():
-            if stage_results is None:
-                continue
-            
+        completed_stages = [k for k, v in results.items() if v is not None]
+        if not completed_stages:
+            logger.error("❌ All curriculum stages failed. No results to save.")
+            return
+        
+        for stage_name in completed_stages:
+            stage_results = results[stage_name]
             output_prefix = f"dynesty_curriculum_{stage_name}_{args.xi}"
             output_npz = Path(args.output_dir) / f"{output_prefix}_samples.npz"
-            
+
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
                 np.savez(output_npz,
@@ -3026,36 +3071,69 @@ def main_dynesty():
                 logger.info(f"Saved {stage_name} to {output_npz}")
             except Exception as e:
                 logger.error(f"Failed to save {stage_name}: {e}")
-        
-        # Use final stage for analysis
-        final_stage = max(results.keys())
+
+        final_stage = max(completed_stages)
         res = results[final_stage]
+
     else:
         # Single run results
+        res = results# Curriculum learning results
+        
+    if isinstance(results, dict) and 'stage_1' in results:
+        completed_stages = [k for k, v in results.items() if v is not None]
+        if not completed_stages:
+            logger.error("❌ All curriculum stages failed. No results to save.")
+            return
+
+        # Save each completed stage
+        for stage_name in completed_stages:
+            stage_results = results[stage_name]
+            output_prefix = f"dynesty_curriculum_{stage_name}_{args.xi}"
+            output_npz = Path(args.output_dir) / f"{output_prefix}_samples.npz"
+
+            try:
+                weights = np.exp(stage_results.logwt - stage_results.logz[-1])
+                np.savez(output_npz,
+                        samples=stage_results.samples,
+                        weights=weights,
+                        logl=stage_results.logl,
+                        logz=stage_results.logz,
+                        logzerr=stage_results.logzerr)
+                logger.info(f"✅ Saved {stage_name} results to {output_npz}")
+            except Exception as e:
+                logger.error(f"❌ Failed to save {stage_name} results: {e}")
+
+        # Use final stage for downstream processing
+        final_stage = max(completed_stages)
+        res = results[final_stage]
+
+    else:
+        # Single-run results
         res = results
-        
-        # Create filename
-        output_parts = ["dynesty_mw", args.xi]
-        if args.include_bulge:
-            output_parts.append("B" + ("f" if args.fit_bulge else "x"))
-        if args.include_disk_thin:
-            output_parts.append("DT" + ("f" if args.fit_disk_thin else "x"))
-        if args.include_disk_thick:
-            output_parts.append("DK" + ("f" if args.fit_disk_thick else "x"))
-        if args.include_gas:
-            output_parts.append("G" + ("f" if args.fit_gas else "x"))
-        
-        output_basename = "_".join(output_parts)
-        output_npz = Path(args.output_dir) / f"{output_basename}_samples.npz"
-        
-        # Calculate effective sample size
-        try:
-            ess = res.effective_sample_size if hasattr(res, 'effective_sample_size') else 0
-        except:
-            weights = np.exp(res.logwt - res.logz[-1])
-            ess = 1.0 / np.sum(weights**2) if np.sum(weights**2) > 0 else 0.0
-        
-        # Save
+
+    # ---- Save final stage or single-run result ----
+    output_parts = ["dynesty_mw", args.xi]
+    if args.include_bulge:
+        output_parts.append("B" + ("f" if args.fit_bulge else "x"))
+    if args.include_disk_thin:
+        output_parts.append("DT" + ("f" if args.fit_disk_thin else "x"))
+    if args.include_disk_thick:
+        output_parts.append("DK" + ("f" if args.fit_disk_thick else "x"))
+    if args.include_gas:
+        output_parts.append("G" + ("f" if args.fit_gas else "x"))
+
+    output_basename = "_".join(output_parts)
+    output_npz = Path(args.output_dir) / f"{output_basename}_samples.npz"
+
+    # Compute effective sample size
+    try:
+        ess = res.effective_sample_size if hasattr(res, 'effective_sample_size') else 0
+    except:
+        weights = np.exp(res.logwt - res.logz[-1])
+        ess = 1.0 / np.sum(weights**2) if np.sum(weights**2) > 0 else 0.0
+
+    # Save final .npz
+    try:
         np.savez(output_npz,
                 samples=res.samples,
                 weights=np.exp(res.logwt - res.logz[-1]),
@@ -3064,34 +3142,57 @@ def main_dynesty():
                 logzerr=res.logzerr,
                 ess=ess,
                 blob=res.blob if hasattr(res, 'blob') else None)
-        
-        logger.info(f"\n✅ Results saved to {output_npz}")
-        
-        # Save pickle
-        output_pkl = Path(args.output_dir) / f"{output_basename}_results.pkl.gz"
-        try:
-            with gzip.open(output_pkl, "wb") as fh:
-                pickle.dump(res, fh)
-            logger.info(f"✅ Full results saved to {output_pkl}")
-        except Exception as e:
-            logger.error(f"Failed to save pickle: {e}")
-    
-    # Final summary
-    if hasattr(res, 'logz'):
-        logger.info(f"\n📊 FINAL RESULTS:")
-        logger.info(f"   log(Z) = {res.logz[-1]:.3f} ± {res.logzerr[-1]:.3f}")
-        logger.info(f"   Samples: {len(res.samples)}")
-        if hasattr(res, 'eff'):
-            logger.info(f"   Efficiency: {res.eff:.2f}%")
-    
-    # Validation recommendation
-    logger.info("\n💡 Next steps:")
-    logger.info("   1. Check convergence diagnostics")
-    logger.info("   2. Run validation suite:")
-    logger.info(f"      python validate_density_model.py --params_file {output_npz}")
-    logger.info("   3. Generate plots and corner plots")
-    
+        logger.info(f"\n✅ Final results saved to {output_npz}")
+    except Exception as e:
+        logger.error(f"❌ Failed to save final results: {e}")
+
+    # Save final .pkl
+    output_pkl = Path(args.output_dir) / f"{output_basename}_results.pkl.gz"
+    try:
+        with gzip.open(output_pkl, "wb") as fh:
+            pickle.dump(res, fh)
+        logger.info(f"✅ Full results saved to {output_pkl}")
+    except Exception as e:
+        logger.error(f"❌ Failed to save pickle file: {e}")
+
+    # === FINALIZE RUN AND SNAPSHOT ===
+    try:
+        fitted_p_names = args.fitted_param_names
+        param_stats = {name: {"median": float(m), "sigma": float(s)}
+                    for name, m, s in zip(fitted_p_names, np.median(res.samples, axis=0), np.std(res.samples, axis=0))}
+
+        is_valid, reason, *_ = check_physical_plausibility(np.median(res.samples, axis=0), fitted_p_names, args)
+        logz = res.logz[-1] if hasattr(res, 'logz') else np.nan
+        logz_err = res.logzerr[-1] if hasattr(res, 'logzerr') else np.nan
+        eff = getattr(res, 'eff', 0.0)
+        rmse = float(np.sqrt(np.mean(res.blob**2))) if hasattr(res, 'blob') else np.nan
+        n_samples = len(res.samples)
+        n_calls = int(np.sum(res.ncall)) if hasattr(res, 'ncall') else 0
+
+        finalize_record(RUN_ID, success=True,
+                        logz=logz, logz_err=logz_err,
+                        eff=eff, rmse=rmse,
+                        n_samples=n_samples, n_calls=n_calls,
+                        param_stats=param_stats,
+                        phys_ok=is_valid, phys_reason=reason if not is_valid else "")
+
+        snapshot_path = Path(args.output_dir) / f"run_{RUN_ID}_summary.json"
+        with open(snapshot_path, "w") as fh:
+            json.dump({
+                "run_id": RUN_ID,
+                "success": True,
+                "logZ": logz,
+                "params": param_stats,
+                "phys_ok": is_valid,
+                "phys_reason": reason if not is_valid else "",
+                "cmd": " ".join(sys.argv)
+            }, fh, indent=2)
+        logger.info(f"📄 Snapshot saved to {snapshot_path}")
+    except Exception as e:
+        logger.error(f"❌ Failed to finalize or snapshot run: {e}")
+
     logger.info("\n✨ Enhanced dynesty run complete!")
+
 
 
 if __name__ == "__main__":

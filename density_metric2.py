@@ -439,23 +439,27 @@ def test_xi_functions():
 #   • ξ→1+λ_g for ρ≪ρ_c (void/halo)
 # Typical theory values: γ≈2.7, λ_g≈8
 # ---------------------------------------------------------------------
-@nb.njit(cache=True)
-def xi_gravitational_color(rho, rho_c, gamma, lambda_g):
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    ratio = rho_arr / rho_c
-    exp_arg = -np.power(ratio, gamma)
-    
-    # Clip to prevent overflow
-    exp_arg = np.maximum(exp_arg, -700.0)
-    
-    # This gives total G_eff/G_N
-    result = 1.0 + lambda_g * np.exp(exp_arg)
-    
-    return result
+
+def xi_logistic(rho, rho_c, n_exp):
+    """Logistic form of xi function"""
+    x = (rho / rho_c) ** n_exp
+    return 2.0 / (1.0 + np.exp(-x))
+
+def xi_enhanced(rho, rho_c, n_exp, A=1.0):
+    """Enhanced form with additional parameter"""
+    return 1.0 + A * np.exp(-(rho / rho_c) ** n_exp)
+
+def xi_grav_color_standard_interface(rho, rho_c, n_exp, _unused_A=None):
+    """
+    Wrapper to make xi_gravitational_color compatible with standard 3-argument interface.
+    Uses default or globally set gamma and lambda_g values.
+    """
+    # Default values - you can make these module-level variables if needed
+    gamma = 2.5
+    lambda_g = 3.0
+    return xi_gravitational_color(rho, rho_c, gamma, lambda_g)
+
+
 
 @nb.njit(cache=True)
 def xi_logistic_law(rho, rho_c, n_exp):
@@ -588,6 +592,39 @@ def calculate_microlensing_tau_baade(p_baryons, l_deg=L_BAADE_DEG, b_deg=B_BAADE
     logger.debug(f"[Microlensing] M_eff_lenses={M_eff_lenses:.2e}, model_tau_scaled: {model_tau_s:.2e}")
     if model_tau_s > target_tau_max: logger.debug("[Microlensing] FAILED."); return False
     logger.debug("[Microlensing] PASSED."); return True
+
+# --------------------------
+# Xi Function Wrappers (3-arg interface)
+# --------------------------
+
+def xi_power_law_wrapper(rho, rho_c, n_exp, _A=None):
+    return xi_power_law(rho, rho_c, n_exp)
+
+def xi_logistic_law_wrapper(rho, rho_c, n_exp, _A=None):
+    return xi_logistic_law(rho, rho_c, n_exp)
+
+def xi_enhanced_bounded_wrapper(rho, rho_c, n_exp, A=1.0):
+    return xi_enhanced_bounded(rho, rho_c, n_exp, A)
+
+def xi_enhanced_exp_wrapper(rho, rho_c, n_exp, A=1.0):
+    return xi_enhanced_exp(rho, rho_c, n_exp, A)
+
+def xi_mond_like_wrapper(rho, rho_c, n_exp, _A=None):
+    return xi_mond_like(rho, rho_c, n_exp)
+
+def xi_grav_color_standard_interface(rho, rho_c, n_exp, _A=None):
+    gamma = 2.5
+    lambda_g = 3.0
+    return xi_gravitational_color(rho, rho_c, gamma, lambda_g)
+
+XI_FUNCTION_MAP = {
+    'power': xi_power_law_wrapper,
+    'logistic': xi_logistic_law_wrapper,
+    'enhanced': xi_enhanced_bounded_wrapper,
+    'mond': xi_mond_like_wrapper,
+    'exp_enhance': xi_enhanced_exp_wrapper,
+    'grav_color': xi_grav_color_standard_interface
+}
 
 # This final info log is fine, it just confirms the module was imported.
 logger.info("density_metric2.py: Multi-component and (aliased) single-disk functions defined.")
