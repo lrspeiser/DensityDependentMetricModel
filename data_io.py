@@ -23,9 +23,48 @@ from pathlib import Path
 import sys
 import logging
 from typing import Dict, Optional, Tuple, Union
+import traceback
+
+# Set up logging early
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Delay HTTP debug until after astropy is imported
+try:
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord, Galactocentric, CartesianDifferential, CylindricalDifferential
+    from astroquery.gaia import Gaia
+    HAS_ASTROPY_AND_QUERY = True
+
+    # Only now turn on HTTP debugging
+    import http.client as http_client
+    http_client.HTTPConnection.debuglevel = 1
+
+    logging.getLogger("astropy").setLevel(logging.DEBUG)
+    logging.getLogger("astroquery").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3").setLevel(logging.DEBUG)
+
+    # Set timeout
+    try:
+        Gaia.TIMEOUT = 900  # 15 minutes
+        logger.info("Gaia.TIMEOUT set to 900 seconds")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not set Gaia.TIMEOUT: {e}")
+        
+    logger.info("Successfully imported astropy and astroquery")
+
+except ImportError as e:
+    HAS_ASTROPY_AND_QUERY = False
+    logger.error(f"Critical libraries (astropy/astroquery) not found: {e}")
+    print("⚠️  Critical libraries (astropy/astroquery) not found in data_io.py. Please install them:")
+    print("   pip install astropy astroquery numpy pandas")
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.getLogger("astropy").setLevel(logging.DEBUG)
+logging.getLogger("astroquery").setLevel(logging.DEBUG)
+logging.getLogger("urllib3").setLevel(logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -35,11 +74,10 @@ try:
     HAS_ASTROPY_AND_QUERY = True
     
     # Set timeout for Gaia queries
-    if hasattr(Gaia, 'TIMEOUT'):
+    try:
         Gaia.TIMEOUT = 900  # 15 minutes
-    elif hasattr(Gaia, 'tap'):
-        if hasattr(Gaia.tap, 'timeout'):
-            Gaia.tap.timeout = 900
+    except Exception as e:
+        logger.warning(f"Could not set Gaia.TIMEOUT: {e}")
             
     logger.info("Successfully imported astropy and astroquery")
     
@@ -64,8 +102,8 @@ ZSUN_KPC_ASTRO = 0.025 * u.kpc        # Height of Sun above midplane
 VSUN_KMS_ASTRO = CartesianDifferential([11.1, 245.6, 7.25] * u.km/u.s)  # Solar motion
 
 # Data quality parameters
-MIN_PARALLAX_MAS = 0.1                 # Minimum parallax (mas) - corresponds to max distance ~10 kpc
-MIN_PARALLAX_OVER_ERROR = 10           # Minimum parallax SNR for reliable distances
+MIN_PARALLAX_MAS = 0.033               # allows distances up to ~30 kpc
+MIN_PARALLAX_OVER_ERROR = 5           # Minimum parallax SNR for reliable distances
 MAX_PM_ERROR_MAS_YR = 0.2              # Maximum proper motion error (mas/yr)
 MAX_RV_ERROR_KMS = 5                   # Maximum radial velocity error (km/s)
 MAX_RUWE = 1.2                         # Maximum RUWE for good astrometric solutions
@@ -184,8 +222,30 @@ def perform_gaia_adql_query_enhanced(
         logger.debug("ADQL Query:\n" + query_adql)
         
         # Execute query
-        job = Gaia.launch_job_async(query_adql)
-        tbl_results = job.get_results()
+        try:
+            logger.debug("ADQL Query:\n" + query_adql)
+            job = Gaia.launch_job_async(query_adql)
+            tbl_results = job.get_results()
+            df_raw_live = tbl_results.to_pandas()
+
+        except Exception as e:
+            logger.error(f"Gaia ADQL query failed: {e}")
+            
+            # Print full traceback
+            tb_str = traceback.format_exc()
+            logger.error(f"Traceback:\n{tb_str}")
+
+            # Try to log the response from the job, if any
+            if 'job' in locals():
+                try:
+                    logger.error(f"Job phase: {job.phase}")
+                    logger.error(f"Job error report:\n{job.get_error_report()}")
+                except Exception as inner:
+                    logger.warning(f"Could not retrieve job error report: {inner}")
+
+            return None
+        
+        
         df_raw_live = tbl_results.to_pandas()
         
         logger.info(f"Gaia ADQL query successful: {len(df_raw_live):,} stars returned")
@@ -825,57 +885,141 @@ def load_gaia(
     return return_dict
 
 
+def load_all_sky_gaia_slices(
+    lon_bin_width: int = 30,
+    stars_per_bin: int = 12000,
+    output_dir: str = "gaia_sky_slices",
+    force_query: bool = False,
+    max_distance_kpc: float = 30.0
+) -> pd.DataFrame:
+    """
+    Query and process Gaia stars across the full disk in longitude slices.
+
+    Parameters
+    ----------
+    lon_bin_width : int
+        Width of longitude slices in degrees (e.g., 30° = 12 slices)
+    stars_per_bin : int
+        Max stars to download per slice
+    output_dir : str
+        Where to cache raw and processed data
+    force_query : bool
+        If True, re-query Gaia even if cache exists
+    max_distance_kpc : float
+        Max galactocentric radius to retain after transformation
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined DataFrame of all stars across all bins
+    """
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    all_dataframes = []
+
+    # Inside the for loop in load_all_sky_gaia_slices
+    for lon_min in range(0, 360, lon_bin_width):
+        lon_max = lon_min + lon_bin_width
+        lon_label = f"L{lon_min:03d}-{lon_max:03d}"
+
+        raw_cache = f"{output_dir}/raw_{lon_label}.csv"
+        processed_cache = f"{output_dir}/processed_{lon_label}.parquet"
+
+        logger.info(f"\n🌌 Querying stars with {lon_min}° ≤ l < {lon_max}°")
+
+        # Adjust cuts based on longitude region
+        if 60 <= lon_min < 180 or 270 <= lon_min < 330:
+            stars_this_bin = 12000
+            min_parallax = 0.02
+            min_snr = 8
+        elif 0 <= lon_min < 90:
+            stars_this_bin = 12000
+            min_parallax = 0.03
+            min_snr = 10
+        else:
+            stars_this_bin = 12000
+            min_parallax = 0.025
+            min_snr = 8
+
+        
+        query_adql = f"""
+SELECT TOP {stars_this_bin}
+    source_id, ra, dec, parallax, parallax_error,
+    pmra, pmra_error, pmdec, pmdec_error,
+    radial_velocity, radial_velocity_error,
+    ruwe, phot_g_mean_mag, b, l
+FROM gaiadr3.gaia_source
+WHERE parallax > {min_parallax}
+    AND parallax_over_error > {min_snr}
+    AND pmra IS NOT NULL AND pmdec IS NOT NULL
+    AND pmra_error < {MAX_PM_ERROR_MAS_YR}
+    AND pmdec_error < {MAX_PM_ERROR_MAS_YR}
+    AND radial_velocity IS NOT NULL
+    AND radial_velocity_error < {MAX_RV_ERROR_KMS}
+    AND ruwe < {MAX_RUWE}
+    AND phot_g_mean_mag < {MAX_PHOT_G_MAG}
+    AND ABS(b) < {MAX_ABS_B_DEG}
+    AND l >= {lon_min} AND l < {lon_max}
+ORDER BY phot_g_mean_mag
+"""
+
+        try:
+            if not force_query and Path(processed_cache).exists():
+                df_proc = pd.read_parquet(processed_cache)
+                logger.info(f"✅ Loaded cached slice: {processed_cache}")
+            else:
+                logger.info("📡 Sending ADQL query to Gaia...")
+                job = Gaia.launch_job_async(query_adql)
+                df_raw = job.get_results().to_pandas()
+                df_raw.to_csv(raw_cache, index=False)
+                logger.info(f"💾 Saved raw slice to {raw_cache}")
+
+                df_proc = process_raw_gaia_df_enhanced(df_raw)
+                df_proc = df_proc[df_proc['R_kpc'] < max_distance_kpc]
+                df_proc.to_parquet(processed_cache, index=False)
+                logger.info(f"✅ Processed & saved: {processed_cache}")
+            
+            all_dataframes.append(df_proc)
+
+        except Exception as e:
+            logger.error(f"❌ Failed to fetch/process {lon_label}: {e}")
+
+    # Combine all into one DataFrame
+    if all_dataframes:
+        df_all = pd.concat(all_dataframes, ignore_index=True)
+        logger.info(f"\n✅ Loaded total: {len(df_all):,} stars across {len(all_dataframes)} slices")
+        return df_all
+    else:
+        logger.error("❌ No data returned from any slice")
+        return pd.DataFrame()
+
+
 # ============================================================================
 # Test Functions
 # ============================================================================
 
 if __name__ == '__main__':
-    """Test the enhanced data loading functionality"""
-    
+    """Run full-sky Gaia DR3 data acquisition with 30° longitude bins"""
+
     print("\n" + "="*60)
-    print("TESTING ENHANCED GAIA DATA LOADER")
+    print("🌌 FULL SKY GAIA DATA LOADER")
     print("="*60)
-    
-    # Test file names
-    test_raw_csv = "test_gaia_enhanced_raw.csv"
-    test_processed_parquet = "test_gaia_enhanced_processed.parquet"
-    
-    # Test 1: Force new enhanced query
-    print("\n--- Test 1: Enhanced Query with Validation ---")
-    gaia_data = load_gaia(
-        sample_max=1000,
-        force_new_query_gaia=True,
-        force_reprocess_raw=True,
-        raw_cache_filename=test_raw_csv,
-        processed_cache_filename=test_processed_parquet,
-        use_enhanced_query=True,
-        validate_data=True
+
+    # Run full-sky loader for publication-grade data
+    df_all_sky = load_all_sky_gaia_slices(
+        lon_bin_width=30,         # 12 bins around full galactic disk
+        stars_per_bin=12000,       # Safe number of stars per bin
+        output_dir="gaia_sky_slices",
+        force_query=True,        # Set to True to re-download all
+        max_distance_kpc=30.0     # Target up to 30 kpc from galactic center
     )
-    
-    if gaia_data and gaia_data["R_kpc"] is not None:
-        print(f"\n✅ Test 1 Success: Loaded {len(gaia_data['R_kpc']):,} stars")
-        print(f"   R range: [{gaia_data['R_kpc'].min():.2f}, {gaia_data['R_kpc'].max():.2f}] kpc")
-        print(f"   v range: [{gaia_data['v_obs'].min():.1f}, {gaia_data['v_obs'].max():.1f}] km/s")
-        print(f"   Median error: {np.median(gaia_data['sigma_v']):.1f} km/s")
+
+    if not df_all_sky.empty:
+        print(f"\n✅ All-sky dataset loaded with {len(df_all_sky):,} stars")
+        print(f"   R_kpc range: {df_all_sky['R_kpc'].min():.2f}–{df_all_sky['R_kpc'].max():.2f} kpc")
+        print(f"   Median v_obs: {np.median(df_all_sky['v_obs']):.2f} km/s")
     else:
-        print("❌ Test 1 Failed: Could not load data")
-    
-    # Test 2: Load from cache
-    print("\n--- Test 2: Load from Cache ---")
-    gaia_data_cached = load_gaia(
-        sample_max=1000,
-        force_new_query_gaia=False,
-        force_reprocess_raw=False,
-        raw_cache_filename=test_raw_csv,
-        processed_cache_filename=test_processed_parquet,
-        validate_data=False  # Skip validation for speed
-    )
-    
-    if gaia_data_cached and len(gaia_data_cached["R_kpc"]) == len(gaia_data["R_kpc"]):
-        print("✅ Test 2 Success: Cache working correctly")
-    else:
-        print("❌ Test 2 Failed: Cache issue")
-    
+        print("❌ All-sky load failed")
+
     print("\n" + "="*60)
-    print("TESTING COMPLETE")
+    print("✅ ALL-SKY GAIA DATA LOADING COMPLETE")
     print("="*60)

@@ -139,28 +139,29 @@ def get_or_create_logger():
 
 # Physical bounds for parameters (based on MW observations and theory)
 PHYSICAL_BOUNDS = {
-    # Mass parameters (M_sun)
-    'M_disk_thin_solar':   {'min': 3e10, 'max': 8e10, 'typical': 5e10},
-    'M_disk_thick_solar':  {'min': 5e9,  'max': 3e10, 'typical': 1.5e10},
-    'M_bulge_solar':       {'min': 0.5e10, 'max': 3e10, 'typical': 1.5e10},
-    'M_gas_solar':         {'min': 5e9,  'max': 5e10,   'typical': 3e10},
+    # Mass parameters (M☉)
+    'M_disk_thin_solar':   {'min': 2.4e10, 'max': 9.0e10, 'typical': 5.0e10},   # Lower min, slightly higher max
+    'M_disk_thick_solar':  {'min': 5e9,    'max': 3.5e10, 'typical': 1.5e10},   # Allow more mass if needed
+    'M_bulge_solar':       {'min': 0.5e10, 'max': 2.5e10, 'typical': 1.2e10},   # Centered on MW bulge fits
+    'M_gas_solar':         {'min': 5e9,    'max': 6e10,   'typical': 3.0e10},
 
-    # Scale lengths (kpc) - EXPANDED RANGES
-    'R_d_thin_kpc':        {'min': 1.5,  'max': 5.0,    'typical': 2.6},    # Was 2.0-4.0
-    'R_d_thick_kpc':       {'min': 2.5,  'max': 8.0,    'typical': 4.0},    # Was 3.0-6.0  
-    'R_d_gas_kpc':         {'min': 4.0,  'max': 15.0,   'typical': 7.0},    # Was 4.0-12.0
-    'a_bulge_kpc':         {'min': 0.2,  'max': 2.0,    'typical': 0.7},    # Was 0.2-1.5
+    # Scale lengths (kpc)
+    'R_d_thin_kpc':        {'min': 2.0,  'max': 4.5,    'typical': 2.6},     # Gaia + Bovy 2017 range
+    'R_d_thick_kpc':       {'min': 3.5,  'max': 9.5,    'typical': 4.5},     # Extended if bimodality demands it
+    'R_d_gas_kpc':         {'min': 4.0,  'max': 15.0,   'typical': 7.0},
+    'a_bulge_kpc':         {'min': 0.2,  'max': 2.0,    'typical': 0.7},
 
     # Scale heights (kpc)
-    'h_z_thin_kpc':        {'min': 0.15, 'max': 0.8,    'typical': 0.3},    # Was 0.2-0.6
-    'h_z_thick_kpc':       {'min': 0.5,  'max': 1.5,    'typical': 0.9},    # Was 0.6-1.3
-    'h_z_gas_kpc':         {'min': 0.05, 'max': 0.4,    'typical': 0.15},   # Was 0.05-0.3
+    'h_z_thin_kpc':        {'min': 0.15, 'max': 0.5,    'typical': 0.3},     # Based on star counts and vertical profile
+    'h_z_thick_kpc':       {'min': 0.7,  'max': 1.5,    'typical': 0.9},     # Raised min for stability; ~2–3× thin
+    'h_z_gas_kpc':         {'min': 0.05, 'max': 0.4,    'typical': 0.15},
 
     # Other parameters
     'M_total':             {'min': 5e10, 'max': 2e11,   'typical': 1e11},
-    'rho_c_solar_kpc3':    {'min': 1e7,  'max': 1e10,   'typical': 5e8},    # Was 5e7-5e9
+    'rho_c_solar_kpc3':    {'min': 1e7,  'max': 1e10,   'typical': 5e8},
     'n_exp':               {'min': 0.5,  'max': 4.0,    'typical': 2.7},
 }
+
 
 # Expected ranges for validation
 EXPECTED_XI_AT_SOLAR = (0.7, 1.0)  # Xi should not suppress gravity too much at R_sun
@@ -2704,6 +2705,32 @@ def main_dynesty():
     """Main entry point with enhanced configuration and validation."""
     global logger, debug_counter
     debug_counter = 0  # Reset debug counter
+    from data_io import load_all_sky_gaia_slices
+
+    logger.info(f"\n📡 Loading full Gaia dataset from longitudinal slices...")
+
+    df_all_sky = load_all_sky_gaia_slices(
+        lon_bin_width=30,           # 12 longitude bins
+        stars_per_bin=8000,         # per bin
+        output_dir="gaia_sky_slices",
+        force_query=args.force_new_query_gaia,      # honors CLI flag
+        max_distance_kpc=30.0
+    )
+
+    if df_all_sky.empty:
+        logger.error("❌ Full-sky Gaia loading failed")
+        sys.exit(1)
+
+    # Convert to the dictionary format expected by run_dynesty
+    gaia_data_dict = {
+        "R_kpc": df_all_sky["R_kpc"].values,
+        "v_obs": df_all_sky["v_obs"].values,
+        "sigma_v": df_all_sky["sigma_v"].values
+    }
+    if "source_id" in df_all_sky.columns:
+        gaia_data_dict["source_id"] = df_all_sky["source_id"].values
+    if "quality_flag" in df_all_sky.columns:
+        gaia_data_dict["quality_flag"] = df_all_sky["quality_flag"].values
 
     # Set up logging
     logging.basicConfig(
@@ -2766,12 +2793,19 @@ def main_dynesty():
                         help="Max allowed thick/thin disk mass ratio (default: 0.7 for Milky Way)")
     parser.add_argument('--M_disk_thin_min', type=float, default=None,
                         help="Override lower prior bound for M_disk_thin_solar")
+    parser.add_argument('--M_disk_thin_max', type=float, default=None, 
+                        help="Override upper prior bound for M_disk_thin_solar")
     parser.add_argument('--h_z_thin_min', type=float, default=None,
                         help="Override lower prior bound for h_z_thin_kpc")
     parser.add_argument('--R_d_thick_max', type=float, default=None,
                         help="Override upper prior bound for R_d_thick_kpc")
     parser.add_argument('--M_gas_max', type=float, default=None,
                         help="Override upper prior bound for M_gas_solar")
+    parser.add_argument('--force_new_query_gaia', action='store_true', default=False,
+                        help="Force new Gaia query, ignoring raw cache")
+    parser.add_argument('--force_reprocess_raw', action='store_true', default=False,
+                        help="Force reprocessing of raw Gaia data, ignoring processed cache")
+
 
     
 
@@ -2885,6 +2919,8 @@ def main_dynesty():
         MW_MULTI_COMP_PARAM_CONFIG['R_d_thin_kpc']['high'] = args.R_d_thin_high
     if args.M_disk_thin_min is not None:
         MW_MULTI_COMP_PARAM_CONFIG['M_disk_thin_solar']['low'] = args.M_disk_thin_min
+    if args.M_disk_thin_max is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_disk_thin_solar']['high'] = args.M_disk_thin_max
     if args.h_z_thin_min is not None:
         MW_MULTI_COMP_PARAM_CONFIG['h_z_thin_kpc']['low'] = args.h_z_thin_min
     if args.R_d_thick_max is not None:
@@ -2927,23 +2963,6 @@ def main_dynesty():
     logger.info("Running physics module self-tests...")
     run_physics_self_tests()
     logger.info("✅ Physics tests passed")
-    
-    # Load data with enhanced validation
-    logger.info(f"\nLoading Gaia data from pre-processed file...")
-    gaia_data_dict = load_gaia(
-        sample_max=args.max_sample_gaia,
-        force_new_query_gaia=False,
-        force_reprocess_raw=False,
-        processed_cache_filename="gaia_cache/gaia_query_cache_DR3_processed_for_fit.parquet",
-        use_enhanced_query=True,
-        validate_data=args.validate_data
-    )
-    
-    if gaia_data_dict is None:
-        logger.error("Failed to load Gaia data")
-        sys.exit(1)
-    
-    logger.info(f"✅ Loaded {len(gaia_data_dict['R_kpc'])} stars")
     
     # Check configuration
     temp_fitted_names, _, _, _, _, _ = get_param_labels_and_bounds(args)
@@ -3063,11 +3082,12 @@ def main_dynesty():
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
                 np.savez(output_npz,
-                        samples=stage_results.samples,
-                        weights=weights,
-                        logl=stage_results.logl,
-                        logz=stage_results.logz,
-                        logzerr=stage_results.logzerr)
+                    samples=res.samples,
+                    weights=weights,
+                    param_names=np.array(fitted_p_names), 
+                    logl=res.logl,
+                    logz=res.logz,
+                    logzerr=res.logzerr)
                 logger.info(f"Saved {stage_name} to {output_npz}")
             except Exception as e:
                 logger.error(f"Failed to save {stage_name}: {e}")
@@ -3094,11 +3114,12 @@ def main_dynesty():
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
                 np.savez(output_npz,
-                        samples=stage_results.samples,
-                        weights=weights,
-                        logl=stage_results.logl,
-                        logz=stage_results.logz,
-                        logzerr=stage_results.logzerr)
+                 samples=stage_results.samples,
+                 weights=weights,
+                 param_names=np.array(fitted_p_names),
+                 logl=stage_results.logl,
+                 logz=stage_results.logz,
+                 logzerr=stage_results.logzerr)
                 logger.info(f"✅ Saved {stage_name} results to {output_npz}")
             except Exception as e:
                 logger.error(f"❌ Failed to save {stage_name} results: {e}")
@@ -3135,13 +3156,14 @@ def main_dynesty():
     # Save final .npz
     try:
         np.savez(output_npz,
-                samples=res.samples,
-                weights=np.exp(res.logwt - res.logz[-1]),
-                logl=res.logl,
-                logz=res.logz,
-                logzerr=res.logzerr,
-                ess=ess,
-                blob=res.blob if hasattr(res, 'blob') else None)
+         samples=res.samples,
+         weights=np.exp(res.logwt - res.logz[-1]),
+         param_names=np.array(fitted_p_names),
+         logl=res.logl,
+         logz=res.logz,
+         logzerr=res.logzerr,
+         ess=ess,
+         blob=res.blob if hasattr(res, 'blob') else None)
         logger.info(f"\n✅ Final results saved to {output_npz}")
     except Exception as e:
         logger.error(f"❌ Failed to save final results: {e}")
