@@ -1047,108 +1047,46 @@ def enhanced_monitor_sampler_progress(
             param_issues.append("Low fraction of physically valid samples")
 
         # Model predictions at solar radius
-        logger.info(f"\n🌟 MODEL PREDICTIONS AT SOLAR RADIUS:")
-        logger.info("─" * 60)
-        full_params = dict(zip(fitted_param_names, current_params))
-        for p_info in args_obj.all_param_info_list:
-            if not p_info['is_fitted']:
-                full_params[p_info['name']] = p_info['current_val']
-        full_params.update({
-            'include_disk_thin': args_obj.include_disk_thin,
-            'include_disk_thick': args_obj.include_disk_thick,
-            'include_bulge': args_obj.include_bulge,
-            'include_gas': args_obj.include_gas,
-            'include_bulge_density': args_obj.include_bulge
-        })
-
-        try:
-            v_newton_solar = v_baryon_total_newtonian_kms(np.array([R_SUN_KPC]), full_params)[0]
-            rho_solar = rho_baryon_total_midplane_solar_kpc3(np.array([R_SUN_KPC]), full_params)[0]
+    logger.info(f"\n🌟 MODEL PREDICTIONS AT SOLAR RADIUS (R = {R_SUN_KPC:.2f} kpc):")
+    logger.info("─" * 60)
+    
+    # Reconstruct the full parameter dictionary for the current median sample
+    res = sampler.results
+    recent_samples = res.samples[-min(1000, len(res.samples)):]
+    current_params = np.median(recent_samples, axis=0)
+    full_params = dict(zip(fitted_param_names, current_params))
+    for p_info in args_obj.all_param_info_list:
+        if not p_info['is_fitted']:
+            full_params[p_info['name']] = p_info['current_val']
             
-            # Calculate xi based on the selected function type
-            if args_obj.xi == 'grav_color':
-                # grav_color needs four arguments
-                from density_metric2 import xi_gravitational_color
-                xi_result = xi_gravitational_color(
-                    rho_solar,
-                    full_params['rho_c_solar_kpc3'],
-                    full_params.get('gamma_exp', 2.0),
-                    full_params.get('lambda_g', 1.5)
-                )
-                xi_solar = xi_result[0] if hasattr(xi_result, '__getitem__') else float(xi_result)
-            else:
-                xi_func = XI_FUNCTION_MAP.get(args_obj.xi, xi_power_law)
-                xi_result = xi_func(
-                    rho_solar,
-                    full_params['rho_c_solar_kpc3'],
-                    full_params.get('n_exp', 2.0)
-                )
-                xi_solar = xi_result[0] if hasattr(xi_result, '__getitem__') else float(xi_result)
-            
-            v_model_solar = v_newton_solar * np.sqrt(xi_solar)
+    full_params['include_disk_thin'] = args_obj.include_disk_thin
+    full_params['include_disk_thick'] = args_obj.include_disk_thick
+    full_params['include_bulge'] = args_obj.include_bulge
+    full_params['include_gas'] = args_obj.include_gas
 
-            logger.info(f"   v_Newton(R☉) = {v_newton_solar:.1f} km/s")
-            logger.info(f"   ρ(R☉,z=0) = {rho_solar:.2e} M☉/kpc³")
-            logger.info(f"   ξ(R☉) = {xi_solar:.3f}")
-            logger.info(f"   v_model(R☉) = {v_model_solar:.1f} km/s")
+    try:
+        r_solar = np.array([R_SUN_KPC])
+        
+        # Calculate Newtonian velocity (the baseline)
+        v_newton_solar = v_baryon_total_newtonian_kms(r_solar, full_params)[0]
+        
+        # Calculate DDMM velocity
+        rho_solar = rho_baryon_total_midplane_solar_kpc3(r_solar, full_params)[0]
+        xi_func = XI_FUNCTION_MAP.get(args_obj.xi, XI_FUNCTION_MAP['power'])
+        n_key = 'gamma_exp' if 'gamma_exp' in full_params else 'n_exp'
+        A_key = 'lambda_g' if 'lambda_g' in full_params else 'A'
+        xi_solar = xi_func(rho_solar, full_params['rho_c_solar_kpc3'], full_params[n_key], full_params.get(A_key, 1.0))
+        xi_solar = np.minimum(xi_solar, 5.0)[0]
+        v_model_solar = v_newton_solar * np.sqrt(xi_solar)
 
-            if v_model_solar < EXPECTED_V_AT_SOLAR[0] or v_model_solar > EXPECTED_V_AT_SOLAR[1]:
-                logger.warning(f"⚠️  v(R☉) = {v_model_solar:.0f} km/s outside expected range")
-                param_issues.append(f"v(R☉) = {v_model_solar:.0f} km/s outside expected range")
-
-        except Exception as e:
-            logger.error(f"❌ Error calculating model predictions: {e}")
-
-        # Recommendations
-        if param_issues or convergence_tracker.stuck_counter > 3:
-            logger.info(f"\n💡 RECOMMENDATIONS:")
-            logger.info("─" * 60)
-            if convergence_tracker.stuck_counter > 3:
-                logger.info("• Sampling appears stuck. Consider curriculum learning or adjusting sampler.")
-            if any("bound" in issue for issue in param_issues):
-                logger.info("• Parameters hitting bounds. Review prior ranges.")
-            if any("physical" in issue for issue in param_issues):
-                logger.info("• Physical plausibility issues. Consider checking model and data consistency.")
-
-        logger.info("=" * 80)
-
-        # 🟢 DASHBOARD INTEGRATION
-        if dashboard_monitor is not None:
-            try:
-                dashboard_state = {
-                    "elapsed_time": float(elapsed_time / 3600),  # Convert to float
-                    "n_samples": int(n_samples),  # Convert to int
-                    "n_calls": int(ncall_total),
-                    "efficiency": float(eff),
-                    "logz": float(current_logz),
-                    "logz_err": float(res.logzerr[-1]) if hasattr(res, 'logzerr') and len(res.logzerr) > 0 else 0,
-                    "dlogz": float(dlogz),
-                    "current_nlive": int(len(res.live_points)) if hasattr(res, 'live_points') else 0,
-                    "parameter_estimates": {},
-                    "parameter_uncertainties": {},
-                    "health_warnings": convergence_tracker.health_warnings if convergence_tracker else []
-                }
-                
-                # Ensure all parameter values are JSON serializable
-                for i, name in enumerate(fitted_param_names):
-                    dashboard_state["parameter_estimates"][name] = float(current_params[i])
-                    dashboard_state["parameter_uncertainties"][name] = float(np.std(recent_samples[:, i]))
-
-                dashboard_state = make_json_serializable(dashboard_state)
-                try:
-                    dashboard_monitor.update_progress(dashboard_state)
-                except Exception as e:
-                    logger.warning(f"⚠️ Dashboard update failed: {e}")
-
-            except Exception as e:
-                logger.error(f"Failed to update dashboard: {e}")
+        # Print the direct comparison
+        logger.info(f"   Newtonian Velocity (Baryons Only): {v_newton_solar:.1f} km/s")
+        logger.info(f"   DDMM Predicted Velocity:             {v_model_solar:.1f} km/s")
+        logger.info(f"   Enhancement Factor (ξ):              {xi_solar:.3f}")
+        logger.info(f"   Difference (DDMM - Newtonian):       {v_model_solar - v_newton_solar:+.1f} km/s")
 
     except Exception as e:
-        logger.error(f"Error in monitoring: {e}")
-        import traceback
-        logger.debug(traceback.format_exc())
-
-
+        logger.error(f"❌ Error calculating model predictions: {e}")
 
 
 def format_parameter_value_enhanced(value: float, param_name: str) -> str:
@@ -1309,26 +1247,24 @@ def log_likelihood_dynesty(
     """
     Enhanced log-likelihood with correct function calls and physical plausibility checks.
     """
-    # 1. Combine fitted parameters with fixed ones
+    # 1. Combine fitted parameters with fixed ones and add boolean flags
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
             params[p_info['name']] = p_info['current_val']
-            
-    # Add the necessary boolean flags
+    
     params['include_disk_thin'] = args_dynesty_obj.include_disk_thin
     params['include_disk_thick'] = args_dynesty_obj.include_disk_thick
     params['include_bulge'] = args_dynesty_obj.include_bulge
     params['include_gas'] = args_dynesty_obj.include_gas
     
-    # 2. Check for physical plausibility BEFORE calculating
+    # 2. Check for physical plausibility (e.g., mass ratios) before expensive calculations
     is_valid, reason, *_ = check_physical_plausibility(theta_values_fitted, fitted_param_names, args_dynesty_obj)
     if not is_valid:
         return -np.inf, [np.inf]
 
     # 3. Compute the model velocity using the correct, robust method
     try:
-        # We need a helper to calculate v_ddmm correctly, just like in the other scripts
         v_newton = v_baryon_total_newtonian_kms(R_data, params)
         rho = rho_baryon_total_midplane_solar_kpc3(R_data, params)
         xi_func = XI_FUNCTION_MAP.get(xi_type, XI_FUNCTION_MAP['power'])
@@ -1347,19 +1283,23 @@ def log_likelihood_dynesty(
     except Exception:
         return -np.inf, [np.inf]
     
-    # 4. Compare to data (using correct keys)
-    chi2 = np.sum(((v_data - v_model) / sigma_data)**2)
-    
-    # 5. Penalty for extreme predictions (to guide the sampler)
+    # --- NEW: PLAUSIBILITY PENALTY TO GUIDE THE SAMPLER ---
+    # This directly addresses your second question.
+    # We check the model's prediction in the solar neighborhood. If it's too high,
+    # we return -inf, telling dynesty this is a "forbidden" region of parameter space.
     v_model_solar = np.median(v_model[(R_data > 7.5) & (R_data < 8.5)])
-    if v_model_solar > 250: # Add a soft penalty if it starts to overshoot
-        return -np.inf
+    if v_model_solar > 250:  # Set a hard ceiling for plausible velocities
+        return -np.inf, [np.inf]
+    # --- END OF NEW SECTION ---
 
+    # 4. Calculate the standard chi-squared likelihood
+    chi2 = np.sum(((v_data - v_model) / sigma_data)**2)
     log_L = -0.5 * chi2
     
     if not np.isfinite(log_L):
         return -np.inf, [np.inf]
 
+    # Return the RMSE as a "blob" for monitoring
     rmse = np.sqrt(np.mean((v_data - v_model)**2))
     return log_L, [rmse]
 
