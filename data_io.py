@@ -22,8 +22,18 @@ import pandas as pd
 from pathlib import Path
 import sys
 import logging
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union, TypedDict
 import traceback
+
+class GaiaData(TypedDict):
+    R_kpc: np.ndarray
+    v_obs: np.ndarray
+    sigma_v: np.ndarray
+    z_kpc: np.ndarray
+    source_id: np.ndarray
+    quality_flag: np.ndarray
+    v_R_kms: np.ndarray
+    v_z_kms: np.ndarray
 
 # Set up logging early
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -181,39 +191,42 @@ def perform_gaia_adql_query_enhanced(
     # Construct enhanced ADQL query
     logger.info(f"Performing LIVE Gaia DR3 ADQL Query (limit {limit_val:,}, subsample 1/{subsample_factor})")
     
+    logger.info(f"Performing LIVE Gaia DR3 ADQL Query (RELAXED CUTS, limit {limit_val:,}, subsample 1/{subsample_factor})")
+
+    # --- Define the new, relaxed thresholds ---
+    # We will accept lower parallax SNR to see more distant stars
+    RELAXED_PARALLAX_OVER_ERROR = 3
+    # We will accept higher velocity errors, which are common for faint, distant stars
+    RELAXED_RV_ERROR_KMS = 15
+    # Relax the RUWE cut slightly
+    RELAXED_RUWE = 1.4
+    # Set a minimum positive parallax to avoid spurious nearby stars
+    MIN_POSITIVE_PARALLAX_MAS = 0.01 # Corresponds to a max distance of 100 kpc
+    # -------------------------------------------
+
     query_adql = f"""
     SELECT TOP {limit_val}
         source_id, ra, dec, parallax, parallax_error,
         pmra, pmra_error, pmdec, pmdec_error,
         radial_velocity, radial_velocity_error,
-        ruwe, phot_g_mean_mag, b, l,
-        -- Additional quality indicators for enhanced filtering
-        astrometric_excess_noise,
-        astrometric_excess_noise_sig,
-        visibility_periods_used,
-        astrometric_n_good_obs_al,
-        radial_velocity_renormalised_gof,
-        phot_bp_rp_excess_factor
+        ruwe, phot_g_mean_mag, b, l
     FROM gaiadr3.gaia_source
-    WHERE parallax IS NOT NULL
-      AND parallax > {MIN_PARALLAX_MAS}                    -- Max distance ~10 kpc
-      AND parallax_over_error > {MIN_PARALLAX_OVER_ERROR}  -- High SNR parallax
-      AND pmra IS NOT NULL AND pmdec IS NOT NULL
-      AND pmra_error < {MAX_PM_ERROR_MAS_YR} 
-      AND pmdec_error < {MAX_PM_ERROR_MAS_YR}              -- Tight PM errors
-      AND radial_velocity IS NOT NULL
-      AND radial_velocity_error < {MAX_RV_ERROR_KMS}       -- Strict RV error
-      AND ruwe < {MAX_RUWE}                                 -- Good astrometric solution
-      AND phot_g_mean_mag < {MAX_PHOT_G_MAG}               -- Bright stars only
-      AND ABS(b) < {MAX_ABS_B_DEG}                         -- Focus on disk
-      AND visibility_periods_used > {MIN_VISIBILITY_PERIODS} -- Well-observed
-      AND astrometric_n_good_obs_al > 100                   -- Many observations
-      AND astrometric_excess_noise < 1                      -- Low excess noise
-      AND astrometric_excess_noise_sig < 2                  -- Not significant
-      -- Quality cuts on RV if available
-      AND (radial_velocity_renormalised_gof < 3 OR radial_velocity_renormalised_gof IS NULL)
-      -- Spatial subsampling for uniformity
-      AND MOD(source_id, {subsample_factor}) = 0
+    WHERE
+        -- Core kinematic requirements (must have all 6D phase space info)
+        parallax IS NOT NULL AND parallax > {MIN_POSITIVE_PARALLAX_MAS}
+        AND pmra IS NOT NULL AND pmdec IS NOT NULL
+        AND radial_velocity IS NOT NULL
+
+        -- RELAXED quality cuts to increase sample size at large distances
+        AND parallax_over_error > {RELAXED_PARALLAX_OVER_ERROR}
+        AND radial_velocity_error < {RELAXED_RV_ERROR_KMS}
+        AND ruwe < {RELAXED_RUWE}
+
+        -- Retain a focus on the disk
+        AND ABS(b) < {MAX_ABS_B_DEG}
+
+        -- Spatial subsampling for uniformity (important for all-sky samples)
+        AND MOD(source_id, {subsample_factor}) = 0
     ORDER BY random_index
     """
     
@@ -322,6 +335,116 @@ def _validate_raw_gaia_data(df_raw: pd.DataFrame) -> None:
         logger.info(f"  Parallax range: {df_raw['parallax'].min():.3f} - "
                    f"{df_raw['parallax'].max():.3f} mas")
 
+
+# ============================================================================
+# ############# PLACEHOLDER FOR FUTURE BAILER-JONES UPGRADE #############
+# The following functions demonstrate how to get more accurate distances for
+# faint/distant stars by crossmatching with the Bailer-Jones et al. (2021)
+# geometric distance catalog. This is the recommended "expert method" for
+# pushing the analysis to larger Galactic radii.
+#
+# To activate this, you would:
+# 1. Uncomment these functions.
+# 2. Modify the main `load_gaia` function to call these new versions.
+# ============================================================================
+
+#
+# def perform_gaia_query_with_bailerjones_distances(
+#     limit_val: int = 100000,
+#     subsample_factor: int = 10
+# ) -> Optional[pd.DataFrame]:
+#     """
+#     This function demonstrates the advanced technique of crossmatching with the
+#     Bailer-Jones distance catalog directly on the Gaia server.
+#     """
+#     logger.info("Performing LIVE Gaia Query with Bailer-Jones crossmatch...")
+#
+#     # These are the same relaxed cuts from the intermediate step
+#     RELAXED_PARALLAX_OVER_ERROR = 3
+#     RELAXED_RV_ERROR_KMS = 15
+#     RELAXED_RUWE = 1.4
+#
+#     # The ADQL query is modified to JOIN the two tables.
+#     # We select our stars first using the relaxed cuts, and then
+#     # we join with the Bailer-Jones catalog to get the better distance estimates.
+#     query_adql_bj = f"""
+#     SELECT TOP {limit_val}
+#         -- Select columns from the main Gaia source table
+#         main.source_id, main.ra, main.dec, main.parallax, main.parallax_error,
+#         main.pmra, main.pmra_error, main.pmdec, main.pmdec_error,
+#         main.radial_velocity, main.radial_velocity_error,
+#         main.ruwe, main.phot_g_mean_mag, main.b, main.l,
+#
+#         -- ALSO select the better distance estimate from the Bailer-Jones table
+#         -- 'r_med_geo' is the median geometric distance in parsecs.
+#         bj.r_med_geo,
+#         bj.r_lo_geo, -- Lower confidence interval on distance
+#         bj.r_hi_geo  -- Upper confidence interval on distance
+#
+#     FROM gaiadr3.gaia_source AS main
+#     -- JOIN with the external Bailer-Jones catalog on the server
+#     JOIN external.gaiadr3_geometric_distance AS bj
+#       ON main.source_id = bj.source_id
+#
+#     WHERE
+#         -- Apply the SAME relaxed quality cuts as before
+#         main.parallax IS NOT NULL AND main.parallax > 0
+#         AND main.pmra IS NOT NULL AND main.pmdec IS NOT NULL
+#         AND main.radial_velocity IS NOT NULL
+#         AND main.parallax_over_error > {RELAXED_PARALLAX_OVER_ERROR}
+#         AND main.radial_velocity_error < {RELAXED_RV_ERROR_KMS}
+#         AND main.ruwe < {RELAXED_RUWE}
+#         AND ABS(main.b) < 10
+#         AND MOD(main.source_id, {subsample_factor}) = 0
+#     ORDER BY main.random_index
+#     """
+#
+#     # --- The rest of the function would execute this query ---
+#     # try:
+#     #     job = Gaia.launch_job_async(query_adql_bj)
+#     #     df_raw_live = job.get_results().to_pandas()
+#     #     return df_raw_live
+#     # except Exception as e:
+#     #     logger.error(f"Bailer-Jones query failed: {e}")
+#     #     return None
+#
+#
+# def process_raw_gaia_df_with_bailerjones(df_raw_bj: pd.DataFrame) -> pd.DataFrame:
+#     """
+#     This function shows how the processing step would change to use the
+#     more accurate Bailer-Jones distances instead of 1/parallax.
+#     """
+#     # ... (initial setup like defining the gc_frame is the same) ...
+#
+#     # The KEY CHANGE is in creating the SkyCoord object.
+#     # We directly use the Bailer-Jones distance column.
+#     coords_icrs = SkyCoord(
+#         ra=df_raw_bj['ra'].values * u.deg,
+#         dec=df_raw_bj['dec'].values * u.deg,
+#
+#         # --- THIS IS THE CRITICAL CHANGE ---
+#         # USE THIS:
+#         distance=df_raw_bj['r_med_geo'].values * u.pc,
+#         # INSTEAD OF THIS:
+#         # distance=(df_raw['parallax'].values * u.mas).to(u.pc, equivalencies=u.parallax()),
+#         # --- END OF CHANGE ---
+#
+#         pm_ra_cosdec=df_raw_bj['pmra'].values * u.mas/u.yr,
+#         pm_dec=df_raw_bj['pmdec'].values * u.mas/u.yr,
+#         radial_velocity=df_raw_bj['radial_velocity'].values * u.km/u.s,
+#         frame='icrs'
+#     )
+#
+#     # --- The rest of the processing is exactly the same ---
+#     # coords_gc = coords_icrs.transform_to(gc_frame)
+#     # ... etc ...
+#
+#     # (The function would return the fully processed DataFrame)
+#     # return df_processed
+#
+# # ============================================================================
+# ############# END OF BAILER-JONES PLACEHOLDER #############
+# ============================================================================
 
 # ============================================================================
 # Enhanced Processing Functions
@@ -694,7 +817,7 @@ def load_gaia(
     processed_cache_filename: Optional[str] = None,
     use_enhanced_query: bool = True,
     validate_data: bool = True
-) -> Optional[Dict[str, np.ndarray]]:
+) -> Optional[GaiaData]:
     """
     Load Gaia data with comprehensive quality controls and validation.
     
