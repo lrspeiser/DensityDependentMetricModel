@@ -913,15 +913,15 @@ def enhanced_monitor_sampler_progress(
     logger: logging.Logger,
     gp_surrogate=None,
     args_obj=None,
-    dashboard_monitor=None  # Optional dashboard integration
+    dashboard_monitor=None
 ):
     """
-    Enhanced monitoring with parameter health checks, convergence diagnostics, and optional dashboard updates.
+    Enhanced monitoring with parameter health checks, convergence diagnostics,
+    and a direct DDMM vs. Newtonian comparison.
     """
     global convergence_tracker
-    from density_metric2 import XI_FUNCTION_MAP, xi_power_law
-
-
+    
+    # This 'try' block wraps the entire function to catch any unexpected errors during monitoring.
     try:
         res = sampler.results
 
@@ -935,14 +935,11 @@ def enhanced_monitor_sampler_progress(
 
         samples = res.samples
         n_samples, n_params = samples.shape
-
-        # Total calls
         ncall_total = np.sum(res.ncall) if isinstance(res.ncall, np.ndarray) else res.ncall
         elapsed_time = time.time() - start_time
         elapsed_str = str(timedelta(seconds=int(elapsed_time)))
-
-        # Efficiency
         eff = 100.0 * n_samples / ncall_total if ncall_total > 0 else 0.0
+        
         logger.info(f"⏱️  Elapsed: {elapsed_str} | 📊 Samples: {n_samples:,} | 🎲 Calls: {ncall_total:,} | 📈 Eff: {eff:.2f}%")
 
         if gp_surrogate is not None and GP_AVAILABLE:
@@ -969,10 +966,8 @@ def enhanced_monitor_sampler_progress(
         # Convergence check
         recent_samples = samples[-min(1000, len(samples)):]
         current_params = np.median(recent_samples, axis=0)
-
         if convergence_tracker is None:
             convergence_tracker = ConvergenceTracker(fitted_param_names)
-
         convergence_tracker.update(current_logz, current_params, eff, recent_samples)
         logger.info("\n🎯 CONVERGENCE PROGRESS:")
         logger.info("─" * 60)
@@ -987,7 +982,6 @@ def enhanced_monitor_sampler_progress(
                 dlogz = float(sampler.saved_logz[-1] - sampler.saved_logz[-2])
             else:
                 dlogz = float("nan")
-
             logger.info(f"\n📏 Stopping criterion: dlogz = {dlogz:.4f}")
             if args_obj and hasattr(args_obj, 'dlogz_target'):
                 if dlogz < args_obj.dlogz_target:
@@ -998,30 +992,19 @@ def enhanced_monitor_sampler_progress(
         logger.info("─" * 80)
         logger.info(f"{'Parameter':<25} {'Median':<15} {'MAD':<15} {'Status':<15}")
         logger.info("─" * 80)
-        param_issues = []
-
         for i, (param_name, param_label) in enumerate(zip(fitted_param_names, fitted_param_labels)):
             values = recent_samples[:, i]
             median_val = np.median(values)
             mad = np.median(np.abs(values - median_val))
             formatted_val = format_parameter_value_enhanced(median_val, param_name)
             formatted_mad = format_parameter_value_enhanced(mad, param_name)
-
             status = "✓"
             if param_name in MW_MULTI_COMP_PARAM_CONFIG:
                 config = MW_MULTI_COMP_PARAM_CONFIG[param_name]
                 if median_val < config['low'] * 1.1:
                     status = "⚠️ Near lower bound"
-                    param_issues.append(f"{param_name} near lower bound")
                 elif median_val > config['high'] * 0.9:
                     status = "⚠️ Near upper bound"
-                    param_issues.append(f"{param_name} near upper bound")
-                elif param_name in PHYSICAL_BOUNDS:
-                    bounds = PHYSICAL_BOUNDS[param_name]
-                    if median_val < bounds['min'] or median_val > bounds['max']:
-                        status = "❌ Unphysical"
-                        param_issues.append(f"{param_name} outside physical bounds")
-
             param_display = param_name.replace('_solar', '').replace('_kpc3', '').replace('_kpc', '')
             logger.info(f"{param_display:<25} {formatted_val:<15} {formatted_mad:<15} {status:<15}")
 
@@ -1033,61 +1016,79 @@ def enhanced_monitor_sampler_progress(
             logger.info("✅ Median parameters pass all physical checks")
         else:
             logger.error(f"❌ Median parameters FAIL physical checks: {reason}")
-            param_issues.append(f"Physical check failed: {reason}")
+        
+        # --- NEW: LIVE MODEL COMPARISON ---
+        logger.info(f"\n🌟 MODEL PREDICTIONS AT SOLAR RADIUS (R = {R_SUN_KPC:.2f} kpc):")
+        logger.info("─" * 60)
+        
+        full_params = dict(zip(fitted_param_names, current_params))
+        for p_info in args_obj.all_param_info_list:
+            if not p_info['is_fitted']:
+                full_params[p_info['name']] = p_info['current_val']
+        full_params.update({
+            'include_disk_thin': args_obj.include_disk_thin,
+            'include_disk_thick': args_obj.include_disk_thick,
+            'include_bulge': args_obj.include_bulge,
+            'include_gas': args_obj.include_gas,
+        })
 
-        # Sample validity
-        n_valid = sum(
-            1 for j in range(min(100, len(recent_samples)))
-            if check_physical_plausibility(recent_samples[j], fitted_param_names, args_obj)[0]
-        )
-        valid_fraction = n_valid / min(100, len(recent_samples))
-        logger.info(f"   {valid_fraction*100:.1f}% of recent samples pass physical checks")
-        if valid_fraction < 0.5:
-            logger.warning("⚠️  Majority of samples failing physical checks!")
-            param_issues.append("Low fraction of physically valid samples")
-
-        # Model predictions at solar radius
-    logger.info(f"\n🌟 MODEL PREDICTIONS AT SOLAR RADIUS (R = {R_SUN_KPC:.2f} kpc):")
-    logger.info("─" * 60)
-    
-    # Reconstruct the full parameter dictionary for the current median sample
-    res = sampler.results
-    recent_samples = res.samples[-min(1000, len(res.samples)):]
-    current_params = np.median(recent_samples, axis=0)
-    full_params = dict(zip(fitted_param_names, current_params))
-    for p_info in args_obj.all_param_info_list:
-        if not p_info['is_fitted']:
-            full_params[p_info['name']] = p_info['current_val']
+        try:
+            r_solar = np.array([R_SUN_KPC])
             
-    full_params['include_disk_thin'] = args_obj.include_disk_thin
-    full_params['include_disk_thick'] = args_obj.include_disk_thick
-    full_params['include_bulge'] = args_obj.include_bulge
-    full_params['include_gas'] = args_obj.include_gas
+            v_newton_solar = v_baryon_total_newtonian_kms(r_solar, full_params)[0]
+            rho_solar = rho_baryon_total_midplane_solar_kpc3(r_solar, full_params)[0]
+            
+            xi_func = XI_FUNCTION_MAP.get(args_obj.xi, XI_FUNCTION_MAP['power'])
+            n_key = 'gamma_exp' if 'gamma_exp' in full_params else 'n_exp'
+            A_key = 'lambda_g' if 'lambda_g' in full_params else 'A'
+            
+            xi_solar_val = xi_func(rho_solar, full_params['rho_c_solar_kpc3'], full_params[n_key], full_params.get(A_key, 1.0))
+            xi_solar = np.minimum(xi_solar_val, 5.0)[0]
+            v_model_solar = v_newton_solar * np.sqrt(xi_solar)
 
-    try:
-        r_solar = np.array([R_SUN_KPC])
+            logger.info(f"   Newtonian Velocity (Baryons Only): {v_newton_solar:.1f} km/s")
+            logger.info(f"   DDMM Predicted Velocity:             {v_model_solar:.1f} km/s")
+            logger.info(f"   Enhancement Factor (ξ):              {xi_solar:.3f}")
+            logger.info(f"   Difference (DDMM - Newtonian):       {v_model_solar - v_newton_solar:+.1f} km/s")
+
+        except Exception as e:
+            logger.error(f"❌ Error calculating model predictions: {e}")
+        # --- END OF NEW SECTION ---
         
-        # Calculate Newtonian velocity (the baseline)
-        v_newton_solar = v_baryon_total_newtonian_kms(r_solar, full_params)[0]
-        
-        # Calculate DDMM velocity
-        rho_solar = rho_baryon_total_midplane_solar_kpc3(r_solar, full_params)[0]
-        xi_func = XI_FUNCTION_MAP.get(args_obj.xi, XI_FUNCTION_MAP['power'])
-        n_key = 'gamma_exp' if 'gamma_exp' in full_params else 'n_exp'
-        A_key = 'lambda_g' if 'lambda_g' in full_params else 'A'
-        xi_solar = xi_func(rho_solar, full_params['rho_c_solar_kpc3'], full_params[n_key], full_params.get(A_key, 1.0))
-        xi_solar = np.minimum(xi_solar, 5.0)[0]
-        v_model_solar = v_newton_solar * np.sqrt(xi_solar)
+        # Dashboard update
+        if dashboard_monitor is not None:
+            try:
+                dashboard_state = {
+                    "elapsed_time": float(elapsed_time / 3600),
+                    "n_samples": int(n_samples),
+                    "n_calls": int(ncall_total),
+                    "efficiency": float(eff),
+                    "logz": float(current_logz),
+                    "logz_err": float(res.logzerr[-1]) if hasattr(res, 'logzerr') and len(res.logzerr) > 0 else 0.0,
+                    "dlogz": float(dlogz) if np.isfinite(dlogz) else 0.0,
+                    "current_nlive": int(len(res.live_points)) if hasattr(res, 'live_points') else 0,
+                    "parameter_estimates": {},
+                    "parameter_uncertainties": {},
+                    "health_warnings": convergence_tracker.health_warnings if convergence_tracker else []
+                }
+                
+                for i, name in enumerate(fitted_param_names):
+                    dashboard_state["parameter_estimates"][name] = float(current_params[i])
+                    dashboard_state["parameter_uncertainties"][name] = float(np.std(recent_samples[:, i]))
 
-        # Print the direct comparison
-        logger.info(f"   Newtonian Velocity (Baryons Only): {v_newton_solar:.1f} km/s")
-        logger.info(f"   DDMM Predicted Velocity:             {v_model_solar:.1f} km/s")
-        logger.info(f"   Enhancement Factor (ξ):              {xi_solar:.3f}")
-        logger.info(f"   Difference (DDMM - Newtonian):       {v_model_solar - v_newton_solar:+.1f} km/s")
+                dashboard_state = make_json_serializable(dashboard_state)
+                dashboard_monitor.update_progress(dashboard_state)
 
+            except Exception as e:
+                logger.warning(f"⚠️ Dashboard update failed: {e}")
+
+        logger.info("=" * 80)
+    
+    # This is the 'except' block that matches the 'try' at the top and fixes the SyntaxError.
     except Exception as e:
-        logger.error(f"❌ Error calculating model predictions: {e}")
-
+        logger.error(f"An unexpected error occurred in the monitoring function: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
 
 def format_parameter_value_enhanced(value: float, param_name: str) -> str:
     """
@@ -1245,20 +1246,20 @@ def log_likelihood_dynesty(
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
     """
-    Enhanced log-likelihood with correct function calls and physical plausibility checks.
+    Enhanced log-likelihood with correct function calls and a physical plausibility penalty.
     """
-    # 1. Combine fitted parameters with fixed ones and add boolean flags
+    # 1. Reconstruct the full parameter dictionary, including fixed values and boolean flags
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
             params[p_info['name']] = p_info['current_val']
-    
+            
     params['include_disk_thin'] = args_dynesty_obj.include_disk_thin
     params['include_disk_thick'] = args_dynesty_obj.include_disk_thick
     params['include_bulge'] = args_dynesty_obj.include_bulge
     params['include_gas'] = args_dynesty_obj.include_gas
     
-    # 2. Check for physical plausibility (e.g., mass ratios) before expensive calculations
+    # 2. Perform a quick check for physical plausibility (e.g., mass ratios)
     is_valid, reason, *_ = check_physical_plausibility(theta_values_fitted, fitted_param_names, args_dynesty_obj)
     if not is_valid:
         return -np.inf, [np.inf]
@@ -1284,15 +1285,17 @@ def log_likelihood_dynesty(
         return -np.inf, [np.inf]
     
     # --- NEW: PLAUSIBILITY PENALTY TO GUIDE THE SAMPLER ---
-    # This directly addresses your second question.
+    # This directly alters the sampler's approach by forbidding unscientific results.
     # We check the model's prediction in the solar neighborhood. If it's too high,
     # we return -inf, telling dynesty this is a "forbidden" region of parameter space.
-    v_model_solar = np.median(v_model[(R_data > 7.5) & (R_data < 8.5)])
-    if v_model_solar > 250:  # Set a hard ceiling for plausible velocities
-        return -np.inf, [np.inf]
+    v_model_solar_mask = (R_data > 7.5) & (R_data < 8.5)
+    if np.any(v_model_solar_mask):
+        v_model_solar = np.median(v_model[v_model_solar_mask])
+        if v_model_solar > 250:  # Set a hard ceiling for plausible velocities
+            return -np.inf, [np.inf]
     # --- END OF NEW SECTION ---
 
-    # 4. Calculate the standard chi-squared likelihood
+    # 4. Calculate the standard chi-squared likelihood for valid models
     chi2 = np.sum(((v_data - v_model) / sigma_data)**2)
     log_L = -0.5 * chi2
     
