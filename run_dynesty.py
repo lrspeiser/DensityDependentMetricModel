@@ -3088,12 +3088,12 @@ def main_dynesty():
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
                 np.savez(output_npz,
-                    samples=res.samples,
-                    weights=weights,
-                    param_names=np.array(fitted_p_names), 
-                    logl=res.logl,
-                    logz=res.logz,
-                    logzerr=res.logzerr)
+                        samples=stage_results.samples,
+                        weights=weights,
+                        param_names=np.array(fitted_p_names), 
+                        logl=stage_results.logl,
+                        logz=stage_results.logz,
+                        logzerr=stage_results.logzerr)
                 logger.info(f"Saved {stage_name} to {output_npz}")
             except Exception as e:
                 logger.error(f"Failed to save {stage_name}: {e}")
@@ -3120,12 +3120,12 @@ def main_dynesty():
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
                 np.savez(output_npz,
-                 samples=stage_results.samples,
-                 weights=weights,
-                 param_names=np.array(fitted_p_names),
-                 logl=stage_results.logl,
-                 logz=stage_results.logz,
-                 logzerr=stage_results.logzerr)
+                    samples=stage_results.samples,
+                    weights=weights,
+                    param_names=np.array(fitted_p_names), 
+                    logl=stage_results.logl,
+                    logz=stage_results.logz,
+                    logzerr=stage_results.logzerr)
                 logger.info(f"✅ Saved {stage_name} results to {output_npz}")
             except Exception as e:
                 logger.error(f"❌ Failed to save {stage_name} results: {e}")

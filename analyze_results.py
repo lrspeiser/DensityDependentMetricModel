@@ -87,6 +87,14 @@ class DynestyAnalyzer:
         data = np.load(self.results_file)
         if 'param_names' in data:
             self.param_names = data['param_names'].tolist()
+            self.param_labels = self.param_names.copy()
+            
+            # 🔧 Patch missing attributes if skipping detection
+            self.xi_type = 'grav_color'  # or 'power', 'enhanced', etc — pick what you used
+            self.has_bulge = True
+            self.has_thin = True
+            self.has_thick = True
+            self.has_gas = False  # You saw warnings about gas params being missing
         else:
             logger.warning("No param_names found in .npz file — inferring from sample shape")
             n_params = data['samples'].shape[1]
@@ -106,6 +114,8 @@ class DynestyAnalyzer:
             else:
                 raise ValueError(f"Unknown parameter set with {n_params} parameters. Please update analyzer.")
 
+        # Assign default param_labels = param_names (for corner/summary compatibility)
+        self.param_labels = self.param_names.copy()
 
         self.samples = data['samples']
         self.weights = data['weights'] if 'weights' in data else np.ones(len(self.samples)) / len(self.samples)

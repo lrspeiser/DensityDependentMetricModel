@@ -12,8 +12,10 @@ from numba import njit
 from scipy.special import iv as BesselI, kv as BesselK 
 import logging
 
+
 # Set up a logger for this module
 logger = logging.getLogger(__name__)
+
 
 # ---- Self-Testing Functions (as recommended by audit) ----
 def _assert_freeman_identity():
@@ -283,8 +285,7 @@ def xi_enhanced_bounded(rho, rho_c, n, A=1.0):
     
     # Clip to reasonable bounds
     result = np.maximum(result, 1e-3)
-    result = np.minimum(result, 1.0 + A)  # <-- CHANGE THIS LINE! 
-    # With A=8, this allows up to ξ=9
+    result = np.minimum(result, 1.0 + A)
     
     return result
 
@@ -314,6 +315,105 @@ def xi_gravitational_color(rho, rho_c, gamma, lambda_g):
     result = 1.0 + lambda_g * np.exp(exp_arg)
     
     return result
+
+
+@nb.njit(cache=True)
+def xi_gaussian_enhancement(rho, rho_peak, sigma_log, lambda_max):
+    """
+    Gaussian enhancement in log-density space
+    Perfect for galaxy rotation curves while preserving Solar System
+    
+    Parameters:
+    - rho: density (M☉/kpc³)
+    - rho_peak: density where enhancement peaks (~0.5 M☉/kpc³)
+    - sigma_log: width in log10 space (~1.0)
+    - lambda_max: maximum enhancement factor (~2.0 for 3x total)
+    
+    Returns xi such that:
+    - ξ ≈ 1 at Solar System densities (ρ ~ 100)
+    - ξ ≈ 1 + λ at galaxy outskirts (ρ ~ 0.1-1)
+    - ξ ≈ 1 at stellar densities (ρ ~ 10²⁴)
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    # Work in log space
+    log_rho = np.log10(np.maximum(rho_arr, 1e-30))
+    log_peak = np.log10(np.maximum(rho_peak, 1e-30))
+    
+    # Gaussian profile
+    exponent = -0.5 * ((log_rho - log_peak) / sigma_log)**2
+    # Clip to prevent overflow
+    exponent = np.maximum(exponent, -700.0)
+    enhancement = lambda_max * np.exp(exponent)
+    
+    return 1.0 + enhancement
+
+
+@nb.njit(cache=True)
+def xi_mond_like(rho, rho_c, n):
+    """
+    MOND-inspired enhancement
+    ξ → 1 as ρ → ∞
+    ξ → sqrt(1 + (ρ_c/ρ)^n) as ρ → 0
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    # Avoid division by zero
+    rho_safe = np.maximum(rho_arr, 1e-30)
+    ratio = rho_c / rho_safe
+    
+    result = np.sqrt(1.0 + np.power(ratio, n))
+    
+    # Cap maximum enhancement
+    result = np.minimum(result, 10.0)
+    
+    return result
+
+
+@nb.njit(cache=True)
+def xi_enhanced_exp(rho, rho_c, n, A=1.0):
+    """
+    Exponential enhancement at low density
+    ξ = 1 + A*exp(-(ρ/ρ_c)^n)
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    ratio = rho_arr / rho_c
+    exp_arg = -np.power(ratio, n)
+    
+    # Clip to prevent overflow
+    exp_arg = np.maximum(exp_arg, -700.0)
+    
+    result = 1.0 + A * np.exp(exp_arg)
+    
+    return result
+
+
+@nb.njit(cache=True)
+def xi_logistic_law(rho, rho_c, n_exp):
+    """
+    Numba-compiled logistic law for xi.
+    This version always works with arrays and returns an array.
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+        
+    log_rho_safe = np.log(np.maximum(rho_arr, 1e-30))
+    log_rho_c_safe = np.log(np.maximum(rho_c, 1e-30))
+    exponent_val = n_exp * (log_rho_safe - log_rho_c_safe)
+    clipped_exponent = np.clip(exponent_val, -709, 709) # Prevents np.exp overflow
+    exp_term = np.exp(clipped_exponent)
+    result_arr = 1.0 / (1.0 + exp_term)
+    
+    return result_arr
 
 
 # Test the behavior
@@ -363,28 +463,6 @@ def test_galaxy_xi():
             print(f"{R:6.1f} | {rho_disk[i]:.2e} | {xi_values[i]:.3f} | {v_factor:.3f}")
 
 
-@nb.njit(cache=True)
-def xi_mond_like(rho, rho_c, n):
-    """
-    MOND-inspired enhancement
-    ξ → 1 as ρ → ∞
-    ξ → sqrt(1 + (ρ_c/ρ)^n) as ρ → 0
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    # Avoid division by zero
-    rho_safe = np.maximum(rho_arr, 1e-30)
-    ratio = rho_c / rho_safe
-    
-    result = np.sqrt(1.0 + np.power(ratio, n))
-    
-    # Cap maximum enhancement
-    result = np.minimum(result, 10.0)
-    
-    return result
 
 @nb.njit(cache=True)
 def xi_enhanced_exp(rho, rho_c, n, A=1.0):
@@ -459,7 +537,14 @@ def xi_grav_color_standard_interface(rho, rho_c, n_exp, _unused_A=None):
     lambda_g = 3.0
     return xi_gravitational_color(rho, rho_c, gamma, lambda_g)
 
-
+def xi_gaussian_wrapper(rho, rho_c, n_exp, A=2.0):
+    """
+    Wrapper using standard 3-parameter interface
+    - rho_c becomes rho_peak (where enhancement peaks)
+    - n_exp becomes sigma_log (width parameter)
+    - A becomes lambda_max (max enhancement)
+    """
+    return xi_gaussian_enhancement(rho, rho_c, n_exp, A)
 
 @nb.njit(cache=True)
 def xi_logistic_law(rho, rho_c, n_exp):
@@ -547,16 +632,7 @@ def v_model_for_dynesty_anisotropic(R_kpc_array, p_all_params_dict, ARGS_obj_dyn
     v_mod_kms = v_n_kms * np.sqrt(np.maximum(xi_radial, 0.0))
     return v_mod_kms
 
-# And for K_z calculation, use VERTICAL xi
 
-XI_FUNCTION_MAP = {
-    'power': xi_power_law,
-    'enhanced': xi_enhanced_bounded,
-    'mond': xi_mond_like,
-    'exp_enhance': xi_enhanced_exp,
-    'logistic': xi_logistic_law,
-    'grav_color': xi_gravitational_color
-}
 
 # ---------- Milky Way Internal Consistency Checks (Unchanged) ----------
 def get_total_volume_density_at_R_z_solar_kpc3_multi(R_kpc_scalar, z_kpc_scalar, p_baryons):
@@ -623,8 +699,50 @@ XI_FUNCTION_MAP = {
     'enhanced': xi_enhanced_bounded_wrapper,
     'mond': xi_mond_like_wrapper,
     'exp_enhance': xi_enhanced_exp_wrapper,
-    'grav_color': xi_grav_color_standard_interface
+    'grav_color': xi_grav_color_standard_interface,
+    'gaussian': xi_gaussian_wrapper
 }
 
+
+def test_gaussian_xi():
+    """Test the new Gaussian xi function"""
+    print("\nTesting Gaussian Xi Function:")
+    print("="*60)
+    
+    # Test parameters
+    rho_peak = 0.316  # Peak at ~0.3 M☉/kpc³
+    sigma_log = 0.70  # Moderate width
+    lambda_max = 5.0  # Strong enhancement (6x total)
+   
+    # Test densities
+    test_densities = [
+        (1e-3, "Intergalactic void"),
+        (0.1, "Galaxy outskirts"),
+        (0.5, "Galaxy mid (peak)"),
+        (5.0, "Galaxy center"),
+        (100, "Solar System"),
+        (1e6, "Stellar surface"),
+        (1e24, "Stellar core")
+    ]
+    
+    print(f"Parameters: ρ_peak={rho_peak}, σ={sigma_log}, λ={lambda_max}")
+    print("\nρ (M☉/kpc³) | Location | ξ | v_factor | Status")
+    print("-"*60)
+    
+    for rho, location in test_densities:
+        xi = xi_gaussian_enhancement(rho, rho_peak, sigma_log, lambda_max)[0]
+        v_factor = np.sqrt(xi)
+        
+        # Check if it meets requirements
+        if location == "Solar System":
+            status = "✓" if abs(xi - 1.0) < 0.1 else "✗"
+        elif "Galaxy" in location:
+            status = "✓" if xi > 1.5 else "✗"
+        else:
+            status = "✓" if abs(xi - 1.0) < 0.5 else "✗"
+            
+        print(f"{rho:10.1e} | {location:20s} | {xi:5.3f} | {v_factor:5.3f} | {status}")
+        
+        
 # This final info log is fine, it just confirms the module was imported.
 logger.info("density_metric2.py: Multi-component and (aliased) single-disk functions defined.")

@@ -76,12 +76,9 @@ def safe_cast(o):
         return {k: safe_cast(v) for k, v in o.items()}
     elif isinstance(o, list):
         return [safe_cast(v) for v in o]
-    elif isinstance(o, np.ndarray):
-        return o.tolist()  # Convert NumPy array to a list
     elif isinstance(o, np.generic):
         return o.item()
     return o
-
 
 
 # Test result structure
@@ -191,8 +188,8 @@ class DDMMValidator:
         xi_ss = self.xi_func(
             rho_solar_system,
             self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)  # <-- Ensure this is set to 30.0
+            self.model_params['n_power'],
+            self.model_params.get('A', self.model_params.get('A_param', 10.0))
         )
         
         # GR predicts 43 arcsec/century excess
@@ -206,8 +203,8 @@ class DDMMValidator:
         logger.info(f"  Solar System density: {rho_solar_system:.2e} M☉/kpc³")
         logger.info(f"  ξ(ρ_SS) = {float(xi_ss):.8f}")
         logger.info(f"  GR prediction: {gr_prediction:.2f} arcsec/century")
-        logger.info(f"  DDMM prediction: {ddmm_prediction[0]:.2f} arcsec/century")
-        logger.info(f"  Deviation: {deviation[0]:.2e}" if isinstance(deviation, np.ndarray) else f"  Deviation: {deviation:.2e}")
+        logger.info(f"  DDMM prediction: {ddmm_prediction:.2f} arcsec/century")
+        logger.info(f"  Deviation: {deviation:.2e}")
         logger.info(f"  Status: {'PASS' if passed else 'FAIL'}")
         
         return {
@@ -256,8 +253,6 @@ class DDMMValidator:
             rho_earth_orbit,
             self.model_params['rho_c_solar_kpc3'],
             self.model_params['n_exp']
-        ,
-            self.model_params.get('A', 30.0)
         )[0]
         
         # Nordtvedt effect constraint
@@ -265,7 +260,7 @@ class DDMMValidator:
         eta_ddmm = abs(1 - xi_em)  # Simplified
         passed = eta_ddmm < eta_limit
         
-        logger.info(f"  Earth-Moon ξ = {float(xi_em):.8f}")
+        logger.info(f"  Earth-Moon ξ = {xi_em:.8f}")
         logger.info(f"  Nordtvedt parameter η = {eta_ddmm:.2e}")
         logger.info(f"  Limit: < {eta_limit:.0e}")
         logger.info(f"  Status: {'PASS' if passed else 'FAIL'}")
@@ -300,12 +295,8 @@ class DDMMValidator:
             rho += sigma_gas / (2 * 0.15)
         
         # Apply DDMM
-        xi = self.xi_func(
-            rho,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi = self.xi_func(rho, self.model_params['rho_c_solar_kpc3'],
+                        self.model_params['n_exp'])
         return v_newton * np.sqrt(xi)
 
     def _get_sparc_recommendations(self, test_details: Dict) -> List[str]:
@@ -421,12 +412,8 @@ class DDMMValidator:
             rho = sigma_star / (2 * h_z) * np.exp(-r / 3.0)  # Rough approximation
             
             # Apply DDMM
-            xi = self.xi_func(
-            rho,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+            xi = self.xi_func(rho, self.model_params['rho_c_solar_kpc3'],
+                            self.model_params['n_exp'])
             v_model = v_newton * np.sqrt(xi)
             
             # Chi-square
@@ -515,12 +502,8 @@ class DDMMValidator:
         rho = rho_baryon_total_midplane_solar_kpc3(r, params)
         
         # Apply DDMM modification
-        xi = self.xi_func(
-            rho,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi = self.xi_func(rho, self.model_params['rho_c_solar_kpc3'], 
+                         self.model_params['n_exp'])
         v_model = v_newton * np.sqrt(xi)
         
         # Calculate fit quality
@@ -564,12 +547,9 @@ class DDMMValidator:
             rho_estimate = kappa_map * Sigma_crit / 100  # M_sun/kpc^3
             
             # Apply DDMM
-            xi_map = self.xi_func(
-            rho_estimate.flatten(),
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        ).reshape(kappa_map.shape)
+            xi_map = self.xi_func(rho_estimate.flatten(), 
+                                self.model_params['rho_c_solar_kpc3'],
+                                self.model_params['n_exp']).reshape(kappa_map.shape)
             
             # Effective convergence in DDMM
             kappa_ddmm = kappa_map * xi_map
@@ -613,12 +593,8 @@ class DDMMValidator:
             xi_avg = []
             for z in z_bins:
                 rho_z = 1e6 * (1 + z)**3  # Rough density estimate
-                xi_z = self.xi_func(
-            rho_z,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+                xi_z = self.xi_func(rho_z, self.model_params['rho_c_solar_kpc3'],
+                                self.model_params['n_exp'])[0]
                 xi_avg.append(xi_z)
             
             # Expected modification to shear power spectrum
@@ -663,12 +639,8 @@ class DDMMValidator:
         # Average ξ at KiDS redshifts
         z_mean_kids = 0.7
         rho_kids = 1e6 * (1 + z_mean_kids)**3
-        xi_kids = self.xi_func(
-            rho_kids,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+        xi_kids = self.xi_func(rho_kids, self.model_params['rho_c_solar_kpc3'],
+                            self.model_params['n_exp'])[0]
         
         S8_ddmm_kids = S8_kids * xi_kids
         
@@ -677,7 +649,7 @@ class DDMMValidator:
         passed = deviation_sigma < 3  # Within 3σ
         
         logger.info(f"  KiDS mean redshift: {z_mean_kids}")
-        logger.info(f"  ξ at KiDS: {float(xi_kids):.3f}")
+        logger.info(f"  ξ at KiDS: {xi_kids:.3f}")
         logger.info(f"  S8 deviation: {deviation_sigma:.1f}σ")
         logger.info(f"  Status: {'PASS' if passed else 'FAIL'}")
         
@@ -763,12 +735,8 @@ class DDMMValidator:
         rho_total = rho_gas + rho_gal
         
         # Calculate lensing convergence with DDMM
-        xi = self.xi_func(
-            rho_total,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi = self.xi_func(rho_total, self.model_params['rho_c_solar_kpc3'],
+                         self.model_params['n_exp'])
         
         # Effective lensing mass
         M_lens_eff = np.trapz(rho_total * xi, x)
@@ -812,12 +780,8 @@ class DDMMValidator:
         rho_nfw = rho_s / ((r/r_s) * (1 + r/r_s)**2)
         
         # Apply DDMM
-        xi = self.xi_func(
-            rho_nfw,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi = self.xi_func(rho_nfw, self.model_params['rho_c_solar_kpc3'],
+                         self.model_params['n_exp'])
         
         # Calculate projected mass within Einstein radius (simplified)
         R_ein_obs = 1.5  # arcsec at z_lens
@@ -936,12 +900,8 @@ class DDMMValidator:
         # Baryon density at recombination
         rho_b_rec = 3e4  # M☉/kpc³ (rough estimate)
         
-        xi_rec = self.xi_func(
-            rho_b_rec,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+        xi_rec = self.xi_func(rho_b_rec, self.model_params['rho_c_solar_kpc3'],
+                             self.model_params['n_exp'])[0]
         
         # Sound horizon scaling
         r_s_standard = 147  # Mpc (standard cosmology)
@@ -951,7 +911,7 @@ class DDMMValidator:
         passed = deviation < 0.01  # 1% tolerance
         
         logger.info(f"  ρ_b at recombination: {rho_b_rec:.2e} M☉/kpc³")
-        logger.info(f"  ξ(z=1100) = {float(xi_rec):.6f}")
+        logger.info(f"  ξ(z=1100) = {xi_rec:.6f}")
         logger.info(f"  Standard r_s: {r_s_standard:.1f} Mpc")
         logger.info(f"  DDMM r_s: {r_s_ddmm:.1f} Mpc")
         logger.info(f"  Deviation: {deviation*100:.2f}%")
@@ -973,12 +933,8 @@ class DDMMValidator:
         
         # With DDMM, effective baryon density changes
         rho_cmb = 5e4  # M☉/kpc³
-        xi_cmb = self.xi_func(
-            rho_cmb,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+        xi_cmb = self.xi_func(rho_cmb, self.model_params['rho_c_solar_kpc3'],
+                             self.model_params['n_exp'])[0]
         
         # Rough scaling
         ratio_ddmm = ratio_observed * (1 + 0.1 * (1 - xi_cmb))
@@ -1053,12 +1009,8 @@ class DDMMValidator:
         for z in z_array:
             # Average density at redshift z
             rho_z = 1e6 * (1 + z)**3  # M☉/kpc³
-            xi_z = self.xi_func(
-            rho_z,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+            xi_z = self.xi_func(rho_z, self.model_params['rho_c_solar_kpc3'],
+                               self.model_params['n_exp'])[0]
             f_ddmm.append(f_standard[list(z_array).index(z)] * np.sqrt(xi_z))
         
         f_ddmm = np.array(f_ddmm)
@@ -1092,12 +1044,8 @@ class DDMMValidator:
         
         # Average density at z~0.5 (typical BAO measurement)
         rho_bao = 2e5  # M☉/kpc³
-        xi_bao = self.xi_func(
-            rho_bao,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+        xi_bao = self.xi_func(rho_bao, self.model_params['rho_c_solar_kpc3'],
+                             self.model_params['n_exp'])[0]
         
         # Scaling
         r_bao_ddmm = r_bao_observed * np.sqrt(xi_bao)
@@ -1107,7 +1055,7 @@ class DDMMValidator:
         
         logger.info(f"  Observed BAO scale: {r_bao_observed:.1f} Mpc")
         logger.info(f"  DDMM BAO scale: {r_bao_ddmm:.1f} Mpc")
-        logger.info(f"  ξ at BAO epoch: {float(xi_bao):.4f}")
+        logger.info(f"  ξ at BAO epoch: {xi_bao:.4f}")
         logger.info(f"  Deviation: {deviation*100:.1f}%")
         logger.info(f"  Status: {'PASS' if passed else 'FAIL'}")
         
@@ -1144,18 +1092,14 @@ class DDMMValidator:
         # Estimate average ξ at drag epoch (z ~ 1060)
         z_drag = 1060
         rho_drag = 1e8 * (1 + z_drag)**3  # Rough estimate
-        xi_drag = self.xi_func(
-            rho_drag,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+        xi_drag = self.xi_func(rho_drag, self.model_params['rho_c_solar_kpc3'],
+                            self.model_params['n_exp'])[0]
         
         rd_ddmm = rd_fiducial * np.sqrt(xi_drag)  # Simplified scaling
         
         logger.info(f"\nSound horizon analysis:")
         logger.info(f"  Fiducial rd = {rd_fiducial:.1f} Mpc")
-        logger.info(f"  ξ at drag = {float(xi_drag):.4f}")
+        logger.info(f"  ξ at drag = {xi_drag:.4f}")
         logger.info(f"  DDMM rd = {rd_ddmm:.1f} Mpc")
         
         # Test each measurement
@@ -1170,12 +1114,8 @@ class DDMMValidator:
             
             # Average density at this redshift
             rho_z = 1e6 * (1 + z)**3  # M☉/kpc³
-            xi_z = self.xi_func(
-            rho_z,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+            xi_z = self.xi_func(rho_z, self.model_params['rho_c_solar_kpc3'],
+                            self.model_params['n_exp'])[0]
             
             # Distance predictions (simplified - should integrate)
             if 'DV_over_rd' in meas:
@@ -1262,12 +1202,8 @@ class DDMMValidator:
             # Average ξ along light path
             z_path = np.linspace(0, z, 100)
             rho_path = 1e6 * (1 + z_path)**3
-            xi_path = self.xi_func(
-            rho_path,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+            xi_path = self.xi_func(rho_path, self.model_params['rho_c_solar_kpc3'],
+                                  self.model_params['n_exp'])
             xi_avg = np.mean(xi_path)
             
             # Modified distance (very simplified)
@@ -1379,12 +1315,8 @@ class DDMMValidator:
         # Laboratory density ~ 10^3 g/cm³ ~ 10^24 M☉/kpc³
         rho_lab = 1e24  # M☉/kpc³
         
-        xi_lab = self.xi_func(
-            rho_lab,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+        xi_lab = self.xi_func(rho_lab, self.model_params['rho_c_solar_kpc3'],
+                             self.model_params['n_exp'])[0]
         
         # Fifth force constraint
         alpha = abs(1 - xi_lab)
@@ -1393,7 +1325,7 @@ class DDMMValidator:
         passed = alpha < alpha_limit
         
         logger.info(f"  Lab density: {rho_lab:.2e} M☉/kpc³")
-        logger.info(f"  ξ(ρ_lab) = {float(xi_lab):.12f}")
+        logger.info(f"  ξ(ρ_lab) = {xi_lab:.12f}")
         logger.info(f"  Fifth force α = {alpha:.2e}")
         logger.info(f"  Limit: < {alpha_limit:.0e}")
         logger.info(f"  Status: {'PASS' if passed else 'FAIL'}")
@@ -1409,12 +1341,8 @@ class DDMMValidator:
         # Satellite orbit density
         rho_orbit = 1e-10  # M☉/kpc³ (very low)
         
-        xi_orbit = self.xi_func(
-            rho_orbit,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )[0]
+        xi_orbit = self.xi_func(rho_orbit, self.model_params['rho_c_solar_kpc3'],
+                               self.model_params['n_exp'])[0]
         
         # Eötvös parameter
         eta = abs(1 - xi_orbit) * 0.01  # Material dependence factor
@@ -1423,7 +1351,7 @@ class DDMMValidator:
         passed = eta < eta_limit
         
         logger.info(f"  Orbit density: {rho_orbit:.2e} M☉/kpc³")
-        logger.info(f"  ξ(ρ_orbit) = {float(xi_orbit):.12f}")
+        logger.info(f"  ξ(ρ_orbit) = {xi_orbit:.12f}")
         logger.info(f"  Eötvös η = {eta:.2e}")
         logger.info(f"  MICROSCOPE limit: < {eta_limit:.0e}")
         logger.info(f"  Status: {'PASS' if passed else 'FAIL'}")
@@ -1510,21 +1438,13 @@ class DDMMValidator:
         r = np.linspace(0.1, 30, 100)
         
         rho1 = rho_baryon_total_midplane_solar_kpc3(r, params1)
-        xi1 = self.xi_func(
-            rho1,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi1 = self.xi_func(rho1, self.model_params['rho_c_solar_kpc3'],
+                          self.model_params['n_exp'])
         integral1 = np.trapz(xi1 * rho1 * r, r)  # Cylindrical integral
         
         rho2 = rho_baryon_total_midplane_solar_kpc3(r, params2)
-        xi2 = self.xi_func(
-            rho2,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi2 = self.xi_func(rho2, self.model_params['rho_c_solar_kpc3'],
+                          self.model_params['n_exp'])
         integral2 = np.trapz(xi2 * rho2 * r, r)
         
         ratio = integral2 / integral1
@@ -1562,12 +1482,8 @@ class DDMMValidator:
         }
         
         rho1 = rho_baryon_total_midplane_solar_kpc3(r_test, params1)
-        xi1 = self.xi_func(
-            rho1,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi1 = self.xi_func(rho1, self.model_params['rho_c_solar_kpc3'],
+                          self.model_params['n_exp'])
         xi1_avg = np.mean(xi1)
         M_eff1 = M1 * xi1_avg
         
@@ -1587,12 +1503,8 @@ class DDMMValidator:
         }
         
         rho2 = rho_baryon_total_midplane_solar_kpc3(r_test, params2)
-        xi2 = self.xi_func(
-            rho2,
-            self.model_params['rho_c_solar_kpc3'],
-            self.model_params['n_exp'],
-            self.model_params.get('A', 30.0)
-        )
+        xi2 = self.xi_func(rho2, self.model_params['rho_c_solar_kpc3'],
+                          self.model_params['n_exp'])
         xi2_avg = np.mean(xi2)
         M_eff2 = M2 * xi2_avg
         

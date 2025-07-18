@@ -1,0 +1,22 @@
+{
+  "rho_c_solar_kpc3": 102000000.0,
+  "n_exp": 3.174,
+  "M_disk_thin_solar": 85100000000.0,
+  "R_d_thin_kpc": 6.271,
+  "h_z_thin_kpc": 0.445,
+  "M_disk_thick_solar": 19000000000.0,
+  "R_d_thick_kpc": 1.8,
+  "h_z_thick_kpc": 0.065,
+  "M_bulge_solar": 37100000000.0,
+  "a_bulge_kpc": 14.377,
+  "M_gas_solar": 5690000000.0,
+  "R_d_gas_kpc": 8.0,
+  "h_z_gas_kpc": 0.15,
+  "include_disk_thin": true,
+  "include_disk_thick": true,
+  "include_bulge": true,
+  "include_gas": true,
+  "xi_type": "power",
+  "lambda_g": 0.911,
+  "A": 30.0
+}

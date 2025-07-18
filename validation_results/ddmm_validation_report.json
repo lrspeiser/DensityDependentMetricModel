@@ -1,21 +1,41 @@
 {
   "model_parameters": {
-    "rho_c_solar_kpc3": 69936388319.58641,
-    "n_exp": 4.367680429314363,
-    "M_disk_thin_solar": 0.24532643455360648,
-    "R_d_thin_kpc": 25469733278.535225,
-    "h_z_thin_kpc": 5.302469702764823,
-    "M_disk_thick_solar": 0.8728733719428169,
-    "R_d_thick_kpc": 21100286529.319965,
-    "h_z_thick_kpc": 1.6374903461669499,
-    "M_bulge_solar": 21828682811.69055,
-    "a_bulge_kpc": 10.762986072944786,
-    "M_gas_solar": 0.09685339279982272,
+    "xi_function": "gaussian",
+    "fit_xi_params": true,
+    "A": 30.0,
+    "A_param": 30.0,
+    "rho_c": 0.5,
+    "rho_c_solar_kpc3": 0.5,
+    "n_exp": 0.3,
+    "n_power": 0.3,
+    "n": 0.3,
+    "M_disk_solar": 50000000000.0,
+    "R_d_kpc": 2.6,
+    "h_z_disk_kpc": 0.3,
+    "M_disk_thin_solar": 50000000000.0,
+    "R_d_thin_kpc": 2.6,
+    "h_z_thin_kpc": 0.3,
+    "M_disk_thick_solar": 1500000000.0,
+    "R_d_thick_kpc": 3.6,
+    "h_z_thick_kpc": 0.9,
+    "M_bulge_solar": 15000000000.0,
+    "a_bulge_kpc": 0.5,
+    "R_b_kpc": 0.5,
+    "M_gas_solar": 5000000000.0,
+    "R_d_gas_kpc": 7.0,
+    "R_gas_kpc": 7.0,
+    "h_z_gas_kpc": 0.15,
     "include_disk_thin": true,
     "include_disk_thick": true,
     "include_bulge": true,
     "include_gas": true,
-    "xi_type": "power"
+    "include_bulge_density": true,
+    "include_bulge_opt": true,
+    "include_gas_opt": true,
+    "fit_disk_thin": true,
+    "fit_disk_thick": true,
+    "fit_bulge": true,
+    "fit_gas": false
   },
   "test_results": [
     {
@@ -24,20 +44,26 @@
       "score": 0.0,
       "details": {
         "mercury_precession": {
-          "passed": false,
+          "passed": [
+            false
+          ],
           "score": 0.0,
-          "xi_solar_system": 3.0,
-          "deviation_ppm": 2000000.0
+          "xi_solar_system": [
+            1.3389098584156915
+          ],
+          "deviation_ppm": [
+            338909.8584156916
+          ]
         },
         "cassini_delay": {
           "passed": false,
           "score": 0.0,
-          "max_xi_deviation": 2.0
+          "max_xi_deviation": 1.3450947919176142
         },
         "lunar_ranging": {
           "passed": false,
           "score": 0.0,
-          "nordtvedt_eta": 2.0
+          "nordtvedt_eta": 0.22363153955623405
         }
       },
       "recommendations": [
@@ -49,18 +75,18 @@
     {
       "test_name": "CMB Predictions",
       "passed": false,
-      "score": 0.0,
+      "score": 0.43869313993656817,
       "details": {
         "sound_horizon": {
           "passed": false,
           "score": 0.0,
-          "xi_recombination": 3.0,
-          "sound_horizon_deviation": 0.7320508075688772
+          "xi_recombination": 1.07109916904849,
+          "sound_horizon_deviation": 0.034939210315509305
         },
         "peak_ratios": {
-          "passed": false,
-          "score": 0.0,
-          "peak_ratio_deviation": 0.19999999999999987
+          "passed": true,
+          "score": 0.8773862798731363,
+          "peak_ratio_deviation": 0.006130686006343182
         }
       },
       "recommendations": [
@@ -70,31 +96,29 @@
     },
     {
       "test_name": "Type Ia Supernovae",
-      "passed": false,
-      "score": 3.447833349209274e-28,
+      "passed": true,
+      "score": 0.9737868954763012,
       "details": {
-        "chi2_reduced": 63.23463658479581,
-        "max_distance_modulus_diff": 1.1928031367991565,
+        "chi2_reduced": 0.026562792423795376,
+        "max_distance_modulus_diff": 0.027135022637100548,
         "n_supernovae": 50
       },
-      "recommendations": [
-        "DDMM cosmological distance measure needs refinement"
-      ]
+      "recommendations": []
     },
     {
       "test_name": "Laboratory Constraints",
       "passed": false,
-      "score": 0.5,
+      "score": 0.44875034114993895,
       "details": {
         "eotwash": {
           "passed": true,
-          "score": 1.0,
-          "fifth_force_alpha": 0.0
+          "score": 0.8975006822998779,
+          "fifth_force_alpha": 1.024993177001221e-07
         },
         "microscope": {
           "passed": false,
           "score": 0.0,
-          "eotvos_eta": 0.02
+          "eotvos_eta": 0.019975407388789005
         }
       },
       "recommendations": [
@@ -109,12 +133,12 @@
         "xi_conservation": {
           "passed": false,
           "score": 0.0,
-          "integral_ratio": 1.5563572244785981
+          "integral_ratio": 1.5549196810409693
         },
         "mass_invariance": {
           "passed": false,
           "score": 0.0,
-          "M_eff_ratio": 1.31496062982126
+          "M_eff_ratio": 1.3134105501738946
         }
       },
       "recommendations": [
@@ -123,56 +147,69 @@
       ]
     }
   ],
-  "overall_score": 0.1,
-  "tests_passed": 0,
-  "tests_failed": 5,
+  "overall_score": 0.37224607531256165,
+  "tests_passed": 1,
+  "tests_failed": 4,
   "critical_issues": [
     {
       "test": "Solar System Consistency",
       "score": 0.0,
       "details": {
         "mercury_precession": {
-          "passed": false,
+          "passed": [
+            false
+          ],
           "score": 0.0,
-          "xi_solar_system": 3.0,
-          "deviation_ppm": 2000000.0
+          "xi_solar_system": [
+            1.3389098584156915
+          ],
+          "deviation_ppm": [
+            338909.8584156916
+          ]
         },
         "cassini_delay": {
           "passed": false,
           "score": 0.0,
-          "max_xi_deviation": 2.0
+          "max_xi_deviation": 1.3450947919176142
         },
         "lunar_ranging": {
           "passed": false,
           "score": 0.0,
-          "nordtvedt_eta": 2.0
+          "nordtvedt_eta": 0.22363153955623405
         }
       }
     },
     {
       "test": "CMB Predictions",
-      "score": 0.0,
+      "score": 0.43869313993656817,
       "details": {
         "sound_horizon": {
           "passed": false,
           "score": 0.0,
-          "xi_recombination": 3.0,
-          "sound_horizon_deviation": 0.7320508075688772
+          "xi_recombination": 1.07109916904849,
+          "sound_horizon_deviation": 0.034939210315509305
         },
         "peak_ratios": {
-          "passed": false,
-          "score": 0.0,
-          "peak_ratio_deviation": 0.19999999999999987
+          "passed": true,
+          "score": 0.8773862798731363,
+          "peak_ratio_deviation": 0.006130686006343182
         }
       }
     },
     {
-      "test": "Type Ia Supernovae",
-      "score": 3.447833349209274e-28,
+      "test": "Laboratory Constraints",
+      "score": 0.44875034114993895,
       "details": {
-        "chi2_reduced": 63.23463658479581,
-        "max_distance_modulus_diff": 1.1928031367991565,
-        "n_supernovae": 50
+        "eotwash": {
+          "passed": true,
+          "score": 0.8975006822998779,
+          "fifth_force_alpha": 1.024993177001221e-07
+        },
+        "microscope": {
+          "passed": false,
+          "score": 0.0,
+          "eotvos_eta": 0.019975407388789005
+        }
       }
     },
     {
@@ -182,25 +219,24 @@
         "xi_conservation": {
           "passed": false,
           "score": 0.0,
-          "integral_ratio": 1.5563572244785981
+          "integral_ratio": 1.5549196810409693
         },
         "mass_invariance": {
           "passed": false,
           "score": 0.0,
-          "M_eff_ratio": 1.31496062982126
+          "M_eff_ratio": 1.3134105501738946
         }
       }
     }
   ],
   "recommendations": [
-    "Check xi normalization across models",
-    "Consider screening mechanisms for high-density environments",
-    "DDMM needs careful early universe implementation",
-    "DDMM cosmological distance measure needs refinement",
     "Check light deflection calculations with modified metric",
-    "Adjust \u03c1_c to ensure \u03be \u2248 1 at Solar System densities",
-    "Effective mass principle may be violated",
+    "Consider screening mechanisms for high-density environments",
     "Verify Earth-Moon dynamics preservation",
+    "Adjust \u03c1_c to ensure \u03be \u2248 1 at Solar System densities",
+    "Check xi normalization across models",
+    "Effective mass principle may be violated",
+    "DDMM needs careful early universe implementation",
     "Consider running full Boltzmann code (CLASS/CAMB)"
   ]
 }
