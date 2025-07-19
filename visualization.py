@@ -2,7 +2,7 @@
 """
 Comprehensive visualization suite for DDMM vs Newtonian/GR predictions
 Creates all requested plots comparing theory with Gaia DR3 observations
-Version 2.0 (Fully Corrected)
+Version 2.0 (Fully Corrected) - PNG Output
 """
 
 import numpy as np
@@ -192,7 +192,7 @@ def plot_master_rotation_curve(gaia_data, params, samples, weights, param_names,
     
     plt.suptitle('DDMM Successfully Reproduces Flat Rotation Curve Without Dark Matter', fontsize=16, y=0.98)
     fig.tight_layout() # Use fig.tight_layout()
-    plt.savefig(f'{save_path}/master_rotation_curve.pdf', bbox_inches='tight')
+    plt.savefig(f'{save_path}/master_rotation_curve.png', bbox_inches='tight')
     plt.close(fig)
 
 # Add other plotting functions here... (ensure they all end with plt.close(fig))
@@ -223,7 +223,7 @@ def plot_residual_comparison(gaia_data, params, save_path='plots/'):
     ax1.set_ylim(-150, 150)
     plt.suptitle('Model Residuals: DDMM Shows Random Scatter Similar to ΛCDM', fontsize=16)
     fig.tight_layout()
-    plt.savefig(f'{save_path}/residual_comparison.pdf', bbox_inches='tight')
+    plt.savefig(f'{save_path}/residual_comparison.png', bbox_inches='tight')
     plt.close(fig)
 
 def plot_density_enhancement_phase_space(gaia_data, params, save_path='plots/'):
@@ -260,7 +260,7 @@ def plot_density_enhancement_phase_space(gaia_data, params, save_path='plots/'):
     ax.grid(True, alpha=0.3)
     plt.title('Density-Dependent Enhancement: Theory Matches Data', fontsize=16)
     fig.tight_layout()
-    plt.savefig(f'{save_path}/density_enhancement_phase_space.pdf', bbox_inches='tight')
+    plt.savefig(f'{save_path}/density_enhancement_phase_space.png', bbox_inches='tight')
     plt.close(fig)
 
 def plot_cumulative_mass_profile(params, save_path='plots/'):
@@ -321,7 +321,7 @@ def plot_cumulative_mass_profile(params, save_path='plots/'):
                  fontsize=16)
     
     fig.tight_layout()
-    plt.savefig(f'{save_path}/cumulative_mass_profile.pdf', bbox_inches='tight')
+    plt.savefig(f'{save_path}/cumulative_mass_profile.png', bbox_inches='tight')
     plt.close(fig)
 
 def plot_parameter_corner(samples, weights, param_names, save_path='plots/'):
@@ -349,7 +349,7 @@ def plot_parameter_corner(samples, weights, param_names, save_path='plots/'):
     
     plt.suptitle('DDMM Parameter Constraints from Gaia Data', fontsize=16)
     fig.tight_layout()
-    plt.savefig(f'{save_path}/parameter_corner.pdf', bbox_inches='tight')
+    plt.savefig(f'{save_path}/parameter_corner.png', bbox_inches='tight')
     plt.close(fig)
 
 # Other plotting functions (spider, diagnostic, etc.) can be placed here, also corrected.

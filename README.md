@@ -1,6 +1,6 @@
 # Testing a Density-Dependent Metric Modification as an Alternative to Dark Matter
 
-**Author:** *Leonard Speiser*
+**Authors:** *Leonard Speiser*
 
 ---
 
@@ -297,14 +297,19 @@ All analysis scripts, posterior samples, and enhanced data collection routines a
 
 ## Figures
 
+![Figure 1: DDMM achieves same effect as dark matter](plots/ddmm_theory_comparison/ddmm_enclosed_mass_comparison.png)
 **Figure 1: DDMM achieves the same dynamical effect as dark matter through enhanced gravity.** The baryonic mass profile (blue) is insufficient to explain galactic dynamics. ΛCDM invokes dark matter (green dashed) to make up the difference. DDMM instead enhances gravity by ξ(ρ), creating an effective mass (red) that matches observations. The shaded region shows the contribution from ξ.
 
+![Figure 2: Density-dependent enhancement](plots/ddmm_theory_comparison/xi_density_dependence.png)
 **Figure 2: Density-dependent enhancement factor ξ(ρ).** The enhancement transitions from unity at high densities to ~3 at typical galactic densities (10⁸ M_⊙/kpc³). The sharp transition ensures Solar System tests are satisfied (ξ ≈ 1) while providing sufficient enhancement for flat rotation curves. The histogram shows the density distribution of our Gaia sample.
 
+![Figure 3: DDMM rotation curve fit](plots/ddmm_theory_comparison/rotation_curve_comparison.png)
 **Figure 3: DDMM successfully reproduces the flat rotation curve without dark matter.** Top panel: Newtonian prediction from baryons alone (blue dashed) fails dramatically. DDMM (red) matches Gaia DR3 data (black points) throughout the observed range (5-16 kpc). Bottom panel: Enhancement factor ξ(R) grows from ~2.5 at 5 kpc to ~3 at 15 kpc, maintaining the flat curve. The model predicts continued enhancement beyond our data limit.
 
+![Figure 4: Parameter constraints](plots/ddmm_theory_comparison/corner_plot_masses.png)
 **Figure 4: Parameter constraints from the Gaia fit.** The posterior distributions show well-constrained disk and bulge masses. Some bimodality is evident, suggesting parameter degeneracies that could be resolved with additional constraints.
 
+![Figure 5: Model residuals](plots/ddmm_theory_comparison/residuals_comparison.png)
 **Figure 5: Model residuals demonstrate DDMM's quality.** DDMM residuals (bottom) show the same random scatter as ΛCDM (middle), both with RMS = 23.0 km s⁻¹. Pure Newtonian gravity (top) shows systematic failure. The lack of trends validates the density-dependent framework.
 
 ---
