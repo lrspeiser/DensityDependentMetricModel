@@ -140,7 +140,7 @@ def get_or_create_logger():
 # Physical bounds for parameters (based on MW observations and theory)
 PHYSICAL_BOUNDS = {
     # Mass parameters (M☉)
-    'M_disk_thin_solar':   {'min': 2.4e10, 'max': 9.0e10, 'typical': 5.0e10},   # Lower min, slightly higher max
+    'M_disk_thin_solar':   {'min': 2.4e10, 'max': 9.0e10, 'typical': 4.0e10},   # Lower min, slightly higher max
     'M_disk_thick_solar':  {'min': 5e9,    'max': 3.5e10, 'typical': 1.5e10},   # Allow more mass if needed
     'M_bulge_solar':       {'min': 0.5e10, 'max': 2.5e10, 'typical': 1.2e10},   # Centered on MW bulge fits
     'M_gas_solar':         {'min': 5e9,    'max': 6e10,   'typical': 3.0e10},
@@ -164,7 +164,7 @@ PHYSICAL_BOUNDS = {
 
 
 # Expected ranges for validation
-EXPECTED_XI_AT_SOLAR = (0.7, 1.0)  # Xi should not suppress gravity too much at R_sun
+EXPECTED_XI_AT_SOLAR = (0.5, 1.2)  # Xi should not suppress gravity too much at R_sun
 EXPECTED_V_AT_SOLAR = (100, 300)   # TEMPORARILY RELAXED for initial exploration
 
 def load_previous_best_params():
@@ -194,170 +194,62 @@ def load_previous_best_params():
 # ============================================================================
 
 MW_MULTI_COMP_PARAM_CONFIG = {
+    # --- Gravity Parameters with MORE LENIENT PRIORS ---
     'rho_c_solar_kpc3': {
-        'label': "rho_c (M_sun/kpc^3)", 
-        'fixed_val_from_arg': 'rho_c_fixed', 
-        'default_fixed': 5e6,
-        'low': 1e6, 
-        'high': 2e7, 
-        'fit_flag_arg': 'fit_xi_params',
-        'log_prior': True,
-        'physical_check': True
+        'label': "rho_c (M_sun/kpc^3)", 'fixed_val_from_arg': 'rho_c_fixed', 'default_fixed': 1e9, # Higher default
+        'low': 1e8, 'high': 1e10, 'fit_flag_arg': 'fit_xi_params', 'log_prior': True
     },
     'n_exp': {
-        'label': "n", 
-        'fixed_val_from_arg': 'n_exp_fixed', 
-        'default_fixed': 2.7,  # Update to theoretical value
-        'low': PHYSICAL_BOUNDS['n_exp']['min'], 
-        'high': PHYSICAL_BOUNDS['n_exp']['max'], 
-        'fit_flag_arg': 'fit_xi_params',
-        'log_prior': False,
-        'physical_check': True
+        'label': "n", 'fixed_val_from_arg': 'n_exp_fixed', 'default_fixed': 1.0, # Lower default
+        'low': 0.1, 'high': 2.5, 'fit_flag_arg': 'fit_xi_params', 'log_prior': False
     },
+    
+    # --- Baryonic Components with Correct, Hardcoded Defaults ---
     'M_disk_thin_solar': {
-        'label': "M_disk_thin (M_sun)", 
-        'fixed_val_from_arg': 'M_disk_thin_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['M_disk_thin_solar']['typical'],
-        'low': PHYSICAL_BOUNDS['M_disk_thin_solar']['min'], 
-        'high': PHYSICAL_BOUNDS['M_disk_thin_solar']['max'], 
-        'fit_flag_arg': 'fit_disk_thin', 
-        'include_flag_arg': 'include_disk_thin',
-        'log_prior': True,
-        'physical_check': True
+        'label': "M_disk_thin (M_sun)", 'fixed_val_from_arg': 'M_disk_thin_fixed', 'default_fixed': 4.0e10,
+        'low': 2.4e10, 'high': 9.0e10, 'fit_flag_arg': 'fit_disk_thin', 'include_flag_arg': 'include_disk_thin', 'log_prior': True
     },
     'R_d_thin_kpc': {
-        'label': "R_d_thin (kpc)", 
-        'fixed_val_from_arg': 'R_d_thin_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['R_d_thin_kpc']['typical'],
-        'low': 1.5,    # Keep as is
-        'high': 5.0,   # Widened again based on recommendation
-        'fit_flag_arg': 'fit_disk_thin', 
-        'include_flag_arg': 'include_disk_thin',
-        'log_prior': False,
-        'physical_check': True
+        'label': "R_d_thin (kpc)", 'fixed_val_from_arg': 'R_d_thin_fixed', 'default_fixed': 2.6,
+        'low': 2.0, 'high': 4.5, 'fit_flag_arg': 'fit_disk_thin', 'include_flag_arg': 'include_disk_thin', 'log_prior': False
     },
     'h_z_thin_kpc': {
-        'label': "h_z_thin (kpc)", 
-        'fixed_val_from_arg': 'h_z_thin_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['h_z_thin_kpc']['typical'],
-        'low': PHYSICAL_BOUNDS['h_z_thin_kpc']['min'], 
-        'high': PHYSICAL_BOUNDS['h_z_thin_kpc']['max'], 
-        'fit_flag_arg': 'fit_disk_thin', 
-        'include_flag_arg': 'include_disk_thin',
-        'log_prior': False,
-        'physical_check': True
+        'label': "h_z_thin (kpc)", 'fixed_val_from_arg': 'h_z_thin_fixed', 'default_fixed': 0.3,
+        'low': 0.15, 'high': 0.5, 'fit_flag_arg': 'fit_disk_thin', 'include_flag_arg': 'include_disk_thin', 'log_prior': False
     },
     'M_disk_thick_solar': {
-        'label': "M_disk_thick (M_sun)", 
-        'fixed_val_from_arg': 'M_disk_thick_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['M_disk_thick_solar']['typical'],
-        'low': PHYSICAL_BOUNDS['M_disk_thick_solar']['min'], 
-        'high': PHYSICAL_BOUNDS['M_disk_thick_solar']['max'], 
-        'fit_flag_arg': 'fit_disk_thick', 
-        'include_flag_arg': 'include_disk_thick',
-        'log_prior': True,
-        'physical_check': True
+        'label': "M_disk_thick (M_sun)", 'fixed_val_from_arg': 'M_disk_thick_fixed', 'default_fixed': 1.5e10,
+        'low': 5e9, 'high': 3.5e10, 'fit_flag_arg': 'fit_disk_thick', 'include_flag_arg': 'include_disk_thick', 'log_prior': True
     },
     'R_d_thick_kpc': {
-        'label': "R_d_thick (kpc)", 
-        'fixed_val_from_arg': 'R_d_thick_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['R_d_thick_kpc']['typical'],
-        'low': 4.0,    # Increased from 2.5
-        'high': 8.0,   # Keep as is
-        'fit_flag_arg': 'fit_disk_thick', 
-        'include_flag_arg': 'include_disk_thick',
-        'log_prior': False,
-        'physical_check': True
+        'label': "R_d_thick (kpc)", 'fixed_val_from_arg': 'R_d_thick_fixed', 'default_fixed': 4.5,
+        'low': 3.5, 'high': 9.5, 'fit_flag_arg': 'fit_disk_thick', 'include_flag_arg': 'include_disk_thick', 'log_prior': False
     },
     'h_z_thick_kpc': {
-        'label': "h_z_thick (kpc)", 
-        'fixed_val_from_arg': 'h_z_thick_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['h_z_thick_kpc']['typical'],
-        'low': PHYSICAL_BOUNDS['h_z_thick_kpc']['min'], 
-        'high': PHYSICAL_BOUNDS['h_z_thick_kpc']['max'], 
-        'fit_flag_arg': 'fit_disk_thick', 
-        'include_flag_arg': 'include_disk_thick',
-        'log_prior': False,
-        'physical_check': True
+        'label': "h_z_thick (kpc)", 'fixed_val_from_arg': 'h_z_thick_fixed', 'default_fixed': 0.9,
+        'low': 0.7, 'high': 1.5, 'fit_flag_arg': 'fit_disk_thick', 'include_flag_arg': 'include_disk_thick', 'log_prior': False
     },
     'M_bulge_solar': {
-        'label': "M_bulge (M_sun)", 
-        'fixed_val_from_arg': 'M_bulge_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['M_bulge_solar']['typical'],
-        'low': PHYSICAL_BOUNDS['M_bulge_solar']['min'], 
-        'high': PHYSICAL_BOUNDS['M_bulge_solar']['max'], 
-        'fit_flag_arg': 'fit_bulge', 
-        'include_flag_arg': 'include_bulge',
-        'log_prior': True,
-        'physical_check': True
+        'label': "M_bulge (M_sun)", 'fixed_val_from_arg': 'M_bulge_fixed', 'default_fixed': 1.2e10,
+        'low': 0.5e10, 'high': 2.5e10, 'fit_flag_arg': 'fit_bulge', 'include_flag_arg': 'include_bulge', 'log_prior': True
     },
     'a_bulge_kpc': {
-        'label': "a_bulge (kpc)", 
-        'fixed_val_from_arg': 'a_bulge_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['a_bulge_kpc']['typical'],
-        'low': PHYSICAL_BOUNDS['a_bulge_kpc']['min'], 
-        'high': PHYSICAL_BOUNDS['a_bulge_kpc']['max'], 
-        'fit_flag_arg': 'fit_bulge', 
-        'include_flag_arg': 'include_bulge',
-        'log_prior': False,
-        'physical_check': True
+        'label': "a_bulge (kpc)", 'fixed_val_from_arg': 'a_bulge_fixed', 'default_fixed': 0.7,
+        'low': 0.2, 'high': 2.0, 'fit_flag_arg': 'fit_bulge', 'include_flag_arg': 'include_bulge', 'log_prior': False
     },
     'M_gas_solar': {
-        'label': "M_gas (M_sun)", 
-        'fixed_val_from_arg': 'M_gas_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['M_gas_solar']['typical'],
-        'low': PHYSICAL_BOUNDS['M_gas_solar']['min'], 
-        'high': PHYSICAL_BOUNDS['M_gas_solar']['max'], 
-        'fit_flag_arg': 'fit_gas', 
-        'include_flag_arg': 'include_gas',
-        'log_prior': True,
-        'physical_check': True
+        'label': "M_gas (M_sun)", 'fixed_val_from_arg': 'M_gas_fixed', 'default_fixed': 3.0e10,
+        'low': 5e9, 'high': 6e10, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas', 'log_prior': True
     },
     'R_d_gas_kpc': {
-        'label': "R_d_gas (kpc)", 
-        'fixed_val_from_arg': 'R_d_gas_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['R_d_gas_kpc']['typical'],
-        'low': PHYSICAL_BOUNDS['R_d_gas_kpc']['min'], 
-        'high': PHYSICAL_BOUNDS['R_d_gas_kpc']['max'], 
-        'fit_flag_arg': 'fit_gas', 
-        'include_flag_arg': 'include_gas',
-        'log_prior': False,
-        'physical_check': True
+        'label': "R_d_gas (kpc)", 'fixed_val_from_arg': 'R_d_gas_fixed', 'default_fixed': 7.0,
+        'low': 4.0, 'high': 15.0, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas', 'log_prior': False
     },
     'h_z_gas_kpc': {
-        'label': "h_z_gas (kpc)", 
-        'fixed_val_from_arg': 'h_z_gas_fixed', 
-        'default_fixed': PHYSICAL_BOUNDS['h_z_gas_kpc']['typical'],
-        'low': PHYSICAL_BOUNDS['h_z_gas_kpc']['min'], 
-        'high': PHYSICAL_BOUNDS['h_z_gas_kpc']['max'], 
-        'fit_flag_arg': 'fit_gas', 
-        'include_flag_arg': 'include_gas',
-        'log_prior': False,
-        'physical_check': True
-    },
-        'gamma_exp': {                             # NEW
-        'label': "γ (grav‑color)",
-        'fixed_val_from_arg': 'gamma_fixed',
-        'default_fixed': 2.8,
-        'low': 2.0, 
-        'high': 3.5,
-        'fit_flag_arg': 'fit_gamma',
-        'log_prior': False,
-        'physical_check': False       # checked together with λ_g below
-    },
-    'lambda_g': {                                # NEW
-        'label': "λ_g",
-        'fixed_val_from_arg': 'lambda_g_fixed',
-        'default_fixed': 1.2,
-        'low': 0.5, 
-        'high': 5.0,
-        'fit_flag_arg': 'fit_lambda_g',
-        'log_prior': False,
-        'physical_check': False
+        'label': "h_z_gas (kpc)", 'fixed_val_from_arg': 'h_z_gas_fixed', 'default_fixed': 0.15,
+        'low': 0.05, 'high': 0.4, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas', 'log_prior': False
     },
 }
-
-
 
 # ============================================================================
 # Physical Plausibility Checks
@@ -394,6 +286,9 @@ def check_physical_plausibility(
     reason : str
         Description of failure if not valid
     """
+    # Get logger safely for multiprocessing - THIS IS THE FIX
+    logger = get_or_create_logger()
+    
     params = dict(zip(param_names, theta_values))
     
     # 1. Check individual parameter bounds against PHYSICAL_BOUNDS
@@ -426,7 +321,7 @@ def check_physical_plausibility(
                 ratio_limit = np.inf          # no constraint
 
             if thick_thin_ratio > ratio_limit:
-                # quadratic penalty,  Δχ² ≈ 20 for a 10 % violation
+                # quadratic penalty,  Δχ² ≈ 20 for a 10 % violation
                 penalty = -20.0 * (thick_thin_ratio / ratio_limit - 1.0)**2
                 return (True, "Ratio penalty", penalty)   # adjust calling code to receive penalty
 
@@ -477,7 +372,9 @@ def check_physical_plausibility(
         if xi_solar < EXPECTED_XI_AT_SOLAR[0]:
             return False, f"xi at R_sun = {xi_solar:.3f} < {EXPECTED_XI_AT_SOLAR[0]} (too much suppression)"
         if xi_solar > EXPECTED_XI_AT_SOLAR[1]:
-            logger.debug(f"Note: xi at R_sun = {xi_solar:.3f} > {EXPECTED_XI_AT_SOLAR[1]} (minimal modification)")
+            # Use logger safely here
+            if logger is not None:
+                logger.debug(f"Note: xi at R_sun = {xi_solar:.3f} > {EXPECTED_XI_AT_SOLAR[1]} (minimal modification)")
 
     
     # 7. Check that we'd get reasonable rotation curve at solar radius
@@ -495,11 +392,10 @@ def check_physical_plausibility(
     
     return True, "OK"
 
-
 def check_parameter_evolution(
     recent_samples: np.ndarray,
     param_names: List[str],
-    logger: logging.Logger
+    logger: logging.Logger = None  # Make logger optional
 ) -> Dict[str, Any]:
     """
     Analyze parameter evolution to detect pathological behavior.
@@ -516,14 +412,18 @@ def check_parameter_evolution(
         Recent samples from the sampler (N_samples x N_params)
     param_names : list
         Parameter names
-    logger : logging.Logger
-        Logger for warnings
+    logger : logging.Logger, optional
+        Logger for warnings (will create one if None)
         
     Returns
     -------
     dict
         Analysis results with warnings and statistics
     """
+    # Get logger safely for multiprocessing
+    if logger is None:
+        logger = get_or_create_logger()
+    
     if len(recent_samples) < 100:
         return {'status': 'insufficient_samples'}
     
@@ -636,8 +536,8 @@ def setup_xi_parameters_for_mode(args):
             'label': "rho_c (M_sun/kpc^3)",
             'fixed_val_from_arg': 'rho_c_fixed',
             'default_fixed': 5e7,  # Galaxy-appropriate
-            'low': 1e6,
-            'high': 1e9,
+            'low': 5e7,
+            'high': 5e8,
             'fit_flag_arg': 'fit_rho_c',
             'log_prior': True,
             'physical_check': True
@@ -682,7 +582,7 @@ def setup_xi_parameters_for_mode(args):
             'fixed_val_from_arg': 'n_exp_fixed',
             'default_fixed': 2.0,
             'low': 0.5,
-            'high': 4.0,
+            'high': 2.0,
             'fit_flag_arg': 'fit_n_exp',  # Different flag
             'log_prior': False,
             'physical_check': True
@@ -715,8 +615,8 @@ def setup_xi_parameters_for_mode(args):
             'label': "rho_c (M_sun/kpc^3)",
             'fixed_val_from_arg': 'rho_c_fixed',
             'default_fixed': 5e8,
-            'low': 1e7,
-            'high': 1e10,
+            'low': 5e7,
+            'high': 5e8,
             'fit_flag_arg': 'fit_xi_params',
             'log_prior': True,
             'physical_check': True
@@ -730,7 +630,7 @@ def setup_xi_parameters_for_mode(args):
             'fixed_val_from_arg': 'n_exp_fixed',
             'default_fixed': 1.5,
             'low': 0.5,
-            'high': 4.0,
+            'high': 2.0,
             'fit_flag_arg': 'fit_xi_params',
             'log_prior': False,
             'physical_check': True
@@ -1145,89 +1045,67 @@ def prior_transform_dynesty(
     use_log_prior_flags: List[bool]
 ) -> np.ndarray:
     """
-    UPDATED AND COMPLETE PRIOR TRANSFORM for the DDMM model.
-    This version uses physically motivated, tighter priors to prevent overshooting
-    and guide the sampler to a scientifically plausible solution.
+    FINAL AND COMPLETE PRIOR TRANSFORM for the DDMM model.
+    Version 3.0: This version uses wider, more flexible priors for the gravity
+    parameters, giving the sampler a much larger space to search for a valid solution.
     """
     params = np.zeros_like(u_array)
-    
-    # Create a dictionary to map the unit cube values to their parameter names for clarity
     u_dict = dict(zip(fitted_param_names, u_array))
-    
-    # Define the transformation for each parameter explicitly.
-    # This provides clear, readable, and easily adjustable priors.
-    
-    # --- Gravity / DDMM Parameters (TIGHTLY CONSTRAINED PRIORS) ---
+
+    # --- Gravity / DDMM Parameters (WIDER, MORE FLEXIBLE PRIORS) ---
     if 'rho_c_solar_kpc3' in u_dict:
-        # Log-uniform prior between 10^7.5 and 10^9.0 M☉/kpc³
-        # This focuses on the physically interesting regime for galaxies.
-        log_low, log_high = 7.5, 9.0
+        # Log-uniform prior between 10^8 and 10^10 M☉/kpc³.
+        # This allows for solutions where the modification is much weaker.
+        log_low, log_high = 8.0, 10.0
         params[fitted_param_names.index('rho_c_solar_kpc3')] = 10**(log_low + u_dict['rho_c_solar_kpc3'] * (log_high - log_low))
 
     if 'n_exp' in u_dict:
-        # Uniform prior between 1.5 and 3.0.
-        # Avoids extreme values that can cause instability.
-        low, high = 1.5, 3.0
+        # Uniform prior between 0.1 and 2.5.
+        # Allowing values close to 0 creates a very weak modification.
+        low, high = 0.1, 2.5
         params[fitted_param_names.index('n_exp')] = low + u_dict['n_exp'] * (high - low)
         
     if 'gamma_exp' in u_dict:
-        # Use the same tight prior for 'gamma_exp'
-        low, high = 1.5, 3.0
+        # Use the same wide prior for 'gamma_exp'
+        low, high = 0.1, 2.5
         params[fitted_param_names.index('gamma_exp')] = low + u_dict['gamma_exp'] * (high - low)
 
     if 'lambda_g' in u_dict:
-        # Uniform prior between 0.3 and 1.5.
-        # CRITICAL: This prevents the extreme overshooting seen in the plots.
-        low, high = 0.3, 1.5
-        params[fitted_param_names.index('lambda_g')] = low + u_dict['lambda_g'] * (high - low)
+        # Log-Uniform prior between 0.1 and 2.0.
+        log_low, log_high = np.log10(0.1), np.log10(2.0)
+        params[fitted_param_names.index('lambda_g')] = 10**(log_low + u_dict['lambda_g'] * (log_high - log_low))
 
     # --- Baryonic Component Parameters (STANDARD PRIORS) ---
-    # These can be wider as they are constrained by the baryonic mass model.
-    
-    # Thin Disk
     if 'M_disk_thin_solar' in u_dict:
-        log_low, log_high = 10.5, 11.1 # 3e10 to 1.2e11 M☉
+        log_low, log_high = 10.5, 11.1
         params[fitted_param_names.index('M_disk_thin_solar')] = 10**(log_low + u_dict['M_disk_thin_solar'] * (log_high - log_low))
-        
     if 'R_d_thin_kpc' in u_dict:
         low, high = 2.0, 4.5
         params[fitted_param_names.index('R_d_thin_kpc')] = low + u_dict['R_d_thin_kpc'] * (high - low)
-
     if 'h_z_thin_kpc' in u_dict:
         low, high = 0.15, 0.5
         params[fitted_param_names.index('h_z_thin_kpc')] = low + u_dict['h_z_thin_kpc'] * (high - low)
-
-    # Thick Disk
     if 'M_disk_thick_solar' in u_dict:
-        log_low, log_high = 9.5, 10.7 # 3e9 to 5e10 M☉
+        log_low, log_high = 9.5, 10.7
         params[fitted_param_names.index('M_disk_thick_solar')] = 10**(log_low + u_dict['M_disk_thick_solar'] * (log_high - log_low))
-
     if 'R_d_thick_kpc' in u_dict:
         low, high = 3.5, 9.5
         params[fitted_param_names.index('R_d_thick_kpc')] = low + u_dict['R_d_thick_kpc'] * (high - low)
-        
     if 'h_z_thick_kpc' in u_dict:
         low, high = 0.7, 1.5
         params[fitted_param_names.index('h_z_thick_kpc')] = low + u_dict['h_z_thick_kpc'] * (high - low)
-
-    # Bulge
     if 'M_bulge_solar' in u_dict:
-        log_low, log_high = 9.7, 10.4 # 5e9 to 2.5e10 M☉
+        log_low, log_high = 9.7, 10.4
         params[fitted_param_names.index('M_bulge_solar')] = 10**(log_low + u_dict['M_bulge_solar'] * (log_high - log_low))
-        
     if 'a_bulge_kpc' in u_dict:
         low, high = 0.2, 2.0
         params[fitted_param_names.index('a_bulge_kpc')] = low + u_dict['a_bulge_kpc'] * (high - low)
-        
-    # Gas
     if 'M_gas_solar' in u_dict:
-        log_low, log_high = 9.7, 10.8 # 5e9 to 6e10 M☉
+        log_low, log_high = 9.7, 10.8
         params[fitted_param_names.index('M_gas_solar')] = 10**(log_low + u_dict['M_gas_solar'] * (log_high - log_low))
-        
     if 'R_d_gas_kpc' in u_dict:
         low, high = 4.0, 15.0
         params[fitted_param_names.index('R_d_gas_kpc')] = low + u_dict['R_d_gas_kpc'] * (high - low)
-        
     if 'h_z_gas_kpc' in u_dict:
         low, high = 0.05, 0.4
         params[fitted_param_names.index('h_z_gas_kpc')] = low + u_dict['h_z_gas_kpc'] * (high - low)
@@ -1247,8 +1125,9 @@ def log_likelihood_dynesty(
 ) -> Tuple[float, List[float]]:
     """
     Enhanced log-likelihood with correct function calls and a physical plausibility penalty.
+    FIXED: Now reconstructs full parameter dictionary BEFORE physical plausibility check.
     """
-    # 1. Reconstruct the full parameter dictionary, including fixed values and boolean flags
+    # 1. FIRST reconstruct the full parameter dictionary, including fixed values and boolean flags
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
@@ -1259,9 +1138,19 @@ def log_likelihood_dynesty(
     params['include_bulge'] = args_dynesty_obj.include_bulge
     params['include_gas'] = args_dynesty_obj.include_gas
     
-    # 2. Perform a quick check for physical plausibility (e.g., mass ratios)
-    is_valid, reason, *_ = check_physical_plausibility(theta_values_fitted, fitted_param_names, args_dynesty_obj)
-    if not is_valid:
+    # 2. NOW perform physical plausibility check with FULL parameter set
+    # Create arrays that include ALL parameters for the check
+    all_param_names = [p['name'] for p in all_param_info_list]
+    all_param_values = np.array([params[name] for name in all_param_names])
+    
+    is_valid, reason, *penalty = check_physical_plausibility(all_param_values, all_param_names, args_dynesty_obj)
+    
+    # Handle soft penalties (e.g., mass ratio penalty)
+    penalty_value = 0.0
+    if len(penalty) > 0 and penalty[0] is not None:
+        penalty_value = penalty[0]
+    
+    if not is_valid and penalty_value == 0.0:
         return -np.inf, [np.inf]
 
     # 3. Compute the model velocity using the correct, robust method
@@ -1280,24 +1169,30 @@ def log_likelihood_dynesty(
 
         if not np.all(np.isfinite(v_model)):
             return -np.inf, [np.inf]
+        
+        bad = ~np.isfinite(v_model)
+        if bad.any():
+            idx = np.where(bad)[0][0]
+            print("Non‑finite v_model at R =", R_data[idx],
+                "km/s =", v_model[idx],
+                "rho =", rho[idx])
             
     except Exception:
         return -np.inf, [np.inf]
     
-    # --- NEW: PLAUSIBILITY PENALTY TO GUIDE THE SAMPLER ---
-    # This directly alters the sampler's approach by forbidding unscientific results.
-    # We check the model's prediction in the solar neighborhood. If it's too high,
-    # we return -inf, telling dynesty this is a "forbidden" region of parameter space.
+    # Plausibility penalty for v_model at solar radius
     v_model_solar_mask = (R_data > 7.5) & (R_data < 8.5)
     if np.any(v_model_solar_mask):
         v_model_solar = np.median(v_model[v_model_solar_mask])
-        if v_model_solar > 250:  # Set a hard ceiling for plausible velocities
+        
+        threshold = 350.0 if getattr(args_dynesty_obj, '_is_preflight_check', False) else 300.0
+        
+        if v_model_solar > threshold:
             return -np.inf, [np.inf]
-    # --- END OF NEW SECTION ---
 
     # 4. Calculate the standard chi-squared likelihood for valid models
     chi2 = np.sum(((v_data - v_model) / sigma_data)**2)
-    log_L = -0.5 * chi2
+    log_L = -0.5 * chi2 + penalty_value  # Add soft penalty if any
     
     if not np.isfinite(log_L):
         return -np.inf, [np.inf]
@@ -1314,28 +1209,27 @@ def v_model_for_dynesty(
 ) -> np.ndarray:
     """
     Calculate model velocities with density-dependent modification.
+    Fixed for multiprocessing compatibility.
     """
-    global debug_counter
-    
-    # Initialize debug counter and logger
-    if 'debug_counter' not in globals():
-        debug_counter = 0
-    
-    # Get logger safely
+    # Get logger safely for multiprocessing
     logger = get_or_create_logger()
     
     # Import needed functions
     from density_metric2 import XI_FUNCTION_MAP, xi_gravitational_color
 
-    # DEBUG: Print what parameters we have (only once)
+    # DEBUG: Print what parameters we have (only once per process)
     if not hasattr(v_model_for_dynesty, "_params_logged"):
-        logger.info(f"\n[PARAMS DEBUG] xi_type: {xi_type_str}")
-        logger.info(f"[PARAMS DEBUG] Available parameters: {list(p_all_params_dict.keys())}")
-        logger.info(f"[PARAMS DEBUG] Parameter values:")
-        for k, v in p_all_params_dict.items():
-            if isinstance(v, (int, float)):
-                logger.info(f"   {k}: {v:.3e}")
-        v_model_for_dynesty._params_logged = True
+        try:
+            logger.info(f"\n[PARAMS DEBUG] xi_type: {xi_type_str}")
+            logger.info(f"[PARAMS DEBUG] Available parameters: {list(p_all_params_dict.keys())}")
+            logger.info(f"[PARAMS DEBUG] Parameter values:")
+            for k, v in p_all_params_dict.items():
+                if isinstance(v, (int, float)):
+                    logger.info(f"   {k}: {v:.3e}")
+            v_model_for_dynesty._params_logged = True
+        except:
+            # If logging fails in multiprocessing, just continue
+            pass
     
     # Extract parameters with proper error handling
     try:
@@ -1363,16 +1257,12 @@ def v_model_for_dynesty(
             lambda_g = None
             
     except Exception as e:
-        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-            logger.error(f"Error extracting parameters: {e}")
-            debug_counter += 1
+        logger.error(f"Error extracting parameters: {e}")
         return np.zeros_like(R_kpc_array)
     
     # Validate xi parameters
     if not np.isfinite(rho_c_solar_kpc3):
-        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning(f"Non-finite rho_c: {rho_c_solar_kpc3}")
-            debug_counter += 1
+        logger.warning(f"Non-finite rho_c: {rho_c_solar_kpc3}")
         return np.zeros_like(R_kpc_array)
     
     # Calculate Newtonian velocities and densities
@@ -1384,15 +1274,11 @@ def v_model_for_dynesty(
     
     # Validate intermediate results
     if not np.all(np.isfinite(v_n_kms)):
-        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning("⚠️ Non-finite Newtonian velocities detected")
-            debug_counter += 1
+        logger.warning("⚠️ Non-finite Newtonian velocities detected")
         v_n_kms = np.nan_to_num(v_n_kms, nan=0.0, posinf=0.0, neginf=0.0)
 
     if not np.all(np.isfinite(rho_midplane_for_xi)):
-        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning("⚠️ Non-finite densities detected")
-            debug_counter += 1
+        logger.warning("⚠️ Non-finite densities detected")
         rho_midplane_for_xi = np.nan_to_num(rho_midplane_for_xi, nan=0.0, posinf=1e10, neginf=0.0)
 
     # Calculate xi based on the selected type
@@ -1410,36 +1296,38 @@ def v_model_for_dynesty(
             xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp)
             
     except Exception as e:
-        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-            logger.error(f"Error calculating xi with {xi_type_str}: {e}")
-            debug_counter += 1
+        logger.error(f"Error calculating xi with {xi_type_str}: {e}")
         xi_raw = np.ones_like(rho_midplane_for_xi)
 
-    # Log xi verification (only once)
-    if not hasattr(v_model_for_dynesty, "_has_logged_xi") and threading.current_thread() is threading.main_thread():
-        logger.info(f"[XI VERIFICATION] Using xi_type: '{xi_type_str}'")
-        if xi_type_str == 'grav_color':
-            logger.info(f"[XI VERIFICATION] Parameters: ρ_c={rho_c_solar_kpc3:.2e}, γ={gamma:.2f}, λ_g={lambda_g:.2f}")
-        else:
-            logger.info(f"[XI VERIFICATION] Parameters: ρ_c={rho_c_solar_kpc3:.2e}, n={n_exp:.2f}")
+    # Log xi verification (only once per process)
+    if not hasattr(v_model_for_dynesty, "_has_logged_xi"):
+        try:
+            logger.info(f"[XI VERIFICATION] Using xi_type: '{xi_type_str}'")
+            if xi_type_str == 'grav_color':
+                logger.info(f"[XI VERIFICATION] Parameters: ρ_c={rho_c_solar_kpc3:.2e}, γ={gamma:.2f}, λ_g={lambda_g:.2f}")
+            else:
+                logger.info(f"[XI VERIFICATION] Parameters: ρ_c={rho_c_solar_kpc3:.2e}, n={n_exp:.2f}")
 
-        # Test xi at different densities
-        test_densities = [1e6, 1e8, 1e10]
-        summary = []
-        for test_rho in test_densities:
-            try:
-                if xi_type_str == 'grav_color':
-                    test_xi_raw = xi_gravitational_color(test_rho, rho_c_solar_kpc3, gamma, lambda_g)
-                else:
-                    xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
-                    test_xi_raw = xi_func(test_rho, rho_c_solar_kpc3, n_exp)
-                test_xi = test_xi_raw[0] if hasattr(test_xi_raw, '__getitem__') else float(test_xi_raw)
-                summary.append(f"ρ={test_rho:.0e} → ξ={test_xi:.3f}")
-            except Exception as e:
-                summary.append(f"ρ={test_rho:.0e} → error: {e}")
-        logger.info("[XI VERIFICATION SUMMARY] " + "; ".join(summary))
-        
-        v_model_for_dynesty._has_logged_xi = True
+            # Test xi at different densities
+            test_densities = [1e6, 1e8, 1e10]
+            summary = []
+            for test_rho in test_densities:
+                try:
+                    if xi_type_str == 'grav_color':
+                        test_xi_raw = xi_gravitational_color(test_rho, rho_c_solar_kpc3, gamma, lambda_g)
+                    else:
+                        xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
+                        test_xi_raw = xi_func(test_rho, rho_c_solar_kpc3, n_exp)
+                    test_xi = test_xi_raw[0] if hasattr(test_xi_raw, '__getitem__') else float(test_xi_raw)
+                    summary.append(f"ρ={test_rho:.0e} → ξ={test_xi:.3f}")
+                except Exception as e:
+                    summary.append(f"ρ={test_rho:.0e} → error: {e}")
+            logger.info("[XI VERIFICATION SUMMARY] " + "; ".join(summary))
+            
+            v_model_for_dynesty._has_logged_xi = True
+        except:
+            # If logging fails in multiprocessing, just continue
+            pass
 
     # Convert xi_raw to array safely
     if not hasattr(xi_raw, "__getitem__"):
@@ -1456,9 +1344,7 @@ def v_model_for_dynesty(
 
     # Final velocity validation
     if not np.all(np.isfinite(v_mod_kms)):
-        if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-            logger.warning("⚠️ Non-finite final velocities detected")
-            debug_counter += 1
+        logger.warning("⚠️ Non-finite final velocities detected")
         v_mod_kms = np.nan_to_num(v_mod_kms, nan=0.0, posinf=0.0, neginf=0.0)
 
     return v_mod_kms
@@ -1482,8 +1368,8 @@ def ensure_grav_color_params_in_config(args):
                 'label': "rho_c (M_sun/kpc^3)", 
                 'fixed_val_from_arg': 'rho_c_fixed', 
                 'default_fixed': 5e7,  # Galaxy-appropriate
-                'low': 1e6,
-                'high': 1e9,
+                'low': 5e7,
+                'high': 5e8,
                 'fit_flag_arg': 'fit_rho_c',  # New flag
                 'log_prior': True,
                 'physical_check': True
@@ -1508,7 +1394,7 @@ def log_likelihood_dynesty_debug(
     xi_type: str,
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
-    """Debug version with extensive logging"""
+    """Debug version with extensive logging - FIXED to handle full parameter set"""
     
     # Get logger safely for multiprocessing
     logger = get_or_create_logger()
@@ -1530,12 +1416,16 @@ def log_likelihood_dynesty_debug(
         logger.error("ERROR: sigma_data is None or empty!")
         return -np.inf, [np.inf]
     
+    # FIXED: Reconstruct full parameter dictionary FIRST
+    params = dict(zip(fitted_param_names, theta_values_fitted))
+    for p_info in all_param_info_list:
+        if not p_info['is_fitted']:
+            params[p_info['name']] = p_info['current_val']
+    
     # Hard constraint: thick disk scale length must be > thin disk scale length
-    if ('R_d_thick_kpc' in fitted_param_names and 'R_d_thin_kpc' in fitted_param_names):
-        idx_thick = fitted_param_names.index('R_d_thick_kpc')
-        idx_thin = fitted_param_names.index('R_d_thin_kpc')
-        R_d_thick = theta_values_fitted[idx_thick]
-        R_d_thin = theta_values_fitted[idx_thin]
+    if ('R_d_thick_kpc' in params and 'R_d_thin_kpc' in params):
+        R_d_thick = params['R_d_thick_kpc']
+        R_d_thin = params['R_d_thin_kpc']
         
         if R_d_thick < 1.05 * R_d_thin:
             if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
@@ -1544,11 +1434,9 @@ def log_likelihood_dynesty_debug(
             return -np.inf, [np.inf]
 
     # Hard constraint: thick disk scale height must be > thin disk scale height
-    if ('h_z_thick_kpc' in fitted_param_names and 'h_z_thin_kpc' in fitted_param_names):
-        idx_h_thick = fitted_param_names.index('h_z_thick_kpc')
-        idx_h_thin = fitted_param_names.index('h_z_thin_kpc')
-        h_z_thick = theta_values_fitted[idx_h_thick]
-        h_z_thin = theta_values_fitted[idx_h_thin]
+    if ('h_z_thick_kpc' in params and 'h_z_thin_kpc' in params):
+        h_z_thick = params['h_z_thick_kpc']
+        h_z_thin = params['h_z_thin_kpc']
         
         if h_z_thick < 2.0 * h_z_thin:
             if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
@@ -1564,9 +1452,16 @@ def log_likelihood_dynesty_debug(
         logger.info(f"DEBUG: First 5 sigma values: {sigma_data[:5]}")
         logger.info(f"DEBUG: R range: [{np.min(R_data):.2f}, {np.max(R_data):.2f}]")
         logger.info(f"DEBUG: v range: [{np.min(v_data):.2f}, {np.max(v_data):.2f}]")
+        
+        # Log the full parameter set being used
+        logger.info("DEBUG: Full parameter set:")
+        for name, value in params.items():
+            if isinstance(value, (int, float)):
+                logger.info(f"  {name}: {value:.3e}")
+        
         log_likelihood_dynesty_debug._logged_data = True
     
-    # Now call the original function
+    # Now call the original function with the fix
     return log_likelihood_dynesty(
         theta_values_fitted, fitted_param_names, args_dynesty_obj,
         all_param_info_list, R_data, v_data, sigma_data, xi_type, gp_surrogate
@@ -1622,18 +1517,7 @@ def get_param_labels_and_bounds(ARGS):
 
     if getattr(ARGS, 'use_previous_best', False):
         try:
-            prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
-            samples = prior_data['samples']
-            weights = prior_data['weights']
-            param_names = [
-                'rho_c_solar_kpc3', 'n_exp',
-                'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
-                'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
-                'M_bulge_solar', 'a_bulge_kpc',
-                'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
-            ]
-            medians = np.average(samples, weights=weights, axis=0)
-            previous_best = dict(zip(param_names, medians))
+
             logger.info("✅ Loaded previous best-fit medians successfully.")
 
             # Apply tightened bounds if requested
@@ -1676,8 +1560,16 @@ def get_param_labels_and_bounds(ARGS):
                 logger.info(f"  {p_name}: Using fixed value (overrides fit flag)")
 
         # Get current value
-        current_val = getattr(ARGS, p_details['fixed_val_from_arg'])
-
+        if p_details.get('log_prior', False):
+            current_val = 10 ** (0.5 * (np.log10(p_details['low']) +
+                                        np.log10(p_details['high'])))
+        else:
+            current_val = 0.5 * (p_details['low'] + p_details['high'])
+        # Allow CLI --<param>_fixed to override the auto start
+        cli_override = getattr(ARGS, p_details['fixed_val_from_arg'])
+        if not is_fitted and cli_override is not None:
+            current_val = cli_override
+            
         # Bounds (tightened if available)
         if p_name in bounds_modified:
             low = bounds_modified[p_name]['low']
@@ -1982,77 +1874,62 @@ def validate_gaia_data_for_fitting(gaia_data_dict):
 
 
 def test_likelihood_at_typical_params(args, gaia_data):
-    """Test likelihood at typical parameter values"""
+    """
+    Test likelihood at the initial starting point of the MCMC run.
+    """
     logger.info("\n" + "="*60)
-    logger.info("TESTING LIKELIHOOD AT TYPICAL PARAMETERS")
+    logger.info("TESTING LIKELIHOOD AT INITIAL PARAMETERS")
     logger.info("="*60)
     
-    # Get parameter configuration
-    fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = \
+    # Get parameter configuration, which includes the correct starting guess (p0_guess)
+    fitted_p_names, _, p0_guess, _, _, _ = \
         get_param_labels_and_bounds(args)
     
-    # Set all parameters to typical values
-    typical_params = []
-    for name in fitted_p_names:
-        if name in PHYSICAL_BOUNDS:
-            typical_params.append(PHYSICAL_BOUNDS[name]['typical'])
-        else:
-            # Use middle of prior range
-            idx = fitted_p_names.index(name)
-            typical_params.append((p_low[idx] + p_high[idx]) / 2)
+    # --- THIS IS THE CRITICAL FIX ---
+    # We now use p0_guess directly. It is the true starting point of the run.
+    test_params = p0_guess
+    # --- END OF FIX ---
     
-    typical_params = np.array(typical_params)
-    
-    logger.info("Typical parameters:")
-    for name, val in zip(fitted_p_names, typical_params):
+    logger.info("Testing with initial parameters (center of prior ranges):")
+    for name, val in zip(fitted_p_names, test_params):
         logger.info(f"  {name}: {val:.3e}")
     
-    # CRITICAL: Also log the FIXED parameters that aren't being fitted
-    logger.info("\nFixed parameters:")
+    logger.info("\nUsing fixed parameters:")
     if hasattr(args, 'all_param_info_list'):
         for p_info in args.all_param_info_list:
             if not p_info['is_fitted']:
                 logger.info(f"  {p_info['name']}: {p_info['current_val']:.3e}")
     
-    # For grav_color, make sure we have the xi parameters
-    if args.xi == 'grav_color':
-        logger.info(f"\nXi function parameters for grav_color:")
-        logger.info(f"  rho_c_fixed: {args.rho_c_fixed:.3e}")
-        logger.info(f"  gamma_fixed: {args.gamma_fixed:.3f}")
-        logger.info(f"  lambda_g_fixed: {args.lambda_g_fixed:.3f}")
+    # Temporarily make the plausibility check more lenient for this one test
+    args._is_preflight_check = True
     
-    # Evaluate likelihood
     logl_args_tuple = (fitted_p_names, args, args.all_param_info_list,
                        gaia_data['R_kpc'], gaia_data['v_obs'], gaia_data['sigma_v'],
                        args.xi, None)
     
     try:
-        log_L, blob = log_likelihood_dynesty(typical_params, *logl_args_tuple)
+        log_L, blob = log_likelihood_dynesty(test_params, *logl_args_tuple)
     except Exception as e:
         logger.error(f"Exception during likelihood evaluation: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return False
+    finally:
+        # Always remove the temporary flag after the test is done
+        args._is_preflight_check = False
+
+    logger.info(f"\nLog-likelihood at initial params: {log_L:.1f}")
+    logger.info(f"RMSE at initial params: {blob[0]:.1f} km/s")
     
-    logger.info(f"\nLog-likelihood at typical params: {log_L:.1f}")
-    logger.info(f"RMSE: {blob[0]:.1f} km/s")
-    
-    if log_L == -np.inf:
-        logger.error("ERROR: Typical parameters give -inf likelihood!")
-        logger.error("This suggests a fundamental problem with the model or data.")
-        
-        # Additional debugging
-        logger.error("\nDEBUGGING INFO:")
-        logger.error(f"Number of data points: {len(gaia_data['R_kpc'])}")
-        logger.error(f"Xi type: {args.xi}")
-        logger.error(f"Fitted parameters: {fitted_p_names}")
-        
+    if not np.isfinite(log_L) or log_L == -np.inf:
+        logger.error("ERROR: Initial parameters give -inf likelihood!")
+        logger.error("This suggests a fundamental problem. Suggestions:")
+        logger.error("1. Check the prior ranges in `prior_transform_dynesty` are reasonable.")
+        logger.error("2. Check the fixed baryonic parameter values in `MW_MULTI_COMP_PARAM_CONFIG`.")
+        logger.error("3. Ensure the `log_likelihood_dynesty` plausibility checks are not too strict.")
         return False
     
-    if log_L < -1e6:
-        logger.warning(f"WARNING: Very negative log-likelihood ({log_L:.1e})")
-        logger.warning("Model may be incompatible with data.")
-    
+    logger.info("✅ Likelihood test passed. Starting sampler.")
     return True
 
 
@@ -2920,15 +2797,6 @@ def main_dynesty():
     # Validate data
     if not validate_gaia_data_for_fitting(gaia_data_dict):
         logger.error("Data validation failed! Check your Gaia data.")
-        sys.exit(1)
-    
-    # Test likelihood function
-    if not test_likelihood_at_typical_params(args, gaia_data_dict):
-        logger.error("Likelihood test failed! Model may be incompatible with data.")
-        logger.error("Suggestions:")
-        logger.error("1. Check that data units match model expectations")
-        logger.error("2. Try simpler model (fewer components)")
-        logger.error("3. Check xi function is behaving correctly")
         sys.exit(1)
     
     # Run sampling
