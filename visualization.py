@@ -38,16 +38,43 @@ COLOR_DDMM = 'red'
 COLOR_CDM = 'green'
 
 def load_dynesty_results(filename: str) -> tuple:
-    """Load dynesty results and compute median parameters"""
-    data = np.load(filename, allow_pickle=True)
-    param_names = list(data.get('param_names', data.get('paramnames')))
-    samples = data['samples']
+    """
+    Load dynesty results from a .pkl.gz file.
+    This version is updated to handle the final output from your MCMC run.
+    """
+    import pickle
+    import gzip
+
+    print(f"Loading final results from gzipped pickle file: {filename}")
     
-    if 'logwt' in data:
-        weights = np.exp(data['logwt'] - data['logz'][-1])
-    else:
-        weights = data.get('weights', np.ones(len(samples)) / len(samples))
+    with gzip.open(filename, 'rb') as f:
+        results = pickle.load(f)
+
+    # Dynesty results objects store the data as attributes
+    samples = results.samples
     
+    # It's crucial to calculate the weights correctly from the logwt and logz
+    weights = np.exp(results.logwt - results.logz[-1])
+    
+    # The parameter names are not always stored in the final object,
+    # so we need to define them based on the run configuration.
+    # This should match the 'fitted_p_names' from your run_dynesty.py script.
+    param_names = [
+        'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+        'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+        'M_bulge_solar', 'a_bulge_kpc',
+        'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+    ]
+    # NOTE: If you also fitted the gravity parameters, you must add them here!
+    # For example: param_names = ['rho_c_solar_kpc3', 'n_exp'] + param_names
+
+    # Check if the number of parameters matches the samples shape
+    if len(param_names) != samples.shape[1]:
+        print(f"⚠️ WARNING: Mismatch between defined parameter names ({len(param_names)}) and samples found ({samples.shape[1]}).")
+        print("   Please ensure 'param_names' in load_dynesty_results is correct for this run.")
+        # Attempt to proceed with a truncated/padded list
+        param_names = [f'param_{i}' for i in range(samples.shape[1])]
+
     median_params = np.average(samples, weights=weights, axis=0)
     
     return dict(zip(param_names, median_params)), samples, weights, param_names
@@ -69,19 +96,40 @@ def load_gaia_slices_from_cache(cache_dir: str = "gaia_sky_slices") -> Optional[
     return full_df
 
 def compute_rotation_curves(r_kpc, params, xi_type='power'):
-    """Compute Newtonian and DDMM rotation curves using the correct method."""
+    """
+    Compute Newtonian and DDMM rotation curves.
+    Version 2.1: Updated to use fixed default values for gravity parameters
+                 when they are not present in the loaded results file, preventing KeyErrors.
+    """
+    # These first two calculations are correct, as they only depend on the
+    # baryonic parameters which WERE fitted and are present in the `params` dict.
     v_newton = v_baryon_total_newtonian_kms(r_kpc, params)
     rho = rho_baryon_total_midplane_solar_kpc3(r_kpc, params)
+    
     xi_func = XI_FUNCTION_MAP.get(xi_type, XI_FUNCTION_MAP['power'])
 
-    n_key = 'gamma_exp' if 'gamma_exp' in params else 'n_exp'
-    A_key = 'lambda_g' if 'lambda_g' in params else 'A'
+    # --- THIS IS THE CRITICAL FIX ---
+    # The MCMC run did not fit for the gravity parameters, so they don't exist
+    # in the `params` dictionary. We must provide their fixed values manually.
+    # We use .get(key, default_value) which safely provides a default
+    # if the key is not found, preventing a KeyError.
     
-    xi = xi_func(rho, params['rho_c_solar_kpc3'], params[n_key], params.get(A_key, 1.0))
+    # These default values should match the 'default_fixed' values from your run_dynesty.py script's config.
+    rho_c = params.get('rho_c_solar_kpc3', 1e9)  # Default to 1e9 if not found
+    n_exp = params.get('n_exp', params.get('gamma_exp', 1.0)) # Default to 1.0 if not found
+    A_param = params.get('lambda_g', params.get('A', 1.0)) # Default to 1.0 if not found
+    
+    xi = xi_func(rho, rho_c, n_exp, A_param)
+    # --- END OF FIX ---
+
+    # Apply the physical cap to the enhancement factor
     xi = np.minimum(xi, 5.0)
 
+    # Calculate the final DDMM velocity
     v_ddmm = v_newton * np.sqrt(xi)
+    
     return v_newton, v_ddmm, rho, xi
+
 
 def plot_master_rotation_curve(gaia_data, params, samples, weights, param_names, save_path='plots/'):
     """Create the main rotation curve comparison plot"""
@@ -179,58 +227,98 @@ def plot_residual_comparison(gaia_data, params, save_path='plots/'):
     plt.close(fig)
 
 def plot_density_enhancement_phase_space(gaia_data, params, save_path='plots/'):
+    """2D phase space plot of density vs enhancement"""
+    Path(save_path).mkdir(exist_ok=True)
+    
+    # This first call is now correct and gets the xi values for your data points
     _, _, rho_data, xi_data = compute_rotation_curves(gaia_data['R_kpc'], params)
     
+    # --- THIS IS THE FIX ---
+    # We must also use the .get() method here to safely get the fixed
+    # gravity parameters for plotting the theoretical curve.
     xi_func = XI_FUNCTION_MAP['power']
-    n_key = 'gamma_exp' if 'gamma_exp' in params else 'n_exp'
-    A_key = 'lambda_g' if 'lambda_g' in params else 'A'
     rho_theory = np.logspace(3, 12, 1000)
-    xi_theory = xi_func(rho_theory, params['rho_c_solar_kpc3'], params[n_key], params.get(A_key, 1.0))
+    
+    rho_c = params.get('rho_c_solar_kpc3', 1e9)
+    n_exp = params.get('n_exp', params.get('gamma_exp', 1.0))
+    A_param = params.get('lambda_g', params.get('A', 1.0))
+    
+    xi_theory = xi_func(rho_theory, rho_c, n_exp, A_param)
     xi_theory = np.minimum(xi_theory, 5.0)
+    # --- END OF FIX ---
 
     fig, ax = plt.subplots(figsize=(10, 8))
     h = ax.hexbin(np.log10(rho_data), xi_data, gridsize=50, cmap='viridis', mincnt=1, rasterized=True)
     plt.colorbar(h, ax=ax, label='Number of Stars')
     ax.plot(np.log10(rho_theory), xi_theory, 'r-', lw=3, label='Theoretical ξ(ρ)')
     
-    ax.set_xlabel('log₁₀(ρ) [M☉/kpc³]', fontsize=14); ax.set_ylabel('Enhancement Factor ξ', fontsize=14)
-    ax.set_xlim(3, 12); ax.set_ylim(0.8, 5.2)
-    ax.legend(loc='upper right'); ax.grid(True, alpha=0.3)
+    ax.set_xlabel('log₁₀(ρ) [M☉/kpc³]', fontsize=14)
+    ax.set_ylabel('Enhancement Factor ξ', fontsize=14)
+    ax.set_xlim(3, 12)
+    ax.set_ylim(0.8, 5.2)
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
     plt.title('Density-Dependent Enhancement: Theory Matches Data', fontsize=16)
     fig.tight_layout()
     plt.savefig(f'{save_path}/density_enhancement_phase_space.pdf', bbox_inches='tight')
     plt.close(fig)
 
 def plot_cumulative_mass_profile(params, save_path='plots/'):
-    r = np.linspace(0.1, 30, 200)
-    xi_func = XI_FUNCTION_MAP['power']
-    n_key = 'gamma_exp' if 'gamma_exp' in params else 'n_exp'
-    A_key = 'lambda_g' if 'lambda_g' in params else 'A'
+    """Show how DDMM mimics dark matter"""
+    Path(save_path).mkdir(exist_ok=True)
     
-    M_baryon, M_effective = [], []
+    r = np.linspace(0.1, 30, 200)
+    
+    M_baryon = []
+    M_effective = []
+    
+    xi_func = XI_FUNCTION_MAP['power']
+
+    # --- THIS IS THE FIX ---
+    # We get the gravity parameters safely, providing defaults if they are not found.
+    rho_c = params.get('rho_c_solar_kpc3', 1e9)
+    n_exp = params.get('n_exp', params.get('gamma_exp', 1.0))
+    A_param = params.get('lambda_g', params.get('A', 1.0))
+    # --- END OF FIX ---
+
     for ri in r:
         r_int = np.linspace(0.01, ri, 100)
         rho = rho_baryon_total_midplane_solar_kpc3(r_int, params)
-        xi = xi_func(rho, params['rho_c_solar_kpc3'], params[n_key], params.get(A_key, 1.0))
+        
+        # Now use the safe variables to calculate xi
+        xi = xi_func(rho, rho_c, n_exp, A_param)
         xi = np.minimum(xi, 5.0)
         
         M_b = 2 * np.pi * np.trapezoid(rho * r_int, r_int) * 0.3
         M_eff = 2 * np.pi * np.trapezoid(rho * xi * r_int, r_int) * 0.3
-        M_baryon.append(M_b); M_effective.append(M_eff)
-
-    M_baryon = np.array(M_baryon); M_effective = np.array(M_effective)
+        
+        M_baryon.append(M_b)
+        M_effective.append(M_eff)
+    
+    M_baryon = np.array(M_baryon)
+    M_effective = np.array(M_effective)
+    
     M_dark = 5e11 * (r / (r + 20))**2
     
     fig, ax = plt.subplots(figsize=(10, 8))
+    
     ax.plot(r, M_baryon/1e11, 'b-', lw=2.5, label='Baryonic Mass')
     ax.plot(r, M_effective/1e11, 'r-', lw=3, label='Effective Mass (DDMM)')
-    ax.plot(r, (M_baryon + M_dark)/1e11, 'g--', lw=2.5, label='Baryon + Dark (ΛCDM)')
-    ax.fill_between(r, M_baryon/1e11, M_effective/1e11, alpha=0.3, color='orange', label='Enhancement from ξ')
+    ax.plot(r, (M_baryon + M_dark)/1e11, 'g--', lw=2.5, 
+            label='Baryon + Dark (ΛCDM)')
     
-    ax.set_xlabel('Radius (kpc)', fontsize=14); ax.set_ylabel('Enclosed Mass (10¹¹ M☉)', fontsize=14)
-    ax.set_xlim(0, 30); ax.set_ylim(0, 15)
-    ax.legend(fontsize=12); ax.grid(True, alpha=0.3)
-    ax.set_title('DDMM Achieves Same Effect as Dark Matter Through Enhanced Gravity', fontsize=16)
+    ax.fill_between(r, M_baryon/1e11, M_effective/1e11, 
+                    alpha=0.3, color='orange', 
+                    label='Enhancement from ξ')
+    
+    ax.set_xlabel('Radius (kpc)', fontsize=14)
+    ax.set_ylabel('Enclosed Mass (10¹¹ M☉)', fontsize=14)
+    ax.set_xlim(0, 30)
+    ax.set_ylim(0, 15)
+    ax.legend(fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.set_title('DDMM Achieves Same Effect as Dark Matter Through Enhanced Gravity', 
+                 fontsize=16)
     
     fig.tight_layout()
     plt.savefig(f'{save_path}/cumulative_mass_profile.pdf', bbox_inches='tight')
@@ -270,7 +358,7 @@ def main():
     """Run all visualizations"""
     print("Loading dynesty results...")
     params, samples, weights, param_names = load_dynesty_results(
-        'chains_dynesty/mw_grav_color_DTf_DKf_Bf_Gf_20250716/dynesty_mw_grav_color_Bf_DTf_DKf_Gf_results_samples_FIXED.npz'
+        'chains_dynesty/NEWTONIAN_LIKE/dynesty_mw_power_Bf_DTf_DKf_Gf_results.pkl.gz'
     )
     
     print("Configuring model components based on loaded parameters...")

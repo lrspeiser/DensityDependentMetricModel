@@ -1624,6 +1624,13 @@ def get_param_labels_and_bounds(ARGS):
     )
 
 
+# ---------------------------------------------------------------------------
+# Helper: return the list of fitted‑parameter names for any Namespace
+# ---------------------------------------------------------------------------
+def fitted_names_for(args_obj):
+    names, *_ = get_param_labels_and_bounds(args_obj)
+    return names
+
 # ============================================================================
 # Convert numpy types to Python native types for JSON serialization
 # ============================================================================
@@ -1988,7 +1995,8 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
             'maxcall': int(args.maxcall * 0.5)
         }
     ]
-
+    
+    stage_args_per_stage = {}                       # NEW – keep every stage’s Namespace
     
     for i, stage in enumerate(curriculum):
         logger.info(f"\n{'='*80}")
@@ -2023,8 +2031,10 @@ def run_curriculum_learning(args, gaia_data_dict, logger):
                         fixed_name = param.replace('_solar', '_fixed').replace('_kpc3', '_fixed').replace('_kpc', '_fixed')
                         setattr(stage_args, fixed_name, cumulative_params[param]['median'])
                         logger.info(f"  Using previous {param}: {cumulative_params[param]['median']:.3e}")
+                        
         
         # Update sampler settings
+        stage_args_per_stage[f'stage_{i+1}'] = stage_args    
         stage_args.nlive_init = stage.get('nlive', 500)
         stage_args.maxcall = stage.get('maxcall', 200000)
         stage_args.dlogz_target = stage.get('dlogz', args.dlogz_target)
@@ -2480,6 +2490,7 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     # Return the results if we get here
     return sampler.results
 
+
 # ============================================================================
 # Main Entry Point
 # ============================================================================
@@ -2681,7 +2692,8 @@ def main_dynesty():
 
     # Inject dynamic xi setup
     setup_xi_parameters_for_mode(args)
-
+    fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(args)
+    
     # Start run logging
     RUN_ID = run_history.start_record(args)
 
@@ -2751,10 +2763,10 @@ def main_dynesty():
     logger.info("Running physics module self-tests...")
     run_physics_self_tests()
     logger.info("✅ Physics tests passed")
-    
-    # Check configuration
-    temp_fitted_names, _, _, _, _, _ = get_param_labels_and_bounds(args)
-    n_params = len(temp_fitted_names)
+
+    fitted_p_names, fitted_p_labels, p0_guess, p_low, p_high, use_log_flags = get_param_labels_and_bounds(args)
+    args.fitted_param_names = fitted_p_names # Attach to args for easy access in helper functions
+    n_params = len(fitted_p_names)
     
     logger.info(f"\nModel complexity: {n_params} free parameters")
     
@@ -2853,26 +2865,28 @@ def main_dynesty():
             logger.error("❌ All curriculum stages failed. No results to save.")
             return
         
-        for stage_name in completed_stages:
-            stage_results = results[stage_name]
-            output_prefix = f"dynesty_curriculum_{stage_name}_{args.xi}"
-            output_npz = Path(args.output_dir) / f"{output_prefix}_samples.npz"
+        for stage_name, stage_results in results.items():
+            fitted_p_names = fitted_names_for(stage_args_per_stage[stage_name])   #  NEW
+            output_prefix   = f"dynesty_curriculum_{stage_name}_{args.xi}"
+            output_npz      = Path(args.output_dir) / f"{output_prefix}_samples.npz"
 
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
                 np.savez(output_npz,
-                        samples=stage_results.samples,
-                        weights=weights,
-                        param_names=np.array(fitted_p_names), 
-                        logl=stage_results.logl,
-                        logz=stage_results.logz,
-                        logzerr=stage_results.logzerr)
-                logger.info(f"Saved {stage_name} to {output_npz}")
+                        samples      = stage_results.samples,
+                        weights      = weights,
+                        param_names  = np.array(fitted_p_names),
+                        logl         = stage_results.logl,
+                        logz         = stage_results.logz,
+                        logzerr      = stage_results.logzerr)
+                logger.info(f"✅ Saved {stage_name} results to {output_npz}")
             except Exception as e:
-                logger.error(f"Failed to save {stage_name}: {e}")
+                logger.error(f"❌ Failed to save {stage_name} results: {e}")
 
         final_stage = max(completed_stages)
         res = results[final_stage]
+        args.fitted_param_names = fitted_names_for(stage_args_per_stage[final_stage])  # NEW
+
 
     else:
         # Single run results
@@ -2958,7 +2972,6 @@ def main_dynesty():
 
     # === FINALIZE RUN AND SNAPSHOT ===
     try:
-        fitted_p_names = args.fitted_param_names
         param_stats = {name: {"median": float(m), "sigma": float(s)}
                     for name, m, s in zip(fitted_p_names, np.median(res.samples, axis=0), np.std(res.samples, axis=0))}
 
