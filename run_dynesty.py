@@ -2864,99 +2864,83 @@ def main_dynesty():
         if not completed_stages:
             logger.error("❌ All curriculum stages failed. No results to save.")
             return
-        
-        for stage_name, stage_results in results.items():
-            fitted_p_names = fitted_names_for(stage_args_per_stage[stage_name])   #  NEW
-            output_prefix   = f"dynesty_curriculum_{stage_name}_{args.xi}"
-            output_npz      = Path(args.output_dir) / f"{output_prefix}_samples.npz"
 
-            try:
-                weights = np.exp(stage_results.logwt - stage_results.logz[-1])
-                np.savez(output_npz,
-                        samples      = stage_results.samples,
-                        weights      = weights,
-                        param_names  = np.array(fitted_p_names),
-                        logl         = stage_results.logl,
-                        logz         = stage_results.logz,
-                        logzerr      = stage_results.logzerr)
-                logger.info(f"✅ Saved {stage_name} results to {output_npz}")
-            except Exception as e:
-                logger.error(f"❌ Failed to save {stage_name} results: {e}")
-
-        final_stage = max(completed_stages)
-        res = results[final_stage]
-        args.fitted_param_names = fitted_names_for(stage_args_per_stage[final_stage])  # NEW
-
-
-    else:
-        # Single run results
-        res = results# Curriculum learning results
-        
-    if isinstance(results, dict) and 'stage_1' in results:
-        completed_stages = [k for k, v in results.items() if v is not None]
-        if not completed_stages:
-            logger.error("❌ All curriculum stages failed. No results to save.")
-            return
-
-        # Save each completed stage
+        # Save each completed stage separately
         for stage_name in completed_stages:
             stage_results = results[stage_name]
+
+            # --- obtain the fitted‑parameter list for THIS stage ----------------
+            stage_args_local = stage_args_per_stage[stage_name]          # NEW
+            fitted_p_names_stage, _, _, _, _, _ = get_param_labels_and_bounds(
+                stage_args_local)                                        # NEW
+            # --------------------------------------------------------------------
+
             output_prefix = f"dynesty_curriculum_{stage_name}_{args.xi}"
-            output_npz = Path(args.output_dir) / f"{output_prefix}_samples.npz"
+            output_npz    = Path(args.output_dir) / f"{output_prefix}_samples.npz"
 
             try:
                 weights = np.exp(stage_results.logwt - stage_results.logz[-1])
-                np.savez(output_npz,
-                    samples=stage_results.samples,
-                    weights=weights,
-                    param_names=np.array(fitted_p_names), 
-                    logl=stage_results.logl,
-                    logz=stage_results.logz,
-                    logzerr=stage_results.logzerr)
+                np.savez(
+                    output_npz,
+                    samples     = stage_results.samples,
+                    weights     = weights,
+                    param_names = np.array(fitted_p_names_stage),         # NEW
+                    logl        = stage_results.logl,
+                    logz        = stage_results.logz,
+                    logzerr     = stage_results.logzerr,
+                )
                 logger.info(f"✅ Saved {stage_name} results to {output_npz}")
             except Exception as e:
                 logger.error(f"❌ Failed to save {stage_name} results: {e}")
 
-        # Use final stage for downstream processing
+        # Use the last completed stage for any downstream processing
         final_stage = max(completed_stages)
         res = results[final_stage]
 
+        # We also need the parameter names for that final stage               # NEW
+        fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(          # NEW
+            stage_args_per_stage[final_stage])                                # NEW
+
     else:
-        # Single-run results
+        # Single‑run results
         res = results
 
-    # ---- Save final stage or single-run result ----
+        # Parameter names come from the main run’s args                        # NEW
+        fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(args)     # NEW
+
+
+    # ---------------------------------------------------------------------------
+    # Save the final stage (or single‑run) results
+    # ---------------------------------------------------------------------------
     output_parts = ["dynesty_mw", args.xi]
-    if args.include_bulge:
-        output_parts.append("B" + ("f" if args.fit_bulge else "x"))
-    if args.include_disk_thin:
-        output_parts.append("DT" + ("f" if args.fit_disk_thin else "x"))
-    if args.include_disk_thick:
-        output_parts.append("DK" + ("f" if args.fit_disk_thick else "x"))
-    if args.include_gas:
-        output_parts.append("G" + ("f" if args.fit_gas else "x"))
+    if args.include_bulge:       output_parts.append("B"  + ("f" if args.fit_bulge       else "x"))
+    if args.include_disk_thin:   output_parts.append("DT" + ("f" if args.fit_disk_thin   else "x"))
+    if args.include_disk_thick:  output_parts.append("DK" + ("f" if args.fit_disk_thick  else "x"))
+    if args.include_gas:         output_parts.append("G"  + ("f" if args.fit_gas         else "x"))
 
     output_basename = "_".join(output_parts)
-    output_npz = Path(args.output_dir) / f"{output_basename}_samples.npz"
+    output_npz      = Path(args.output_dir) / f"{output_basename}_samples.npz"
 
-    # Compute effective sample size
+    # Effective sample size
     try:
         ess = res.effective_sample_size if hasattr(res, 'effective_sample_size') else 0
-    except:
+    except Exception:
         weights = np.exp(res.logwt - res.logz[-1])
         ess = 1.0 / np.sum(weights**2) if np.sum(weights**2) > 0 else 0.0
 
-    # Save final .npz
+    # Save final results
     try:
-        np.savez(output_npz,
-         samples=res.samples,
-         weights=np.exp(res.logwt - res.logz[-1]),
-         param_names=np.array(fitted_p_names),
-         logl=res.logl,
-         logz=res.logz,
-         logzerr=res.logzerr,
-         ess=ess,
-         blob=res.blob if hasattr(res, 'blob') else None)
+        np.savez(
+            output_npz,
+            samples     = res.samples,
+            weights     = np.exp(res.logwt - res.logz[-1]),
+            param_names = np.array(fitted_p_names),                      # uses stage‑specific names
+            logl        = res.logl,
+            logz        = res.logz,
+            logzerr     = res.logzerr,
+            ess         = ess,
+            blob        = res.blob if hasattr(res, 'blob') else None,
+        )
         logger.info(f"\n✅ Final results saved to {output_npz}")
     except Exception as e:
         logger.error(f"❌ Failed to save final results: {e}")
