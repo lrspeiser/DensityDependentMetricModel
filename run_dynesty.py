@@ -366,20 +366,34 @@ def check_physical_plausibility(
 
         # Safely compute xi_solar using selected xi mode
         xi_mode = getattr(args_obj, 'xi', 'power')
+        from density_metric2 import XI_FUNCTION_MAP, v_total_kms
+        
+        # We need the full parameter dictionary, including fixed values
+        full_params = {}
+        for p_info in args_obj.all_param_info_list:
+            full_params[p_info['name']] = p_info['current_val']
+        
+        # Calculate v_total to get xi implicitly. This is the most robust way.
+        # We create a dummy params dictionary for v_total_kms
+        dummy_params = full_params.copy()
+        for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
+            dummy_params[f'include_{component}'] = getattr(args_obj, f'include_{component}', False)
+            
+        try:
+            # We don't need the velocity, but calling this function correctly calculates xi internally.
+            # To get the xi value, we can use the fundamental formula: xi = (v_model/v_newton)^2
+            v_model_test = v_total_kms(np.array([R_SUN_KPC]), dummy_params, xi_type=xi_mode)[0]
+            v_newton_test = v_baryon_total_newtonian_kms(np.array([R_SUN_KPC]), dummy_params)[0]
+            
+            if v_newton_test > 1e-6:
+                xi_solar = (v_model_test / v_newton_test)**2
+            else:
+                xi_solar = 1.0
 
-        if xi_mode == 'grav_color':
-            from density_metric2 import xi_gravitational_color
-            gamma = params.get('gamma_exp', 2.7)
-            lambda_g = params.get('lambda_g', 1.5)
-            rho_c = params['rho_c_solar_kpc3']
-            xi_solar = xi_gravitational_color(rho_solar_typical, rho_c, gamma, lambda_g)[0]
-
-        elif 'n_exp' in params:
-            from density_metric2 import XI_FUNCTION_MAP
-            xi_func = XI_FUNCTION_MAP.get(xi_mode, XI_FUNCTION_MAP['power'])
-            rho_c = params['rho_c_solar_kpc3']
-            n_exp = params['n_exp']
-            xi_solar = xi_func(rho_solar_typical, rho_c, n_exp)[0]
+        except Exception as e:
+            # If the calculation fails for any reason, assume a non-physical value
+            logger.warning(f"Plausibility check for xi failed with error: {e}")
+            xi_solar = -1.0 # This will cause the check below to fail safely
 
         # Validate the xi_solar value
         if xi_solar < EXPECTED_XI_AT_SOLAR[0]:
@@ -1138,22 +1152,29 @@ def log_likelihood_dynesty(
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
     """
-    Log-likelihood function that now correctly handles ALL xi_types by using
-    the v_total_kms master function from density_metric2.py.
+    MASTER log-likelihood function that now correctly passes the FULL parameter set
+    to the physical plausibility check.
     """
-    # 1. Reconstruct the full parameter dictionary
+    # 1. FIRST, reconstruct the full parameter dictionary, including fixed values
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
             params[p_info['name']] = p_info['current_val']
     
+    # Add boolean flags
     for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
         params[f'include_{component}'] = getattr(args_dynesty_obj, f'include_{component}', False)
     
-    # 2. Perform plausibility checks
-    is_valid, reason, *_ = check_physical_plausibility(theta_values_fitted, fitted_param_names, args_dynesty_obj)
+    # --- THIS IS THE CRITICAL FIX ---
+    # 2. NOW, perform the physical plausibility check using the FULL parameter set.
+    # We must reconstruct the full parameter lists that the check function expects.
+    all_param_names_for_check = [p['name'] for p in all_param_info_list]
+    all_param_values_for_check = np.array([params[name] for name in all_param_names_for_check])
+    
+    is_valid, reason, *_ = check_physical_plausibility(all_param_values_for_check, all_param_names_for_check, args_dynesty_obj)
     if not is_valid:
         return -np.inf, [np.inf]
+    # --- END OF FIX ---
 
     # 3. Compute the model velocity using the master v_total_kms function
     try:
@@ -1179,7 +1200,6 @@ def log_likelihood_dynesty(
 
     rmse = np.sqrt(np.mean((v_data - v_model)**2))
     return log_L, [rmse]
-
 
 def v_model_for_dynesty(
     R_kpc_array: np.ndarray,
@@ -1530,14 +1550,31 @@ def get_param_labels_and_bounds(ARGS):
         if not is_included:
             continue
 
+        # Define which parameters belong to which xi model
+        xi_model_params = {
+            'power': ['rho_c_solar_kpc3', 'n_exp'],
+            'mass_threshold': ['M_crit_msun', 'xi_boost', 'width'],
+            'grav_color': ['rho_c_solar_kpc3', 'gamma_exp', 'lambda_g']
+            # Add other models as you define them
+        }
+
         # Should we fit this parameter?
         is_fitted = False
-        if 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
-            fixed_arg_name = p_details['fixed_val_from_arg']
-            if f"--{fixed_arg_name}" not in sys.argv:
+        if p_details.get('fit_flag_arg') == 'fit_xi_params':
+            # This is a gravity parameter. Only fit it if it belongs to the
+            # currently selected model AND the --fit_xi_params flag is active.
+            if ARGS.fit_xi_params and p_name in xi_model_params.get(ARGS.xi, []):
                 is_fitted = True
-            else:
-                logger.info(f"  {p_name}: Using fixed value (overrides fit flag)")
+        elif 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
+            # This is a baryonic parameter. Fit it if its specific flag is active.
+            is_fitted = True
+
+        # Allow a fixed value on the command line to override fitting
+        fixed_arg_name = p_details['fixed_val_from_arg']
+        default_val = p_details['default_fixed']
+        # Check if the user provided a value different from the default
+        if getattr(ARGS, fixed_arg_name, default_val) != default_val:
+            is_fitted = False
 
         # Get current value
         if p_details.get('log_prior', False):
