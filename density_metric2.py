@@ -247,39 +247,6 @@ def rho_baryon_total_midplane_solar_kpc3(R_kpc, p_baryons_for_density):
 # --- END: NEW MULTI-COMPONENT FUNCTIONS ---
 
 
-# ---------- Candidate xi(rho) Laws (Corrected for Numba) ----------
-# NOTE: The new xi_mass_threshold function cannot be Numba-compiled in its current
-# form because it uses features Numba doesn't support well (like complex fallbacks).
-# We define it as a regular Python function.
-def xi_mass_threshold(rho, rho_c, n_exp, A, 
-                     M_enclosed_func=None, r_kpc=None, params=None):
-    """
-    Mass threshold ξ function - gravity strengthens below a critical ENCLOSED MASS.
-    """
-    # Reinterpret parameters for this specific model
-    M_crit = rho_c      # rho_c is now M_crit in M_sun
-    xi_boost = 1 + A    # A is the fractional boost
-    width = n_exp       # n_exp is the transition width (in units of M_crit)
-    
-    # Get enclosed mass
-    if params and 'M_enclosed_msun' in params:
-        M_enclosed = params['M_enclosed_msun']
-    elif M_enclosed_func is not None and r_kpc is not None and params is not None:
-        # This is the expected path: use a real mass model
-        M_enclosed = v_baryon_total_newtonian_kms(r_kpc, params)**2 * r_kpc / G_ASTRO_UNITS
-    else:
-        # This is a very rough fallback and should be avoided
-        r_est = 10.0 if np.isscalar(rho) else np.logspace(-1, 2, len(rho))
-        M_enclosed = rho * r_est**3 * 4/3 * np.pi * 1e-9
-    
-    M_enclosed = np.atleast_1d(M_enclosed)
-    
-    # Smooth transition using the hyperbolic tangent function (tanh)
-    # This creates a smooth "S" curve around the critical mass.
-    xi = 1 + (xi_boost - 1) * 0.5 * (1 - np.tanh((M_enclosed - M_crit) / width))
-    
-    return xi
-
 @nb.njit(cache=True)
 def xi_power_law(rho, rho_c, n_exp):
     """
@@ -784,36 +751,125 @@ def xi_exponential(rho, rho_c, n_exp, A=1.0):
     result = 1.0 + A * np.exp(exp_arg)
     return result
 
-# NOTE: The new xi_mass_threshold function cannot be Numba-compiled in its current
-# form because it uses features Numba doesn't support well (like complex fallbacks).
-# We define it as a regular Python function.
 def xi_mass_threshold(rho, rho_c, n_exp, A, 
                      M_enclosed_func=None, r_kpc=None, params=None):
     """
     Mass threshold ξ function - gravity strengthens below a critical ENCLOSED MASS.
+    
+    This model ignores local density (rho) and instead depends on the total
+    mass enclosed within radius r_kpc.
+    
+    Parameters:
+    -----------
+    rho : array or None
+        Not used for this model - can be None
+    rho_c : float
+        Reinterpreted as M_crit - the critical enclosed mass in M_sun
+    n_exp : float
+        Reinterpreted as width - the transition width parameter
+    A : float
+        Enhancement factor minus 1 (so total boost = 1 + A)
+    r_kpc : array or float, optional
+        Radii at which to evaluate xi. If None, uses R_sun = 8.122 kpc
+    params : dict, optional
+        Full parameter dictionary for calculating enclosed mass
     """
-    # Reinterpret parameters for this specific model
-    M_crit = rho_c      # rho_c is now M_crit in M_sun
-    xi_boost = 1 + A    # A is the fractional boost
-    width = n_exp       # n_exp is the transition width (in units of M_crit)
+    import numpy as np
     
-    # Get enclosed mass
-    if params and 'M_enclosed_msun' in params:
-        M_enclosed = params['M_enclosed_msun']
-    elif M_enclosed_func is not None and r_kpc is not None and params is not None:
-        # This is the expected path: use a real mass model
-        M_enclosed = v_baryon_total_newtonian_kms(r_kpc, params)**2 * r_kpc / G_ASTRO_UNITS
+    # Get logger safely
+    try:
+        logger = logging.getLogger("run_dynesty")
+    except:
+        logger = None
+    
+    # Reinterpret parameters for mass threshold model
+    M_crit = rho_c      # Critical mass in M_sun
+    xi_boost = 1 + A    # Total enhancement factor
+    width = n_exp       # Transition width
+    
+    # Handle radius input
+    if r_kpc is None:
+        # Default to solar radius for plausibility checks
+        r_kpc = np.array([8.122])  # R_sun in kpc
+        if logger:
+            logger.debug("xi_mass_threshold: No radius provided, using R_sun = 8.122 kpc")
     else:
-        # This is a very rough fallback and should be avoided
-        r_est = 10.0 if np.isscalar(rho) else np.logspace(-1, 2, len(rho))
-        M_enclosed = rho * r_est**3 * 4/3 * np.pi * 1e-9
+        r_kpc = np.atleast_1d(r_kpc)
     
+    # Calculate enclosed mass
+    M_enclosed = None
+    
+    # Option 1: Pre-computed mass
+    if params and 'M_enclosed_msun' in params:
+        M_enclosed = np.atleast_1d(params['M_enclosed_msun'])
+        if logger:
+            logger.debug(f"Using pre-computed M_enclosed")
+    
+    # Option 2: Calculate from baryon model
+    elif params is not None:
+        try:
+            # Avoid circular imports by importing here
+            from density_metric2 import v_baryon_total_newtonian_kms, G_ASTRO_UNITS
+            
+            # Calculate Newtonian velocity
+            v_newton = v_baryon_total_newtonian_kms(r_kpc, params)
+            
+            # Convert to enclosed mass: M = v^2 * R / G
+            M_enclosed = v_newton**2 * r_kpc / G_ASTRO_UNITS
+            
+            if logger:
+                logger.debug(f"Calculated M_enclosed from baryon model")
+                
+        except Exception as e:
+            if logger:
+                logger.warning(f"Failed to calculate M_enclosed from baryon model: {e}")
+            M_enclosed = None
+    
+    # Option 3: Fallback to typical galaxy profile
+    if M_enclosed is None:
+        # Use a typical MW-like mass profile
+        # M(R) = M_total * (1 - exp(-R/R_scale))
+        M_total = 1e11  # Total galaxy mass ~ 10^11 M_sun
+        R_scale = 3.0   # Scale radius ~ 3 kpc
+        M_enclosed = M_total * (1 - np.exp(-r_kpc / R_scale))
+        
+        if logger:
+            logger.debug(f"Using fallback galaxy mass profile")
+    
+    # Ensure M_enclosed is array
     M_enclosed = np.atleast_1d(M_enclosed)
     
-    # Smooth transition using the hyperbolic tangent function (tanh)
-    # This creates a smooth "S" curve around the critical mass.
-    # Note the corrected call to np.tanh
-    xi = 1 + (xi_boost - 1) * 0.5 * (1 - np.tanh((M_enclosed - M_crit) / width))
+    # Ensure arrays match in length
+    if len(M_enclosed) == 1 and len(r_kpc) > 1:
+        M_enclosed = np.full(len(r_kpc), M_enclosed[0])
+    elif len(M_enclosed) != len(r_kpc):
+        # Shouldn't happen, but handle gracefully
+        n_out = len(r_kpc)
+        if len(M_enclosed) > n_out:
+            M_enclosed = M_enclosed[:n_out]
+        else:
+            M_enclosed = np.pad(M_enclosed, (0, n_out - len(M_enclosed)), mode='edge')
+    
+    # Calculate xi with smooth tanh transition
+    # For M << M_crit: xi → xi_boost (enhanced gravity)
+    # For M >> M_crit: xi → 1 (normal gravity)
+    
+    # Width as fraction of M_crit
+    width_abs = width * M_crit
+    if width_abs <= 0:
+        width_abs = 0.1 * M_crit
+    
+    # Smooth transition using tanh
+    x = (M_enclosed - M_crit) / width_abs
+    transition = 0.5 * (1.0 - np.tanh(x))
+    xi = 1.0 + (xi_boost - 1.0) * transition
+    
+    # Apply reasonable bounds
+    xi = np.clip(xi, 0.1, 10.0)
+    
+    # Return scalar if input was scalar
+    if len(xi) == 1 and len(r_kpc) == 1:
+        return xi[0]
     
     return xi
 
@@ -837,8 +893,13 @@ XI_FUNCTION_MAP = {
 
 def v_total_kms(R_kpc, p, xi_type='power'):
     """
-    Master function to compute the full DDMM circular velocity.
+    MASTER function to compute the full DDMM circular velocity.
     """
+    import numpy as np
+    
+    # Ensure R_kpc is array
+    R_kpc = np.atleast_1d(R_kpc)
+    
     # 1. Calculate Newtonian velocity from baryons
     v_newton = v_baryon_total_newtonian_kms(R_kpc, p)
     
@@ -847,17 +908,41 @@ def v_total_kms(R_kpc, p, xi_type='power'):
     if xi_func is None:
         raise ValueError(f"Unknown xi_type: '{xi_type}'. Available: {list(XI_FUNCTION_MAP.keys())}")
 
-    # 3. Handle the different arguments for density-based vs. mass-based xi
-    if xi_type == 'mass_threshold':
-        # The mass threshold function needs the full parameter dictionary
-        xi = xi_func(None, p['rho_c_solar_kpc3'], p['n_exp'], p.get('A', 1.0),
-                     r_kpc=R_kpc, params=p)
-    else:
-        # Density-based functions need the density profile
-        rho = rho_baryon_total_midplane_solar_kpc3(R_kpc, p)
-        xi = xi_func(rho, p['rho_c_solar_kpc3'], p['n_exp'], p.get('A', 1.0))
-        
+    # 3. Call the xi function with the CORRECT arguments for that model
+    try:
+        if xi_type == 'mass_threshold':
+            # Extract parameters for mass threshold model
+            M_crit = p.get('M_crit_msun', 1e10)    # Default to galaxy scale
+            xi_boost = p.get('xi_boost', 2.0)      # Default to 2x enhancement
+            width = p.get('width', 0.5)             # Default to smooth transition
+            
+            # CRITICAL: Pass radius array for mass calculation
+            xi = xi_func(
+                rho=None,           # Not used
+                rho_c=M_crit,       # Critical mass
+                n_exp=width,        # Transition width
+                A=(xi_boost-1),     # Enhancement minus 1
+                r_kpc=R_kpc,        # Radius array
+                params=p            # Full parameters
+            )
+            
+        else:
+            # All other models use the standard interface
+            rho = rho_baryon_total_midplane_solar_kpc3(R_kpc, p)
+            rho_c = p.get('rho_c_solar_kpc3', 1e9)
+            n_exp = p.get('n_exp', p.get('gamma_exp', 1.0))
+            A_param = p.get('A', p.get('lambda_g', 1.0))
+            xi = xi_func(rho, rho_c, n_exp, A_param)
+
+    except Exception as e:
+        import traceback
+        logger = logging.getLogger("run_dynesty")
+        logger.error(f"Error in v_total_kms with {xi_type}: {e}")
+        logger.debug(traceback.format_exc())
+        raise
+
     # 4. Apply the modification
+    xi = np.atleast_1d(xi)
     v_modified = v_newton * np.sqrt(np.maximum(xi, 0.0))
     
     return v_modified

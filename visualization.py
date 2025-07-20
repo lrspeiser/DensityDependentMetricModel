@@ -358,7 +358,7 @@ def main():
     """Run all visualizations"""
     print("Loading dynesty results...")
     params, samples, weights, param_names = load_dynesty_results(
-        'chains_dynesty/NEWTONIAN_LIKE/dynesty_mw_power_Bf_DTf_DKf_Gf_results.pkl.gz'
+        'chains_dynesty/enhanced_cassini_clean/dynesty_mw_enhanced_DTf_results.pkl.gz'
     )
     
     print("Configuring model components based on loaded parameters...")

@@ -68,6 +68,11 @@ class DynestyAnalyzer:
             Directory for output plots (default: same as results file)
         """
         self.results_file = Path(results_file)
+        self.has_thin = False
+        self.has_thick = False
+        self.has_bulge = False
+        self.has_gas = False
+        
         if not self.results_file.exists():
             raise FileNotFoundError(f"Results file not found: {results_file}")
         
@@ -76,69 +81,94 @@ class DynestyAnalyzer:
         
         # Load results
         self.load_results()
+        # Ensure xi_type and param_labels are available for summary/plots
+        if not hasattr(self, 'xi_type') or not hasattr(self, 'param_labels'):
+            self.detect_model_config()
         
         # Detect model configuration from filename
         self.detect_model_config()
         
     def load_results(self):
-        """Load Dynesty results from .npz file."""
+        """Load Dynesty results from either .npz or .pkl.gz file."""
         logger.info(f"Loading results from {self.results_file}")
         
-        data = np.load(self.results_file)
-        if 'param_names' in data:
-            self.param_names = data['param_names'].tolist()
+        import gzip
+        import pickle
+
+        if str(self.results_file).endswith(".pkl.gz"):
+            with gzip.open(self.results_file, "rb") as f:
+                self.results = pickle.load(f)
+
+            # Extract attributes safely
+            self.samples = self.results.samples
+            self.weights = np.exp(self.results.logwt - self.results.logz[-1]) \
+                if hasattr(self.results, 'logwt') and hasattr(self.results, 'logz') else None
+            self.logl = getattr(self.results, 'logl', None)
+            self.logz = getattr(self.results, 'logz', None)
+            self.logzerr = getattr(self.results, 'logzerr', None)
+            self.blob = getattr(self.results, 'blob', None)
+            self.param_names = getattr(self.results, 'param_names', [f"param_{i}" for i in range(self.samples.shape[1])])
             self.param_labels = self.param_names.copy()
-            
-            # 🔧 Patch missing attributes if skipping detection
-            self.xi_type = 'grav_color'  # or 'power', 'enhanced', etc — pick what you used
-            self.has_bulge = True
-            self.has_thin = True
-            self.has_thick = True
-            self.has_gas = False  # You saw warnings about gas params being missing
+            self.rmse_values = self.blob.flatten() if self.blob is not None and self.blob.ndim > 1 else self.blob
+
+            logger.info(f"✅ Loaded {len(self.samples)} samples from DynestyResults object")
+
+        elif str(self.results_file).endswith(".npz"):
+            data = np.load(self.results_file)
+
+            self.samples = data['samples']
+            self.weights = data['weights'] if 'weights' in data else np.ones(len(self.samples)) / len(self.samples)
+            self.logl = data['logl'] if 'logl' in data else None
+            self.logz = data['logz'] if 'logz' in data else None
+            self.logzerr = data['logzerr'] if 'logzerr' in data else None
+            self.blob = data['blob'] if 'blob' in data else None
+            self.param_names = data['param_names'].tolist() if 'param_names' in data else [f"param_{i}" for i in range(self.samples.shape[1])]
+            self.param_labels = self.param_names.copy()
+            self.rmse_values = self.blob.flatten() if self.blob is not None and self.blob.ndim > 1 else self.blob
+
+            # Normalize weights
+            self.weights = self.weights / np.sum(self.weights)
+
+            logger.info(f"✅ Loaded {len(self.samples)} samples from .npz file")
+
         else:
-            logger.warning("No param_names found in .npz file — inferring from sample shape")
-            n_params = data['samples'].shape[1]
+            raise ValueError(f"Unsupported results file format: {self.results_file}")
 
-            # Guess based on known order for grav_color
-            if n_params == 6:
-                self.param_names = [
-                    'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g',
-                    'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc'
-                ]
-            elif n_params == 8:
-                self.param_names = [
-                    'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g',
-                    'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
-                    'M_bulge_solar', 'a_bulge_kpc'
-                ]
-            else:
-                raise ValueError(f"Unknown parameter set with {n_params} parameters. Please update analyzer.")
-
-        # Assign default param_labels = param_names (for corner/summary compatibility)
-        self.param_labels = self.param_names.copy()
-
-        self.samples = data['samples']
-        self.weights = data['weights'] if 'weights' in data else np.ones(len(self.samples)) / len(self.samples)
-        self.logl = data['logl'] if 'logl' in data else None
-        self.logz = data['logz'] if 'logz' in data else None
-        self.logzerr = data['logzerr'] if 'logzerr' in data else None
-        
-        # Normalize weights
-        self.weights = self.weights / np.sum(self.weights)
-        
-        logger.info(f"Loaded {len(self.samples)} samples with {self.samples.shape[1]} parameters")
-        
-        if 'blob' in data and data['blob'] is not None:
-            self.blob = data['blob']
-            self.rmse_values = self.blob.flatten() if self.blob.ndim > 1 else self.blob
+    def detect_xi_type_from_names(self):
+        """Infer xi_type from parameter names"""
+        if any(p in self.param_names for p in ['gamma_exp', 'lambda_g']):
+            return 'grav_color'
+        elif 'n_exp' in self.param_names:
+            return 'enhanced'
+        elif 'M_crit_msun' in self.param_names:
+            return 'mass_threshold'
         else:
-            self.rmse_values = None
-    
+            return 'power'
+
     def detect_model_config(self):
         """Detect model configuration from filename."""
-        if self.param_names is not None:
-            logger.info("⚙️ Skipping model config detection — using param_names from loaded file or shape inference")
+        if self.param_names == ['param_0', 'param_1', 'param_2']:
+            logger.warning("Fallback param names detected — assigning default labels for thin disk model")
+            self.param_names = ['M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc']
+            self.param_labels = [
+                r'$M_{\rm thin}$ (M$_\odot$)',
+                r'$R_{d,\rm thin}$ (kpc)',
+                r'$h_{z,\rm thin}$ (kpc)'
+            ]
+            self.xi_type = 'enhanced'  # or 'power' depending on your model
+            self.has_thin = True
+            self.has_thick = False
+            self.has_bulge = False
+            self.has_gas = False
             return
+        
+        
+        
+        if self.param_names is not None and self.param_labels:
+            logger.info("⚙️ Skipping model config detection — using param_names from loaded file or shape inference")
+            self.xi_type = self.detect_xi_type_from_names()
+            return
+
         filename = self.results_file.stem
         
         # Detect xi type
@@ -576,6 +606,22 @@ class DynestyAnalyzer:
         
         return len(issues) == 0
 
+# Patch for exporting full summary
+from typing import Dict
+
+def export_summary(analyzer, stats_dict: Dict[str, dict]) -> dict:
+    """Return full summary dictionary including metadata and parameter stats."""
+    summary = {
+        "model": {
+            "xi_type": analyzer.xi_type,
+            "logZ": float(analyzer.logz[-1]) if analyzer.logz is not None else None,
+            "logZerr": float(analyzer.logzerr[-1]) if analyzer.logzerr is not None else None,
+            "rmse_median": float(np.median(analyzer.rmse_values)) if analyzer.rmse_values is not None else None,
+            "total_mass": sum(stats_dict[k]['median'] for k in stats_dict if 'M_' in k)
+        },
+        "parameters": stats_dict
+    }
+    return summary
 
 def main():
     """Main entry point."""
@@ -594,6 +640,10 @@ def main():
                        help='Path to Gaia data for comparison')
     parser.add_argument('--n_samples', type=int, default=100,
                        help='Number of posterior samples for uncertainty bands')
+    parser.add_argument("--export_summary_json", action="store_true", help="Export summary as JSON")
+    parser.add_argument("--save_plots", action="store_true", help="Save corner/rotation curve/xi plots")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+
     
     args = parser.parse_args()
     
@@ -603,15 +653,30 @@ def main():
     # Print summary
     analyzer.print_summary()
     
+    if args.export_summary_json:
+        stats_dict = analyzer.get_parameter_stats()
+        full_summary = export_summary(analyzer, stats_dict)
+        json_path = analyzer.output_dir / f"summary_{analyzer.xi_type}.json"
+        with open(json_path, 'w') as f:
+            json.dump(full_summary, f, indent=2)
+        logger.info(f"📤 Full JSON summary saved to {json_path}")
+
     # Check physical plausibility
     analyzer.check_physical_plausibility()
-    
+
+    # 👉 Export summary JSON if requested
+    if args.export_summary_json:
+        summary = export_summary(analyzer, stats_dict)
+        output_json = analyzer.output_dir / f"summary_{analyzer.xi_type}.json"
+        with open(output_json, 'w') as f:
+            json.dump(summary, f, indent=2)
+        logger.info(f"📄 Exported summary to {output_json}")
+
+
     # Generate plots
     if not args.no_plots:
-        # Corner plot
         analyzer.plot_corner()
-        
-        # Load Gaia data if requested
+
         gaia_data = None
         if args.gaia_data or PHYSICS_AVAILABLE:
             try:
@@ -620,16 +685,11 @@ def main():
                 )
             except:
                 logger.warning("Could not load Gaia data")
-        
-        # Rotation curve
+
         analyzer.plot_rotation_curve(gaia_data, n_samples=args.n_samples)
-        
-        # Xi profile
         analyzer.plot_xi_profile()
-    
-    # Generate LaTeX table
+
     analyzer.generate_latex_table()
-    
     print(f"\n✨ Analysis complete! Results saved to {analyzer.output_dir}")
 
 
