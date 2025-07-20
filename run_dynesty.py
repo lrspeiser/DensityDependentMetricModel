@@ -350,8 +350,6 @@ def check_physical_plausibility(
             logger.warning("Thick disk scale height less than 2x thin disk")
             return False, "Thick disk scale height must be at least 2x thin disk."
 
-# In check_physical_plausibility function, replace the xi/velocity check section (around line 287) with:
-
     # 4. Check xi and velocity at solar radius
     try:
         logger.debug("Beginning velocity/xi plausibility check at R_sun")
@@ -411,11 +409,18 @@ def check_physical_plausibility(
                 f"[{EXPECTED_V_AT_SOLAR[0]}, {EXPECTED_V_AT_SOLAR[1]}]"
             )
 
+        # 5. Cassini test
+        passes_cassini, cassini_msg = check_cassini_compatibility(params, args_obj.xi)
+        if not passes_cassini:
+            logger.warning(f"Cassini test failed: {cassini_msg}")
+            return False, cassini_msg
+
     except Exception as e:
         import traceback
         logger.warning(f"⚠️ Plausibility check for xi/velocity failed with error: {e}")
         logger.debug(traceback.format_exc())
         return False, "Velocity calculation failed during plausibility check"
+
 
     # If all checks pass
     return True, "OK"
@@ -564,9 +569,9 @@ def setup_xi_parameters_for_mode(args):
         MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'].update({
             'label': "rho_c (M_sun/kpc^3)",
             'fixed_val_from_arg': 'rho_c_fixed',
-            'default_fixed': 5e7,  # Galaxy-appropriate
-            'low': 5e7,
-            'high': 5e8,
+            'default_fixed': 1e13,  # Galaxy-appropriate
+            'low': 1e12,
+            'high': 1e15,
             'fit_flag_arg': 'fit_rho_c',
             'log_prior': True,
             'physical_check': True
@@ -643,9 +648,9 @@ def setup_xi_parameters_for_mode(args):
         MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'].update({
             'label': "rho_c (M_sun/kpc^3)",
             'fixed_val_from_arg': 'rho_c_fixed',
-            'default_fixed': 5e8,
-            'low': 5e7,
-            'high': 5e8,
+            'default_fixed': 1e13,
+            'low': 1e12,
+            'high': 1e15,
             'fit_flag_arg': 'fit_xi_params',
             'log_prior': True,
             'physical_check': True
@@ -880,19 +885,35 @@ def enhanced_monitor_sampler_progress(
             logger.info("⚠️  Too few samples for detailed analysis")
             return
 
-        # LogZ stats
+        # LogZ stats and dlogz
         current_logz = -np.inf
+        dlogz = np.nan  # Default
+
         if hasattr(res, 'logz') and len(res.logz) > 0:
             current_logz = res.logz[-1]
+            
             if not np.isfinite(current_logz):
                 logger.error("❌ log(Z) = -inf. All live points have likelihood = -inf.")
                 return
             else:
                 logger.info(f"📊 Log(Z): {current_logz:.3f}")
+
+                # Compute dlogz from last two logz values
+                if len(res.logz) >= 2:
+                    prev_logz = res.logz[-2]
+                    dlogz = current_logz - prev_logz
+                    logger.info(f"   Δlog(Z): {dlogz:.6f}")
+                else:
+                    logger.info("   Δlog(Z): (not enough samples yet)")
+
+                # Show error estimate
                 if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
                     logger.info(f"   Error: ±{res.logzerr[-1]:.3f}")
 
-        # Convergence check
+        # Store dlogz for later JSON/dash export
+        args_obj._current_dlogz = dlogz  # Or however you pass it to dashboard_monitor
+
+       # Convergence check
         recent_samples = samples[-min(1000, len(samples)):]
         current_params = np.median(recent_samples, axis=0)
         if convergence_tracker is None:
@@ -994,7 +1015,7 @@ def enhanced_monitor_sampler_progress(
                     "efficiency": float(eff),
                     "logz": float(current_logz),
                     "logz_err": float(res.logzerr[-1]) if hasattr(res, 'logzerr') and len(res.logzerr) > 0 else 0.0,
-                    "dlogz": float(dlogz) if np.isfinite(dlogz) else 0.0,
+                    "dlogz": float(dlogz) if dlogz is not None and np.isfinite(dlogz) else None,
                     "current_nlive": int(len(res.live_points)) if hasattr(res, 'live_points') else 0,
                     "parameter_estimates": {},
                     "parameter_uncertainties": {},
@@ -1086,7 +1107,7 @@ def prior_transform_dynesty(
     if 'rho_c_solar_kpc3' in u_dict:
         # Log-uniform prior between 10^12 and 10^16 M☉/kpc³.
         # This is a much higher range, guaranteed to screen gravity in the Solar System.
-        log_low, log_high = 12.0, 16.0
+        log_low, log_high = 12.0, 15.0
         params[fitted_param_names.index('rho_c_solar_kpc3')] = 10**(log_low + u_dict['rho_c_solar_kpc3'] * (log_high - log_low))
 
     if 'n_exp' in u_dict or 'gamma_exp' in u_dict:
@@ -1150,9 +1171,10 @@ def log_likelihood_dynesty(
     R_data: np.ndarray,
     v_data: np.ndarray,
     sigma_data: np.ndarray,
-    xi_type: str,
+    xi_type: str,  # <-- This parameter exists here
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
+
     """
     MASTER log-likelihood function that now correctly passes the FULL parameter set
     to the physical plausibility check and uses the v_total_kms master function.
@@ -1180,6 +1202,39 @@ def log_likelihood_dynesty(
 
     is_valid, reason, *_ = check_physical_plausibility(all_param_values_for_check, all_param_names_for_check, args_dynesty_obj)
     if not is_valid:
+        return -np.inf, [np.inf]
+    
+    # 2b. Enforce Cassini constraints
+    try:
+        rho_saturn = 2.3e21  # Cassini orbit density
+        
+        # Import at function level to avoid circular imports
+        from density_metric2 import XI_FUNCTION_MAP
+        
+        xi_func = XI_FUNCTION_MAP.get(xi_type, XI_FUNCTION_MAP['power'])
+        
+        if xi_type == 'grav_color':
+            gamma = params.get('gamma_exp', 2.7)
+            lambda_g = params.get('lambda_g', 1.5)
+            rho_c = params.get('rho_c_solar_kpc3', 1e13)
+            xi_saturn = xi_func(rho_saturn, rho_c, gamma, lambda_g)[0]
+        elif xi_type in ('power', 'logistic', 'enhanced'):
+            n = params.get('n_exp', 1.5)
+            A = params.get('A', 1.0) if 'enhanced' in xi_type else None
+            rho_c = params.get('rho_c_solar_kpc3', 1e13)
+            if A is not None:
+                xi_saturn = xi_func(rho_saturn, rho_c, n, A)[0]
+            else:
+                xi_saturn = xi_func(rho_saturn, rho_c, n)[0]
+        else:
+            xi_saturn = 1.0  # Skip check for mass_threshold etc.
+        
+        if abs(xi_saturn - 1.0) > 2.3e-5:  # Cassini tolerance
+            return -np.inf, [np.inf]  # Reject sample
+            
+    except Exception as e:
+        logger = get_or_create_logger()
+        logger.warning(f"⚠️ Cassini check failed: {e}")
         return -np.inf, [np.inf]
 
     # 3. Compute the model velocity using the master v_total_kms function
@@ -1374,21 +1429,14 @@ def ensure_grav_color_params_in_config(args):
             MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'] = {
                 'label': "rho_c (M_sun/kpc^3)", 
                 'fixed_val_from_arg': 'rho_c_fixed', 
-                'default_fixed': 5e7,  # Galaxy-appropriate
-                'low': 5e7,
-                'high': 5e8,
+                'default_fixed': 1e13,  # Galaxy-appropriate
+                'low': 1e12,
+                'high': 1e15,
                 'fit_flag_arg': 'fit_rho_c',  # New flag
                 'log_prior': True,
                 'physical_check': True
             }
 
-#!/usr/bin/env python3
-"""
-Debug patch to add to your run_dynesty.py to diagnose the crash.
-Add these modifications to your existing code.
-"""
-
-# 1. Add this debug version of log_likelihood_dynesty right after the original:
 
 def log_likelihood_dynesty_debug(
     theta_values_fitted: np.ndarray,
@@ -1405,6 +1453,10 @@ def log_likelihood_dynesty_debug(
     
     # Get logger safely for multiprocessing
     logger = get_or_create_logger()
+    
+    # Initialize warning counts
+    if not hasattr(log_likelihood_dynesty_debug, 'warning_counts'):
+        log_likelihood_dynesty_debug.warning_counts = {}
     
     # Handle debug counter for multiprocessing
     if not hasattr(log_likelihood_dynesty_debug, 'debug_counter'):
@@ -1435,9 +1487,15 @@ def log_likelihood_dynesty_debug(
         R_d_thin = params['R_d_thin_kpc']
         
         if R_d_thick < 1.05 * R_d_thin:
-            if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-                logger.warning(f"Rejecting: R_d_thick ({R_d_thick:.2f}) < 1.05 * R_d_thin ({R_d_thin:.2f})")
-                log_likelihood_dynesty_debug.debug_counter += 1
+            # Use warning counter for this specific constraint
+            warning_key = "R_d_thick_thin"
+            if warning_key not in log_likelihood_dynesty_debug.warning_counts:
+                log_likelihood_dynesty_debug.warning_counts[warning_key] = 0
+            
+            if log_likelihood_dynesty_debug.warning_counts[warning_key] < 10:
+                logger.debug(f"Rejecting: R_d_thick ({R_d_thick:.2f}) < 1.05 * R_d_thin ({R_d_thin:.2f})")
+                log_likelihood_dynesty_debug.warning_counts[warning_key] += 1
+            
             return -np.inf, [np.inf]
 
     # Hard constraint: thick disk scale height must be > thin disk scale height
@@ -1446,12 +1504,18 @@ def log_likelihood_dynesty_debug(
         h_z_thin = params['h_z_thin_kpc']
         
         if h_z_thick < 2.0 * h_z_thin:
-            if log_likelihood_dynesty_debug.debug_counter < DEBUG_COUNTER_MAX:
-                logger.warning(f"Rejecting: h_z_thick ({h_z_thick:.3f}) < 2 * h_z_thin ({h_z_thin:.3f})")
-                log_likelihood_dynesty_debug.debug_counter += 1
+            # Use warning counter for this specific constraint
+            warning_key = "h_z_thick_thin"
+            if warning_key not in log_likelihood_dynesty_debug.warning_counts:
+                log_likelihood_dynesty_debug.warning_counts[warning_key] = 0
+            
+            if log_likelihood_dynesty_debug.warning_counts[warning_key] < 10:
+                logger.debug(f"Rejecting: h_z_thick ({h_z_thick:.3f}) < 2 * h_z_thin ({h_z_thin:.3f})")
+                log_likelihood_dynesty_debug.warning_counts[warning_key] += 1
+            
             return -np.inf, [np.inf]
         
-    # Log first few data points
+    # Log first few data points (only once)
     if not hasattr(log_likelihood_dynesty_debug, '_logged_data'):
         logger.info(f"DEBUG: Data shapes - R: {R_data.shape}, v: {v_data.shape}, sigma: {sigma_data.shape}")
         logger.info(f"DEBUG: First 5 R values: {R_data[:5]}")
@@ -1473,6 +1537,41 @@ def log_likelihood_dynesty_debug(
         theta_values_fitted, fitted_param_names, args_dynesty_obj,
         all_param_info_list, R_data, v_data, sigma_data, xi_type, gp_surrogate
     )
+    
+def check_cassini_compatibility(params, xi_type):
+    """
+    Check if parameters pass Cassini test.
+    """
+    from density_metric2 import XI_FUNCTION_MAP
+    
+    rho_saturn = 2.3e21  # Saturn orbit density
+    cassini_precision = 2.3e-5
+    
+    xi_func = XI_FUNCTION_MAP.get(xi_type)
+    if xi_func is None:
+        return False, f"Unknown xi_type: {xi_type}"
+    
+    try:
+        if xi_type == 'mass_threshold':
+            return False, "mass_threshold model cannot pass Cassini test"
+        elif xi_type == 'grav_color':
+            rho_c = params.get('rho_c_solar_kpc3', 1e13)
+            gamma = params.get('gamma_exp', 2.7)
+            lambda_g = params.get('lambda_g', 8.0)
+            xi_saturn = xi_func(rho_saturn, rho_c, gamma, lambda_g)[0]
+        else:
+            rho_c = params.get('rho_c_solar_kpc3', 1e13)
+            n_exp = params.get('n_exp', 1.5)
+            A = params.get('A', 1.0)
+            xi_saturn = xi_func(rho_saturn, rho_c, n_exp, A)[0]
+        
+        if abs(xi_saturn - 1.0) > cassini_precision:
+            return False, f"Fails Cassini: |ξ({rho_saturn:.1e}) - 1| = {abs(xi_saturn - 1.0):.2e} > {cassini_precision}"
+        
+        return True, "Passes Cassini test"
+        
+    except Exception as e:
+        return False, f"Cassini check error: {e}"
 
 def check_prior_bounds_compatibility(args):
     """Check if prior bounds are compatible with constraints"""
@@ -2404,7 +2503,8 @@ def main_dynesty():
     # Core run options
     parser.add_argument('--resume', action='store_true', default=False,
                         help="Resume from checkpoint in output_dir/dynesty_checkpoint.pkl")
-
+    parser.add_argument('--debug', action='store_true', default=False,
+                        help="Enable verbose debug logging")
     parser.add_argument('--xi', type=str, default='power',
                             choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold'],
                             help="Choice of xi(ρ) function")
@@ -2551,17 +2651,33 @@ def main_dynesty():
     if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
         logger.addHandler(file_handler)
 
-    # Optional: keep console output cleaner
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(console_handler)
+
 
     logger.info("📡 Logger initialized. Writing to: %s", log_file)
 
 
     # Configure logging
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+    logging.basicConfig(
+        level=logging.WARNING,  # Set to WARNING to reduce output
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        force=True  # Override any existing configuration
+    )
+
+    # Clear any existing handlers to prevent duplicates
+    logger.handlers.clear()
+
+    # Add only ONE handler
+    file_handler = logging.FileHandler(log_file, mode='w')
+    file_handler.setLevel(logging.DEBUG)  # File gets everything
+    file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"))
+    logger.addHandler(file_handler)
+
+    # Set logger level based on production vs debug mode
+    if args.debug:  # Add --debug flag to your argparser
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.WARNING)  # Only warnings and errors to console    
+    
     logger.info("Starting Enhanced Dynesty Sampler v2.0")
 
     if not DYNESTY_AVAILABLE:
@@ -2621,6 +2737,9 @@ def main_dynesty():
         get_param_labels_and_bounds(args)
         
     if args.xi == 'mass_threshold':
+        logger.error("WARNING: mass_threshold model CANNOT simultaneously pass Cassini and galaxy tests!")
+        logger.error("This model is fundamentally incompatible with Solar System constraints.")
+        logger.error("Consider using 'power', 'enhanced', or 'grav_color' instead.")
         logger.info("DEBUG: Checking M_crit_msun config:")
         if 'M_crit_msun' in MW_MULTI_COMP_PARAM_CONFIG:
             config = MW_MULTI_COMP_PARAM_CONFIG['M_crit_msun']

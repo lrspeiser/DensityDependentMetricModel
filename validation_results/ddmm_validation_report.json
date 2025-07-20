@@ -1,16 +1,8 @@
 {
   "model_parameters": {
-    "M_disk_thin_solar": 32633814094.189198,
-    "R_d_thin_kpc": 3.916183263407725,
-    "h_z_thin_kpc": 0.32915613250335696,
-    "M_disk_thick_solar": 5669576165.257,
-    "R_d_thick_kpc": 9.073789163262763,
-    "h_z_thick_kpc": 0.7859962098063651,
-    "M_bulge_solar": 6688507895.595518,
-    "a_bulge_kpc": 0.22027107388916248,
-    "M_gas_solar": 7977291696.633187,
-    "R_d_gas_kpc": 13.544467098705137,
-    "h_z_gas_kpc": 0.18290034265599803,
+    "M_disk_thin_solar": 54563008583.800934,
+    "R_d_thin_kpc": 3.482327637067669,
+    "h_z_thin_kpc": 0.32753097728339803,
     "rho_c_solar_kpc3": 1000000000.0,
     "n_exp": 1.0,
     "A": 1.0,
@@ -24,23 +16,23 @@
     {
       "test_name": "Solar System Consistency",
       "passed": false,
-      "score": 0.687200024799733,
+      "score": 0.6936000124001995,
       "details": {
         "mercury": {
           "passed": true,
-          "score": 0.998000001999857,
-          "xi": 1.000001999998,
-          "deviation_ppm": 1.9999980001430655
+          "score": 0.9990000009999285,
+          "xi": 1.000000999999,
+          "deviation_ppm": 0.9999990000715328
         },
         "lunar": {
           "passed": true,
-          "score": 0.9600000799993005,
-          "eta": 3.999992000069952e-06
+          "score": 0.9800000400007605,
+          "eta": 1.9999959999239536e-06
         },
         "cassini": {
           "passed": "False",
           "score": 0.0,
-          "gamma_deviation": 0.0019980019980019303
+          "gamma_deviation": 0.0009990009990010762
         }
       },
       "recommendations": [
@@ -50,7 +42,7 @@
     {
       "test_name": "Galaxy Rotation Curves",
       "passed": false,
-      "score": 0.29673820369431203,
+      "score": 0.2679456019082153,
       "details": {
         "gaia": {
           "passed": false,
@@ -59,10 +51,10 @@
         },
         "sparc": {
           "passed": true,
-          "score": 0.5934764073886241,
+          "score": 0.5358912038164306,
           "n_galaxies": 30,
-          "successful": 30,
-          "median_rms": 10.43515634768994
+          "successful": 28,
+          "median_rms": 11.096624899632339
         }
       },
       "recommendations": [
@@ -72,15 +64,15 @@
     {
       "test_name": "Type Ia Supernovae",
       "passed": "True",
-      "score": 0.40187870185519375,
+      "score": 0.4018787018551933,
       "details": {
         "model_comparison": {
           "ddmm_no_expansion_max_dev": null,
           "ddmm_hybrid_max_dev": null,
           "chi2_results": {
             "lcdm": 214535388.37927735,
-            "ddmm_no_exp": 195571526.83951688,
-            "ddmm_hybrid": 197718386.40056443
+            "ddmm_no_exp": 195571526.83951712,
+            "ddmm_hybrid": 203845124.26893824
           }
         }
       },
@@ -100,8 +92,8 @@
         "microscope": {
           "passed": false,
           "score": 0.0,
-          "eta": 2.000000165480742e-11,
-          "xi": 1.00000000002
+          "eta": 1.000000082740371e-11,
+          "xi": 1.00000000001
         }
       },
       "recommendations": [
@@ -117,13 +109,13 @@
         "galaxy_galaxy": {
           "passed": "False",
           "score": 0.0,
-          "theta_ratio": 1.730208906215296,
-          "mass_ratio": 2.9936228591467313
+          "theta_ratio": 1.413085782807741,
+          "mass_ratio": 1.996811429573366
         },
         "cluster": {
           "passed": "False",
           "score": 0.0,
-          "mass_ratio": 2.999994451656215
+          "mass_ratio": 1.9999972258281082
         }
       },
       "recommendations": [
@@ -134,18 +126,18 @@
     {
       "test_name": "Large Scale Structure",
       "passed": false,
-      "score": 4.52871210011403e-18,
+      "score": 8.51138825589332e-08,
       "details": {
         "growth_rate": {
           "passed": "False",
-          "score": 9.05742420022806e-18,
-          "f_ddmm": 0.8929613239260892,
-          "deviation_sigma": 8.859226478521784
+          "score": 1.702277651178664e-07,
+          "f_ddmm": 0.7291606034329466,
+          "deviation_sigma": 5.583212068658932
         },
         "bao": {
           "passed": false,
           "score": 0.0,
-          "DV_ratio": 1.2004876986966284
+          "DV_ratio": 1.1221471970290937
         }
       },
       "recommendations": [
@@ -154,7 +146,7 @@
       ]
     }
   ],
-  "overall_score": 0.3143028217248731,
+  "overall_score": 0.3105707335462485,
   "tests_passed": 1,
   "tests_total": 6,
   "summary": {

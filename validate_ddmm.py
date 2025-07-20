@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-validate_ddmm_focused.py - Focused validation suite for DDMM
+validate_ddmm.py - Focused validation suite for DDMM
 
 This script runs only the appropriate tests for DDMM theory:
 1. Solar System precision tests (high density regime)
