@@ -250,17 +250,17 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'label': "h_z_gas (kpc)", 'fixed_val_from_arg': 'h_z_gas_fixed', 'default_fixed': 0.15,
         'low': 0.05, 'high': 0.4, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas', 'log_prior': False
     },
-        'M_crit_msun': {
-        'label': "log10(M_crit/M_sun)", 'fixed_val_from_arg': 'M_crit_fixed', 'default_fixed': 1e11,
-        'low': 1e9, 'high': 1e13, 'fit_flag_arg': 'fit_xi_params', 'log_prior': True
+    'M_crit_msun': {
+        'label': "log10(M_crit/M_sun)", 'fixed_val_from_arg': 'M_crit_fixed', 'default_fixed': 0.01,
+        'low': 1e-4, 'high': 1.0, 'fit_flag_arg': 'fit_xi_params', 'log_prior': True
     },
     'xi_boost': {
         'label': "xi_boost", 'fixed_val_from_arg': 'xi_boost_fixed', 'default_fixed': 3.0,
-        'low': 1.1, 'high': 5.0, 'fit_flag_arg': 'fit_xi_params', 'log_prior': False
+        'low': 2.0, 'high': 4.0, 'fit_flag_arg': 'fit_xi_params', 'log_prior': False
     },
     'width': {
-        'label': "width (M_crit units)", 'fixed_val_from_arg': 'width_fixed', 'default_fixed': 1e10,
-        'low': 1e8, 'high': 1e12, 'fit_flag_arg': 'fit_xi_params', 'log_prior': True
+        'label': "width (M_crit units)", 'fixed_val_from_arg': 'width_fixed', 'default_fixed': 0.1,
+        'low': 0.01, 'high': 1.0, 'fit_flag_arg': 'fit_xi_params', 'log_prior': False
     },
 }
 
@@ -1138,66 +1138,48 @@ def log_likelihood_dynesty(
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
     """
-    Enhanced log-likelihood with correct function calls and a physical plausibility penalty.
-    FIXED: Now reconstructs full parameter dictionary BEFORE physical plausibility check.
+    Log-likelihood function that now correctly handles ALL xi_types by using
+    the v_total_kms master function from density_metric2.py.
     """
-    # 1. FIRST reconstruct the full parameter dictionary, including fixed values and boolean flags
+    # 1. Reconstruct the full parameter dictionary
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
             params[p_info['name']] = p_info['current_val']
-            
-    params['include_disk_thin'] = args_dynesty_obj.include_disk_thin
-    params['include_disk_thick'] = args_dynesty_obj.include_disk_thick
-    params['include_bulge'] = args_dynesty_obj.include_bulge
-    params['include_gas'] = args_dynesty_obj.include_gas
     
-    # 2. NOW perform physical plausibility check with FULL parameter set
-    # Create arrays that include ALL parameters for the check
-    all_param_names = [p['name'] for p in all_param_info_list]
-    all_param_values = np.array([params[name] for name in all_param_names])
+    for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
+        params[f'include_{component}'] = getattr(args_dynesty_obj, f'include_{component}', False)
     
-    is_valid, reason, *penalty = check_physical_plausibility(all_param_values, all_param_names, args_dynesty_obj)
-    
-    # Handle soft penalties (e.g., mass ratio penalty)
-    penalty_value = 0.0
-    if len(penalty) > 0 and penalty[0] is not None:
-        penalty_value = penalty[0]
-    
-    if not is_valid and penalty_value == 0.0:
+    # 2. Perform plausibility checks
+    is_valid, reason, *_ = check_physical_plausibility(theta_values_fitted, fitted_param_names, args_dynesty_obj)
+    if not is_valid:
         return -np.inf, [np.inf]
 
-    # 3. Compute the model velocity using the correct, robust method
+    # 3. Compute the model velocity using the master v_total_kms function
     try:
-        # v_total_kms will automatically select the correct xi function based on args.xi
         v_model = v_total_kms(R_data, params, xi_type=xi_type)
-
         if not np.all(np.isfinite(v_model)):
             return -np.inf, [np.inf]
-            
     except Exception:
         return -np.inf, [np.inf]
     
-    # Plausibility penalty for v_model at solar radius
+    # 4. Plausibility penalty for overshooting
     v_model_solar_mask = (R_data > 7.5) & (R_data < 8.5)
     if np.any(v_model_solar_mask):
         v_model_solar = np.median(v_model[v_model_solar_mask])
-        
-        threshold = 350.0 if getattr(args_dynesty_obj, '_is_preflight_check', False) else 300.0
-        
-        if v_model_solar > threshold:
+        if v_model_solar > 300.0:
             return -np.inf, [np.inf]
 
-    # 4. Calculate the standard chi-squared likelihood for valid models
+    # 5. Calculate chi-squared and final log-likelihood
     chi2 = np.sum(((v_data - v_model) / sigma_data)**2)
-    log_L = -0.5 * chi2 + penalty_value  # Add soft penalty if any
+    log_L = -0.5 * chi2
     
     if not np.isfinite(log_L):
         return -np.inf, [np.inf]
 
-    # Return the RMSE as a "blob" for monitoring
     rmse = np.sqrt(np.mean((v_data - v_model)**2))
     return log_L, [rmse]
+
 
 def v_model_for_dynesty(
     R_kpc_array: np.ndarray,
@@ -2526,8 +2508,8 @@ def main_dynesty():
                         help="Resume from checkpoint in output_dir/dynesty_checkpoint.pkl")
 
     parser.add_argument('--xi', type=str, default='power',
-                        choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold'],
-                        help="Choice of xi(ρ) function")
+                            choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold'],
+                            help="Choice of xi(ρ) function")
     parser.add_argument('--max_sample_gaia', type=int, default=10000,
                         help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty",
@@ -2664,13 +2646,21 @@ def main_dynesty():
     
     logger.info(f"\n📡 Loading full Gaia dataset from longitudinal slices...")
 
-    df_all_sky = load_all_sky_gaia_slices(
-        lon_bin_width=30,           # 12 longitude bins
-        stars_per_bin=12000,         # per bin
-        output_dir="gaia_sky_slices",
-        force_query=args.force_new_query_gaia,      # honors CLI flag
-        max_distance_kpc=30.0
-    )
+    gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
+
+    if not gaia_cache_file.exists() or args.force_new_query_gaia:
+        logger.info(f"⏳ Loading Gaia slices... (forced: {args.force_new_query_gaia})")
+        df_all_sky = load_all_sky_gaia_slices(
+            lon_bin_width=30,
+            stars_per_bin=12000,
+            output_dir="gaia_sky_slices",
+            force_query=args.force_new_query_gaia,
+            max_distance_kpc=30.0
+        )
+    else:
+        logger.info(f"✅ Using cached Gaia slices from {gaia_cache_file}")
+        import pandas as pd
+        df_all_sky = pd.read_csv(gaia_cache_file)
 
     if df_all_sky.empty:
         logger.error("❌ Full-sky Gaia loading failed")
