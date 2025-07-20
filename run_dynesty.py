@@ -49,6 +49,7 @@ import matplotlib
 matplotlib.use("Agg")  # Headless backend for servers / background threads
 import matplotlib.pyplot as plt
 import corner
+from density_metric2 import v_total_kms 
 
 # Control debug output
 DEBUG_COUNTER_MAX = 100  # Maximum debug messages to prevent log spam
@@ -248,6 +249,18 @@ MW_MULTI_COMP_PARAM_CONFIG = {
     'h_z_gas_kpc': {
         'label': "h_z_gas (kpc)", 'fixed_val_from_arg': 'h_z_gas_fixed', 'default_fixed': 0.15,
         'low': 0.05, 'high': 0.4, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas', 'log_prior': False
+    },
+        'M_crit_msun': {
+        'label': "log10(M_crit/M_sun)", 'fixed_val_from_arg': 'M_crit_fixed', 'default_fixed': 1e11,
+        'low': 1e9, 'high': 1e13, 'fit_flag_arg': 'fit_xi_params', 'log_prior': True
+    },
+    'xi_boost': {
+        'label': "xi_boost", 'fixed_val_from_arg': 'xi_boost_fixed', 'default_fixed': 3.0,
+        'low': 1.1, 'high': 5.0, 'fit_flag_arg': 'fit_xi_params', 'log_prior': False
+    },
+    'width': {
+        'label': "width (M_crit units)", 'fixed_val_from_arg': 'width_fixed', 'default_fixed': 1e10,
+        'low': 1e8, 'high': 1e12, 'fit_flag_arg': 'fit_xi_params', 'log_prior': True
     },
 }
 
@@ -1045,25 +1058,26 @@ def prior_transform_dynesty(
     use_log_prior_flags: List[bool]
 ) -> np.ndarray:
     """
-    FINAL AND COMPLETE PRIOR TRANSFORM for the DDMM model.
-    Version 3.0: This version uses wider, more flexible priors for the gravity
-    parameters, giving the sampler a much larger space to search for a valid solution.
+    PRIOR TRANSFORM WITH SOLAR SYSTEM CONSTRAINTS.
+    This version uses extremely tight, physically motivated priors on the gravity
+    parameters to FORCE the solution to be compatible with Solar System tests.
+    The MCMC will then determine if such a solution can also fit the galaxy data.
     """
     params = np.zeros_like(u_array)
     u_dict = dict(zip(fitted_param_names, u_array))
 
-    # --- Gravity / DDMM Parameters (WIDER, MORE FLEXIBLE PRIORS) ---
+    # --- Gravity / DDMM Parameters (SOLAR SYSTEM COMPATIBLE PRIORS) ---
     if 'rho_c_solar_kpc3' in u_dict:
-        # Log-uniform prior between 10^8 and 10^10 M☉/kpc³.
-        # This allows for solutions where the modification is much weaker.
-        log_low, log_high = 8.0, 10.0
+        # Log-uniform prior between 10^12 and 10^16 M☉/kpc³.
+        # This is a much higher range, guaranteed to screen gravity in the Solar System.
+        log_low, log_high = 12.0, 16.0
         params[fitted_param_names.index('rho_c_solar_kpc3')] = 10**(log_low + u_dict['rho_c_solar_kpc3'] * (log_high - log_low))
 
-    if 'n_exp' in u_dict:
-        # Uniform prior between 0.1 and 2.5.
-        # Allowing values close to 0 creates a very weak modification.
-        low, high = 0.1, 2.5
-        params[fitted_param_names.index('n_exp')] = low + u_dict['n_exp'] * (high - low)
+    if 'n_exp' in u_dict or 'gamma_exp' in u_dict:
+        # A higher 'n' creates a sharper, more step-like transition, which also helps.
+        key = 'gamma_exp' if 'gamma_exp' in u_dict else 'n_exp'
+        low, high = 2.0, 6.0
+        params[fitted_param_names.index(key)] = low + u_dict[key] * (high - low)
         
     if 'gamma_exp' in u_dict:
         # Use the same wide prior for 'gamma_exp'
@@ -1155,27 +1169,11 @@ def log_likelihood_dynesty(
 
     # 3. Compute the model velocity using the correct, robust method
     try:
-        v_newton = v_baryon_total_newtonian_kms(R_data, params)
-        rho = rho_baryon_total_midplane_solar_kpc3(R_data, params)
-        xi_func = XI_FUNCTION_MAP.get(xi_type, XI_FUNCTION_MAP['power'])
-        
-        n_key = 'gamma_exp' if 'gamma_exp' in params else 'n_exp'
-        A_key = 'lambda_g' if 'lambda_g' in params else 'A'
-        
-        xi = xi_func(rho, params['rho_c_solar_kpc3'], params[n_key], params.get(A_key, 1.0))
-        xi = np.minimum(xi, 5.0)
-        
-        v_model = v_newton * np.sqrt(xi)
+        # v_total_kms will automatically select the correct xi function based on args.xi
+        v_model = v_total_kms(R_data, params, xi_type=xi_type)
 
         if not np.all(np.isfinite(v_model)):
             return -np.inf, [np.inf]
-        
-        bad = ~np.isfinite(v_model)
-        if bad.any():
-            idx = np.where(bad)[0][0]
-            print("Non‑finite v_model at R =", R_data[idx],
-                "km/s =", v_model[idx],
-                "rho =", rho[idx])
             
     except Exception:
         return -np.inf, [np.inf]
@@ -2528,9 +2526,8 @@ def main_dynesty():
                         help="Resume from checkpoint in output_dir/dynesty_checkpoint.pkl")
 
     parser.add_argument('--xi', type=str, default='power',
-                        choices=['power', 'logistic', 'enhanced', 'grav_color'],
+                        choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold'],
                         help="Choice of xi(ρ) function")
-
     parser.add_argument('--max_sample_gaia', type=int, default=10000,
                         help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty",

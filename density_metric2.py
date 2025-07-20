@@ -248,6 +248,38 @@ def rho_baryon_total_midplane_solar_kpc3(R_kpc, p_baryons_for_density):
 
 
 # ---------- Candidate xi(rho) Laws (Corrected for Numba) ----------
+# NOTE: The new xi_mass_threshold function cannot be Numba-compiled in its current
+# form because it uses features Numba doesn't support well (like complex fallbacks).
+# We define it as a regular Python function.
+def xi_mass_threshold(rho, rho_c, n_exp, A, 
+                     M_enclosed_func=None, r_kpc=None, params=None):
+    """
+    Mass threshold ξ function - gravity strengthens below a critical ENCLOSED MASS.
+    """
+    # Reinterpret parameters for this specific model
+    M_crit = rho_c      # rho_c is now M_crit in M_sun
+    xi_boost = 1 + A    # A is the fractional boost
+    width = n_exp       # n_exp is the transition width (in units of M_crit)
+    
+    # Get enclosed mass
+    if params and 'M_enclosed_msun' in params:
+        M_enclosed = params['M_enclosed_msun']
+    elif M_enclosed_func is not None and r_kpc is not None and params is not None:
+        # This is the expected path: use a real mass model
+        M_enclosed = v_baryon_total_newtonian_kms(r_kpc, params)**2 * r_kpc / G_ASTRO_UNITS
+    else:
+        # This is a very rough fallback and should be avoided
+        r_est = 10.0 if np.isscalar(rho) else np.logspace(-1, 2, len(rho))
+        M_enclosed = rho * r_est**3 * 4/3 * np.pi * 1e-9
+    
+    M_enclosed = np.atleast_1d(M_enclosed)
+    
+    # Smooth transition using the hyperbolic tangent function (tanh)
+    # This creates a smooth "S" curve around the critical mass.
+    xi = 1 + (xi_boost - 1) * 0.5 * (1 - np.tanh((M_enclosed - M_crit) / width))
+    
+    return xi
+
 @nb.njit(cache=True)
 def xi_power_law(rho, rho_c, n_exp):
     """
@@ -693,15 +725,142 @@ def xi_grav_color_standard_interface(rho, rho_c, n_exp, _A=None):
     lambda_g = 3.0
     return xi_gravitational_color(rho, rho_c, gamma, lambda_g)
 
+# ============================================================================
+# SECTION 3: XI(RHO) FUNCTIONS
+# This section defines all candidate functions for the density-dependent
+# modification of gravity.
+# ============================================================================
+
+@nb.njit(cache=True)
+def xi_power_law(rho, rho_c, n_exp, A=1.0):
+    """
+    Standard power-law suppression/enhancement.
+    ξ = 1 + A / (1 + (ρ/ρ_c)^n)
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    ratio = rho_arr / rho_c
+    enhancement = A / (1.0 + np.power(ratio, n_exp))
+    result = 1.0 + enhancement
+    return np.clip(result, 0.1, 10.0)
+
+@nb.njit(cache=True)
+def xi_logistic_law(rho, rho_c, n_exp, A=1.0):
+    """
+    Logistic function for a smooth transition.
+    A controls the amplitude of the change.
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+        
+    log_rho_safe = np.log(np.maximum(rho_arr, 1e-30))
+    log_rho_c_safe = np.log(np.maximum(rho_c, 1e-30))
+    exponent_val = -n_exp * (log_rho_safe - log_rho_c_safe)
+    clipped_exponent = np.clip(exponent_val, -700, 700)
+    
+    # Standard logistic function: 1 / (1 + exp(-x))
+    logistic_val = 1.0 / (1.0 + np.exp(clipped_exponent))
+    
+    # Scale it from 1 to 1+A
+    result_arr = 1.0 + A * (1.0 - logistic_val)
+    return result_arr
+
+@nb.njit(cache=True)
+def xi_exponential(rho, rho_c, n_exp, A=1.0):
+    """
+    Exponential enhancement at low density.
+    ξ = 1 + A * exp(-(ρ/ρ_c)^n)
+    """
+    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
+    if rho_c <= 1e-9:
+        return np.ones_like(rho_arr, dtype=np.float64)
+    
+    ratio = rho_arr / rho_c
+    exp_arg = -np.power(ratio, n_exp)
+    exp_arg = np.maximum(exp_arg, -700.0)
+    result = 1.0 + A * np.exp(exp_arg)
+    return result
+
+# NOTE: The new xi_mass_threshold function cannot be Numba-compiled in its current
+# form because it uses features Numba doesn't support well (like complex fallbacks).
+# We define it as a regular Python function.
+def xi_mass_threshold(rho, rho_c, n_exp, A, 
+                     M_enclosed_func=None, r_kpc=None, params=None):
+    """
+    Mass threshold ξ function - gravity strengthens below a critical ENCLOSED MASS.
+    """
+    # Reinterpret parameters for this specific model
+    M_crit = rho_c      # rho_c is now M_crit in M_sun
+    xi_boost = 1 + A    # A is the fractional boost
+    width = n_exp       # n_exp is the transition width (in units of M_crit)
+    
+    # Get enclosed mass
+    if params and 'M_enclosed_msun' in params:
+        M_enclosed = params['M_enclosed_msun']
+    elif M_enclosed_func is not None and r_kpc is not None and params is not None:
+        # This is the expected path: use a real mass model
+        M_enclosed = v_baryon_total_newtonian_kms(r_kpc, params)**2 * r_kpc / G_ASTRO_UNITS
+    else:
+        # This is a very rough fallback and should be avoided
+        r_est = 10.0 if np.isscalar(rho) else np.logspace(-1, 2, len(rho))
+        M_enclosed = rho * r_est**3 * 4/3 * np.pi * 1e-9
+    
+    M_enclosed = np.atleast_1d(M_enclosed)
+    
+    # Smooth transition using the hyperbolic tangent function (tanh)
+    # This creates a smooth "S" curve around the critical mass.
+    # Note the corrected call to np.tanh
+    xi = 1 + (xi_boost - 1) * 0.5 * (1 - np.tanh((M_enclosed - M_crit) / width))
+    
+    return xi
+
+# --- This is the single, authoritative map of all available xi functions ---
 XI_FUNCTION_MAP = {
-    'power': xi_power_law_wrapper,
+    'power': xi_power_law,
     'logistic': xi_logistic_law_wrapper,
     'enhanced': xi_enhanced_bounded_wrapper,
     'mond': xi_mond_like_wrapper,
     'exp_enhance': xi_enhanced_exp_wrapper,
     'grav_color': xi_grav_color_standard_interface,
-    'gaussian': xi_gaussian_wrapper
+    'gaussian': xi_gaussian_wrapper,
+    'mass_threshold': xi_mass_threshold  # Add this new line
 }
+
+
+# ============================================================================
+# SECTION 4: FULL VELOCITY MODEL
+# This section combines the baryonic model with the xi function.
+# ============================================================================
+
+def v_total_kms(R_kpc, p, xi_type='power'):
+    """
+    Master function to compute the full DDMM circular velocity.
+    """
+    # 1. Calculate Newtonian velocity from baryons
+    v_newton = v_baryon_total_newtonian_kms(R_kpc, p)
+    
+    # 2. Get the appropriate xi function from the map
+    xi_func = XI_FUNCTION_MAP.get(xi_type)
+    if xi_func is None:
+        raise ValueError(f"Unknown xi_type: '{xi_type}'. Available: {list(XI_FUNCTION_MAP.keys())}")
+
+    # 3. Handle the different arguments for density-based vs. mass-based xi
+    if xi_type == 'mass_threshold':
+        # The mass threshold function needs the full parameter dictionary
+        xi = xi_func(None, p['rho_c_solar_kpc3'], p['n_exp'], p.get('A', 1.0),
+                     r_kpc=R_kpc, params=p)
+    else:
+        # Density-based functions need the density profile
+        rho = rho_baryon_total_midplane_solar_kpc3(R_kpc, p)
+        xi = xi_func(rho, p['rho_c_solar_kpc3'], p['n_exp'], p.get('A', 1.0))
+        
+    # 4. Apply the modification
+    v_modified = v_newton * np.sqrt(np.maximum(xi, 0.0))
+    
+    return v_modified
 
 
 def test_gaussian_xi():

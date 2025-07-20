@@ -1,0 +1,137 @@
+[
+  {
+    "name": "Mass Threshold_1",
+    "formula_type": "Mass Threshold",
+    "params": {
+      "M_crit_msun": 0.001,
+      "xi_boost": 3.0,
+      "width": 0.1
+    },
+    "cassini_gamma": 0.0,
+    "galaxy_xi_avg": 2.999999995877693,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0
+  },
+  {
+    "name": "Mass Threshold_2",
+    "formula_type": "Mass Threshold",
+    "params": {
+      "M_crit_msun": 0.01,
+      "xi_boost": 3.0,
+      "width": 0.1
+    },
+    "cassini_gamma": 0.0,
+    "galaxy_xi_avg": 2.999999995877693,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0
+  },
+  {
+    "name": "Mass Threshold_3",
+    "formula_type": "Mass Threshold",
+    "params": {
+      "M_crit_msun": 0.1,
+      "xi_boost": 2.5,
+      "width": 0.2
+    },
+    "cassini_gamma": 0.0,
+    "galaxy_xi_avg": 2.499931903196946,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0
+  },
+  {
+    "name": "Mass Power Law_3",
+    "formula_type": "Mass Power Law",
+    "params": {
+      "M_crit_msun": 0.0001,
+      "n_exp": 1.5,
+      "A": 1.5
+    },
+    "cassini_gamma": 1.4993070942548314e-06,
+    "galaxy_xi_avg": 5.0,
+    "xi_at_sun": 1.0000015,
+    "xi_at_earth": 1.0000014977528093
+  },
+  {
+    "name": "Density + Mass Screen_1",
+    "formula_type": "Density + Mass Screen",
+    "params": {
+      "rho_c_msun_kpc3": 1e+20,
+      "n_exp": 1.0,
+      "A": 2.0,
+      "M_screen_msun": 0.1
+    },
+    "cassini_gamma": 1.911257907494246e-07,
+    "galaxy_xi_avg": 471709149555.7494,
+    "xi_at_sun": 1.0000000000000044,
+    "xi_at_earth": 1.0000000042855226
+  },
+  {
+    "name": "Density + Mass Screen_2",
+    "formula_type": "Density + Mass Screen",
+    "params": {
+      "rho_c_msun_kpc3": 1e+18,
+      "n_exp": 1.5,
+      "A": 1.5,
+      "M_screen_msun": 0.01
+    },
+    "cassini_gamma": 0.0,
+    "galaxy_xi_avg": 177047810702299.1,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0
+  },
+  {
+    "name": "Mixed Density-Mass_1",
+    "formula_type": "Mixed Density-Mass",
+    "params": {
+      "rho_c_msun_kpc3": 1e+16,
+      "n_exp": 1.0,
+      "A": 2.0,
+      "M_screen_msun": 0.1
+    },
+    "cassini_gamma": 1.9112711413526995e-11,
+    "galaxy_xi_avg": 5.0,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0000000000004285
+  },
+  {
+    "name": "Yukawa Screening_2",
+    "formula_type": "Yukawa Screening",
+    "params": {
+      "xi_0": 2.5,
+      "M_screen_msun": 0.01,
+      "lambda_kpc": 20.0
+    },
+    "cassini_gamma": 0.0,
+    "galaxy_xi_avg": 2.357951087622019,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0
+  },
+  {
+    "name": "Critical Density_1",
+    "formula_type": "Critical Density",
+    "params": {
+      "rho_crit_msun_kpc3": 1000000000000.0,
+      "xi_low": 3.0,
+      "xi_high": 1.0,
+      "M_apply_msun": 0.1
+    },
+    "cassini_gamma": 0.0,
+    "galaxy_xi_avg": 3.0,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0
+  },
+  {
+    "name": "Critical Density_2",
+    "formula_type": "Critical Density",
+    "params": {
+      "rho_crit_msun_kpc3": 10000000000.0,
+      "xi_low": 2.5,
+      "xi_high": 1.0,
+      "M_apply_msun": 0.01
+    },
+    "cassini_gamma": 0.0,
+    "galaxy_xi_avg": 2.5,
+    "xi_at_sun": 1.0,
+    "xi_at_earth": 1.0
+  }
+]
