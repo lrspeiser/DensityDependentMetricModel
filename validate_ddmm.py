@@ -31,6 +31,8 @@ import warnings
 from scipy.integrate import odeint, quad
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
+from enhanced_light_propagation import EnhancedDDMMLightPropagation, integrate_with_existing_validator
+
 
 # Import DDMM modules
 try:
@@ -1581,6 +1583,9 @@ def main():
     # Initialize validator
     validator = DDMMValidator(model_params, args.output_dir)
     
+    # Integrate enhanced light propagation
+    propagator = integrate_with_existing_validator(validator, Path(args.output_dir))
+
     # Check data availability
     if not args.skip_data_check:
         data_available = validator.check_data_availability()

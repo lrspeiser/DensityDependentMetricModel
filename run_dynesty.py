@@ -957,6 +957,12 @@ def enhanced_monitor_sampler_progress(
                     status = "⚠️ Near upper bound"
             param_display = param_name.replace('_solar', '').replace('_kpc3', '').replace('_kpc', '')
             logger.info(f"{param_display:<25} {formatted_val:<15} {formatted_mad:<15} {status:<15}")
+        logger.info(f"\n📌 FIXED PARAMETERS:")
+        logger.info("─" * 60)
+        if hasattr(args_obj, 'all_param_info_list'):
+            for p_info in args_obj.all_param_info_list:
+                if not p_info['is_fitted'] and p_info['name'] in ['n_exp', 'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g']:
+                    logger.info(f"{p_info['name']:<25} {p_info['current_val']:.3e}")
 
         # Physical plausibility check
         logger.info(f"\n🔍 PHYSICAL PLAUSIBILITY CHECK:")
@@ -1019,12 +1025,18 @@ def enhanced_monitor_sampler_progress(
                     "current_nlive": int(len(res.live_points)) if hasattr(res, 'live_points') else 0,
                     "parameter_estimates": {},
                     "parameter_uncertainties": {},
+                    "fixed_parameters": {},
                     "health_warnings": convergence_tracker.health_warnings if convergence_tracker else []
                 }
                 
                 for i, name in enumerate(fitted_param_names):
                     dashboard_state["parameter_estimates"][name] = float(current_params[i])
                     dashboard_state["parameter_uncertainties"][name] = float(np.std(recent_samples[:, i]))
+                    
+                if hasattr(args_obj, 'all_param_info_list'):
+                    for p_info in args_obj.all_param_info_list:
+                        if not p_info['is_fitted'] and p_info['name'] in ['n_exp', 'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g', 'A']:
+                            dashboard_state["fixed_parameters"][p_info['name']] = float(p_info['current_val'])
 
                 dashboard_state = make_json_serializable(dashboard_state)
                 dashboard_monitor.update_progress(dashboard_state)
@@ -1095,72 +1107,42 @@ def prior_transform_dynesty(
     use_log_prior_flags: List[bool]
 ) -> np.ndarray:
     """
-    PRIOR TRANSFORM WITH SOLAR SYSTEM CONSTRAINTS.
-    This version uses extremely tight, physically motivated priors on the gravity
-    parameters to FORCE the solution to be compatible with Solar System tests.
-    The MCMC will then determine if such a solution can also fit the galaxy data.
+    Generic prior transform that uses the bounds from configuration.
     """
     params = np.zeros_like(u_array)
-    u_dict = dict(zip(fitted_param_names, u_array))
-
-    # --- Gravity / DDMM Parameters (SOLAR SYSTEM COMPATIBLE PRIORS) ---
-    if 'rho_c_solar_kpc3' in u_dict:
-        # Log-uniform prior between 10^12 and 10^16 M☉/kpc³.
-        # This is a much higher range, guaranteed to screen gravity in the Solar System.
-        log_low, log_high = 12.0, 15.0
-        params[fitted_param_names.index('rho_c_solar_kpc3')] = 10**(log_low + u_dict['rho_c_solar_kpc3'] * (log_high - log_low))
-
-    if 'n_exp' in u_dict or 'gamma_exp' in u_dict:
-        # A higher 'n' creates a sharper, more step-like transition, which also helps.
-        key = 'gamma_exp' if 'gamma_exp' in u_dict else 'n_exp'
-        low, high = 2.0, 6.0
-        params[fitted_param_names.index(key)] = low + u_dict[key] * (high - low)
+    
+    for i, (name, u_val) in enumerate(zip(fitted_param_names, u_array)):
+        low = prior_bounds_low[i]
+        high = prior_bounds_high[i]
+        use_log = use_log_prior_flags[i]
         
-    if 'gamma_exp' in u_dict:
-        # Use the same wide prior for 'gamma_exp'
-        low, high = 0.1, 2.5
-        params[fitted_param_names.index('gamma_exp')] = low + u_dict['gamma_exp'] * (high - low)
-
-    if 'lambda_g' in u_dict:
-        # Log-Uniform prior between 0.1 and 2.0.
-        log_low, log_high = np.log10(0.1), np.log10(2.0)
-        params[fitted_param_names.index('lambda_g')] = 10**(log_low + u_dict['lambda_g'] * (log_high - log_low))
-
-    # --- Baryonic Component Parameters (STANDARD PRIORS) ---
-    if 'M_disk_thin_solar' in u_dict:
-        log_low, log_high = 10.5, 11.1
-        params[fitted_param_names.index('M_disk_thin_solar')] = 10**(log_low + u_dict['M_disk_thin_solar'] * (log_high - log_low))
-    if 'R_d_thin_kpc' in u_dict:
-        low, high = 2.0, 4.5
-        params[fitted_param_names.index('R_d_thin_kpc')] = low + u_dict['R_d_thin_kpc'] * (high - low)
-    if 'h_z_thin_kpc' in u_dict:
-        low, high = 0.15, 0.5
-        params[fitted_param_names.index('h_z_thin_kpc')] = low + u_dict['h_z_thin_kpc'] * (high - low)
-    if 'M_disk_thick_solar' in u_dict:
-        log_low, log_high = 9.5, 10.7
-        params[fitted_param_names.index('M_disk_thick_solar')] = 10**(log_low + u_dict['M_disk_thick_solar'] * (log_high - log_low))
-    if 'R_d_thick_kpc' in u_dict:
-        low, high = 3.5, 9.5
-        params[fitted_param_names.index('R_d_thick_kpc')] = low + u_dict['R_d_thick_kpc'] * (high - low)
-    if 'h_z_thick_kpc' in u_dict:
-        low, high = 0.7, 1.5
-        params[fitted_param_names.index('h_z_thick_kpc')] = low + u_dict['h_z_thick_kpc'] * (high - low)
-    if 'M_bulge_solar' in u_dict:
-        log_low, log_high = 9.7, 10.4
-        params[fitted_param_names.index('M_bulge_solar')] = 10**(log_low + u_dict['M_bulge_solar'] * (log_high - log_low))
-    if 'a_bulge_kpc' in u_dict:
-        low, high = 0.2, 2.0
-        params[fitted_param_names.index('a_bulge_kpc')] = low + u_dict['a_bulge_kpc'] * (high - low)
-    if 'M_gas_solar' in u_dict:
-        log_low, log_high = 9.7, 10.8
-        params[fitted_param_names.index('M_gas_solar')] = 10**(log_low + u_dict['M_gas_solar'] * (log_high - log_low))
-    if 'R_d_gas_kpc' in u_dict:
-        low, high = 4.0, 15.0
-        params[fitted_param_names.index('R_d_gas_kpc')] = low + u_dict['R_d_gas_kpc'] * (high - low)
-    if 'h_z_gas_kpc' in u_dict:
-        low, high = 0.05, 0.4
-        params[fitted_param_names.index('h_z_gas_kpc')] = low + u_dict['h_z_gas_kpc'] * (high - low)
+        if use_log:
+            # Log-uniform prior
+            log_low = np.log10(low)
+            log_high = np.log10(high)
+            params[i] = 10**(log_low + u_val * (log_high - log_low))
+        else:
+            # Uniform prior
+            params[i] = low + u_val * (high - low)
+    
+    # Quick Cassini check before returning
+    if 'rho_c_solar_kpc3' in fitted_param_names and 'n_exp' in fitted_param_names:
+        idx_rho_c = fitted_param_names.index('rho_c_solar_kpc3')
+        idx_n = fitted_param_names.index('n_exp')
         
+        # Check at Saturn density
+        rho_saturn = 2.3e21
+        rho_c = params[idx_rho_c]
+        n = params[idx_n]
+        
+        # For power law enhancement: ξ = 1 + λ/(1 + (ρ/ρ_c)^n)
+        xi_saturn = 1.0 + 2.0 / (1.0 + (rho_saturn / rho_c)**n)
+        
+        if abs(xi_saturn - 1.0) > 2.3e-5:
+            # This prior sample would fail Cassini
+            # You could either reject it or adjust parameters
+            logger.debug(f"Prior sample would fail Cassini: ξ_Saturn = {xi_saturn}")
+    
     return params
 
 def log_likelihood_dynesty(
@@ -2301,6 +2283,7 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     fitted_names, fitted_labels, p0_guess, p_low, p_high, log_flags = get_param_labels_and_bounds(args)
     ndim = len(fitted_names)
     convergence_tracker = ConvergenceTracker(fitted_names)
+    
 
     # -----------------------------------------------------------------------
     # 3. Inject all_param_info_list if needed (safety patch)
@@ -2308,6 +2291,26 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None):
     if not hasattr(args, "all_param_info_list") or args.all_param_info_list is None:
         logger.warning("⚠️ args.all_param_info_list was missing — injecting now")
         get_param_labels_and_bounds(args)
+        
+    logger.info("\n" + "="*60)
+    logger.info("PARAMETER CONFIGURATION")
+    logger.info("="*60)
+    logger.info(f"Fitting {len(fitted_names)} parameters:")
+    for name, val, low, high in zip(fitted_names, p0_guess, p_low, p_high):
+        logger.info(f"  {name}: {val:.3e} [{low:.3e}, {high:.3e}]")
+
+    logger.info("\nFixed parameters:")
+    for p_info in args.all_param_info_list:
+        if not p_info['is_fitted']:
+            logger.info(f"  {p_info['name']}: {p_info['current_val']:.3e}")
+    
+    # Specifically check n_exp
+    if 'n_exp' in fitted_names:
+        logger.info(f"\n✓ n_exp IS being fitted")
+    else:
+        n_exp_val = next((p['current_val'] for p in args.all_param_info_list if p['name'] == 'n_exp'), None)
+        logger.info(f"\n✗ n_exp is FIXED at: {n_exp_val}")
+    logger.info("="*60 + "\n")
 
     # -----------------------------------------------------------------------
     # 4. Check initial likelihood + plausibility
