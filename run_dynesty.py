@@ -1120,6 +1120,64 @@ def format_parameter_value_enhanced(value: float, param_name: str) -> str:
         return f"{value:.3e}"
 
 
+def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
+    """
+    Save current sampling state to NPZ file.
+    This can be called periodically during sampling.
+    """
+    try:
+        res = getattr(sampler, "results", None)
+        
+        if res is None:
+            logger.warning("⚠️ No sampler.results found — skipping .npz snapshot")
+            return False
+            
+        if not hasattr(res, "samples") or res.samples is None or len(res.samples) == 0:
+            logger.warning("⚠️ Dynesty results has no samples yet — skipping .npz snapshot")
+            return False
+            
+        # Build timestamp for unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        npz_path = Path(output_dir) / f"dynesty_checkpoint_{timestamp}.npz"
+        
+        # Also save to a fixed filename that overwrites (for easy resumption)
+        npz_latest = Path(output_dir) / "dynesty_checkpoint_latest.npz"
+        
+        # Calculate weights if possible
+        weights = None
+        if hasattr(res, 'logwt') and hasattr(res, 'logz') and len(res.logz) > 0:
+            weights = np.exp(res.logwt - res.logz[-1])
+        
+        # Save the checkpoint
+        save_data = {
+            'samples': res.samples,
+            'logz': getattr(res, "logz", np.array([])),
+            'logzerr': getattr(res, "logzerr", np.array([])),
+            'logl': getattr(res, "logl", np.array([])),
+            'logwt': getattr(res, "logwt", np.array([])),
+            'blob': getattr(res, "blob", None),
+            'param_names': fitted_names,
+            'weights': weights,
+            'n_calls': getattr(res, "ncall", None),
+            'timestamp': timestamp,
+            'n_samples': len(res.samples)
+        }
+        
+        # Save with timestamp
+        np.savez(npz_path, **save_data)
+        logger.info(f"✅ Saved .npz checkpoint to: {npz_path}")
+        
+        # Save latest version (overwrites)
+        np.savez(npz_latest, **save_data)
+        logger.debug(f"✅ Updated latest checkpoint: {npz_latest}")
+        
+        return True
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to save .npz checkpoint: {e}")
+        return False
+
+
 # ============================================================================
 # Prior Transform and Likelihood Functions
 # ============================================================================
@@ -2511,45 +2569,41 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monito
 
     if args.use_run_nested:
         logger.info("Running sampler using built-in run_nested()")
+        # Create a timer thread for periodic NPZ saves
+        import threading
+        stop_saving = threading.Event()
+        
+        def periodic_npz_save():
+            while not stop_saving.is_set():
+                save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
+                stop_saving.wait(300)  # Wait 5 minutes or until stopped
+        
+        save_thread = threading.Thread(target=periodic_npz_save)
+        save_thread.daemon = True
+        save_thread.start()
+        
+        try:
+            sampler.run_nested(
+                nlive_init=args.nlive_init,
+                nlive_batch=args.nlive_batch,
+                dlogz_init=args.dlogz_target,
+                maxcall=args.maxcall,
+                print_progress=True,
+                checkpoint_file=str(checkpoint_file),
+                checkpoint_every=args.checkpoint_every,
+            )
+        finally:
+            stop_saving.set()
+            save_thread.join(timeout=1)
 
-        # Set up periodic monitoring
-        last_monitor_time = time.time()
-        monitor_interval = args.monitor_interval_s
-
-        # Create a wrapper to monitor progress periodically
-        def check_and_monitor():
-            nonlocal last_monitor_time
-            current_time = time.time()
-            if current_time - last_monitor_time > monitor_interval:
-                try:
-                    enhanced_monitor_sampler_progress(
-                        sampler, fitted_names, fitted_labels,
-                        run_start_time, logger, gp_surrogate, args,
-                        dashboard_monitor
-                    )
-                    last_monitor_time = current_time
-                except Exception as e:
-                    logger.warning(f"Monitoring failed: {e}")
-
-        # You'll need to call check_and_monitor() periodically
-        # This depends on your dynesty version - some support callbacks
-        sampler.run_nested(
-            nlive_init=args.nlive_init,
-            nlive_batch=args.nlive_batch,
-            dlogz_init=args.dlogz_target,
-            maxcall=args.maxcall,
-            print_progress=True,
-            checkpoint_file=str(checkpoint_file),
-            checkpoint_every=args.checkpoint_every,
-            # If your dynesty version supports it:
-            # logl_kwargs={'callback': check_and_monitor}
-        )
     else:
         logger.info("Running sampler using custom loop with early stopping")
         args.fitted_param_names = fitted_names
         early_stop_counter = 0
         last_monitor = last_check = time.time()
-
+        last_npz_save = time.time()  # ADD THIS
+        NPZ_SAVE_INTERVAL = 300  # Save every 5 minutes (300 seconds)
+        
         try:
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
                 now = time.time()
@@ -2563,12 +2617,17 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monito
                     except Exception as e:
                         logger.warning(f"⚠️ Checkpoint failed: {e}")
 
+                if now - last_npz_save > NPZ_SAVE_INTERVAL:
+                    save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
+                    last_npz_save = now
+
                 # Monitor progress
                 if now - last_monitor > args.monitor_interval_s:
                     last_monitor = now
                     enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
                                                       run_start_time, logger, gp_surrogate, args,
                                                       dashboard_monitor)
+                    
 
                 # Early stop check every 5 min
                 if now - last_check > 300:
@@ -2654,6 +2713,9 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monito
     return sampler.results
 
 
+
+
+
 # ============================================================================
 # Main Entry Point
 # ============================================================================
@@ -2675,9 +2737,9 @@ def main_dynesty():
     import uuid
     RUN_ID = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
     # This was set after running the model with GR settings, keeping gravity at 1 everywhere.
-    BASELINE_LOGZ_GR = -1453387.129274015
+    BASELINE_LOGZ_GR = -1453340.493201188
 
-
+    
     logger = get_or_create_logger()
     debug_counter = 0
 

@@ -571,7 +571,34 @@ def integrate_with_existing_validator(validator_instance, output_dir: Optional[P
         propagator.plot_path_dependent_redshift(save_path=output_dir / 'path_dependent_redshift.png')
     
     # Enhanced test function
-    def enhanced_test_supernovae(self, pantheon_path: Optional[str] = None) -> 'TestResult':
+def integrate_with_existing_validator(validator_instance, output_dir: Optional[Path] = None):
+    """
+    Integrate enhanced light propagation into existing validator.
+    
+    This function adds an enhanced supernova test method to the validator
+    without replacing the existing dispatcher.
+    """
+    # Extract parameters from validator
+    params = validator_instance.model_params
+    
+    # Create enhanced propagation calculator
+    propagator = EnhancedDDMMLightPropagation(
+        rho_c=params['rho_c_solar_kpc3'],
+        n_exp=params['n_exp'],
+        A=params['A']
+    )
+    
+    # Create cosmic web
+    logger.info("Creating realistic cosmic web for light propagation...")
+    propagator.create_cosmic_web(box_size=500, resolution=128)
+    
+    # Save cosmic web visualization
+    if output_dir:
+        propagator.plot_cosmic_web_slice(save_path=output_dir / 'cosmic_web_slice.png')
+        propagator.plot_path_dependent_redshift(save_path=output_dir / 'path_dependent_redshift.png')
+    
+    # Enhanced test function - note this is now test_supernovae_enhanced
+    def test_supernovae_enhanced(self, pantheon_path: Optional[str] = None) -> 'TestResult':
         """Enhanced supernova test with improved DDMM light propagation"""
         logger.info("\n" + "="*60)
         logger.info("TEST 3: TYPE IA SUPERNOVAE (Enhanced DDMM Propagation)")
@@ -747,13 +774,15 @@ def integrate_with_existing_validator(validator_instance, output_dir: Optional[P
         plt.savefig(output_dir / 'enhanced_hubble_diagram.png', dpi=150)
         plt.close()
     
-    # Replace the existing method
+    # Add the enhanced method WITHOUT replacing test_supernovae
     import types
-    validator_instance.test_supernovae = types.MethodType(enhanced_test_supernovae, validator_instance)
+    validator_instance.test_supernovae_enhanced = types.MethodType(test_supernovae_enhanced, validator_instance)
     validator_instance._plot_enhanced_hubble_diagram = types.MethodType(_plot_enhanced_hubble_diagram, validator_instance)
     
+    # Store the propagator for later use
+    validator_instance._enhanced_propagator = propagator
+    
     return propagator
-
 
 # Example usage
 if __name__ == "__main__":

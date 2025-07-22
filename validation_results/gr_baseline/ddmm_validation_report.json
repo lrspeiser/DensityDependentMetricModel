@@ -1,0 +1,164 @@
+{
+  "model_parameters": {
+    "rho_c_solar_kpc3": 1e+30,
+    "n_exp": 1.0,
+    "A": 1e-20,
+    "xi_type": "power",
+    "M_disk_thin_solar": 60000000000.0,
+    "R_d_thin_kpc": 2.6,
+    "h_z_thin_kpc": 0.3,
+    "M_disk_thick_solar": 0,
+    "R_d_thick_kpc": 3.6,
+    "h_z_thick_kpc": 0.9,
+    "M_bulge_solar": 20000000000.0,
+    "a_bulge_kpc": 0.9,
+    "M_gas_solar": 0,
+    "R_d_gas_kpc": 7.0,
+    "h_z_gas_kpc": 0.08,
+    "include_disk_thin": true,
+    "include_disk_thick": false,
+    "include_bulge": true,
+    "include_gas": false
+  },
+  "test_results": [
+    {
+      "test_name": "Solar System Consistency",
+      "passed": true,
+      "score": 1.0,
+      "details": {
+        "mercury": {
+          "passed": true,
+          "score": 1.0,
+          "xi": 1.0,
+          "deviation_ppm": 0.0
+        },
+        "lunar": {
+          "passed": true,
+          "score": 1.0,
+          "eta": 0.0
+        },
+        "cassini": {
+          "passed": "True",
+          "score": 1.0,
+          "gamma_deviation": 0.0
+        }
+      },
+      "recommendations": []
+    },
+    {
+      "test_name": "Galaxy Rotation Curves",
+      "passed": false,
+      "score": 0.19709769975375382,
+      "details": {
+        "gaia": {
+          "passed": "False",
+          "score": 0.0,
+          "chi2_dof": 13176.40390340329,
+          "mean_residual": 22.20514824709847
+        },
+        "sparc": {
+          "passed": "False",
+          "score": 0.39419539950750765,
+          "n_galaxies": 30,
+          "successful": 28,
+          "median_rms": 17.23831366594925
+        }
+      },
+      "recommendations": [
+        "DDMM struggles with Milky Way rotation curve",
+        "Consider mass-dependent \u03c1_c for better fits"
+      ]
+    },
+    {
+      "test_name": "Type Ia Supernovae",
+      "passed": "True",
+      "score": 0.4723893925681941,
+      "details": {
+        "model_comparison": {
+          "ddmm_no_expansion_max_dev": null,
+          "ddmm_hybrid_max_dev": null,
+          "chi2_results": {
+            "lcdm": 4244.835800867935,
+            "lcdm_chi2_dof": 2.4999032985087957,
+            "ddmm_no_exp": 348756.76619016856,
+            "ddmm_no_exp_chi2_dof": 205.5137101886674,
+            "ddmm_hybrid": 4244.835800867935,
+            "ddmm_hybrid_chi2_dof": 2.501376429503792,
+            "offset_mag": -0.09482143204785132,
+            "intrinsic_scatter": 0.12
+          }
+        }
+      },
+      "recommendations": []
+    },
+    {
+      "test_name": "Laboratory Constraints",
+      "passed": true,
+      "score": 1.0,
+      "details": {
+        "eotwash": {
+          "passed": true,
+          "score": 1.0,
+          "alpha": 0.0,
+          "xi": 1.0
+        },
+        "microscope": {
+          "passed": true,
+          "score": 1.0,
+          "eta": 0.0,
+          "xi": 1.0
+        }
+      },
+      "recommendations": []
+    },
+    {
+      "test_name": "Gravitational Lensing",
+      "passed": false,
+      "score": 0.5,
+      "details": {
+        "galaxy_galaxy": {
+          "passed": "True",
+          "score": 1.0,
+          "theta_ratio": 1.0,
+          "mass_ratio": 1.0
+        },
+        "cluster": {
+          "passed": "False",
+          "score": 0.0,
+          "mass_ratio": 1.0
+        }
+      },
+      "recommendations": [
+        "Lensing requires careful \u03be integration along line of sight",
+        "Consider environmental dependence of parameters"
+      ]
+    },
+    {
+      "test_name": "Large Scale Structure",
+      "passed": true,
+      "score": 0.7107556969346203,
+      "details": {
+        "growth_rate": {
+          "passed": "True",
+          "score": 0.42151139386924047,
+          "f_ddmm": 0.5157232253540304,
+          "deviation_sigma": 1.3144645070806071
+        },
+        "bao": {
+          "passed": true,
+          "score": 1.0,
+          "DV_ratio": 1.0
+        }
+      },
+      "recommendations": []
+    }
+  ],
+  "overall_score": 0.6467071315427614,
+  "tests_passed": 4,
+  "tests_total": 6,
+  "summary": {
+    "status": "GOOD",
+    "message": "DDMM shows good agreement but has some tensions",
+    "score": "0.65"
+  }
+}
