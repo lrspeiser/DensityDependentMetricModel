@@ -70,6 +70,19 @@ EXPECTED_PARAMS = {
     'xi_type': 'power'
 }
 
+# Patch for loading dynesty checkpoints that reference run_dynesty functions
+try:
+    from run_dynesty import (
+        log_likelihood_dynesty_debug,
+        prior_transform_dynesty,
+        get_param_labels_and_bounds,
+        MW_MULTI_COMP_PARAM_CONFIG,  # if needed by default values
+    )
+except ImportError as e:
+    print(f"WARNING: Could not import functions from run_dynesty: {e}")
+    print("Unpickling may fail unless all referenced functions are in scope.")
+    
+    
 @dataclass
 class TestResult:
     """Structured test result with metadata"""
@@ -768,8 +781,26 @@ class DDMMValidator:
             return None
         
 
-    def test_supernovae(self, pantheon_path: Optional[str] = None) -> TestResult:
-        """Test distance-redshift relation with SNe Ia using proper DDMM light propagation"""
+    def test_supernovae(self, pantheon_path: Optional[str] = None, run_cosmology: bool = False) -> TestResult:
+        """Dispatcher for supernova tests. Runs baseline or advanced cosmological tests."""
+        if run_cosmology:
+            logger.info("Attempting to run ADVANCED cosmological supernova test...")
+            try:
+                from enhanced_light_propagation import integrate_with_existing_validator
+                integrate_with_existing_validator(self, self.output_dir)
+                # After integration, the original method is replaced. We call it again.
+                return self.test_supernovae(pantheon_path=pantheon_path)
+            except ImportError:
+                logger.error("Could not import 'enhanced_light_propagation.py'. Cannot run advanced tests.")
+                return TestResult("Type Ia Supernovae (Enhanced)", False, 0.0,
+                                {'error': 'Module not found'}, ["Install enhanced_light_propagation module."])
+        else:
+            logger.info("Running BASELINE supernova test...")
+            return self.test_supernovae_baseline(pantheon_path)
+
+
+    def test_supernovae_baseline(self, pantheon_path: Optional[str] = None) -> TestResult:
+        """Original SNe test renamed to baseline. Assumes standard expansion."""
         logger.info("\n" + "="*60)
         logger.info("TEST 3: TYPE IA SUPERNOVAE (DDMM Light Propagation)")
         logger.info("="*60)
@@ -1528,6 +1559,8 @@ def main():
                        help="Output directory")
     parser.add_argument('--skip_data_check', action='store_true',
                        help="Skip data availability check")
+    parser.add_argument('--run_cosmology', action='store_true',
+                    help="Run the advanced cosmological light propagation tests instead of the baseline.")
     
     args = parser.parse_args()
     
@@ -1546,11 +1579,37 @@ def main():
         median_params = np.average(data['samples'], weights=weights, axis=0)
         model_params = dict(zip(param_names, median_params))
         model_params['xi_type'] = 'power'
-    elif args.params_file.endswith('.pkl.gz'):
-        # Load dynesty results directly
-        with gzip.open(args.params_file, 'rb') as f:
+    elif args.params_file.endswith('.pkl.gz') or args.params_file.endswith('.pkl'):
+        import pickle
+        import gzip
+
+        is_gz = args.params_file.endswith('.pkl.gz')
+        open_fn = gzip.open if is_gz else open
+
+        with open_fn(args.params_file, 'rb') as f:
             results = pickle.load(f)
-        
+
+        weights = np.exp(results.logwt - results.logz[-1])
+        param_names = getattr(results, 'param_names', [
+            'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+            'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+            'M_bulge_solar', 'a_bulge_kpc',
+            'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+        ])
+        median_params = np.average(results.samples, weights=weights, axis=0)
+        model_params = dict(zip(param_names, median_params))
+
+        model_params['rho_c_solar_kpc3'] = 1e9
+        model_params['n_exp'] = 1.0
+        model_params['A'] = 1.0
+        model_params['xi_type'] = 'power'
+
+        model_params['include_disk_thin'] = True
+        model_params['include_disk_thick'] = True
+        model_params['include_bulge'] = True
+        model_params['include_gas'] = True
+
+
         # Calculate weights
         weights = np.exp(results.logwt - results.logz[-1])
         
@@ -1605,8 +1664,10 @@ def main():
     )
     
     # Test 3: Type Ia supernovae
-    pantheon_path = 'pantheon' if Path('pantheon').exists() else None
-    validator.test_supernovae(pantheon_path)
+    validator.test_supernovae(
+    pantheon_path='pantheon' if Path('pantheon').exists() else None,
+    run_cosmology=args.run_cosmology)
+
         
     # Test 4: Laboratory constraints
     validator.test_laboratory_constraints()

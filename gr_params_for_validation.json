@@ -1,0 +1,17 @@
+{
+    "xi_type": "power",
+    "rho_c_solar_kpc3": 1e+99,
+    "n_exp": 1.0,
+    "A": 0.0,
+    "M_disk_thin_solar": 70.82e9,
+    "R_d_thin_kpc": 3.06,
+    "h_z_thin_kpc": 0.29,
+    "M_disk_thick_solar": 20.78e9,
+    "R_d_thick_kpc": 7.08,
+    "h_z_thick_kpc": 1.14,
+    "M_bulge_solar": 8.70e9,
+    "a_bulge_kpc": 1.33,
+    "M_gas_solar": 52.65e9,
+    "R_d_gas_kpc": 7.85,
+    "h_z_gas_kpc": 0.27
+  }
