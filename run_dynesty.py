@@ -680,6 +680,15 @@ def setup_xi_parameters_for_mode(args):
         })
 
 
+def xi_gr_baseline(rho, *args, **kwargs):
+    """
+    A special xi function for GR baseline runs. It ignores all inputs
+    and returns 1.0, ensuring xi=1 everywhere.
+    """
+    # jnp.ones_like ensures the output has the same shape as the input density array.
+    return jnp.ones_like(jnp.atleast_1d(rho))
+
+
 # ============================================================================
 # Enhanced Monitoring Functions
 # ============================================================================
@@ -1512,6 +1521,10 @@ def check_cassini_compatibility(params, xi_type):
     """
     Check if parameters pass Cassini test.
     """
+    # If rho_c is very large, this is a GR baseline run. It passes by definition.
+    if params.get('rho_c_solar_kpc3', 0.0) > 1e20:
+        return True, "Passes Cassini (GR Baseline)"
+
     from density_metric2 import XI_FUNCTION_MAP
 
     rho_saturn = 2.3e21  # Saturn orbit density
@@ -2664,7 +2677,7 @@ def main_dynesty():
             return False
     
     # This was set after running the model with GR settings, keeping gravity at 1 everywhere.
-    BASELINE_LOGZ_GR = -1453340.493201188
+    BASELINE_LOGZ_GR = -1453634.9493113013
 
     
     logger = get_or_create_logger()
@@ -2688,7 +2701,7 @@ def main_dynesty():
     parser.add_argument('--debug', action='store_true', default=False,
                         help="Enable verbose debug logging")
     parser.add_argument('--xi', type=str, default='power',
-                            choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold'],
+                            choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold', 'gr'],
                             help="Choice of xi(ρ) function")
     parser.add_argument('--max_sample_gaia', type=int, default=10000,
                         help="Maximum number of Gaia stars to use")

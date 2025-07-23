@@ -529,7 +529,16 @@ def xi_mass_threshold(rho, rho_c, n_exp, A, r_kpc, params, **_):
     xi = _transition(M_enclosed, M_crit, width, xi_boost)
     return jnp.clip(xi, 0.1, 10.0)
 
+def xi_gr_baseline(rho, *args, **kwargs):
+    """
+    A special xi function for GR baseline runs. It ignores all inputs
+    and returns 1.0, ensuring xi=1 everywhere.
+    """
+    # jnp.ones_like ensures the output has the same shape as the input density array.
+    return jnp.ones_like(jnp.atleast_1d(rho))
+
 XI_FUNCTION_MAP = {
+    'gr': xi_gr_baseline, 
     'power': xi_power_law_wrapper,
     'logistic': xi_logistic_law_wrapper,
     'enhanced': xi_power_law_wrapper,
