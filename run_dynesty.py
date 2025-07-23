@@ -50,7 +50,36 @@ import matplotlib
 matplotlib.use("Agg")  # Headless backend for servers / background threads
 import matplotlib.pyplot as plt
 import corner
-from density_metric2 import v_total_kms
+import jax
+import jax.numpy as jnp
+
+
+# --- JAX Configuration ---
+# Use float32 for performance on GPUs (Metal and CUDA).
+DEFAULT_DTYPE = jnp.float32
+jax.config.update("jax_enable_x64", False)
+
+# Local physics modules (now pointing to the JAX version)
+try:
+    from density_metric2 import (
+        v_total_kms,
+        v_baryon_total_newtonian_kms,
+        rho_baryon_total_midplane_solar_kpc3,
+        XI_FUNCTION_MAP,
+        run_physics_self_tests,
+        check_physical_plausibility,
+        G_ASTRO_UNITS,
+        R_SUN_KPC
+    )
+    from data_io import load_gaia
+    # This was in your original file; it's good practice to keep it for compatibility.
+
+# This is the missing clause that must follow the 'try' block.
+except ImportError as e:
+    # Provide a more informative error message for the user.
+    print(f"CRITICAL: Could not import local JAX-based modules: {e}")
+    print("Please ensure 'density_metric2.py', 'data_io.py', and 'main2.py' are in the same directory or accessible in your PYTHONPATH.")
+    sys.exit(1)
 
 # Save the full CLI args to a JSON file for reproducibility
 def save_run_metadata(args, output_dir):
@@ -102,21 +131,6 @@ except ImportError:
     print("CRITICAL: Dynesty library not found. Please install it: pip install dynesty")
     sys.exit(1)
 
-# Local physics modules
-try:
-    from density_metric2 import (
-        v_baryon_total_newtonian_kms,
-        rho_baryon_total_midplane_solar_kpc3,
-        XI_FUNCTION_MAP,
-        run_physics_self_tests,
-        G_ASTRO_UNITS,
-        R_SUN_KPC
-    )
-    from data_io import load_gaia
-    from main2 import get_param_labels_and_bounds as get_param_config_main_module
-except ImportError as e:
-    print(f"CRITICAL: Could not import local modules: {e}")
-    sys.exit(1)
 
 
 # ============================================================================
@@ -377,13 +391,13 @@ def check_physical_plausibility(
             params_for_calc[f'include_{component}'] = include_flag
             logger.debug(f"Component include_{component} = {include_flag}")
 
-        r_solar = np.array([R_SUN_KPC])
+        r_solar = jnp.array([R_SUN_KPC], dtype=DEFAULT_DTYPE)
         logger.debug(f"R_SUN_KPC = {R_SUN_KPC:.2f} kpc")
 
         # Calculate velocities using v_total_kms which handles all xi types correctly
         try:
-            v_model_solar = v_total_kms(r_solar, params_for_calc, xi_type=args_obj.xi)[0]
-            v_newton_solar = v_baryon_total_newtonian_kms(r_solar, params_for_calc)[0]
+            v_model_solar = v_total_kms(r_solar, params_for_calc, xi_type=args_obj.xi).item()
+            v_newton_solar = v_baryon_total_newtonian_kms(r_solar, params_for_calc).item()
             logger.debug(f"v_model(R_sun) = {v_model_solar:.2f} km/s")
             logger.debug(f"v_newton(R_sun) = {v_newton_solar:.2f} km/s")
         except Exception as e:
@@ -1216,10 +1230,10 @@ def log_likelihood_dynesty(
     fitted_param_names: List[str],
     args_dynesty_obj: argparse.Namespace,
     all_param_info_list: List[Dict],
-    R_data: np.ndarray,
-    v_data: np.ndarray,
-    sigma_data: np.ndarray,
-    xi_type: str,  # <-- This parameter exists here
+    R_data_jax: jax.Array,
+    v_data_jax: jax.Array,
+    sigma_data_jax: jax.Array,
+    xi_type: str,
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
 
@@ -1285,30 +1299,30 @@ def log_likelihood_dynesty(
         logger.warning(f"⚠️ Cassini check failed: {e}")
         return -np.inf, [np.inf]
 
-    # 3. Compute the model velocity using the master v_total_kms function
+    # 3. Compute the model velocity using the JAX v_total_kms function
     try:
-        v_model = v_total_kms(R_data, params, xi_type=xi_type)
-        if not np.all(np.isfinite(v_model)):
+        v_model = v_total_kms(R_data_jax, params, xi_type=xi_type)
+        if not jnp.all(jnp.isfinite(v_model)):
             return -np.inf, [np.inf]
     except Exception:
         return -np.inf, [np.inf]
 
     # 4. Plausibility penalty for overshooting
-    v_model_solar_mask = (R_data > 7.5) & (R_data < 8.5)
-    if np.any(v_model_solar_mask):
-        v_model_solar = np.median(v_model[v_model_solar_mask])
+    v_model_solar_mask = (R_data_jax > 7.5) & (R_data_jax < 8.5)
+    if jnp.any(v_model_solar_mask):
+        v_model_solar = jnp.median(v_model[v_model_solar_mask])
         if v_model_solar > 300.0:
             return -np.inf, [np.inf]
-
-    # 5. Calculate chi-squared and final log-likelihood
-    chi2 = np.sum(((v_data - v_model) / sigma_data)**2)
+    # 5. Calculate chi-squared and log-likelihood on the GPU
+    chi2 = jnp.sum(((v_data_jax - v_model) / sigma_data_jax)**2)
     log_L = -0.5 * chi2
 
-    if not np.isfinite(log_L):
+    if not jnp.isfinite(log_L):
         return -np.inf, [np.inf]
 
-    rmse = np.sqrt(np.mean((v_data - v_model)**2))
-    return log_L, [rmse]
+    rmse = jnp.sqrt(jnp.mean((v_data_jax - v_model)**2))
+    # Return standard Python floats for Dynesty
+    return float(log_L), [float(rmse)]
 
 
 def v_model_for_dynesty(
@@ -1486,105 +1500,6 @@ def ensure_grav_color_params_in_config(args):
             }
 
 
-def log_likelihood_dynesty_debug(
-    theta_values_fitted: np.ndarray,
-    fitted_param_names: List[str],
-    args_dynesty_obj: argparse.Namespace,
-    all_param_info_list: List[Dict],
-    R_data: np.ndarray,
-    v_data: np.ndarray,
-    sigma_data: np.ndarray,
-    xi_type: str,
-    gp_surrogate=None
-) -> Tuple[float, List[float]]:
-    """Debug version with extensive logging - FIXED to handle full parameter set"""
-
-    # Get logger safely for multiprocessing
-    logger = get_or_create_logger()
-
-    # Initialize warning counts
-    if not hasattr(log_likelihood_dynesty_debug, 'warning_counts'):
-        log_likelihood_dynesty_debug.warning_counts = {}
-
-    # Handle debug counter for multiprocessing
-    if not hasattr(log_likelihood_dynesty_debug, 'debug_counter'):
-        log_likelihood_dynesty_debug.debug_counter = 0
-
-    # First check if we have valid data
-    if R_data is None or len(R_data) == 0:
-        logger.error("ERROR: R_data is None or empty!")
-        return -np.inf, [np.inf]
-
-    if v_data is None or len(v_data) == 0:
-        logger.error("ERROR: v_data is None or empty!")
-        return -np.inf, [np.inf]
-
-    if sigma_data is None or len(sigma_data) == 0:
-        logger.error("ERROR: sigma_data is None or empty!")
-        return -np.inf, [np.inf]
-
-    # FIXED: Reconstruct full parameter dictionary FIRST
-    params = dict(zip(fitted_param_names, theta_values_fitted))
-    for p_info in all_param_info_list:
-        if not p_info['is_fitted']:
-            params[p_info['name']] = p_info['current_val']
-
-    # Hard constraint: thick disk scale length must be > thin disk scale length
-    if ('R_d_thick_kpc' in params and 'R_d_thin_kpc' in params):
-        R_d_thick = params['R_d_thick_kpc']
-        R_d_thin = params['R_d_thin_kpc']
-
-        if R_d_thick < 1.05 * R_d_thin:
-            # Use warning counter for this specific constraint
-            warning_key = "R_d_thick_thin"
-            if warning_key not in log_likelihood_dynesty_debug.warning_counts:
-                log_likelihood_dynesty_debug.warning_counts[warning_key] = 0
-
-            if log_likelihood_dynesty_debug.warning_counts[warning_key] < 10:
-                logger.debug(f"Rejecting: R_d_thick ({R_d_thick:.2f}) < 1.05 * R_d_thin ({R_d_thin:.2f})")
-                log_likelihood_dynesty_debug.warning_counts[warning_key] += 1
-
-            return -np.inf, [np.inf]
-
-    # Hard constraint: thick disk scale height must be > thin disk scale height
-    if ('h_z_thick_kpc' in params and 'h_z_thin_kpc' in params):
-        h_z_thick = params['h_z_thick_kpc']
-        h_z_thin = params['h_z_thin_kpc']
-
-        if h_z_thick < 2.0 * h_z_thin:
-            # Use warning counter for this specific constraint
-            warning_key = "h_z_thick_thin"
-            if warning_key not in log_likelihood_dynesty_debug.warning_counts:
-                log_likelihood_dynesty_debug.warning_counts[warning_key] = 0
-
-            if log_likelihood_dynesty_debug.warning_counts[warning_key] < 10:
-                logger.debug(f"Rejecting: h_z_thick ({h_z_thick:.3f}) < 2 * h_z_thin ({h_z_thin:.3f})")
-                log_likelihood_dynesty_debug.warning_counts[warning_key] += 1
-
-            return -np.inf, [np.inf]
-
-    # Log first few data points (only once)
-    if not hasattr(log_likelihood_dynesty_debug, '_logged_data'):
-        logger.info(f"DEBUG: Data shapes - R: {R_data.shape}, v: {v_data.shape}, sigma: {sigma_data.shape}")
-        logger.info(f"DEBUG: First 5 R values: {R_data[:5]}")
-        logger.info(f"DEBUG: First 5 v values: {v_data[:5]}")
-        logger.info(f"DEBUG: First 5 sigma values: {sigma_data[:5]}")
-        logger.info(f"DEBUG: R range: [{np.min(R_data):.2f}, {np.max(R_data):.2f}]")
-        logger.info(f"DEBUG: v range: [{np.min(v_data):.2f}, {np.max(v_data):.2f}]")
-
-        # Log the full parameter set being used
-        logger.info("DEBUG: Full parameter set:")
-        for name, value in params.items():
-            if isinstance(value, (int, float)):
-                logger.info(f"  {name}: {value:.3e}")
-
-        log_likelihood_dynesty_debug._logged_data = True
-
-    # Now call the original function with the fix
-    return log_likelihood_dynesty(
-        theta_values_fitted, fitted_param_names, args_dynesty_obj,
-        all_param_info_list, R_data, v_data, sigma_data, xi_type, gp_surrogate
-    )
 
 def check_cassini_compatibility(params, xi_type):
     """
@@ -2154,7 +2069,7 @@ def test_likelihood_at_typical_params(args, gaia_data):
 # Curriculum Learning Implementation
 # ============================================================================
 
-def run_curriculum_learning(args, gaia_data_dict, logger, dashboard_monitor=None):
+def run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax, sigma_data_jax, dashboard_monitor=None):
     """
     Implement curriculum learning approach with physical constraints.
 
@@ -2250,7 +2165,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger, dashboard_monitor=None
         stage_args.output_dir = Path(args.output_dir) / f"stage_{i+1}"
 
         # Run this stage
-        results = run_single_dynesty(stage_args, gaia_data_dict, dashboard_monitor=dashboard_monitor)
+        results = run_single_dynesty(stage_args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax, dashboard_monitor=dashboard_monitor)
 
         if results is None:
             logger.error(f"Stage {i+1} failed!")
@@ -2353,7 +2268,7 @@ def check_early_stopping(sampler, convergence_tracker, args):
 
     return False, "Continuing"
 
-def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monitor=None):
+def run_single_dynesty(args, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogate=None, dashboard_monitor=None):
     """
     Run a single Dynesty sampling loop with enhanced monitoring, convergence diagnostics,
     physical plausibility checks, and optional dashboard support.
@@ -2378,19 +2293,19 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monito
     # -----------------------------------------------------------------------
     # 1. Load Gaia rotation curve data and validate
     # -----------------------------------------------------------------------
-    R_data = gaia_data_dict["R_kpc"]
-    v_data = gaia_data_dict["v_obs"]
-    sigma_data = gaia_data_dict["sigma_v"]
+    R_data_np = np.asarray(R_data_jax)
+    v_data_np = np.asarray(v_data_jax)
+    sigma_data_np = np.asarray(sigma_data_jax)
 
-    logger.info(f"Loaded {len(R_data)} stars")
-    logger.info(f"R range: {R_data.min():.2f}–{R_data.max():.2f} kpc")
-    logger.info(f"v_obs range: {v_data.min():.2f}–{v_data.max():.2f} km/s")
+    logger.info(f"Loaded {len(R_data_jax)} stars from JAX array")
+    logger.info(f"R range: {R_data_np.min():.2f}–{R_data_np.max():.2f} kpc")
+    logger.info(f"v_obs range: {v_data_np.min():.2f}–{v_data_np.max():.2f} km/s")
 
-    if not np.all(np.isfinite(R_data)):
+    if not np.all(np.isfinite(R_data_np)):
         logger.error("Non-finite values detected in R_data")
-    if not np.all(np.isfinite(v_data)):
+    if not np.all(np.isfinite(v_data_np)):
         logger.error("Non-finite values detected in v_data")
-    if not np.all(np.isfinite(sigma_data)):
+    if not np.all(np.isfinite(sigma_data_np)):
         logger.error("Non-finite values detected in sigma_data")
 
     # -----------------------------------------------------------------------
@@ -2432,10 +2347,9 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monito
     # 4. Check initial likelihood + plausibility
     # -----------------------------------------------------------------------
     logger.info("Checking log-likelihood of initial parameter guess...")
-    test_logl, test_blob = log_likelihood_dynesty_debug(
+    test_logl, test_blob = log_likelihood_dynesty(
         p0_guess, fitted_names, args, args.all_param_info_list,
-        R_data, v_data, sigma_data, args.xi, gp_surrogate
-    )
+        R_data_jax, v_data_jax, sigma_data_jax, args.xi, gp_surrogate)
     logger.info(f"Initial logL: {test_logl:.2f}, RMSE: {test_blob[0]:.2f} km/s")
 
     is_valid, reason, *_ = check_physical_plausibility(p0_guess, fitted_names, args)
@@ -2449,10 +2363,13 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monito
     # 5. Initialize dynesty sampler
     # -----------------------------------------------------------------------
     ptform_args = (fitted_names, np.array(p_low), np.array(p_high), log_flags)
-    logl_args = (fitted_names, args, args.all_param_info_list, R_data, v_data, sigma_data, args.xi, gp_surrogate)
+    logl_args = (fitted_names, args, args.all_param_info_list, R_data_jax, v_data_jax, sigma_data_jax, args.xi, gp_surrogate)
+
 
     pool = None
     if args.num_threads > 1:
+        logger.warning("JAX handles GPU parallelism. Forcing num_threads=1.")
+        args.num_threads = 1
         try:
             pool = Pool(args.num_threads)
             logger.info(f"Initialized multiprocessing pool with {args.num_threads} threads")
@@ -2462,7 +2379,7 @@ def run_single_dynesty(args, gaia_data_dict, gp_surrogate=None, dashboard_monito
     sampler = None
     try:
         sampler = DynamicNestedSampler(
-            log_likelihood_dynesty_debug,
+            log_likelihood_dynesty,
             prior_transform_dynesty,
             ndim,
             pool=pool,
@@ -2948,8 +2865,21 @@ def main_dynesty():
 
     gaia_data_dict = {col: df_all_sky[col].values for col in df_all_sky.columns}
 
+    logger.info(f"Moving data to JAX device: {jax.default_backend()}...")
+    R_data_np = gaia_data_dict["R_kpc"].astype(np.float32)
+    v_data_np = gaia_data_dict["v_obs"].astype(np.float32)
+    sigma_data_np = gaia_data_dict["sigma_v"].astype(np.float32)
+
+    R_data_jax = jax.device_put(R_data_np)
+    v_data_jax = jax.device_put(v_data_np)
+    sigma_data_jax = jax.device_put(sigma_data_np)
+    logger.info("✅ Data is now on the GPU and ready for computation.")
+
+
     # Inject xi-mode specific parameters
     setup_xi_parameters_for_mode(args)
+    
+    
 
     # Ensure physical prior bounds match -- override if needed
     if args.R_d_thin_high is not None:
@@ -3045,9 +2975,9 @@ def main_dynesty():
     # Sampling logic
     logger.info("Beginning sampling...")
     if args.use_curriculum_learning:
-        results, stage_args_per_stage = run_curriculum_learning(args, gaia_data_dict, logger, dashboard_monitor)
+        results, stage_args_per_stage = run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax, sigma_data_jax, dashboard_monitor)
     else:
-        results = run_single_dynesty(args, gaia_data_dict, gp_surrogate, dashboard_monitor)
+        results = run_single_dynesty(args, gaia_data_dict, gp_surrogate, R_data_jax, v_data_jax, sigma_data_jax, dashboard_monitor)
 
 
     if results is None or not hasattr(results, 'samples') or len(results.samples) == 0:
