@@ -259,95 +259,54 @@ def v_circ_hernquist_bulge_kms(R_kpc, M_bulge_solar, a_bulge_kpc):
     v_out = jnp.where(R_kpc_arr > 1e-9, v_calc, 0.0)
     return jnp.where((M_bulge_solar <= 1e-9) | (a_bulge_kpc <= 1e-9), jnp.zeros_like(v_out), v_out)
 
-# Freeman disk calculation WITHOUT @jax.jit due to Bessel functions
-def v_circ_exponential_disk_freeman_kms(R_kpc_in, M_disk_solar, R_d_kpc):
-    """
-    Exact Freeman (1970) kernel for exponential disk rotation.
-    Not JIT-compiled due to Bessel function requirements on Metal.
-    """
-    # Convert inputs to JAX arrays
-    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc_in, dtype=DEFAULT_DTYPE))
-    M_disk_solar = jnp.asarray(M_disk_solar, dtype=DEFAULT_DTYPE)
-    R_d_kpc = jnp.asarray(R_d_kpc, dtype=DEFAULT_DTYPE)
-
-    # Freeman formula y = R / (2 * Rd)
-    y = R_kpc_arr / (2.0 * R_d_kpc)
-    y = jnp.maximum(y, 1e-9)
-
-    # Compute Bessel functions (will use CPU fallback on Metal)
-    i0y = BesselI0(y)
-    i1y = BesselI1(y)
-    k0y = BesselK0(y)
-    k1y = BesselK1(y)
-
-    bessel_term_safe = jnp.maximum(i0y * k0y - i1y * k1y, 0.0)
-
-    pre_factor = 2.0 * G_ASTRO_UNITS * M_disk_solar / R_d_kpc
-    v_sq = pre_factor * (y**2) * bessel_term_safe
-
-    v_sq = jnp.where(R_kpc_arr > 1e-9, v_sq, 0.0)
-    v_sq = jnp.where((M_disk_solar <= 1e-9) | (R_d_kpc <= 1e-9), jnp.zeros_like(v_sq), v_sq)
-
-    return jnp.sqrt(jnp.maximum(v_sq, 0.0))
-
-# Alternative: Approximate Freeman formula that can be JIT-compiled
 @jax.jit
-def v_circ_exponential_disk_approx_kms(R_kpc_in, M_disk_solar, R_d_kpc):
+def v_circ_exponential_disk_approx_kms(R_kpc, M_disk_solar, R_d_kpc):
     """
-    Approximate exponential disk rotation curve using Binney & Tremaine approximation.
-    This can be JIT-compiled on all backends including Metal.
+    JIT-compatible approximation for an exponential disk velocity curve.
+    Uses a standard spherical approximation for the enclosed mass.
+    This is fast and numerically stable.
     """
-    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc_in, dtype=DEFAULT_DTYPE))
-    M_disk_solar = jnp.asarray(M_disk_solar, dtype=DEFAULT_DTYPE)
-    R_d_kpc = jnp.asarray(R_d_kpc, dtype=DEFAULT_DTYPE)
-    
-    x = R_kpc_arr / R_d_kpc
-    
-    # Binney & Tremaine approximation for exponential disk
-    # Valid for all x > 0
-    v_sq_norm = x**2 * (1.0 - jnp.exp(-x) * (1.0 + x))
-    
-    # Maximum velocity occurs at x ≈ 2.16
-    v_max_sq = G_ASTRO_UNITS * M_disk_solar / (2.16 * R_d_kpc)
-    v_sq = v_max_sq * v_sq_norm / 0.609  # Normalize to peak
-    
-    v_sq = jnp.where(R_kpc_arr > 1e-9, v_sq, 0.0)
-    v_sq = jnp.where((M_disk_solar <= 1e-9) | (R_d_kpc <= 1e-9), jnp.zeros_like(v_sq), v_sq)
-    
-    return jnp.sqrt(jnp.maximum(v_sq, 0.0))
+    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+    # Add a small epsilon to prevent division by zero if R_d_kpc is zero
+    x = R_kpc_arr / (R_d_kpc + 1e-9)
+
+    # Enclosed mass approximation: M_enc(x) = M_disk * [1 - (1+x) * exp(-x)]
+    # This is a standard formula and is composed of simple operations JAX can compile.
+    m_enc_fraction = 1.0 - (1.0 + x) * jnp.exp(-x)
+    m_enc = M_disk_solar * m_enc_fraction
+
+    # Velocity from enclosed mass: v^2 = G * M_enc / R
+    # Add a small epsilon to R_kpc_arr to prevent division by zero at the center.
+    v_sq = (G_ASTRO_UNITS * m_enc) / (R_kpc_arr + 1e-9)
+
+    # Ensure result is zero if mass or scale length are zero, and handle negative v_sq.
+    v_sq_final = jnp.where((M_disk_solar <= 1e-9) | (R_d_kpc <= 1e-9), 0.0, v_sq)
+    return jnp.sqrt(jnp.maximum(v_sq_final, 0.0))
 
 # Choose which disk function to use based on backend
 USE_FREEMAN_EXACT = not is_metal_backend()  # Use approximation on Metal
 
 def v_baryon_total_newtonian_kms(R_kpc, p_baryons):
-    """Sum the circular velocities of all baryonic sub-components in quadrature."""
-    logger.debug("v_baryon_total_newtonian_kms called.")
+    """
+    Sum the circular velocities of all baryonic sub-components in quadrature.
+    This version uses the corrected JIT-compatible disk velocity approximation.
+    """
     R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
     v_total_sq_kms2 = jnp.zeros_like(R_kpc_arr)
-    
+
     if p_baryons.get('include_bulge', False):
-        v_total_sq_kms2 += v_circ_hernquist_bulge_kms(
-            R_kpc_arr, p_baryons.get('M_bulge_solar', 0.0), p_baryons.get('a_bulge_kpc', 0.5)
-        )**2
-    
-    # Choose disk function based on backend
-    disk_func = v_circ_exponential_disk_freeman_kms if USE_FREEMAN_EXACT else v_circ_exponential_disk_approx_kms
-    
+        v_total_sq_kms2 += v_circ_hernquist_bulge_kms(R_kpc_arr, p_baryons.get('M_bulge_solar', 0.0), p_baryons.get('a_bulge_kpc', 0.5))**2
+
+    # Use the fast, JIT-compatible approximation for all disk components
+    disk_func = v_circ_exponential_disk_approx_kms
+
     if p_baryons.get('include_disk_thin', False):
-        v_total_sq_kms2 += disk_func(
-            R_kpc_arr, p_baryons.get('M_disk_thin_solar', 0.0), p_baryons.get('R_d_thin_kpc', 2.5)
-        )**2
-    
+        v_total_sq_kms2 += disk_func(R_kpc_arr, p_baryons.get('M_disk_thin_solar', 0.0), p_baryons.get('R_d_thin_kpc', 2.5))**2
     if p_baryons.get('include_disk_thick', False):
-        v_total_sq_kms2 += disk_func(
-            R_kpc_arr, p_baryons.get('M_disk_thick_solar', 0.0), p_baryons.get('R_d_thick_kpc', 3.5)
-        )**2
-    
+        v_total_sq_kms2 += disk_func(R_kpc_arr, p_baryons.get('M_disk_thick_solar', 0.0), p_baryons.get('R_d_thick_kpc', 3.5))**2
     if p_baryons.get('include_gas', False):
-        v_total_sq_kms2 += disk_func(
-            R_kpc_arr, p_baryons.get('M_gas_solar', 0.0), p_baryons.get('R_d_gas_kpc', 7.0)
-        )**2
-    
+        v_total_sq_kms2 += disk_func(R_kpc_arr, p_baryons.get('M_gas_solar', 0.0), p_baryons.get('R_d_gas_kpc', 7.0))**2
+
     return jnp.sqrt(jnp.maximum(v_total_sq_kms2, 0.0))
 
 @jax.jit
