@@ -2,75 +2,66 @@
 """
 density_metric2.py - Physics layer: mass models, density profiles,
                     density-weighting functions (xi), and full velocity model.
-                    Contains BOTH old single-disk functions (for backward compatibility
-                    in main2.py) AND new multi-component baryonic model functions.
-"""
-import numpy as np
-import numba as nb
-from numba import vectorize, float64
-from numba import njit
-from scipy.special import iv as BesselI, kv as BesselK 
-import logging
 
+This version is accelerated with JAX for hardware-agnostic execution on
+GPUs (Apple Metal, NVIDIA CUDA) and TPUs.
+"""
+import jax
+import jax.numpy as jnp
+from jax.scipy.special import i0 as BesselI0, i1 as BesselI1, k0 as BesselK0, k1 as BesselK1
+import numpy as np  # Kept for CPU-specific tasks like data loading and plotting
+from scipy.special import iv as BesselI_cpu, kv as BesselK_cpu # For original CPU-based tests
+import logging
 
 # Set up a logger for this module
 logger = logging.getLogger(__name__)
 
+# JAX Configuration: By default, JAX will use float32. This is ideal for
+# GPU performance on Metal and CUDA. We will explicitly use float32.
+# On Metal, float64 support may be limited or emulated on the CPU.
+DEFAULT_DTYPE = jnp.float32
+jax.config.update("jax_enable_x64", False)
 
-# ---- Self-Testing Functions (as recommended by audit) ----
+
+# ---- Self-Testing Functions (updated for JAX) ----
 def _assert_freeman_identity():
-    """Quick self‑test: Check Freeman kernel against a known approximate value."""
-    logger.debug("[SELF-TEST] Verifying Freeman kernel...")
-    # At R=R_d, y=0.5. The expression y^2 * (I0K0 - I1K1) should be ~0.1386.
-    # The full v^2 = (2*G*M/R_d) * (y^2*(...))
-    y_test = 0.5
-    i0y, k0y, i1y, k1y = BesselI(0, y_test), BesselK(0, y_test), BesselI(1, y_test), BesselK(1, y_test)
+    """Quick self‑test: Check Freeman kernel against a known approximate value using JAX."""
+    logger.debug("[SELF-TEST] Verifying Freeman kernel with JAX...")
+    y_test = jnp.array(0.5, dtype=DEFAULT_DTYPE)
+    # Use JAX's Bessel functions
+    i0y, k0y, i1y, k1y = BesselI0(y_test), BesselK0(y_test), BesselI1(y_test), BesselK1(y_test)
     bessel_term = i0y * k0y - i1y * k1y
     val = (y_test**2) * bessel_term
     expected_val = 0.138979394445648
-    assert np.isclose(val, expected_val, rtol=1e-6), f"Freeman kernel self-test failed! Expected ~{expected_val}, got {val}"
+    assert jnp.isclose(val, expected_val, rtol=1e-5), f"Freeman kernel self-test failed! Expected ~{expected_val}, got {val}"
     logger.debug("[SELF-TEST] Freeman kernel OK.")
 
 def _assert_xi_limits():
-    """Ensure xi functions behave correctly for enhanced gravity theory."""
-    logger.debug("[SELF-TEST] Verifying xi function limits...")
-    
-    # For enhanced gravity theories (grav_color, enhanced, etc):
-    # - At LOW density (ρ→0): xi should be >1 (enhanced gravity)
-    # - At HIGH density (ρ>>ρ_c): xi should be ≈1 (normal gravity)
-    
-    # Test with gravitational color model
-    from density_metric2 import xi_gravitational_color
-    
+    """Ensure JAX-compiled xi functions behave correctly for enhanced gravity theory."""
+    logger.debug("[SELF-TEST] Verifying xi function limits with JAX...")
     # Low density test
-    xi_low = xi_gravitational_color(1e-10, 1e8, 2.7, 8.0)[0]
+    xi_low = xi_gravitational_color(jnp.array(1e-10), 1e8, 2.7, 8.0)
     expected_low = 9.0  # 1 + λ = 1 + 8 = 9
-    assert np.abs(xi_low - expected_low) < 0.1, f"xi at ρ→0 should be ≈{expected_low}, got {xi_low}"
+    assert jnp.abs(xi_low - expected_low) < 0.1, f"xi at ρ→0 should be ≈{expected_low}, got {xi_low}"
     
-    # High density test  
-    xi_high = xi_gravitational_color(1e12, 1e8, 2.7, 8.0)[0]
-    assert np.abs(xi_high - 1.0) < 0.1, f"xi at ρ>>ρ_c should be ≈1.0, got {xi_high}"
+    # High density test
+    xi_high = xi_gravitational_color(jnp.array(1e12), 1e8, 2.7, 8.0)
+    assert jnp.abs(xi_high - 1.0) < 0.1, f"xi at ρ>>ρ_c should be ≈1.0, got {xi_high}"
     
-    # Also test the standard power law (which has backwards behavior)
-    # Just verify it runs without error
-    test_val = xi_power_law(1e8, 1e8, 2.0)[0]
+    # Test another function
+    test_val = xi_power_law(jnp.array(1e8), 1e8, 2.0, A=1.0)
     assert 0 < test_val <= 10.0, f"xi_power_law should return value in (0,10], got {test_val}"
-    
     logger.debug("[SELF-TEST] xi limit checks OK.")
 
 def run_physics_self_tests():
-    """
-    Runs all self-tests for this physics module.
-    Call this from the main script after logging is configured.
-    """
+    """Runs all self-tests for this physics module."""
     try:
-        logger.info("[PHYSICS] Running self-tests...")
+        logger.info("[PHYSICS] Running JAX self-tests...")
         _assert_freeman_identity()
-        _assert_xi_limits() # This will call the Numba-compiled function
-        logger.info("[PHYSICS] All self-tests passed.")
+        _assert_xi_limits()
+        logger.info("[PHYSICS] All JAX self-tests passed.")
     except Exception as e:
         logger.error(f"[PHYSICS SELF-TEST FAILED] {e}")
-        # Re-raise the exception to halt execution if a core formula is broken
         raise
 
 # ---------- Physical Constants ----------
@@ -83,910 +74,464 @@ L_BAADE_DEG = 1.0
 B_BAADE_DEG = -2.75
 D_SUN_GC_KPC = R_SUN_KPC
 
-# --- START: OLDER SINGLE-DISK COMPATIBLE FUNCTIONS (Unchanged) ---
-@nb.njit
+# --- START: OLDER SINGLE-DISK COMPATIBLE FUNCTIONS (Converted to JAX) ---
+@jax.jit
 def _enclosed_disk_mass_solar_old(R_kpc, M_disk_solar, R_d_kpc):
-    """ Helper for OLD v_newton_kms: Exponential disk, cumulative mass (spherical approx). """
-    if R_d_kpc <= 1e-9:
-        if isinstance(R_kpc, (float, int)): return 0.0
-        return np.zeros_like(R_kpc, dtype=np.float64)
-    is_scalar = isinstance(R_kpc, (float, int))
-    R_kpc_arr = np.atleast_1d(R_kpc)
-    x = R_kpc_arr / R_d_kpc
-    x_safe = np.maximum(x, 0)
-    m_enc_arr = M_disk_solar * (1.0 - np.exp(-x_safe) * (1.0 + x_safe))
-    m_enc_arr[R_kpc_arr < 0] = 0.0
-    return m_enc_arr[0] if is_scalar else m_enc_arr
+    """ JAX Helper for OLD v_newton_kms: Exponential disk, cumulative mass (spherical approx). """
+    x = R_kpc / R_d_kpc
+    x_safe = jnp.maximum(x, 0)
+    m_enc = M_disk_solar * (1.0 - jnp.exp(-x_safe) * (1.0 + x_safe))
+    m_enc = jnp.where(R_kpc < 0, 0.0, m_enc)
+    return jnp.where(R_d_kpc <= 1e-9, 0.0, m_enc)
 
-@nb.njit
+@jax.jit
 def _enclosed_hernquist_mass_solar_old(R_kpc, M_bulge_solar, R_b_kpc):
-    """ Helper for OLD v_newton_kms: Hernquist profile enclosed mass. """
-    if R_b_kpc <= 1e-9 or M_bulge_solar <= 1e-9:
-        if isinstance(R_kpc, (float, int)): return 0.0
-        return np.zeros_like(R_kpc, dtype=np.float64)
-    is_scalar = isinstance(R_kpc, (float, int))
-    R_kpc_arr = np.atleast_1d(R_kpc)
-    R_kpc_safe = np.maximum(R_kpc_arr, 0)
-    m_enc_arr = M_bulge_solar * (R_kpc_safe**2) / ((R_kpc_safe + R_b_kpc)**2)
-    m_enc_arr[R_kpc_arr < 0] = 0.0
-    return m_enc_arr[0] if is_scalar else m_enc_arr
+    """ JAX Helper for OLD v_newton_kms: Hernquist profile enclosed mass. """
+    R_kpc_safe = jnp.maximum(R_kpc, 0)
+    m_enc = M_bulge_solar * (R_kpc_safe**2) / ((R_kpc_safe + R_b_kpc)**2)
+    m_enc = jnp.where(R_kpc < 0, 0.0, m_enc)
+    return jnp.where((R_b_kpc <= 1e-9) | (M_bulge_solar <= 1e-9), 0.0, m_enc)
 
 def v_newton_kms(R_kpc, M_disk_solar_main, R_d_kpc_main,
                  M_bulge_solar_opt=0.0, R_b_kpc_opt=0.5, include_bulge_opt=False,
                  M_gas_solar_opt=0.0, R_gas_kpc_opt=7.0, include_gas_opt=False):
-    """ OLDER Newtonian circular velocity (spherical approx). For backward compatibility. """
+    """ OLDER Newtonian circular velocity (spherical approx). Wraps JAX functions. """
     is_scalar = isinstance(R_kpc, (float, int))
-    R_kpc_arr = np.atleast_1d(R_kpc)
-    v_total_sq_kms2 = np.zeros_like(R_kpc_arr, dtype=np.float64)
+    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+    
     M_enc_disk = _enclosed_disk_mass_solar_old(R_kpc_arr, M_disk_solar_main, R_d_kpc_main)
-    M_enc_bulge = np.zeros_like(R_kpc_arr, dtype=np.float64)
+    
+    M_enc_bulge = 0.0
     if include_bulge_opt and M_bulge_solar_opt > 0:
         M_enc_bulge = _enclosed_hernquist_mass_solar_old(R_kpc_arr, M_bulge_solar_opt, R_b_kpc_opt)
-    M_enc_gas = np.zeros_like(R_kpc_arr, dtype=np.float64)
+        
+    M_enc_gas = 0.0
     if include_gas_opt and M_gas_solar_opt > 0:
         M_enc_gas = _enclosed_disk_mass_solar_old(R_kpc_arr, M_gas_solar_opt, R_gas_kpc_opt)
+        
     M_enc_total_solar = M_enc_disk + M_enc_bulge + M_enc_gas
-    valid_R_mask = (R_kpc_arr > 1e-9) & (M_enc_total_solar > 1e-9)
-    if np.any(valid_R_mask):
-        v_total_sq_kms2[valid_R_mask] = G_ASTRO_UNITS * M_enc_total_solar[valid_R_mask] / R_kpc_arr[valid_R_mask]
-    v_out_kms = np.sqrt(np.maximum(v_total_sq_kms2, 0.0))
-    return v_out_kms[0] if is_scalar else v_out_kms
+    
+    v_total_sq_kms2 = (G_ASTRO_UNITS * M_enc_total_solar) / R_kpc_arr
+    v_total_sq_kms2 = jnp.where((R_kpc_arr <= 1e-9) | (M_enc_total_solar <= 1e-9), 0.0, v_total_sq_kms2)
+    
+    v_out_kms = jnp.sqrt(jnp.maximum(v_total_sq_kms2, 0.0))
+    return v_out_kms.item() if is_scalar else v_out_kms
 
-@nb.njit
-def volume_density_total_midplane_solar_kpc3(R_kpc,
-                                             M_disk_solar_main, R_d_kpc_main, h_z_disk_kpc_main,
-                                             M_bulge_solar_opt=0.0, R_b_kpc_opt=0.5, h_z_bulge_eff_kpc_opt=0.3, include_bulge_opt=False,
-                                             M_gas_solar_opt=0.0, R_gas_kpc_opt=7.0, h_z_gas_kpc_opt=0.15, include_gas_opt=False):
-    """ OLDER Midplane volume density. For backward compatibility. """
+@jax.jit
+def _volume_density_total_midplane_solar_kpc3_jax(R_kpc_arr, M_disk, Rd_disk, hz_disk, M_bulge, Rb_bulge, incl_bulge, M_gas, Rd_gas, hz_gas, incl_gas):
+    """ JAX-compiled core for OLDER Midplane volume density. """
+    rho_total = jnp.zeros_like(R_kpc_arr, dtype=DEFAULT_DTYPE)
+
+    # Disk component
+    Sigma0_disk = M_disk / (2.0 * jnp.pi * Rd_disk**2)
+    rho_disk = (Sigma0_disk / (2.0 * hz_disk)) * jnp.exp(-R_kpc_arr / Rd_disk)
+    rho_total += jnp.where((M_disk > 1e-9) & (Rd_disk > 1e-9) & (hz_disk > 1e-9), rho_disk, 0.0)
+    
+    # Bulge component
+    R_eff_bulge = jnp.maximum(R_kpc_arr, 1e-6)
+    rho_bulge_mid = (M_bulge / (2.0 * jnp.pi)) * (Rb_bulge / (R_eff_bulge * (R_eff_bulge + Rb_bulge)**3))
+    # Handle R=0 case by filling with value at a small R to avoid infinity
+    min_r_b = 1e-6
+    fill_val_b = (M_bulge / (2.0 * jnp.pi)) * (Rb_bulge / (min_r_b * (min_r_b + Rb_bulge)**3))
+    rho_bulge = jnp.where(R_kpc_arr < 1e-5, fill_val_b, rho_bulge_mid)
+    rho_total += jnp.where(incl_bulge & (M_bulge > 0) & (Rb_bulge > 1e-9), rho_bulge, 0.0)
+
+    # Gas component
+    Sigma0_gas = M_gas / (2.0 * jnp.pi * Rd_gas**2)
+    rho_gas = (Sigma0_gas / (2.0 * hz_gas)) * jnp.exp(-R_kpc_arr / Rd_gas)
+    rho_total += jnp.where(incl_gas & (M_gas > 0) & (Rd_gas > 1e-9) & (hz_gas > 1e-9), rho_gas, 0.0)
+
+    return rho_total
+
+def volume_density_total_midplane_solar_kpc3(*args, **kwargs):
+    """ OLDER Midplane volume density. Python wrapper for JAX core. """
+    R_kpc = args[0]
     is_scalar = isinstance(R_kpc, (float, int))
-    R_kpc_arr = np.atleast_1d(R_kpc)
-    rho_total = np.zeros_like(R_kpc_arr, dtype=np.float64)
-    if M_disk_solar_main > 1e-9 and R_d_kpc_main > 1e-9 and h_z_disk_kpc_main > 1e-9:
-        Sigma0_disk = M_disk_solar_main / (2.0 * np.pi * R_d_kpc_main**2)
-        rho_total += (Sigma0_disk / (2.0 * h_z_disk_kpc_main)) * np.exp(-R_kpc_arr / R_d_kpc_main)
-    if include_bulge_opt and M_bulge_solar_opt > 0 and R_b_kpc_opt > 1e-9:
-        R_eff_bulge = np.maximum(R_kpc_arr, 1e-6)
-        rho_bulge_mid_vals = (M_bulge_solar_opt / (2.0 * np.pi)) * (R_b_kpc_opt / (R_eff_bulge * (R_eff_bulge + R_b_kpc_opt)**3))
-        mask_zero_R_bulge = R_kpc_arr < 1e-5
-        if np.any(mask_zero_R_bulge):
-            non_zero_R_eff_b = R_eff_bulge[R_eff_bulge > 1e-7]
-            if len(non_zero_R_eff_b) > 0:
-                min_r_b = np.min(non_zero_R_eff_b)
-                fill_val_b = (M_bulge_solar_opt / (2.0 * np.pi)) * (R_b_kpc_opt / (min_r_b * (min_r_b + R_b_kpc_opt)**3))
-                rho_bulge_mid_vals[mask_zero_R_bulge] = fill_val_b
-        rho_total += rho_bulge_mid_vals
-    if include_gas_opt and M_gas_solar_opt > 0 and R_gas_kpc_opt > 1e-9 and h_z_gas_kpc_opt > 1e-9:
-        Sigma0_gas = M_gas_solar_opt / (2.0 * np.pi * R_gas_kpc_opt**2)
-        rho_total += (Sigma0_gas / (2.0 * h_z_gas_kpc_opt)) * np.exp(-R_kpc_arr / R_gas_kpc_opt)
-    return rho_total[0] if is_scalar else rho_total
+    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+    
+    # Unpack args and kwargs into the order expected by the JAX function
+    p = {
+        'M_disk': args[1], 'Rd_disk': args[2], 'hz_disk': args[3],
+        'M_bulge': kwargs.get('M_bulge_solar_opt', 0.0), 'Rb_bulge': kwargs.get('R_b_kpc_opt', 0.5),
+        'incl_bulge': kwargs.get('include_bulge_opt', False),
+        'M_gas': kwargs.get('M_gas_solar_opt', 0.0), 'Rd_gas': kwargs.get('R_gas_kpc_opt', 7.0),
+        'hz_gas': kwargs.get('h_z_gas_kpc_opt', 0.15), 'incl_gas': kwargs.get('include_gas_opt', False)
+    }
 
+    rho_total = _volume_density_total_midplane_solar_kpc3_jax(
+        R_kpc_arr, p['M_disk'], p['Rd_disk'], p['hz_disk'], p['M_bulge'], p['Rb_bulge'],
+        p['incl_bulge'], p['M_gas'], p['Rd_gas'], p['hz_gas'], p['incl_gas']
+    )
+    return rho_total.item() if is_scalar else rho_total
 # --- END: OLDER FUNCTIONS ---
 
 
-# --- START: NEW MULTI-COMPONENT BARYONIC MODEL FUNCTIONS (with added logging) ---
+# --- START: NEW MULTI-COMPONENT BARYONIC MODEL FUNCTIONS (JAX backend) ---
+@jax.jit
 def v_circ_hernquist_bulge_kms(R_kpc, M_bulge_solar, a_bulge_kpc):
-    """Hernquist bulge circular velocity. v = sqrt(G M R) / (R+a)"""
-    logger.debug(f"v_circ_hernquist called with M={M_bulge_solar:.2e}, a={a_bulge_kpc:.2f}")
-    if M_bulge_solar <= 1e-9 or a_bulge_kpc <= 1e-9:
-        return np.zeros_like(np.atleast_1d(R_kpc), dtype=np.float64)
-    is_scalar = isinstance(R_kpc, (float, int))
-    R_kpc_arr = np.atleast_1d(R_kpc)
-    v_out = np.zeros_like(R_kpc_arr, dtype=np.float64)
-    valid_mask = (R_kpc_arr > 1e-9)
-    if np.any(valid_mask):
-        R_valid = R_kpc_arr[valid_mask]
-        v_calc = (np.sqrt(G_ASTRO_UNITS * M_bulge_solar * R_valid)) / (R_valid + a_bulge_kpc)
-        v_out[valid_mask] = v_calc
-    return v_out[0] if is_scalar else v_out
+    """JAX-compiled Hernquist bulge circular velocity. v = sqrt(G M R) / (R+a)"""
+    R_kpc_arr = jnp.atleast_1d(R_kpc)
+    v_calc = (jnp.sqrt(G_ASTRO_UNITS * M_bulge_solar * R_kpc_arr)) / (R_kpc_arr + a_bulge_kpc)
+    v_out = jnp.where(R_kpc_arr > 1e-9, v_calc, 0.0)
+    return jnp.where((M_bulge_solar <= 1e-9) | (a_bulge_kpc <= 1e-9), jnp.zeros_like(v_out), v_out)
 
+@jax.jit
 def v_circ_exponential_disk_freeman_kms(R_kpc_in, M_disk_solar, R_d_kpc):
-    """Exact Freeman (1970) kernel."""
-    logger.debug(f"v_circ_exp_disk (Freeman) called with M={M_disk_solar:.2e}, Rd={R_d_kpc:.2f}")
-    if R_d_kpc <= 1e-9 or M_disk_solar <= 1e-9:
-        return np.zeros_like(np.atleast_1d(R_kpc_in), dtype=np.float64)
-    is_scalar_input = isinstance(R_kpc_in, (float, int))
-    R_kpc_arr = np.atleast_1d(R_kpc_in).astype(np.float64)
-    v_sq_out = np.zeros_like(R_kpc_arr, dtype=np.float64)
-    valid_mask = (R_kpc_arr > 1e-9)
-    if np.any(valid_mask):
-        R_kpc_valid = R_kpc_arr[valid_mask]
-        y = R_kpc_valid / (2.0 * R_d_kpc); y = np.maximum(y, 1e-9)
-        i0y, k0y, i1y, k1y = BesselI(0,y), BesselK(0,y), BesselI(1,y), BesselK(1,y)
-        bessel_term_safe = np.maximum(i0y * k0y - i1y * k1y, 0.0)
-        v_sq_out[valid_mask] = (2.0*G_ASTRO_UNITS*M_disk_solar/R_d_kpc)*(y**2)*bessel_term_safe
-    v_kms = np.sqrt(np.maximum(v_sq_out, 0.0))
-    return v_kms[0] if is_scalar_input else v_kms
+    """JAX-compiled exact Freeman (1970) kernel."""
+    R_kpc_arr = jnp.atleast_1d(R_kpc_in)
+    y = R_kpc_arr / (2.0 * R_d_kpc)
+    y = jnp.maximum(y, 1e-9)
+    i0y, k0y, i1y, k1y = BesselI0(y), BesselK0(y), BesselI1(y), BesselK1(y)
+    bessel_term_safe = jnp.maximum(i0y * k0y - i1y * k1y, 0.0)
+    v_sq = (2.0 * G_ASTRO_UNITS * M_disk_solar / R_d_kpc) * (y**2) * bessel_term_safe
+    v_sq_out = jnp.where(R_kpc_arr > 1e-9, v_sq, 0.0)
+    v_sq_final = jnp.where((R_d_kpc <= 1e-9) | (M_disk_solar <= 1e-9), jnp.zeros_like(v_sq_out), v_sq_out)
+    return jnp.sqrt(jnp.maximum(v_sq_final, 0.0))
 
 def v_baryon_total_newtonian_kms(R_kpc, p_baryons):
     """Sum the circular velocities of all baryonic sub-components in quadrature."""
     logger.debug("v_baryon_total_newtonian_kms called.")
-    v_total_sq_kms2 = np.zeros_like(np.atleast_1d(R_kpc), dtype=np.float64)
+    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+    v_total_sq_kms2 = jnp.zeros_like(R_kpc_arr)
+    
     if p_baryons.get('include_bulge', False):
-        v_total_sq_kms2 += v_circ_hernquist_bulge_kms(R_kpc, p_baryons.get('M_bulge_solar', 0), p_baryons.get('a_bulge_kpc', 0.5))**2
+        v_total_sq_kms2 += v_circ_hernquist_bulge_kms(R_kpc_arr, p_baryons.get('M_bulge_solar', 0.0), p_baryons.get('a_bulge_kpc', 0.5))**2
     if p_baryons.get('include_disk_thin', False):
-        v_total_sq_kms2 += v_circ_exponential_disk_freeman_kms(R_kpc, p_baryons.get('M_disk_thin_solar', 0), p_baryons.get('R_d_thin_kpc', 2.5))**2
+        v_total_sq_kms2 += v_circ_exponential_disk_freeman_kms(R_kpc_arr, p_baryons.get('M_disk_thin_solar', 0.0), p_baryons.get('R_d_thin_kpc', 2.5))**2
     if p_baryons.get('include_disk_thick', False):
-        v_total_sq_kms2 += v_circ_exponential_disk_freeman_kms(R_kpc, p_baryons.get('M_disk_thick_solar', 0), p_baryons.get('R_d_thick_kpc', 3.5))**2
+        v_total_sq_kms2 += v_circ_exponential_disk_freeman_kms(R_kpc_arr, p_baryons.get('M_disk_thick_solar', 0.0), p_baryons.get('R_d_thick_kpc', 3.5))**2
     if p_baryons.get('include_gas', False):
-        v_total_sq_kms2 += v_circ_exponential_disk_freeman_kms(R_kpc, p_baryons.get('M_gas_solar', 0), p_baryons.get('R_d_gas_kpc', 7.0))**2
-    return np.sqrt(np.maximum(v_total_sq_kms2, 0.0))
+        v_total_sq_kms2 += v_circ_exponential_disk_freeman_kms(R_kpc_arr, p_baryons.get('M_gas_solar', 0.0), p_baryons.get('R_d_gas_kpc', 7.0))**2
+    
+    return jnp.sqrt(jnp.maximum(v_total_sq_kms2, 0.0))
 
-def rho_baryon_total_midplane_solar_kpc3(R_kpc, p_baryons_for_density):
-    """Mid-plane volume density rho(R, z=0) for multi-component disks and optionally bulge."""
+@jax.jit
+def _get_disk_rho_mid_internal(M, Rd, hz, R_arr):
+    rho = (M / (2 * jnp.pi * Rd**2) / (2 * hz)) * jnp.exp(-R_arr / Rd)
+    return jnp.where((M > 1e-9) & (Rd > 1e-9) & (hz > 1e-9), rho, jnp.zeros_like(R_arr))
+
+@jax.jit
+def _get_bulge_rho_mid_internal(M_b, a_b, R_arr):
+    R_eff_b = jnp.maximum(R_arr, 1e-6)
+    rho_b_mid = (M_b / (2 * jnp.pi)) * (a_b / (R_eff_b * (R_eff_b + a_b)**3))
+    min_r_b = 1e-6
+    fill_val_b = (M_b / (2 * jnp.pi)) * (a_b / (min_r_b * (min_r_b + a_b)**3))
+    rho_b_mid_safe = jnp.where(R_arr < 1e-5, fill_val_b, rho_b_mid)
+    return jnp.where(a_b > 1e-9, rho_b_mid_safe, jnp.zeros_like(R_arr))
+
+def rho_baryon_total_midplane_solar_kpc3(R_kpc, p_baryons):
+    """Mid-plane volume density rho(R, z=0) for multi-component model."""
     logger.debug("rho_baryon_total_midplane_solar_kpc3 called.")
     is_scalar_input = isinstance(R_kpc, (float, int))
-    R_kpc_arr = np.atleast_1d(R_kpc)
-    rho_total = np.zeros_like(R_kpc_arr, dtype=np.float64)
+    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+    rho_total = jnp.zeros_like(R_kpc_arr)
     
-    def get_disk_rho_mid_internal(M, Rd, hz, R_arr, name="disk"):
-        logger.debug(f"get_disk_rho_mid for {name} with M={M:.2e}, Rd={Rd:.2f}, hz={hz:.2f}")
-        if M <= 1e-9 or Rd <= 1e-9 or hz <= 1e-9: return np.zeros_like(R_arr)
-        return (M/(2*np.pi*Rd**2)/(2*hz))*np.exp(-R_arr/Rd)
-
-    if p_baryons_for_density.get('include_disk_thin', False):
-        rho_total += get_disk_rho_mid_internal(p_baryons_for_density.get('M_disk_thin_solar',0), p_baryons_for_density.get('R_d_thin_kpc',2.5), p_baryons_for_density.get('h_z_thin_kpc',0.3), R_kpc_arr, "thin_disk")
-    if p_baryons_for_density.get('include_disk_thick', False):
-        rho_total += get_disk_rho_mid_internal(p_baryons_for_density.get('M_disk_thick_solar',0), p_baryons_for_density.get('R_d_thick_kpc',3.5), p_baryons_for_density.get('h_z_thick_kpc',0.9), R_kpc_arr, "thick_disk")
-    if p_baryons_for_density.get('include_gas', False):
-        rho_total += get_disk_rho_mid_internal(p_baryons_for_density.get('M_gas_solar',0), p_baryons_for_density.get('R_d_gas_kpc',7.0), p_baryons_for_density.get('h_z_gas_kpc',0.15), R_kpc_arr, "gas")
-    
-    if p_baryons_for_density.get('include_bulge_density', False) and p_baryons_for_density.get('M_bulge_solar',0)>0:
-        M_b, a_b = p_baryons_for_density.get('M_bulge_solar', 0), p_baryons_for_density.get('a_bulge_kpc', 0.5)
-        logger.debug(f"Adding bulge density with M={M_b:.2e}, a={a_b:.2f}")
-        if a_b > 1e-9:
-            R_eff_b=np.maximum(R_kpc_arr,1e-6)
-            rho_b_mid=(M_b/(2*np.pi))*(a_b/(R_eff_b*(R_eff_b+a_b)**3))
-            m_zero_R_b = R_kpc_arr < 1e-5
-            if np.any(m_zero_R_b):
-                non_zero_R_eff_b = R_eff_b[R_eff_b > 1e-7]
-                if len(non_zero_R_eff_b)>0: min_r_b=np.min(non_zero_R_eff_b); fill_val_b=(M_b/(2*np.pi))*(a_b/(min_r_b*(min_r_b+a_b)**3)); rho_b_mid[m_zero_R_b]=fill_val_b
-            rho_total += rho_b_mid
-            
-    return rho_total[0] if is_scalar_input and len(rho_total)==1 else rho_total
-
+    if p_baryons.get('include_disk_thin', False):
+        rho_total += _get_disk_rho_mid_internal(p_baryons.get('M_disk_thin_solar',0.0), p_baryons.get('R_d_thin_kpc',2.5), p_baryons.get('h_z_thin_kpc',0.3), R_kpc_arr)
+    if p_baryons.get('include_disk_thick', False):
+        rho_total += _get_disk_rho_mid_internal(p_baryons.get('M_disk_thick_solar',0.0), p_baryons.get('R_d_thick_kpc',3.5), p_baryons.get('h_z_thick_kpc',0.9), R_kpc_arr)
+    if p_baryons.get('include_gas', False):
+        rho_total += _get_disk_rho_mid_internal(p_baryons.get('M_gas_solar',0.0), p_baryons.get('R_d_gas_kpc',7.0), p_baryons.get('h_z_gas_kpc',0.15), R_kpc_arr)
+    if p_baryons.get('include_bulge_density', False) and p_baryons.get('M_bulge_solar', 0.0) > 0:
+        rho_total += _get_bulge_rho_mid_internal(p_baryons.get('M_bulge_solar', 0.0), p_baryons.get('a_bulge_kpc', 0.5), R_kpc_arr)
+        
+    return rho_total.item() if is_scalar_input else rho_total
 # --- END: NEW MULTI-COMPONENT FUNCTIONS ---
 
 
-@nb.njit(cache=True)
-def xi_power_law(rho, rho_c, n_exp):
-    """
-    Enhanced gravity at low density - FIXED VERSION
-    ξ = 1 + λ/(1 + (ρ/ρ_c)^n)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
+# ============================================================================
+# SECTION 3: XI(RHO) FUNCTIONS (JAX-compiled)
+# ============================================================================
+
+@jax.jit
+def xi_power_law(rho, rho_c, n_exp, A=1.0):
+    """ JAX-compiled: ξ = 1 + A / (1 + (ρ/ρ_c)^n) """
+    rho_arr = jnp.atleast_1d(rho)
     ratio = rho_arr / rho_c
-    enhancement_factor = 1.0 / (1.0 + np.power(ratio, n_exp))
-    
-    lambda_enhancement = 2.0  # For galaxies
-    result = 1.0 + lambda_enhancement * enhancement_factor
-    
-    return np.clip(result, 0.1, 10.0)
+    enhancement = A / (1.0 + jnp.power(ratio, n_exp))
+    result = 1.0 + enhancement
+    result = jnp.where(rho_c <= 1e-9, jnp.ones_like(rho_arr), result)
+    return jnp.clip(result, 0.1, 10.0)
 
+@jax.jit
+def xi_logistic_law(rho, rho_c, n_exp, A=1.0):
+    """ JAX-compiled: Logistic function for a smooth transition from 1 to 1+A. """
+    rho_arr = jnp.atleast_1d(rho)
+    log_rho_safe = jnp.log(jnp.maximum(rho_arr, 1e-30))
+    log_rho_c_safe = jnp.log(jnp.maximum(rho_c, 1e-30))
+    exponent_val = -n_exp * (log_rho_safe - log_rho_c_safe)
+    logistic_val = 1.0 / (1.0 + jnp.exp(exponent_val))
+    result_arr = 1.0 + A * (1.0 - logistic_val)
+    return jnp.where(rho_c <= 1e-9, jnp.ones_like(rho_arr), result_arr)
 
-@nb.njit(cache=True)
-def xi_enhanced_bounded(rho, rho_c, n, A=1.0):
-    """
-    Enhanced gravity at low density, bounded maximum
-    ξ → 1 as ρ → ∞ (normal gravity in dense regions)  
-    ξ → 1+A as ρ → 0 (enhanced gravity in voids)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
+@jax.jit
+def xi_exponential(rho, rho_c, n_exp, A=1.0):
+    """ JAX-compiled: Exponential enhancement at low density. ξ = 1 + A*exp(-(ρ/ρ_c)^n) """
+    rho_arr = jnp.atleast_1d(rho)
     ratio = rho_arr / rho_c
-    result = 1.0 + A / (1.0 + np.power(ratio, n))
-    
-    # Clip to reasonable bounds
-    result = np.maximum(result, 1e-3)
-    result = np.minimum(result, 1.0 + A)
-    
-    return result
+    exp_arg = -jnp.power(ratio, n_exp)
+    result = 1.0 + A * jnp.exp(exp_arg)
+    return jnp.where(rho_c <= 1e-9, jnp.ones_like(rho_arr), result)
 
-
-@nb.njit(cache=True)
+# This is the single authoritative definition for this model
+@jax.jit
 def xi_gravitational_color(rho, rho_c, gamma, lambda_g):
-    """
-    Gravitational color confinement model
-    ξ = 1 + λ*exp(-(ρ/ρ_c)^γ)
-    
-    Theory predicts:
-    - λ ≈ 8 (for 9x total enhancement in voids)
-    - γ ≈ 2.7 (from β_g = -11/3 in QCD analogy)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
+    """ JAX-compiled: Gravitational color confinement model. ξ = 1 + λ*exp(-(ρ/ρ_c)^γ) """
+    rho_arr = jnp.atleast_1d(rho)
     ratio = rho_arr / rho_c
-    exp_arg = -np.power(ratio, gamma)
-    
-    # Clip to prevent overflow
-    exp_arg = np.maximum(exp_arg, -700.0)
-    
-    # This gives total G_eff/G_N
-    result = 1.0 + lambda_g * np.exp(exp_arg)
-    
-    return result
+    exp_arg = -jnp.power(ratio, gamma)
+    result = 1.0 + lambda_g * jnp.exp(exp_arg)
+    return jnp.where(rho_c <= 1e-9, jnp.ones_like(rho_arr), result)
 
-
-@nb.njit(cache=True)
+@jax.jit
 def xi_gaussian_enhancement(rho, rho_peak, sigma_log, lambda_max):
-    """
-    Gaussian enhancement in log-density space
-    Perfect for galaxy rotation curves while preserving Solar System
-    
-    Parameters:
-    - rho: density (M☉/kpc³)
-    - rho_peak: density where enhancement peaks (~0.5 M☉/kpc³)
-    - sigma_log: width in log10 space (~1.0)
-    - lambda_max: maximum enhancement factor (~2.0 for 3x total)
-    
-    Returns xi such that:
-    - ξ ≈ 1 at Solar System densities (ρ ~ 100)
-    - ξ ≈ 1 + λ at galaxy outskirts (ρ ~ 0.1-1)
-    - ξ ≈ 1 at stellar densities (ρ ~ 10²⁴)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    # Work in log space
-    log_rho = np.log10(np.maximum(rho_arr, 1e-30))
-    log_peak = np.log10(np.maximum(rho_peak, 1e-30))
-    
-    # Gaussian profile
+    """ JAX-compiled: Gaussian enhancement in log-density space. """
+    rho_arr = jnp.atleast_1d(rho)
+    log_rho = jnp.log10(jnp.maximum(rho_arr, 1e-30))
+    log_peak = jnp.log10(jnp.maximum(rho_peak, 1e-30))
     exponent = -0.5 * ((log_rho - log_peak) / sigma_log)**2
-    # Clip to prevent overflow
-    exponent = np.maximum(exponent, -700.0)
-    enhancement = lambda_max * np.exp(exponent)
-    
+    enhancement = lambda_max * jnp.exp(exponent)
     return 1.0 + enhancement
 
-
-@nb.njit(cache=True)
+@jax.jit
 def xi_mond_like(rho, rho_c, n):
-    """
-    MOND-inspired enhancement
-    ξ → 1 as ρ → ∞
-    ξ → sqrt(1 + (ρ_c/ρ)^n) as ρ → 0
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    # Avoid division by zero
-    rho_safe = np.maximum(rho_arr, 1e-30)
+    """ JAX-compiled: MOND-inspired enhancement. """
+    rho_arr = jnp.atleast_1d(rho)
+    rho_safe = jnp.maximum(rho_arr, 1e-30)
     ratio = rho_c / rho_safe
-    
-    result = np.sqrt(1.0 + np.power(ratio, n))
-    
-    # Cap maximum enhancement
-    result = np.minimum(result, 10.0)
-    
-    return result
+    result = jnp.sqrt(1.0 + jnp.power(ratio, n))
+    result = jnp.where(rho_c <= 1e-9, jnp.ones_like(rho_arr), result)
+    return jnp.minimum(result, 10.0)
 
+# The functions below had duplicate definitions, they are now consolidated to the JAX versions above
+# and aliased through wrappers if needed.
+xi_enhanced_bounded = xi_power_law # This model is identical to power-law
+xi_enhanced_exp = xi_exponential
 
-@nb.njit(cache=True)
-def xi_enhanced_exp(rho, rho_c, n, A=1.0):
-    """
-    Exponential enhancement at low density
-    ξ = 1 + A*exp(-(ρ/ρ_c)^n)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    ratio = rho_arr / rho_c
-    exp_arg = -np.power(ratio, n)
-    
-    # Clip to prevent overflow
-    exp_arg = np.maximum(exp_arg, -700.0)
-    
-    result = 1.0 + A * np.exp(exp_arg)
-    
-    return result
+@jax.jit
+def xi_nonlocal(rho_local, M_enclosed, R_kpc, rho_c=1e8, M_c=5e10):
+    """ JAX-vectorized non-local model. """
+    rho_local_arr = jnp.atleast_1d(rho_local)
+    M_enclosed_arr = jnp.atleast_1d(M_enclosed)
+    R_kpc_arr = jnp.atleast_1d(R_kpc)
 
+    xi_local = 1.0 / (1.0 + (rho_local_arr / rho_c)**1.5)
 
-@nb.njit(cache=True)
-def xi_logistic_law(rho, rho_c, n_exp):
-    """
-    Numba-compiled logistic law for xi.
-    This version always works with arrays and returns an array.
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-        
-    log_rho_safe = np.log(np.maximum(rho_arr, 1e-30))
-    log_rho_c_safe = np.log(np.maximum(rho_c, 1e-30))
-    exponent_val = n_exp * (log_rho_safe - log_rho_c_safe)
-    clipped_exponent = np.clip(exponent_val, -709, 709) # Prevents np.exp overflow
-    exp_term = np.exp(clipped_exponent)
-    result_arr = 1.0 / (1.0 + exp_term)
+    M_expected = M_c * (1 - jnp.exp(-R_kpc_arr / 3.0))
+    mass_ratio = M_enclosed_arr / jnp.maximum(M_expected, 1e-6)
     
-    return result_arr
+    xi_global = 1.0 / jnp.sqrt(mass_ratio)
+    xi_global = jnp.where(mass_ratio >= 1, 1.0, xi_global)
+    xi_global = jnp.where(M_expected < 1e-6, 1.0, xi_global)
 
+    return xi_local * xi_global
 
-# Test the behavior
+@jax.jit
+def xi_anisotropic(rho, direction, rho_c_rad=5e8, rho_c_vert=1e7):
+    """ JAX-vectorized anisotropic model. """
+    rho_arr = jnp.atleast_1d(rho)
+    
+    # Radial calculation
+    x_rad = jnp.log10(rho_arr / rho_c_rad)
+    xi_rad_enhance = 1.0 + 0.3 * jnp.exp(-x_rad**2)
+    xi_rad_suppress = 1.0 / (1.0 + (rho_arr / rho_c_rad)**1.5)
+    xi_radial = jnp.where(x_rad < 0, xi_rad_enhance, xi_rad_suppress)
+
+    # Vertical calculation
+    xi_vertical = 1.0 / (1.0 + (rho_arr / rho_c_vert)**0.5)
+
+    return jnp.where(direction == 'radial', xi_radial, xi_vertical)
+
+# ============================================================================
+# High-level test functions (remain on CPU using numpy)
+# ============================================================================
+
 def test_galaxy_xi():
-    """Test xi behavior for galaxy rotation curves"""
+    # This function uses numpy and matplotlib, it's a CPU-based test harness
+    # It will call the JAX functions, which will run on the GPU.
     import matplotlib.pyplot as plt
+    R_test = np.array([5, 8, 12, 20, 30])
+    Sigma_0 = 5e10 / (2 * np.pi * 2.6**2)
+    rho_disk = (Sigma_0 / (2 * 0.3)) * np.exp(-R_test / 2.6)
     
-    # Galaxy parameters
-    R_test = np.array([5, 8, 12, 20, 30])  # kpc
-    # Exponential disk density
-    rho_0 = 5e8  # Central density
-    R_d = 2.6    # Scale length
-    h_z = 0.3    # Scale height
-    
-    # Calculate densities
-    Sigma_0 = 5e10 / (2 * np.pi * R_d**2)
-    rho_disk = (Sigma_0 / (2 * h_z)) * np.exp(-R_test / R_d)
-    
-    print("Galaxy Disk Density Profile:")
-    print("R (kpc) | ρ (M☉/kpc³)")
-    for i, R in enumerate(R_test):
-        print(f"{R:6.1f} | {rho_disk[i]:.2e}")
-    
-    # Test different ρ_c values
-    print("\nXi Enhancement with Different ρ_c:")
-    print("="*60)
-    
-    test_configs = [
-        {"rho_c": 1e8, "lambda": 8.0, "label": "Original (wrong)"},
-        {"rho_c": 1e7, "lambda": 1.5, "label": "Galaxy-tuned 1"},  
-        {"rho_c": 5e6, "lambda": 2.0, "label": "Galaxy-tuned 2"},
-        {"rho_c": 1e6, "lambda": 3.0, "label": "Galaxy-tuned 3"},
-    ]
-    
-    gamma = 2.7
-    
-    for config in test_configs:
-        print(f"\n{config['label']} (ρ_c={config['rho_c']:.0e}, λ={config['lambda']})")
-        print("R (kpc) | ρ (M☉/kpc³) | ξ | v_factor")
-        
-        xi_values = xi_gravitational_color_galaxy(
-            rho_disk, config['rho_c'], gamma, config['lambda']
-        )
-        
-        for i, R in enumerate(R_test):
-            v_factor = np.sqrt(xi_values[i])
-            print(f"{R:6.1f} | {rho_disk[i]:.2e} | {xi_values[i]:.3f} | {v_factor:.3f}")
+    print("Testing with JAX-compiled xi_gravitational_color...")
+    # This call pushes data to GPU, computes, and brings it back
+    xi_values = xi_gravitational_color(jnp.array(rho_disk), 1e7, 2.7, 1.5)
+    print("Test successful, xi_values:", np.asarray(xi_values))
 
-
-
-@nb.njit(cache=True)
-def xi_enhanced_exp(rho, rho_c, n, A=1.0):
-    """
-    Exponential enhancement at low density
-    ξ = 1 + A*exp(-(ρ/ρ_c)^n)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    ratio = rho_arr / rho_c
-    exp_arg = -np.power(ratio, n)
-    
-    # Clip to prevent overflow
-    exp_arg = np.maximum(exp_arg, -700.0)
-    
-    result = 1.0 + A * np.exp(exp_arg)
-    
-    return result
 
 def test_xi_functions():
-    """Test that xi functions enhance/suppress correctly"""
-    test_rho = np.array([1e6, 1e8, 1e10])  # Low, medium, high density
+    test_rho = jnp.array([1e6, 1e8, 1e10], dtype=DEFAULT_DTYPE)
     rho_c = 5e8
     n = 1.5
-    
-    print("\nXi Function Test (ρ_c=5e8, n=1.5):")
-    print("ρ (M☉/kpc³) | power | enhanced | mond | exp")
-    print("-" * 60)
-    
-    for rho in test_rho:
-        xi_p = xi_power_law(rho, rho_c, n)[0]
-        xi_e = xi_enhanced_bounded(rho, rho_c, n, 1.0)[0]
-        xi_m = xi_mond_like(rho, rho_c, n)[0]
-        xi_x = xi_enhanced_exp(rho, rho_c, n, 1.0)[0]
-        
-        print(f"{rho:.1e} | {xi_p:.3f} | {xi_e:.3f} | {xi_m:.3f} | {xi_x:.3f}")
-    
-    print("\nExpected behavior:")
-    print("- power: HIGH at low ρ (wrong!), LOW at high ρ")
-    print("- enhanced: HIGH at low ρ (✓), NORMAL at high ρ")
-    print("- mond: HIGH at low ρ (✓), NORMAL at high ρ")
-    print("- exp: HIGH at low ρ (✓), NORMAL at high ρ")
-
-
-# ---------------------------------------------------------------------
-# Gravitational‑color confinement (single authoritative definition)
-# ξ(ρ)=1+λ_g exp[‑(ρ/ρ_c)^γ]
-#   • ξ→1  for ρ≫ρ_c  (Solar‑System/stellar interior)
-#   • ξ→1+λ_g for ρ≪ρ_c (void/halo)
-# Typical theory values: γ≈2.7, λ_g≈8
-# ---------------------------------------------------------------------
-
-def xi_logistic(rho, rho_c, n_exp):
-    """Logistic form of xi function"""
-    x = (rho / rho_c) ** n_exp
-    return 2.0 / (1.0 + np.exp(-x))
-
-def xi_enhanced(rho, rho_c, n_exp, A=1.0):
-    """Enhanced form with additional parameter"""
-    return 1.0 + A * np.exp(-(rho / rho_c) ** n_exp)
-
-def xi_grav_color_standard_interface(rho, rho_c, n_exp, _unused_A=None):
-    """
-    Wrapper to make xi_gravitational_color compatible with standard 3-argument interface.
-    Uses default or globally set gamma and lambda_g values.
-    """
-    # Default values - you can make these module-level variables if needed
-    gamma = 2.5
-    lambda_g = 3.0
-    return xi_gravitational_color(rho, rho_c, gamma, lambda_g)
-
-def xi_gaussian_wrapper(rho, rho_c, n_exp, A=2.0):
-    """
-    Wrapper using standard 3-parameter interface
-    - rho_c becomes rho_peak (where enhancement peaks)
-    - n_exp becomes sigma_log (width parameter)
-    - A becomes lambda_max (max enhancement)
-    """
-    return xi_gaussian_enhancement(rho, rho_c, n_exp, A)
-
-@nb.njit(cache=True)
-def xi_logistic_law(rho, rho_c, n_exp):
-    """
-    Numba-compiled logistic law for xi.
-    This version always works with arrays and returns an array.
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-        
-    log_rho_safe = np.log(np.maximum(rho_arr, 1e-30))
-    log_rho_c_safe = np.log(np.maximum(rho_c, 1e-30))
-    exponent_val = n_exp * (log_rho_safe - log_rho_c_safe)
-    clipped_exponent = np.clip(exponent_val, -709, 709) # Prevents np.exp overflow
-    exp_term = np.exp(clipped_exponent)
-    result_arr = 1.0 / (1.0 + exp_term)
-    
-    return result_arr
-
-def xi_nonlocal(rho_local, M_enclosed, R_kpc, rho_c=1e8, M_c=5e10):
-    """
-    Non-local model: depends on both local density and mass interior to R.
-    """
-    rho_local = np.atleast_1d(np.asarray(rho_local, dtype=np.float64))
-    M_enclosed = np.atleast_1d(np.asarray(M_enclosed, dtype=np.float64))
-    R_kpc = np.atleast_1d(np.asarray(R_kpc, dtype=np.float64))
-
-    xi_arr = np.ones_like(rho_local)
-
-    for i in range(len(rho_local)):
-        rho = rho_local[i]
-        M_enc = M_enclosed[i]
-        R = R_kpc[i]
-
-        xi_local = 1.0 / (1.0 + (rho / rho_c)**1.5)
-
-        M_expected = M_c * (1 - np.exp(-R / 3.0))
-        if M_expected < 1e-6:
-            xi_global = 1.0
-        else:
-            mass_ratio = M_enc / M_expected
-            if mass_ratio < 1:
-                xi_global = 1.0 / np.sqrt(mass_ratio)
-            else:
-                xi_global = 1.0
-
-        xi_arr[i] = xi_local * xi_global
-
-    return xi_arr
-
-def xi_anisotropic(rho, direction='radial', rho_c_rad=5e8, rho_c_vert=1e7):
-    """
-    Different behavior depending on direction.
-    'radial' can enhance; 'vertical' always suppresses.
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    xi_arr = np.ones_like(rho_arr)
-
-    for i in range(len(rho_arr)):
-        rho_val = rho_arr[i]
-        if direction == 'radial':
-            x = np.log10(rho_val / rho_c_rad)
-            if x < 0:
-                xi_arr[i] = 1.0 + 0.3 * np.exp(-x**2)
-            else:
-                xi_arr[i] = 1.0 / (1.0 + (rho_val / rho_c_rad)**1.5)
-        elif direction == 'vertical':
-            xi_arr[i] = 1.0 / (1.0 + (rho_val / rho_c_vert)**0.5)
-
-    return xi_arr
-
-def v_model_for_dynesty_anisotropic(R_kpc_array, p_all_params_dict, ARGS_obj_dynesty):
-    """Modified to use anisotropic xi."""
-    
-    # Get Newtonian velocities
-    v_n_kms = v_baryon_total_newtonian_kms(R_kpc_array, p_all_params_dict)
-    rho_midplane = rho_baryon_total_midplane_solar_kpc3(R_kpc_array, p_all_params_dict)
-    
-    # Use RADIAL xi for rotation curve
-    xi_radial = xi_anisotropic(rho_midplane, direction='radial', 
-                               rho_c_rad=p_all_params_dict.get('rho_c_radial', 5e8))
-    
-    v_mod_kms = v_n_kms * np.sqrt(np.maximum(xi_radial, 0.0))
-    return v_mod_kms
-
-
-
-# ---------- Milky Way Internal Consistency Checks (Unchanged) ----------
-def get_total_volume_density_at_R_z_solar_kpc3_multi(R_kpc_scalar, z_kpc_scalar, p_baryons):
-    rho_total_at_point = 0.0; abs_z = np.abs(z_kpc_scalar)
-    def get_sdisk_mid_rho(M,Rd,hz,R):
-        if M<=0 or Rd<=0 or hz<=0: return 0.0
-        return (M/(2*np.pi*Rd**2)/(2*hz))*np.exp(-R/Rd)
-    if p_baryons.get('include_disk_thin',False) and p_baryons.get('M_disk_thin_solar',0)>0: rho_total_at_point += get_sdisk_mid_rho(p_baryons['M_disk_thin_solar'],p_baryons['R_d_thin_kpc'],p_baryons['h_z_thin_kpc'],R_kpc_scalar)*np.exp(-abs_z/p_baryons['h_z_thin_kpc'])
-    if p_baryons.get('include_disk_thick',False) and p_baryons.get('M_disk_thick_solar',0)>0: rho_total_at_point += get_sdisk_mid_rho(p_baryons['M_disk_thick_solar'],p_baryons['R_d_thick_kpc'],p_baryons['h_z_thick_kpc'],R_kpc_scalar)*np.exp(-abs_z/p_baryons['h_z_thick_kpc'])
-    if p_baryons.get('include_gas',False) and p_baryons.get('M_gas_solar',0)>0: rho_total_at_point += get_sdisk_mid_rho(p_baryons['M_gas_solar'],p_baryons['R_d_gas_kpc'],p_baryons['h_z_gas_kpc'],R_kpc_scalar)*np.exp(-abs_z/p_baryons['h_z_gas_kpc'])
-    if p_baryons.get('include_bulge',False) and p_baryons.get('M_bulge_solar',0)>0:
-        r_sph=np.sqrt(R_kpc_scalar**2+z_kpc_scalar**2); r_eff=np.maximum(r_sph,1e-6); M_b,a_b=p_baryons['M_bulge_solar'],p_baryons['a_bulge_kpc']
-        rho_total_at_point += (M_b/(2*np.pi))*(a_b/(r_eff*(r_eff+a_b)**3))
-    return rho_total_at_point
-
-def check_vertical_kinematics_Kz(p_baryons, R_solar_val=R_SUN_KPC, z_limit_kpc=1.0, nz_points=100, target_sigma_z_max_msun_kpc2=SIGMA_Z_TARGET_MAX_RSUN_MSUN_KPC2):
-    logger.debug(f"[Kz Test] Target < {target_sigma_z_max_msun_kpc2 / MSUN_PC2_TO_MSUN_KPC2:.1f} Msun/pc^2.")
-    z_pts=np.linspace(-z_limit_kpc,z_limit_kpc,nz_points); dz=z_pts[1]-z_pts[0]
-    rhos=[get_total_volume_density_at_R_z_solar_kpc3_multi(R_solar_val,z,p_baryons) for z in z_pts]
-    col_dens_model=np.sum((np.array(rhos[:-1])+np.array(rhos[1:]))*0.5*dz)
-    logger.debug(f"[Kz Test] Model Sigma_z = {col_dens_model/MSUN_PC2_TO_MSUN_KPC2:.1f} Msun/pc^2.")
-    if col_dens_model > target_sigma_z_max_msun_kpc2: logger.debug("[Kz Test] FAILED."); return False
-    logger.debug("[Kz Test] PASSED."); return True
-
-def calculate_microlensing_tau_baade(p_baryons, l_deg=L_BAADE_DEG, b_deg=B_BAADE_DEG, ds_los_kpc=0.1, target_tau_max=TAU_MICRO_TARGET_BAADE_MAX):
-    logger.debug(f"[Microlensing Test] Target < {target_tau_max:.1e}")
-    M_eff_lenses=0.0
-    if p_baryons.get('include_disk_thin',False): M_eff_lenses += p_baryons.get('M_disk_thin_solar',0)
-    if p_baryons.get('include_disk_thick',False): M_eff_lenses += p_baryons.get('M_disk_thick_solar',0)
-    if p_baryons.get('include_bulge',False): M_eff_lenses += p_baryons.get('M_bulge_solar',0)
-    if M_eff_lenses <= 1e-9 : logger.debug("[Microlensing] No lens mass. PASSED."); return True
-    model_tau_s = (M_eff_lenses / 5e10) * 2e-6 # Crude scaling
-    logger.debug(f"[Microlensing] M_eff_lenses={M_eff_lenses:.2e}, model_tau_scaled: {model_tau_s:.2e}")
-    if model_tau_s > target_tau_max: logger.debug("[Microlensing] FAILED."); return False
-    logger.debug("[Microlensing] PASSED."); return True
-
-# --------------------------
-# Xi Function Wrappers (3-arg interface)
-# --------------------------
-
-def xi_power_law_wrapper(rho, rho_c, n_exp, _A=None):
-    return xi_power_law(rho, rho_c, n_exp)
-
-def xi_logistic_law_wrapper(rho, rho_c, n_exp, _A=None):
-    return xi_logistic_law(rho, rho_c, n_exp)
-
-def xi_enhanced_bounded_wrapper(rho, rho_c, n_exp, A=1.0):
-    return xi_enhanced_bounded(rho, rho_c, n_exp, A)
-
-def xi_enhanced_exp_wrapper(rho, rho_c, n_exp, A=1.0):
-    return xi_enhanced_exp(rho, rho_c, n_exp, A)
-
-def xi_mond_like_wrapper(rho, rho_c, n_exp, _A=None):
-    return xi_mond_like(rho, rho_c, n_exp)
-
-def xi_grav_color_standard_interface(rho, rho_c, n_exp, _A=None):
-    gamma = 2.5
-    lambda_g = 3.0
-    return xi_gravitational_color(rho, rho_c, gamma, lambda_g)
+    print("\nJAX Xi Function Test (ρ_c=5e8, n=1.5):")
+    xi_p = xi_power_law(test_rho, rho_c, n, A=1.0)
+    xi_m = xi_mond_like(test_rho, rho_c, n)
+    xi_x = xi_exponential(test_rho, rho_c, n, A=1.0)
+    print("Results are JAX arrays:", xi_p, xi_m, xi_x)
 
 # ============================================================================
-# SECTION 3: XI(RHO) FUNCTIONS
-# This section defines all candidate functions for the density-dependent
-# modification of gravity.
+# XI Function Wrappers and Map
 # ============================================================================
 
-@nb.njit(cache=True)
-def xi_power_law(rho, rho_c, n_exp, A=1.0):
-    """
-    Standard power-law suppression/enhancement.
-    ξ = 1 + A / (1 + (ρ/ρ_c)^n)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    ratio = rho_arr / rho_c
-    enhancement = A / (1.0 + np.power(ratio, n_exp))
-    result = 1.0 + enhancement
-    return np.clip(result, 0.1, 10.0)
+def xi_power_law_wrapper(rho, rho_c, n_exp, A=1.0, **_):
+    return xi_power_law(rho, rho_c, n_exp, A)
 
-@nb.njit(cache=True)
-def xi_logistic_law(rho, rho_c, n_exp, A=1.0):
-    """
-    Logistic function for a smooth transition.
-    A controls the amplitude of the change.
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
+def xi_logistic_law_wrapper(rho, rho_c, n_exp, A=1.0, **_):
+    return xi_logistic_law(rho, rho_c, n_exp, A)
+
+def xi_grav_color_standard_interface(rho, rho_c, n_exp, A, **_):
+    # n_exp is re-interpreted as gamma, A as lambda_g
+    return xi_gravitational_color(rho, rho_c, gamma=n_exp, lambda_g=A)
+
+def xi_gaussian_wrapper(rho, rho_c, n_exp, A, **_):
+    # rho_c -> rho_peak, n_exp -> sigma_log, A -> lambda_max
+    return xi_gaussian_enhancement(rho, rho_peak=rho_c, sigma_log=n_exp, lambda_max=A)
+
+def xi_mass_threshold(rho, rho_c, n_exp, A, r_kpc, params, **_):
+    """ High-level wrapper for mass threshold model. Cannot be JIT-compiled directly. """
+    M_crit = rho_c      # Reinterpret rho_c as critical mass
+    width = n_exp       # Reinterpret n_exp as width
+    xi_boost = 1 + A    # Total enhancement
+    
+    # Mass calculation uses other JAX functions
+    v_newton = v_baryon_total_newtonian_kms(r_kpc, params)
+    M_enclosed = v_newton**2 * r_kpc / G_ASTRO_UNITS
+    
+    # Core transition logic can be a small JIT'd function
+    @jax.jit
+    def _transition(m_enc, m_crit, w, boost):
+        width_abs = jnp.maximum(w * m_crit, 0.1 * m_crit)
+        x = (m_enc - m_crit) / width_abs
+        transition_factor = 0.5 * (1.0 - jnp.tanh(x))
+        return 1.0 + (boost - 1.0) * transition_factor
         
-    log_rho_safe = np.log(np.maximum(rho_arr, 1e-30))
-    log_rho_c_safe = np.log(np.maximum(rho_c, 1e-30))
-    exponent_val = -n_exp * (log_rho_safe - log_rho_c_safe)
-    clipped_exponent = np.clip(exponent_val, -700, 700)
-    
-    # Standard logistic function: 1 / (1 + exp(-x))
-    logistic_val = 1.0 / (1.0 + np.exp(clipped_exponent))
-    
-    # Scale it from 1 to 1+A
-    result_arr = 1.0 + A * (1.0 - logistic_val)
-    return result_arr
+    xi = _transition(M_enclosed, M_crit, width, xi_boost)
+    return jnp.clip(xi, 0.1, 10.0)
 
-@nb.njit(cache=True)
-def xi_exponential(rho, rho_c, n_exp, A=1.0):
-    """
-    Exponential enhancement at low density.
-    ξ = 1 + A * exp(-(ρ/ρ_c)^n)
-    """
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=np.float64))
-    if rho_c <= 1e-9:
-        return np.ones_like(rho_arr, dtype=np.float64)
-    
-    ratio = rho_arr / rho_c
-    exp_arg = -np.power(ratio, n_exp)
-    exp_arg = np.maximum(exp_arg, -700.0)
-    result = 1.0 + A * np.exp(exp_arg)
-    return result
-
-def xi_mass_threshold(rho, rho_c, n_exp, A, 
-                     M_enclosed_func=None, r_kpc=None, params=None):
-    """
-    Mass threshold ξ function - gravity strengthens below a critical ENCLOSED MASS.
-    
-    This model ignores local density (rho) and instead depends on the total
-    mass enclosed within radius r_kpc.
-    
-    Parameters:
-    -----------
-    rho : array or None
-        Not used for this model - can be None
-    rho_c : float
-        Reinterpreted as M_crit - the critical enclosed mass in M_sun
-    n_exp : float
-        Reinterpreted as width - the transition width parameter
-    A : float
-        Enhancement factor minus 1 (so total boost = 1 + A)
-    r_kpc : array or float, optional
-        Radii at which to evaluate xi. If None, uses R_sun = 8.122 kpc
-    params : dict, optional
-        Full parameter dictionary for calculating enclosed mass
-    """
-    import numpy as np
-    
-    # Get logger safely
-    try:
-        logger = logging.getLogger("run_dynesty")
-    except:
-        logger = None
-    
-    # Reinterpret parameters for mass threshold model
-    M_crit = rho_c      # Critical mass in M_sun
-    xi_boost = 1 + A    # Total enhancement factor
-    width = n_exp       # Transition width
-    
-    # Handle radius input
-    if r_kpc is None:
-        # Default to solar radius for plausibility checks
-        r_kpc = np.array([8.122])  # R_sun in kpc
-        if logger:
-            logger.debug("xi_mass_threshold: No radius provided, using R_sun = 8.122 kpc")
-    else:
-        r_kpc = np.atleast_1d(r_kpc)
-    
-    # Calculate enclosed mass
-    M_enclosed = None
-    
-    # Option 1: Pre-computed mass
-    if params and 'M_enclosed_msun' in params:
-        M_enclosed = np.atleast_1d(params['M_enclosed_msun'])
-        if logger:
-            logger.debug(f"Using pre-computed M_enclosed")
-    
-    # Option 2: Calculate from baryon model
-    elif params is not None:
-        try:
-            # Avoid circular imports by importing here
-            from density_metric2 import v_baryon_total_newtonian_kms, G_ASTRO_UNITS
-            
-            # Calculate Newtonian velocity
-            v_newton = v_baryon_total_newtonian_kms(r_kpc, params)
-            
-            # Convert to enclosed mass: M = v^2 * R / G
-            M_enclosed = v_newton**2 * r_kpc / G_ASTRO_UNITS
-            
-            if logger:
-                logger.debug(f"Calculated M_enclosed from baryon model")
-                
-        except Exception as e:
-            if logger:
-                logger.warning(f"Failed to calculate M_enclosed from baryon model: {e}")
-            M_enclosed = None
-    
-    # Option 3: Fallback to typical galaxy profile
-    if M_enclosed is None:
-        # Use a typical MW-like mass profile
-        # M(R) = M_total * (1 - exp(-R/R_scale))
-        M_total = 1e11  # Total galaxy mass ~ 10^11 M_sun
-        R_scale = 3.0   # Scale radius ~ 3 kpc
-        M_enclosed = M_total * (1 - np.exp(-r_kpc / R_scale))
-        
-        if logger:
-            logger.debug(f"Using fallback galaxy mass profile")
-    
-    # Ensure M_enclosed is array
-    M_enclosed = np.atleast_1d(M_enclosed)
-    
-    # Ensure arrays match in length
-    if len(M_enclosed) == 1 and len(r_kpc) > 1:
-        M_enclosed = np.full(len(r_kpc), M_enclosed[0])
-    elif len(M_enclosed) != len(r_kpc):
-        # Shouldn't happen, but handle gracefully
-        n_out = len(r_kpc)
-        if len(M_enclosed) > n_out:
-            M_enclosed = M_enclosed[:n_out]
-        else:
-            M_enclosed = np.pad(M_enclosed, (0, n_out - len(M_enclosed)), mode='edge')
-    
-    # Calculate xi with smooth tanh transition
-    # For M << M_crit: xi → xi_boost (enhanced gravity)
-    # For M >> M_crit: xi → 1 (normal gravity)
-    
-    # Width as fraction of M_crit
-    width_abs = width * M_crit
-    if width_abs <= 0:
-        width_abs = 0.1 * M_crit
-    
-    # Smooth transition using tanh
-    x = (M_enclosed - M_crit) / width_abs
-    transition = 0.5 * (1.0 - np.tanh(x))
-    xi = 1.0 + (xi_boost - 1.0) * transition
-    
-    # Apply reasonable bounds
-    xi = np.clip(xi, 0.1, 10.0)
-    
-    # Return scalar if input was scalar
-    if len(xi) == 1 and len(r_kpc) == 1:
-        return xi[0]
-    
-    return xi
-
-# --- This is the single, authoritative map of all available xi functions ---
 XI_FUNCTION_MAP = {
-    'power': xi_power_law,
+    'power': xi_power_law_wrapper,
     'logistic': xi_logistic_law_wrapper,
-    'enhanced': xi_enhanced_bounded_wrapper,
-    'mond': xi_mond_like_wrapper,
-    'exp_enhance': xi_enhanced_exp_wrapper,
+    'enhanced': xi_power_law_wrapper, # aliased
+    'mond': xi_mond_like,
+    'exp_enhance': xi_exponential,
     'grav_color': xi_grav_color_standard_interface,
     'gaussian': xi_gaussian_wrapper,
-    'mass_threshold': xi_mass_threshold  # Add this new line
+    'mass_threshold': xi_mass_threshold
 }
-
 
 # ============================================================================
 # SECTION 4: FULL VELOCITY MODEL
-# This section combines the baryonic model with the xi function.
 # ============================================================================
 
 def v_total_kms(R_kpc, p, xi_type='power'):
-    """
-    MASTER function to compute the full DDMM circular velocity.
-    """
-    import numpy as np
-    
-    # Ensure R_kpc is array
-    R_kpc = np.atleast_1d(R_kpc)
+    """ MASTER function to compute the full circular velocity using JAX. """
+    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
     
     # 1. Calculate Newtonian velocity from baryons
-    v_newton = v_baryon_total_newtonian_kms(R_kpc, p)
+    v_newton = v_baryon_total_newtonian_kms(R_kpc_arr, p)
     
-    # 2. Get the appropriate xi function from the map
+    # 2. Get the appropriate xi function
     xi_func = XI_FUNCTION_MAP.get(xi_type)
     if xi_func is None:
         raise ValueError(f"Unknown xi_type: '{xi_type}'. Available: {list(XI_FUNCTION_MAP.keys())}")
 
-    # 3. Call the xi function with the CORRECT arguments for that model
+    # 3. Prepare args and call the xi function
     try:
-        if xi_type == 'mass_threshold':
-            # Extract parameters for mass threshold model
-            M_crit = p.get('M_crit_msun', 1e10)    # Default to galaxy scale
-            xi_boost = p.get('xi_boost', 2.0)      # Default to 2x enhancement
-            width = p.get('width', 0.5)             # Default to smooth transition
-            
-            # CRITICAL: Pass radius array for mass calculation
-            xi = xi_func(
-                rho=None,           # Not used
-                rho_c=M_crit,       # Critical mass
-                n_exp=width,        # Transition width
-                A=(xi_boost-1),     # Enhancement minus 1
-                r_kpc=R_kpc,        # Radius array
-                params=p            # Full parameters
-            )
-            
-        else:
-            # All other models use the standard interface
-            rho = rho_baryon_total_midplane_solar_kpc3(R_kpc, p)
-            rho_c = p.get('rho_c_solar_kpc3', 1e9)
-            n_exp = p.get('n_exp', p.get('gamma_exp', 1.0))
-            A_param = p.get('A', p.get('lambda_g', 1.0))
-            xi = xi_func(rho, rho_c, n_exp, A_param)
+        # Standard density-based models
+        rho = rho_baryon_total_midplane_solar_kpc3(R_kpc_arr, p)
+        rho_c = p.get('rho_c_solar_kpc3', 1e9)
+        n_exp = p.get('n_exp', p.get('gamma_exp', 1.0))
+        A_param = p.get('A', p.get('lambda_g', 1.0))
+        
+        # The mass_threshold model has a different signature
+        kwargs = {'r_kpc': R_kpc_arr, 'params': p}
+        
+        xi = xi_func(rho, rho_c, n_exp, A_param, **kwargs)
 
     except Exception as e:
-        import traceback
-        logger = logging.getLogger("run_dynesty")
-        logger.error(f"Error in v_total_kms with {xi_type}: {e}")
-        logger.debug(traceback.format_exc())
+        logger.error(f"Error in v_total_kms with xi_type '{xi_type}': {e}")
         raise
 
     # 4. Apply the modification
-    xi = np.atleast_1d(xi)
-    v_modified = v_newton * np.sqrt(np.maximum(xi, 0.0))
+    xi = jnp.atleast_1d(xi)
+    v_modified = v_newton * jnp.sqrt(jnp.maximum(xi, 0.0))
     
-    return v_modified
+    # Return scalar if input was scalar
+    return v_modified.item() if isinstance(R_kpc, (float, int)) else v_modified
 
 
-def test_gaussian_xi():
-    """Test the new Gaussian xi function"""
-    print("\nTesting Gaussian Xi Function:")
-    print("="*60)
+# Anisotropic model requires a slightly different high-level velocity function
+def v_model_for_dynesty_anisotropic(R_kpc_array, p_all_params_dict, **_):
+    """Modified to use anisotropic xi with JAX."""
+    R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc_array, dtype=DEFAULT_DTYPE))
     
-    # Test parameters
-    rho_peak = 0.316  # Peak at ~0.3 M☉/kpc³
-    sigma_log = 0.70  # Moderate width
-    lambda_max = 5.0  # Strong enhancement (6x total)
-   
-    # Test densities
-    test_densities = [
-        (1e-3, "Intergalactic void"),
-        (0.1, "Galaxy outskirts"),
-        (0.5, "Galaxy mid (peak)"),
-        (5.0, "Galaxy center"),
-        (100, "Solar System"),
-        (1e6, "Stellar surface"),
-        (1e24, "Stellar core")
-    ]
+    v_n_kms = v_baryon_total_newtonian_kms(R_kpc_arr, p_all_params_dict)
+    rho_midplane = rho_baryon_total_midplane_solar_kpc3(R_kpc_arr, p_all_params_dict)
     
-    print(f"Parameters: ρ_peak={rho_peak}, σ={sigma_log}, λ={lambda_max}")
-    print("\nρ (M☉/kpc³) | Location | ξ | v_factor | Status")
-    print("-"*60)
+    # Use JAX-compiled RADIAL xi for rotation curve
+    xi_radial = xi_anisotropic(rho_midplane, direction='radial', 
+                               rho_c_rad=p_all_params_dict.get('rho_c_radial', 5e8))
     
-    for rho, location in test_densities:
-        xi = xi_gaussian_enhancement(rho, rho_peak, sigma_log, lambda_max)[0]
-        v_factor = np.sqrt(xi)
-        
-        # Check if it meets requirements
-        if location == "Solar System":
-            status = "✓" if abs(xi - 1.0) < 0.1 else "✗"
-        elif "Galaxy" in location:
-            status = "✓" if xi > 1.5 else "✗"
-        else:
-            status = "✓" if abs(xi - 1.0) < 0.5 else "✗"
-            
-        print(f"{rho:10.1e} | {location:20s} | {xi:5.3f} | {v_factor:5.3f} | {status}")
-        
-        
-# This final info log is fine, it just confirms the module was imported.
-logger.info("density_metric2.py: Multi-component and (aliased) single-disk functions defined.")
+    v_mod_kms = v_n_kms * jnp.sqrt(jnp.maximum(xi_radial, 0.0))
+    return v_mod_kms
+
+
+# ---------- Milky Way Internal Consistency Checks (Updated to use JAX) ----------
+def get_total_volume_density_at_R_z_solar_kpc3_multi(R_kpc_scalar, z_kpc_scalar, p_baryons):
+    """Calculates density at a single (R, z) point using JAX functions."""
+    R_kpc = jnp.array(R_kpc_scalar, dtype=DEFAULT_DTYPE)
+    abs_z = jnp.abs(jnp.array(z_kpc_scalar, dtype=DEFAULT_DTYPE))
+    rho_total_at_point = 0.0
+
+    @jax.jit
+    def get_sdisk_rho_at_z(M, Rd, hz, R, z):
+        mid_rho = (M / (2 * jnp.pi * Rd**2) / (2 * hz)) * jnp.exp(-R / Rd)
+        full_rho = mid_rho * jnp.exp(-z / hz)
+        return jnp.where((M > 0) & (Rd > 0) & (hz > 0), full_rho, 0.0)
+
+    @jax.jit
+    def get_bulge_rho_at_rz(M_b, a_b, R, z):
+        r_sph = jnp.sqrt(R**2 + z**2)
+        r_eff = jnp.maximum(r_sph, 1e-6)
+        rho = (M_b / (2 * jnp.pi)) * (a_b / (r_eff * (r_eff + a_b)**3))
+        return jnp.where(M_b > 0, rho, 0.0)
+
+    if p_baryons.get('include_disk_thin', False):
+        rho_total_at_point += get_sdisk_rho_at_z(p_baryons.get('M_disk_thin_solar',0.0), p_baryons.get('R_d_thin_kpc',2.5), p_baryons.get('h_z_thin_kpc',0.3), R_kpc, abs_z)
+    if p_baryons.get('include_disk_thick', False):
+        rho_total_at_point += get_sdisk_rho_at_z(p_baryons.get('M_disk_thick_solar',0.0), p_baryons.get('R_d_thick_kpc',3.5), p_baryons.get('h_z_thick_kpc',0.9), R_kpc, abs_z)
+    if p_baryons.get('include_gas', False):
+        rho_total_at_point += get_sdisk_rho_at_z(p_baryons.get('M_gas_solar',0.0), p_baryons.get('R_d_gas_kpc',7.0), p_baryons.get('h_z_gas_kpc',0.15), R_kpc, abs_z)
+    if p_baryons.get('include_bulge', False):
+        rho_total_at_point += get_bulge_rho_at_rz(p_baryons.get('M_bulge_solar', 0.0), p_baryons.get('a_bulge_kpc', 0.5), R_kpc, abs_z)
+
+    return rho_total_at_point # Returns a JAX scalar
+
+def check_vertical_kinematics_Kz(p_baryons, R_solar_val=R_SUN_KPC, z_limit_kpc=1.0, nz_points=100, target_sigma_z_max_msun_kpc2=SIGMA_Z_TARGET_MAX_RSUN_MSUN_KPC2):
+    """CPU-based check that uses JAX for the density calculation."""
+    logger.debug(f"[Kz Test] Target < {target_sigma_z_max_msun_kpc2 / MSUN_PC2_TO_MSUN_KPC2:.1f} Msun/pc^2.")
+    z_pts = np.linspace(-z_limit_kpc, z_limit_kpc, nz_points)
+    dz = z_pts[1] - z_pts[0]
+    # This list comprehension will be slow, but it's a diagnostic, not a performance path.
+    rhos = [get_total_volume_density_at_R_z_solar_kpc3_multi(R_solar_val, z, p_baryons) for z in z_pts]
+    rhos_np = np.asarray(rhos) # Convert list of JAX scalars back to numpy array
+    col_dens_model = np.sum((rhos_np[:-1] + rhos_np[1:]) * 0.5 * dz)
+    logger.debug(f"[Kz Test] Model Sigma_z = {col_dens_model/MSUN_PC2_TO_MSUN_KPC2:.1f} Msun/pc^2.")
+    return col_dens_model <= target_sigma_z_max_msun_kpc2
+
+def calculate_microlensing_tau_baade(p_baryons, target_tau_max=TAU_MICRO_TARGET_BAADE_MAX):
+    """Simple algebraic check, does not require JAX."""
+    logger.debug(f"[Microlensing Test] Target < {target_tau_max:.1e}")
+    M_eff_lenses = 0.0
+    if p_baryons.get('include_disk_thin', False): M_eff_lenses += p_baryons.get('M_disk_thin_solar', 0)
+    if p_baryons.get('include_disk_thick', False): M_eff_lenses += p_baryons.get('M_disk_thick_solar', 0)
+    if p_baryons.get('include_bulge', False): M_eff_lenses += p_baryons.get('M_bulge_solar', 0)
+    if M_eff_lenses <= 1e-9:
+        logger.debug("[Microlensing] No lens mass. PASSED.")
+        return True
+    model_tau_s = (M_eff_lenses / 5e10) * 2e-6 # Crude scaling
+    logger.debug(f"[Microlensing] M_eff_lenses={M_eff_lenses:.2e}, model_tau_scaled: {model_tau_s:.2e}")
+    return model_tau_s <= target_tau_max
+
+logger.info("density_metric2.py (JAX Version): Multi-component functions defined and JIT-compiled for GPU.")
