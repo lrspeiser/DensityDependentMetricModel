@@ -528,26 +528,6 @@ def check_parameter_evolution(
                 if results['status'] == 'ok':
                     results['status'] = 'high_correlation'
 
-    # 4. Check for bimodality (might indicate multiple solutions)
-    for i, param in enumerate(param_names):
-        values = recent_samples[:, i]
-
-        # Simple bimodality check using Hartigan's dip test approximation
-        sorted_vals = np.sort(values)
-        n = len(sorted_vals)
-        if n > 50:
-            # Check for gap in middle 50% of distribution
-            mid_range = sorted_vals[int(n*0.25):int(n*0.75)]
-            if len(mid_range) > 2:
-                gaps = np.diff(mid_range)
-                max_gap = np.max(gaps)
-                median_gap = np.median(gaps)
-
-                if max_gap > 5 * median_gap:
-                    results['warnings'].append(f"{param} shows bimodal distribution")
-                    if results['status'] == 'ok':
-                        results['status'] = 'bimodal'
-
     return results
 
 def setup_xi_parameters_for_mode(args):

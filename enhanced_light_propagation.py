@@ -316,7 +316,7 @@ class EnhancedDDMMLightPropagation:
             d_paths = []
             
             # Initial distance guess
-            d_guess = C_KMS * z_target / H0 * 1e-3  # Mpc
+            d_guess = C_KMS * z_target / H0
             
             for _ in range(n_paths):
                 # Random direction
@@ -421,7 +421,7 @@ class EnhancedDDMMLightPropagation:
         
         # Comoving distance
         integral, _ = quad(lambda zp: 1/E(zp), 0, z)
-        d_c = C_KMS / H0 * integral * 1e-3  # Mpc
+        d_c = C_KMS / H0 * integral
         
         return d_c * (1 + z)
     
@@ -476,7 +476,7 @@ class EnhancedDDMMLightPropagation:
         random_redshifts = []
         
         observer_pos = np.array([self.cosmic_web.box_size/2] * 3)
-        d_target = C_KMS * z_target / H0 * 1e-3  # Mpc
+        d_target = C_KMS * z_target / H0
         
         # Find void and cluster regions
         density_flat = self.cosmic_web.density_field.flatten()
