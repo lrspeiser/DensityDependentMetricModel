@@ -24,6 +24,8 @@ import sys
 import logging
 from typing import Dict, Optional, Tuple, Union, TypedDict
 import traceback
+from astropy import units as u
+
 
 class GaiaData(TypedDict):
     R_kpc: np.ndarray

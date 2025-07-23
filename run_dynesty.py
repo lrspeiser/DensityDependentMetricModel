@@ -67,7 +67,6 @@ try:
         rho_baryon_total_midplane_solar_kpc3,
         XI_FUNCTION_MAP,
         run_physics_self_tests,
-        check_physical_plausibility,
         G_ASTRO_UNITS,
         R_SUN_KPC
     )
@@ -2268,7 +2267,7 @@ def check_early_stopping(sampler, convergence_tracker, args):
 
     return False, "Continuing"
 
-def run_single_dynesty(args, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogate=None, dashboard_monitor=None):
+def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogate=None, dashboard_monitor=None):
     """
     Run a single Dynesty sampling loop with enhanced monitoring, convergence diagnostics,
     physical plausibility checks, and optional dashboard support.
@@ -2296,6 +2295,10 @@ def run_single_dynesty(args, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogat
     R_data_np = np.asarray(R_data_jax)
     v_data_np = np.asarray(v_data_jax)
     sigma_data_np = np.asarray(sigma_data_jax)
+
+    if R_data_jax is None:
+        logger.error("❌ R_data_jax is None before run — aborting.")
+        sys.exit(1)
 
     logger.info(f"Loaded {len(R_data_jax)} stars from JAX array")
     logger.info(f"R range: {R_data_np.min():.2f}–{R_data_np.max():.2f} kpc")
@@ -2844,10 +2847,11 @@ def main_dynesty():
     if not DYNESTY_AVAILABLE:
         logger.error("Dynesty library not available.")
         sys.exit(1)
-
-    # Load Gaia data
+        
     gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
+
     if not gaia_cache_file.exists() or args.force_new_query_gaia:
+        logger.info("📡 Querying Gaia slices from scratch...")
         df_all_sky = load_all_sky_gaia_slices(
             lon_bin_width=30,
             stars_per_bin=12000,
@@ -2857,28 +2861,69 @@ def main_dynesty():
         )
     else:
         import pandas as pd
-        df_all_sky = pd.read_csv(gaia_cache_file)
+        raw_dir = Path("gaia_sky_slices")
+        raw_files = sorted(raw_dir.glob("raw_L*.csv"))
 
-    if df_all_sky.empty:
-        logger.error("Gaia data load failed")
+        if not raw_files:
+            logger.error("❌ No raw Gaia CSVs found in gaia_sky_slices/")
+            sys.exit(1)
+
+        logger.info(f"📂 Found {len(raw_files)} raw Gaia slice files. Merging...")
+
+        dfs = []
+        for f in raw_files:
+            try:
+                df = pd.read_csv(f)
+                dfs.append(df)
+                logger.info(f"✅ Loaded {f.name} with {len(df)} rows")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to load {f.name}: {e}")
+
+        if not dfs:
+            logger.error("❌ All Gaia slice files failed to load")
+            sys.exit(1)
+
+        df_all_sky = pd.concat(dfs, ignore_index=True)
+
+        # Cache the merged result for next time
+        try:
+            df_all_sky.to_csv(gaia_cache_file, index=False)
+            logger.info(f"💾 Cached merged Gaia data to: {gaia_cache_file}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to cache merged Gaia CSV: {e}")
+
+    # --- Basic validity check ---
+    required_cols = ["R_kpc", "v_obs", "sigma_v"]
+    missing_cols = [col for col in required_cols if col not in df_all_sky.columns]
+    if df_all_sky.empty or missing_cols:
+        logger.error(f"❌ Gaia data load failed. Missing columns: {missing_cols}")
         sys.exit(1)
 
     gaia_data_dict = {col: df_all_sky[col].values for col in df_all_sky.columns}
 
-    logger.info(f"Moving data to JAX device: {jax.default_backend()}...")
-    R_data_np = gaia_data_dict["R_kpc"].astype(np.float32)
-    v_data_np = gaia_data_dict["v_obs"].astype(np.float32)
-    sigma_data_np = gaia_data_dict["sigma_v"].astype(np.float32)
+    # --- Defensive validation of Gaia data ---
+    required_cols = ["R_kpc", "v_obs", "sigma_v"]
+    for col in required_cols:
+        if col not in gaia_data_dict or len(gaia_data_dict[col]) == 0:
+            logger.error(f"❌ Missing or empty Gaia field: {col}")
+            sys.exit(1)
 
-    R_data_jax = jax.device_put(R_data_np)
-    v_data_jax = jax.device_put(v_data_np)
-    sigma_data_jax = jax.device_put(sigma_data_np)
-    logger.info("✅ Data is now on the GPU and ready for computation.")
+    try:
+        # Move to JAX (with validation)
+        logger.info(f"📦 Moving Gaia data to JAX backend: {jax.default_backend()}...")
+        R_data_np = gaia_data_dict["R_kpc"].astype(np.float32)
+        v_data_np = gaia_data_dict["v_obs"].astype(np.float32)
+        sigma_data_np = gaia_data_dict["sigma_v"].astype(np.float32)
 
+        R_data_jax = jax.device_put(R_data_np)
+        v_data_jax = jax.device_put(v_data_np)
+        sigma_data_jax = jax.device_put(sigma_data_np)
 
-    # Inject xi-mode specific parameters
-    setup_xi_parameters_for_mode(args)
-    
+        logger.info(f"✅ {len(R_data_np)} stars transferred to GPU")
+    except Exception as e:
+        logger.error(f"❌ Error converting Gaia data to JAX arrays: {e}")
+        R_data_jax = v_data_jax = sigma_data_jax = None
+        sys.exit(1)
     
 
     # Ensure physical prior bounds match -- override if needed
@@ -2977,7 +3022,7 @@ def main_dynesty():
     if args.use_curriculum_learning:
         results, stage_args_per_stage = run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax, sigma_data_jax, dashboard_monitor)
     else:
-        results = run_single_dynesty(args, gaia_data_dict, gp_surrogate, R_data_jax, v_data_jax, sigma_data_jax, dashboard_monitor)
+        results = run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogate=gp_surrogate, dashboard_monitor=dashboard_monitor)
 
 
     if results is None or not hasattr(results, 'samples') or len(results.samples) == 0:
