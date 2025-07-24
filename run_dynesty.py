@@ -53,6 +53,7 @@ import corner
 import jax
 import jax.numpy as jnp
 
+
 # Enable JAX debugging for Metal
 os.environ['JAX_TRACEBACK_FILTERING'] = 'off'  # Show full traceback
 os.environ['JAX_DEBUG_NANS'] = '1'  # Check for NaN/Inf
@@ -69,8 +70,8 @@ jax.config.update("jax_platform_name", "METAL")  # Force Metal platform
 jax.config.update("jax_log_compiles", True)  # Log compilations
 
 # Add logging for JAX operations
-import logging
-logging.getLogger("jax").setLevel(logging.DEBUG)
+# import logging
+# logging.getLogger("jax").setLevel(logging.DEBUG)
 
 # Test JAX is working
 try:
@@ -258,6 +259,10 @@ except ImportError:
     sys.exit(1)
 
 
+print("DEBUG: run_dynesty.py loaded")
+print(f"DEBUG: __name__ = {__name__}")
+print(f"DEBUG: DYNESTY_AVAILABLE = {DYNESTY_AVAILABLE}")
+
 
 # ============================================================================
 # Set Up Multi-Thread Safe Logging
@@ -403,6 +408,26 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'label': "M_gas (M_sun)", 'fixed_val_from_arg': 'M_gas_fixed', 'default_fixed': 3.0e10,
         'low': 5e9, 'high': 6e10, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas', 'log_prior': True
     },
+    'M_disk_total_solar': {
+        'label': "M_disk_total (M_sun)",
+        'fixed_val_from_arg': 'M_disk_total_fixed',
+        'default_fixed': 9e10,  # thin + thick
+        'low': 7e10,
+        'high': 1.2e11,
+        'fit_flag_arg': 'fit_disk_reparameterized',
+        'include_flag_arg': 'include_disk_thin',  # Uses thin flag
+        'log_prior': True
+    },
+    'thick_mass_fraction': {
+        'label': "f_thick",
+        'fixed_val_from_arg': 'thick_fraction_fixed', 
+        'default_fixed': 0.25,
+        'low': 0.15,
+        'high': 0.40,
+        'fit_flag_arg': 'fit_disk_reparameterized',
+        'include_flag_arg': 'include_disk_thick',
+        'log_prior': False
+    },
     'R_d_gas_kpc': {
         'label': "R_d_gas (kpc)", 'fixed_val_from_arg': 'R_d_gas_fixed', 'default_fixed': 7.0,
         'low': 4.0, 'high': 15.0, 'fit_flag_arg': 'fit_gas', 'include_flag_arg': 'include_gas', 'log_prior': False
@@ -542,6 +567,28 @@ def check_physical_plausibility(
 
     # If all checks pass (or are now non-blocking), always return True.
     return True, "OK (Non-Blocking)"
+
+def reconstruct_physical_parameters(params_dict):
+    """
+    Convert reparameterized parameters to physical parameters.
+    This ensures thick/thin disk ratios are always valid.
+    """
+    params = params_dict.copy()
+    
+    # Reconstruct disk masses from total + fraction
+    if 'M_disk_total_solar' in params and 'thick_mass_fraction' in params:
+        M_total = params['M_disk_total_solar']
+        f_thick = params['thick_mass_fraction']
+        
+        # Calculate individual masses
+        params['M_disk_thick_solar'] = M_total * f_thick
+        params['M_disk_thin_solar'] = M_total * (1 - f_thick)
+        
+        # Remove the reparameterized versions
+        del params['M_disk_total_solar']
+        del params['thick_mass_fraction']
+    
+    return params
 
 def check_parameter_evolution(
     recent_samples: np.ndarray,
@@ -1116,6 +1163,11 @@ def enhanced_monitor_sampler_progress(
         for p_info in args_obj.all_param_info_list:
             if not p_info['is_fitted']:
                 full_params[p_info['name']] = p_info['current_val']
+                
+        # 1b. Convert reparameterized parameters to physical parameters
+        full_params = reconstruct_physical_parameters(full_params)
+        
+        
         full_params.update({
             'include_disk_thin': args_obj.include_disk_thin,
             'include_disk_thick': args_obj.include_disk_thick,
@@ -1144,7 +1196,6 @@ def enhanced_monitor_sampler_progress(
 
         except Exception as e:
             logger.error(f"❌ Error calculating model predictions: {e}")
-        # --- END OF NEW SECTION ---
 
         # Dashboard update
         if dashboard_monitor is not None:
@@ -2522,7 +2573,9 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         except Exception as e:
             logger.warning(f"⚠ Failed to initialize multiprocessing: {e}")
             pool = None    
-    sampler = None
+            
+    # --- New robust sampler creation block ---
+    sampler = None  # Ensure sampler is defined before the try block
     try:
         sampler = DynamicNestedSampler(
             log_likelihood_dynesty,
@@ -2538,39 +2591,46 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             logl_args=logl_args,
             blob=True
         )
-        logger.info("Dynesty sampler initialized")
-        
+        logger.info("✅ Dynesty sampler initialized successfully.")
+
         # Store configuration in sampler for checkpointing
         sampler._run_config = {
-            'fitted_names': fitted_names,
-            'fitted_labels': fitted_labels, 
-            'include_bulge': args.include_bulge,
-            'include_disk_thin': args.include_disk_thin,
-            'include_disk_thick': args.include_disk_thick,
-            'include_gas': args.include_gas,
-            'fit_disk_thin': args.fit_disk_thin,
-            'fit_disk_thick': args.fit_disk_thick,
-            'fit_bulge': args.fit_bulge,
-            'fit_gas': args.fit_gas,
-            'fit_xi_params': args.fit_xi_params,
-            'xi': args.xi
+            'fitted_names': fitted_names, 'fitted_labels': fitted_labels, 'include_bulge': args.include_bulge,
+            'include_disk_thin': args.include_disk_thin, 'include_disk_thick': args.include_disk_thick,
+            'include_gas': args.include_gas, 'fit_disk_thin': args.fit_disk_thin,
+            'fit_disk_thick': args.fit_disk_thick, 'fit_bulge': args.fit_bulge,
+            'fit_gas': args.fit_gas, 'fit_xi_params': args.fit_xi_params, 'xi': args.xi
         }
         
+        # Initialize logz tracking safely
         if not hasattr(sampler, "saved_logz"):
             sampler.saved_logz = []
-        if hasattr(args, '_resume_checkpoint_file'):
+        if hasattr(args, '_resume_checkpoint_file') and args._resume_checkpoint_file:
             sampler.restore(args._resume_checkpoint_file)
             logger.info(f"✅ Resumed from checkpoint: {args._resume_checkpoint_file}")
+            
     except Exception as e:
-        logger.error(f"Failed to create sampler: {e}")
-        return None
+        logger.error("❌❌❌ CRITICAL: Failed to create Dynesty sampler! ❌❌❌")
+        logger.error(f"   Error Type: {type(e).__name__}")
+        logger.error(f"   Error Message: {e}")
+        import traceback
+        logger.error("   Full Traceback:")
+        logger.error(traceback.format_exc())
+        if pool and hasattr(pool, 'shutdown'):
+            pool.shutdown(wait=False)
+        return None # Return None to indicate catastrophic failure
 
     # Initialize saved_logz tracking
     try:
-        logz_list = getattr(sampler.results, 'logz', None)
-        if logz_list is not None and len(logz_list) >= 2:
-            sampler.saved_logz = list(logz_list[-2:])
+        # First check if sampler and sampler.results exist
+        if hasattr(sampler, 'results') and sampler.results is not None:
+            logz_list = getattr(sampler.results, 'logz', None)
+            if logz_list is not None and len(logz_list) >= 2:
+                sampler.saved_logz = list(logz_list[-2:])
+            else:
+                sampler.saved_logz = []
         else:
+            # No results yet, just initialize empty list
             sampler.saved_logz = []
     except Exception as e:
         logger.warning(f"Failed to initialize saved_logz: {e}")
@@ -2595,30 +2655,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         logger.info("Using existing dashboard monitor instance")
 
 
-    # ✅ Always attempt to save a checkpoint snapshot — safely
-    try:
-        res = getattr(sampler, "results", None)
 
-        if res is None:
-            logger.warning("⚠️ No sampler.results found — skipping .npz snapshot")
-        elif not hasattr(res, "samples") or res.samples is None or len(res.samples) == 0:
-            logger.warning("⚠️ Dynesty results has no samples yet — skipping .npz snapshot")
-        else:
-            npz_path = Path(args.output_dir) / "dynesty_checkpoint_snapshot.npz"
-
-            # Save only the safe fields, skipping optional ones if not present
-            np.savez(npz_path,
-                samples     = res.samples,
-                logz        = getattr(res, "logz", np.array([])),
-                logzerr     = getattr(res, "logzerr", np.array([])),
-                logl        = getattr(res, "logl", np.array([])),
-                blob        = getattr(res, "blob", None),
-                param_names = getattr(res, "param_names", [f"param_{i}" for i in range(res.samples.shape[1])])
-            )
-            logger.info(f"✅ Saved .npz snapshot to: {npz_path}")
-
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to save .npz checkpoint snapshot: {e}")
 
 
 
@@ -2881,6 +2918,10 @@ def main_dynesty():
                         help="Override lower prior bound for M_disk_thin_solar")
     parser.add_argument('--M_disk_thin_max', type=float, default=None,
                         help="Override upper prior bound for M_disk_thin_solar")
+    parser.add_argument('--M_disk_total_min', type=float, default=None,
+                        help="Override lower prior bound for M_disk_total_solar")
+    parser.add_argument('--M_disk_total_max', type=float, default=None,
+                        help="Override upper prior bound for M_disk_total_solar")
     parser.add_argument('--h_z_thin_min', type=float, default=None,
                         help="Override lower prior bound for h_z_thin_kpc")
     parser.add_argument('--R_d_thick_max', type=float, default=None,
@@ -2967,6 +3008,9 @@ def main_dynesty():
                        help="Fit bulge parameters")
     fit_g.add_argument('--fit_gas', action='store_true',
                        help="Fit gas parameters")
+    fit_g.add_argument('--fit_disk_reparameterized', action='store_true',
+                       help="Fit disk masses using total+fraction parameterization")
+
 
     # Fixed values
     fixed_g = parser.add_argument_group('Fixed Parameter Values')
@@ -3124,6 +3168,10 @@ def main_dynesty():
         MW_MULTI_COMP_PARAM_CONFIG['M_disk_thin_solar']['low'] = args.M_disk_thin_min
     if args.M_disk_thin_max is not None:
         MW_MULTI_COMP_PARAM_CONFIG['M_disk_thin_solar']['high'] = args.M_disk_thin_max
+    if args.M_disk_total_min is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_disk_total_solar']['low'] = args.M_disk_total_min
+    if args.M_disk_total_max is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_disk_total_solar']['high'] = args.M_disk_total_max
     if args.h_z_thin_min is not None:
         MW_MULTI_COMP_PARAM_CONFIG['h_z_thin_kpc']['low'] = args.h_z_thin_min
     if args.R_d_thick_max is not None:
@@ -3140,7 +3188,10 @@ def main_dynesty():
             logger.error(f"Checkpoint not found: {checkpoint_path}")
             sys.exit(1)
         
-        # Load checkpoint to get configuration
+        # Store the checkpoint file path for later use
+        args._resume_checkpoint_file = str(checkpoint_path)
+        
+        # Load checkpoint to check for configuration
         with open(checkpoint_path, 'rb') as f:
             import pickle
             temp_sampler = pickle.load(f)
@@ -3150,8 +3201,7 @@ def main_dynesty():
                     setattr(args, key, value)
                 logger.info("✅ Restored run configuration from checkpoint")
             else:
-                logger.error("❌ Checkpoint missing configuration - provide --fit_* flags!")
-                sys.exit(1)
+                logger.warning("⚠️ Checkpoint missing configuration - using command line flags")
 
     if args.enable_dashboard and not args.disable_dashboard:
         try:
@@ -3273,272 +3323,128 @@ def main_dynesty():
         return
 
 
-    # Curriculum learning
+    # =================================================================================
+    # FINAL RESULTS PROCESSING AND SAVING
+    # This block determines the final results object and then safely processes it.
+    # =================================================================================
+
+    # First, determine the final result object ('res') and the correct parameter names
+    res = None
+    fitted_p_names = []
+
     if isinstance(results, dict) and 'stage_1' in results:
-        completed_stages = [k for k, v in results.items() if v is not None]
+        # --- Handle Curriculum Learning Results ---
+        completed_stages = [k for k, v in results.items() if v is not None and hasattr(v, 'samples') and len(v.samples) > 0]
         if not completed_stages:
-            logger.error("❌ All curriculum stages failed. No results to save.")
+            logger.error("❌ All curriculum stages failed or produced no samples. No results to save.")
+            finalize_record(RUN_ID, success=False, phys_reason="All curriculum stages failed")
             return
-
-        # Save each completed stage separately
-        for stage_name in completed_stages:
-            stage_results = results[stage_name]
-
-            # --- obtain the fitted‑parameter list for THIS stage ----------------
-            stage_args_local = stage_args_per_stage[stage_name]          # NEW
-            fitted_p_names_stage, _, _, _, _, _ = get_param_labels_and_bounds(
-                stage_args_local)                                        # NEW
-            # --------------------------------------------------------------------
-
-            output_prefix = f"dynesty_curriculum_{stage_name}_{args.xi}"
-            output_npz    = Path(args.output_dir) / f"{output_prefix}_samples.npz"
-
-            try:
-                weights = np.exp(stage_results.logwt - stage_results.logz[-1])
-                np.savez(
-                    output_npz,
-                    samples     = stage_results.samples,
-                    weights     = weights,
-                    param_names = np.array(fitted_p_names_stage),         # NEW
-                    logl        = stage_results.logl,
-                    logz        = stage_results.logz,
-                    logzerr     = stage_results.logzerr,
-                )
-                logger.info(f"✅ Saved {stage_name} results to {output_npz}")
-            except Exception as e:
-                logger.error(f"❌ Failed to save {stage_name} results: {e}")
-
-        # Use the last completed stage for any downstream processing
-        final_stage = max(completed_stages)
-        res = results[final_stage]
-
-        # We also need the parameter names for that final stage               # NEW
-        fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(          # NEW
-            stage_args_per_stage[final_stage])                                # NEW
-
-    else:
-        # Single‑run results
+        else:
+            logger.info(f"✅ Curriculum learning completed {len(completed_stages)} stages successfully.")
+            final_stage_name = max(completed_stages)
+            res = results[final_stage_name]
+            final_stage_args = stage_args_per_stage[final_stage_name]
+            fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(final_stage_args)
+    elif results is not None:
+        # --- Handle Single Run Results ---
         res = results
+        fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(args)
 
-        # Parameter names come from the main run’s args                        # NEW
-        fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(args)     # NEW
+    # =================================================================================
+    # MASTER GUARD CLAUSE: Only proceed if 'res' is a valid, populated results object.
+    # =================================================================================
+    if res and hasattr(res, 'samples') and len(res.samples) >= 10:
+        # Add imports here to guarantee they are in scope, preventing the UnboundLocalError
+        import pickle
+        import gzip
 
-    # Save results...
-    # === FINALIZE RUN AND SNAPSHOT ===
-    try:
-        param_stats = {name: {"median": float(m), "sigma": float(s)}
-                    for name, m, s in zip(fitted_p_names, np.median(res.samples, axis=0), np.std(res.samples, axis=0))}
+        logger.info("\n✨ Run complete! Finalizing and saving results...")
 
-        is_valid, reason, *_ = check_physical_plausibility(np.median(res.samples, axis=0), fitted_p_names, args)
-        logz = res.logz[-1] if hasattr(res, 'logz') and res.logz is not None else np.nan
-        logz_err = res.logzerr[-1] if hasattr(res, 'logzerr') and res.logzerr is not None else np.nan
-        eff = float(getattr(res, 'eff', 0.0))
-        rmse = float(np.sqrt(np.mean(res.blob**2))) if hasattr(res, 'blob') and res.blob is not None else np.nan
-        n_samples = len(res.samples) if hasattr(res, 'samples') else 0
-        n_calls = int(np.sum(res.ncall)) if hasattr(res, 'ncall') else 0
+        # --- 1. Define Output Filenames ---
+        output_parts = ["dynesty_mw", args.xi]
+        if args.include_bulge:      output_parts.append("B" + ("f" if args.fit_bulge else "x"))
+        if args.include_disk_thin:  output_parts.append("DT" + ("f" if args.fit_disk_thin else "x"))
+        if args.include_disk_thick: output_parts.append("DK" + ("f" if args.fit_disk_thick else "x"))
+        if args.include_gas:        output_parts.append("G" + ("f" if args.fit_gas else "x"))
+        output_basename = "_".join(output_parts)
 
-        finalize_record(RUN_ID, success=True,
-                        logz=logz, logz_err=logz_err,
-                        eff=eff, rmse=rmse,
-                        n_samples=n_samples, n_calls=n_calls,
-                        param_stats=param_stats,
-                        phys_ok=is_valid, phys_reason=reason if not is_valid else "")
+        # --- 2. Save Main NPZ Results File ---
+        output_npz = Path(args.output_dir) / f"{output_basename}_samples.npz"
+        try:
+            weights = np.exp(res.logwt - res.logz[-1])
+            ess = 1.0 / np.sum(weights**2) if np.sum(weights**2) > 0 else 0.0
+            np.savez(
+                output_npz, samples=res.samples, weights=weights,
+                param_names=np.array(fitted_p_names), logl=res.logl,
+                logz=res.logz, logzerr=res.logzerr, ess=ess,
+                blob=getattr(res, 'blob', None),
+            )
+            logger.info(f"✅ Final results saved to {output_npz}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save final .npz results: {e}")
 
-        snapshot_path = Path(args.output_dir) / f"run_{RUN_ID}_summary.json"
-        with open(snapshot_path, "w") as fh:
-            json.dump({
-                "run_id": RUN_ID,
-                "success": True,
-                "logZ": logz,
-                "params": param_stats,
-                "phys_ok": is_valid,
-                "phys_reason": reason if not is_valid else "",
-                "cmd": " ".join(sys.argv)
-            }, fh, indent=2)
-        logger.info(f"📄 Snapshot saved to {snapshot_path}")
-    except Exception as e:
-        logger.error(f"❌ Failed to finalize or snapshot run: {e}")
+        # --- 3. Save Full Results Object via Pickle ---
+        output_pkl = Path(args.output_dir) / f"{output_basename}_results.pkl.gz"
+        try:
+            with gzip.open(output_pkl, "wb") as fh:
+                pickle.dump(res, fh)
+            logger.info(f"✅ Full results object saved to {output_pkl}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save final pickle file: {e}")
 
-    logger.info("\n✨ Enhanced dynesty run complete!")
+        # --- 4. Finalize Run Record and Create Summary ---
+        try:
+            median_params = np.median(res.samples, axis=0)
+            std_params = np.std(res.samples, axis=0)
+            param_stats = {name: {"median": float(med), "sigma": float(std)}
+                           for name, med, std in zip(fitted_p_names, median_params, std_params)}
+            is_valid, reason, *_ = check_physical_plausibility(median_params, fitted_p_names, args)
+            logz = res.logz[-1] if hasattr(res, 'logz') and len(res.logz) > 0 else np.nan
+            logz_err = res.logzerr[-1] if hasattr(res, 'logzerr') and len(res.logzerr) > 0 else np.nan
+            eff = float(getattr(res, 'eff', 0.0)) * 100
+            rmse = float(np.sqrt(np.mean(res.blob**2))) if hasattr(res, 'blob') and res.blob is not None else np.nan
+            delta_logz_vs_gr = logz - BASELINE_LOGZ_GR if np.isfinite(logz) else np.nan
+            jeffreys_interp = interpret_jeffreys_scale(delta_logz_vs_gr) if np.isfinite(delta_logz_vs_gr) else "Unavailable"
+            
+            logger.info(f"\n📊 Model Comparison:")
+            logger.info(f"   GR Baseline logZ: {BASELINE_LOGZ_GR:.2f}")
+            logger.info(f"   This run logZ:    {logz:.2f} (err: ±{logz_err:.2f})")
+            logger.info(f"   ΔlogZ vs GR:      {delta_logz_vs_gr:+.2f} → {jeffreys_interp}")
 
-    logger.info("✅ Main dynesty run complete.")
-
-
-
-    # ---------------------------------------------------------------------------
-    # Save the final stage (or single‑run) results
-    # ---------------------------------------------------------------------------
-    output_parts = ["dynesty_mw", args.xi]
-    if args.include_bulge:       output_parts.append("B"  + ("f" if args.fit_bulge       else "x"))
-    if args.include_disk_thin:   output_parts.append("DT" + ("f" if args.fit_disk_thin   else "x"))
-    if args.include_disk_thick:  output_parts.append("DK" + ("f" if args.fit_disk_thick  else "x"))
-    if args.include_gas:         output_parts.append("G"  + ("f" if args.fit_gas         else "x"))
-
-    output_basename = "_".join(output_parts)
-    output_npz      = Path(args.output_dir) / f"{output_basename}_samples.npz"
-
-    # Effective sample size
-    try:
-        ess = res.effective_sample_size if hasattr(res, 'effective_sample_size') else 0
-    except Exception:
-        weights = np.exp(res.logwt - res.logz[-1])
-        ess = 1.0 / np.sum(weights**2) if np.sum(weights**2) > 0 else 0.0
-
-    # Save final results
-    try:
-        np.savez(
-            output_npz,
-            samples     = res.samples,
-            weights     = np.exp(res.logwt - res.logz[-1]),
-            param_names = np.array(fitted_p_names),                      # uses stage‑specific names
-            logl        = res.logl,
-            logz        = res.logz,
-            logzerr     = res.logzerr,
-            ess         = ess,
-            blob        = res.blob if hasattr(res, 'blob') else None,
-        )
-        logger.info(f"\n✅ Final results saved to {output_npz}")
-    except Exception as e:
-        logger.error(f"❌ Failed to save final results: {e}")
-
-    # Save final .pkl
-    output_pkl = Path(args.output_dir) / f"{output_basename}_results.pkl.gz"
-    try:
-        with gzip.open(output_pkl, "wb") as fh:
-            pickle.dump(res, fh)
-        logger.info(f"✅ Full results saved to {output_pkl}")
-    except Exception as e:
-        logger.error(f"❌ Failed to save pickle file: {e}")
-
-    if results is None or not hasattr(results, 'samples') or len(results.samples) < 10:
-        logger.error("Not enough samples for finalization")
-        logger.info("Run terminated early - check parameters and try again")
+            finalize_record(RUN_ID, success=True, logz=logz, logz_err=logz_err, eff=eff, rmse=rmse,
+                            n_samples=len(res.samples), n_calls=int(np.sum(res.ncall)),
+                            param_stats=param_stats, phys_ok=is_valid,
+                            phys_reason=reason if not is_valid else "OK")
+            
+            snapshot_path = Path(args.output_dir) / f"run_{RUN_ID}_summary.json"
+            with open(snapshot_path, "w") as fh:
+                json.dump(make_json_serializable({
+                    "run_id": RUN_ID, "success": True, "logZ": logz, "logZ_err": logz_err,
+                    "delta_logZ_vs_GR": delta_logz_vs_gr, "jeffreys_interpretation": jeffreys_interp,
+                    "params": param_stats, "phys_ok": is_valid,
+                    "phys_reason": reason if not is_valid else "OK", "n_samples": len(res.samples),
+                    "rmse_kms": rmse, "cmd": " ".join(sys.argv)
+                }), fh, indent=2)
+            logger.info(f"📄 Run summary snapshot saved to {snapshot_path}")
+        except Exception as e:
+            logger.error(f"❌ An error occurred during the final analysis and reporting step: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+    else:
+        # This block executes if the run failed or was interrupted.
+        logger.error("\n==========================================================")
+        logger.error("❌ RUN FAILED: No valid results were produced to save.")
+        logger.error("   Check the log file for a 'CRITICAL: Failed to create Dynesty sampler!' message.")
+        logger.error("==========================================================")
+        finalize_record(RUN_ID, success=False, phys_reason="No valid samples produced")
         return
 
-    # === FINALIZE RUN AND SNAPSHOT ===
-
-    try:
-        # Check if we have valid results
-        if res is None or not hasattr(res, 'samples') or len(res.samples) < 10:
-            logger.warning("⚠️ Not enough samples for proper finalization")
-            finalize_record(RUN_ID, success=False,
-                           logz=np.nan, logz_err=np.nan,
-                           eff=0, rmse=np.nan,
-                           n_samples=0, n_calls=0,
-                           param_stats={}, phys_ok=False,
-                           phys_reason="Too few samples")
-            return
-
-        # Calculate parameter statistics safely
-        param_stats = {}
-        try:
-            if hasattr(res, 'weights') and res.weights is not None:
-                weights = res.weights
-                mean_params = np.average(res.samples, weights=weights, axis=0)
-                # Weighted standard deviation
-                variance = np.average((res.samples - mean_params)**2, weights=weights, axis=0)
-                std_params = np.sqrt(variance)
-            else:
-                mean_params = np.mean(res.samples, axis=0)
-                std_params = np.std(res.samples, axis=0)
-
-            for i, name in enumerate(fitted_p_names):
-                if i < len(mean_params):
-                    param_stats[name] = {
-                        "median": float(mean_params[i]),
-                        "sigma": float(std_params[i])
-                    }
-        except Exception as e:
-            logger.warning(f"Could not calculate parameter statistics: {e}")
-            param_stats = {}
-
-        # Get other statistics safely
-        try:
-            logz = res.logz[-1] if hasattr(res, 'logz') and res.logz is not None else np.nan
-            logz_err = res.logzerr[-1] if hasattr(res, 'logzerr') and res.logzerr is not None else np.nan
-        except Exception as e:
-            logger.error(f"LogZ extraction failed: {e}")
-            logz = logz_err = np.nan
-
-
-        eff = float(res.eff) if hasattr(res, 'eff') else 0.0
-
-        # Calculate RMSE if blob data exists
-        rmse = np.nan
-        if hasattr(res, 'blob') and res.blob is not None:
-            try:
-                rmse = float(np.sqrt(np.mean(res.blob**2)))
-            except:
-                rmse = np.nan
-
-        n_samples = len(res.samples) if hasattr(res, 'samples') else 0
-        n_calls = int(np.sum(res.ncall)) if hasattr(res, 'ncall') else 0
-
-        # Check physical plausibility if we have parameters
-        phys_ok = False
-        phys_reason = "Not checked"
-        if param_stats and len(mean_params) > 0:
-            try:
-                is_valid, reason = check_physical_plausibility(mean_params, fitted_p_names, args)
-                phys_ok = is_valid
-                phys_reason = reason if not is_valid else ""
-            except Exception as e:
-                logger.warning(f"Could not check physical plausibility: {e}")
-
-        # === REPORT DELTA LOGZ VS GR BASELINE =====================================
-        if np.isfinite(logz):
-            delta_logz_vs_gr = logz - BASELINE_LOGZ_GR
-            jeffreys_interp = interpret_jeffreys_scale(delta_logz_vs_gr)
-            logger.info(f"\n📊 Model Comparison:")
-            logger.info(f"   GR Baseline logZ: {BASELINE_LOGZ_GR:.2f}")
-            logger.info(f"   This run logZ: {logz:.2f}")
-            logger.info(f"   ΔlogZ: {delta_logz_vs_gr:+.2f} → {jeffreys_interp}")
-
-            jeffreys_interp = interpret_jeffreys_scale(delta_logz_vs_gr)
-            logger.info(f"\n📊 Model Comparison:")
-            logger.info(f"   GR Baseline logZ: {BASELINE_LOGZ_GR:.2f}")
-            logger.info(f"   This run logZ: {logz:.2f}")
-            logger.info(f"   ΔlogZ: {delta_logz_vs_gr:+.2f} → {jeffreys_interp}")
-        else:
-            delta_logz_vs_gr = None
-            jeffreys_interp = "Unavailable"
-
-        # Finalize the record
-        finalize_record(RUN_ID, success=True,
-                        logz=logz, logz_err=logz_err,
-                        eff=eff, rmse=rmse,
-                        n_samples=n_samples, n_calls=n_calls,
-                        param_stats=param_stats,
-                        phys_ok=phys_ok, phys_reason=phys_reason)
-
-        # Create snapshot
-        snapshot_path = Path(args.output_dir) / f"run_{RUN_ID}_summary.json"
-        with open(snapshot_path, "w") as fh:
-            json.dump({
-                "run_id": RUN_ID,
-                "success": True,
-                "logZ": logz,
-                "delta_logZ_vs_GR": delta_logz_vs_gr,
-                "jeffreys_interpretation": jeffreys_interp,
-                "params": param_stats,
-                "phys_ok": phys_ok,
-                "phys_reason": phys_reason,
-                "n_samples": n_samples,
-                "rmse": rmse,
-                "cmd": " ".join(sys.argv)
-            }, fh, indent=2)
-        logger.info(f"📄 Snapshot saved to {snapshot_path}")
-
-    except Exception as e:
-        logger.error(f"❌ Failed to finalize or snapshot run: {e}")
-        import traceback
-        logger.debug(traceback.format_exc())
-
-
 if __name__ == "__main__":
+    print("DEBUG: Entering main block")
     freeze_support()
     if not DYNESTY_AVAILABLE:
         print("CRITICAL: Dynesty library not found")
         sys.exit(1)
-
+    print("DEBUG: About to call main_dynesty()")
     main_dynesty()
+    print("DEBUG: main_dynesty() completed")
