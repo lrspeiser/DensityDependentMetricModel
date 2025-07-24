@@ -1,2 +1,4 @@
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.parquet filter=lfs diff=lfs merge=lfs -text
+gaia_sky_slices/*.csv filter=lfs diff=lfs merge=lfs -text
+gaia_sky_slices/*.parquet filter=lfs diff=lfs merge=lfs -text
