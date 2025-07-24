@@ -1,12 +1,25 @@
-# requirements.txt
+# Core scientific computing
 numpy>=1.23
-pandas>=1.5
-matplotlib>=3.5
-scipy>=1.9
+pandas>=1.5.0
+scipy>=1.9.0
+pyarrow>=10.0.0
+
+# Plotting and visualization
+matplotlib>=3.5.0
+corner>=2.2.0
+
+# Astronomy specific
 astropy>=5.0
 astroquery>=0.4.6
-emcee>=3.1.0
-corner>=2.2.0
-numba>=0.57
+
+# Bayesian inference
+dynesty>=2.0.0
+
+# Machine learning and acceleration
+scikit-learn>=1.1.0
+jax[metal]>=0.4.0
+jaxlib
+
+# Optional but good to have
 tqdm>=4.64
-pyarrow>=10.0.0
+numba>=0.57.0
