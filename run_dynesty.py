@@ -58,6 +58,10 @@ os.environ['JAX_TRACEBACK_FILTERING'] = 'off'  # Show full traceback
 os.environ['JAX_DEBUG_NANS'] = '1'  # Check for NaN/Inf
 os.environ['JAX_LOG_COMPILES'] = '1'  # Log when functions are compiled
 os.environ['JAX_ENABLE_CHECKS'] = '1'  # Enable runtime checks
+# Disable JAX CPU parallelism to let Dynesty use threads
+os.environ['JAX_METAL_USE_MPS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '3'  # Limit BLAS threads too
+
 
 # Configure JAX
 jax.config.update("jax_enable_x64", False)  # Metal doesn't support float64
@@ -75,6 +79,47 @@ try:
     print(f"JAX test successful: sum = {test_result}")
 except Exception as e:
     print(f"JAX test failed: {e}")
+    
+BASELINE_LOGZ_GR = -1453634.9493113013  # From GR-only run with xi=1 everywhere
+
+# ============================================================================
+# Model Comparison Functions
+# ============================================================================
+
+def interpret_jeffreys_scale(dlogz):
+    """
+    Interpret the Jeffreys scale for model comparison.
+    
+    Parameters
+    ----------
+    dlogz : float
+        Difference in log evidence (logZ_model - logZ_baseline)
+        
+    Returns
+    -------
+    str
+        Interpretation string based on Jeffreys scale
+        
+    Notes
+    -----
+    Jeffreys scale interpretation:
+    - |dlogZ| < 1: Inconclusive
+    - 1 <= |dlogZ| < 2.5: Weak evidence
+    - 2.5 <= |dlogZ| < 5: Moderate evidence  
+    - 5 <= |dlogZ| < 10: Strong evidence
+    - |dlogZ| >= 10: Decisive evidence
+    """
+    abs_val = abs(dlogz)
+    if abs_val < 1:
+        return "Inconclusive"
+    elif abs_val < 2.5:
+        return "Weak evidence"
+    elif abs_val < 5:
+        return "Moderate evidence"
+    elif abs_val < 10:
+        return "Strong evidence"
+    else:
+        return "Decisive evidence"
     
 def debug_jax_function(func):
     """Decorator to debug JAX function calls"""
@@ -118,13 +163,56 @@ except ImportError as e:
     print(f"CRITICAL: Could not import local JAX-based modules: {e}")
     print("Please ensure 'density_metric2.py', 'data_io.py', and 'main2.py' are in the same directory or accessible in your PYTHONPATH.")
     sys.exit(1)
+    
 
 # Save the full CLI args to a JSON file for reproducibility
 def save_run_metadata(args, output_dir):
+    """Enhanced version that tracks which args were explicitly provided"""
+    
+    # Original functionality - save standard run_config.json
     metadata_path = Path(output_dir) / "run_config.json"
     with open(metadata_path, "w") as f:
         json.dump(vars(args), f, indent=2)
     print(f"✅ Saved run configuration to {metadata_path}")
+    
+    # NEW: Enhanced tracking
+    import sys
+    raw_cmd = " ".join(sys.argv)
+    
+    # Track which arguments were explicitly provided
+    explicitly_provided = set()
+    i = 1  # Skip script name
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg.startswith('--'):
+            # Extract parameter name
+            param_name = arg[2:].replace('-', '_')
+            explicitly_provided.add(param_name)
+            # Skip the next item if it's the value for this parameter
+            if i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith('--'):
+                i += 1
+        i += 1
+    
+    # Build enhanced metadata
+    enhanced_metadata = {
+        "raw_command": raw_cmd,
+        "timestamp": datetime.now().isoformat(),
+        "explicitly_provided_flags": sorted(list(explicitly_provided)),
+        "all_parameters": vars(args),
+        "parameters_from_defaults": []
+    }
+    
+    # Identify parameters that came from defaults
+    for param, value in vars(args).items():
+        if param not in explicitly_provided and not param.startswith('_'):
+            enhanced_metadata["parameters_from_defaults"].append(param)
+    
+    # Save enhanced version
+    enhanced_path = Path(output_dir) / "run_config_enhanced.json"
+    with open(enhanced_path, "w") as f:
+        json.dump(enhanced_metadata, f, indent=2)
+    
+    print(f"✅ Saved enhanced run configuration to {enhanced_path}")
 
 # Control debug output
 DEBUG_COUNTER_MAX = 100  # Maximum debug messages to prevent log spam
@@ -924,9 +1012,25 @@ def enhanced_monitor_sampler_progress(
                 else:
                     logger.info("   Δlog(Z): (not enough samples yet)")
 
-                # Show error estimate
-                if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
-                    logger.info(f"   Error: ±{res.logzerr[-1]:.3f}")
+        # Show error estimate
+        if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
+            logger.info(f"   Error: ±{res.logzerr[-1]:.3f}")
+
+        if np.isfinite(current_logz):
+            delta_logz_vs_gr = current_logz - BASELINE_LOGZ_GR
+            jeffreys_interpretation = interpret_jeffreys_scale(delta_logz_vs_gr)
+            
+            logger.info(f"\n📊 MODEL COMPARISON VS GR BASELINE:")
+            logger.info(f"   GR Baseline log(Z): {BASELINE_LOGZ_GR:.2f}")
+            logger.info(f"   Current DDMM log(Z): {current_logz:.2f}")
+            logger.info(f"   Δlog(Z) = {delta_logz_vs_gr:+.2f}")
+            logger.info(f"   Interpretation: {jeffreys_interpretation} {'favoring GR' if delta_logz_vs_gr < 0 else 'favoring DDMM'}")
+            
+            if delta_logz_vs_gr < -100:
+                logger.warning(f"⚠️  DDMM model is {abs(delta_logz_vs_gr):.0f} log units worse than GR!")
+                logger.warning("   Consider checking parameter bounds or model configuration")
+            elif delta_logz_vs_gr > 100:
+                logger.info(f"✅ DDMM model is {delta_logz_vs_gr:.0f} log units better than GR!")
 
         # Store dlogz for later JSON/dash export
         args_obj._current_dlogz = dlogz  # Or however you pass it to dashboard_monitor
@@ -1045,6 +1149,18 @@ def enhanced_monitor_sampler_progress(
         # Dashboard update
         if dashboard_monitor is not None:
             try:
+                # Calculate GR baseline comparison for dashboard
+                delta_logz_vs_gr = None
+                jeffreys_interpretation = "Unknown"
+                model_preference = "Unknown"
+                
+                if np.isfinite(current_logz):
+                    delta_logz_vs_gr = current_logz - BASELINE_LOGZ_GR
+                    jeffreys_interpretation = interpret_jeffreys_scale(delta_logz_vs_gr)
+                    model_preference = "GR preferred" if delta_logz_vs_gr < 0 else "DDMM preferred"
+                                    
+                            
+                
                 dashboard_state = {
                     "elapsed_time": float(elapsed_time / 3600),
                     "n_samples": int(n_samples),
@@ -1058,6 +1174,11 @@ def enhanced_monitor_sampler_progress(
                     ),
                     "dlogz": float(dlogz) if isinstance(dlogz, (float, int)) and np.isfinite(dlogz) else None,
                     "current_nlive": int(len(res.live_points)) if hasattr(res, 'live_points') else 0,
+                    "gr_baseline_logz": BASELINE_LOGZ_GR,
+                    "delta_logz_vs_gr": float(delta_logz_vs_gr) if delta_logz_vs_gr is not None else None,
+                    "jeffreys_vs_gr": jeffreys_interpretation,
+                    "model_preference": model_preference,
+
                     "parameter_estimates": {},
                     "parameter_uncertainties": {},
                     "fixed_parameters": {},
@@ -1257,6 +1378,7 @@ def log_likelihood_dynesty(
     MASTER log-likelihood function that now correctly passes the FULL parameter set
     to the physical plausibility check and uses the v_total_kms master function.
     """
+    
     # 1. Reconstruct the full parameter dictionary, including fixed values
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
@@ -2392,14 +2514,14 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 
     pool = None
     if args.num_threads > 1:
-        logger.warning("JAX handles GPU parallelism. Forcing num_threads=1.")
-        args.num_threads = 1
         try:
-            pool = Pool(args.num_threads)
-            logger.info(f"Initialized multiprocessing pool with {args.num_threads} threads")
+            # Use ThreadPoolExecutor for JAX compatibility
+            from concurrent.futures import ThreadPoolExecutor
+            pool = ThreadPoolExecutor(max_workers=args.num_threads)
+            logger.info(f"Initialized ThreadPoolExecutor with {args.num_threads} threads")
         except Exception as e:
             logger.warning(f"⚠ Failed to initialize multiprocessing: {e}")
-
+            pool = None    
     sampler = None
     try:
         sampler = DynamicNestedSampler(
@@ -2417,6 +2539,23 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             blob=True
         )
         logger.info("Dynesty sampler initialized")
+        
+        # Store configuration in sampler for checkpointing
+        sampler._run_config = {
+            'fitted_names': fitted_names,
+            'fitted_labels': fitted_labels, 
+            'include_bulge': args.include_bulge,
+            'include_disk_thin': args.include_disk_thin,
+            'include_disk_thick': args.include_disk_thick,
+            'include_gas': args.include_gas,
+            'fit_disk_thin': args.fit_disk_thin,
+            'fit_disk_thick': args.fit_disk_thick,
+            'fit_bulge': args.fit_bulge,
+            'fit_gas': args.fit_gas,
+            'fit_xi_params': args.fit_xi_params,
+            'xi': args.xi
+        }
+        
         if not hasattr(sampler, "saved_logz"):
             sampler.saved_logz = []
         if hasattr(args, '_resume_checkpoint_file'):
@@ -2628,10 +2767,15 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                 pool.join()
             return None
 
-    # -----------------------------------------------------------------------
+# -----------------------------------------------------------------------
     # 8. Return result
     # -----------------------------------------------------------------------
-    return sampler.results
+    try:
+        return sampler.results
+    finally:
+        if pool and hasattr(pool, 'shutdown'):
+            pool.shutdown(wait=True)
+            logger.info("ThreadPoolExecutor shut down successfully")
 
 
 
@@ -2676,9 +2820,6 @@ def main_dynesty():
             logger.error(f"Failed to finalize run record: {e}")
             return False
     
-    # This was set after running the model with GR settings, keeping gravity at 1 everywhere.
-    BASELINE_LOGZ_GR = -1453634.9493113013
-
     
     logger = get_or_create_logger()
     debug_counter = 0
@@ -2998,7 +3139,19 @@ def main_dynesty():
         if not checkpoint_path.exists():
             logger.error(f"Checkpoint not found: {checkpoint_path}")
             sys.exit(1)
-        args._resume_checkpoint_file = str(checkpoint_path)
+        
+        # Load checkpoint to get configuration
+        with open(checkpoint_path, 'rb') as f:
+            import pickle
+            temp_sampler = pickle.load(f)
+            if hasattr(temp_sampler, '_run_config'):
+                # Restore configuration from checkpoint
+                for key, value in temp_sampler._run_config.items():
+                    setattr(args, key, value)
+                logger.info("✅ Restored run configuration from checkpoint")
+            else:
+                logger.error("❌ Checkpoint missing configuration - provide --fit_* flags!")
+                sys.exit(1)
 
     if args.enable_dashboard and not args.disable_dashboard:
         try:
@@ -3335,20 +3488,11 @@ def main_dynesty():
         # === REPORT DELTA LOGZ VS GR BASELINE =====================================
         if np.isfinite(logz):
             delta_logz_vs_gr = logz - BASELINE_LOGZ_GR
-
-            # Interpret the Jeffreys scale
-            def interpret_jeffreys_scale(dlogz):
-                abs_val = abs(dlogz)
-                if abs_val < 1:
-                    return "Inconclusive"
-                elif abs_val < 2.5:
-                    return "Weak evidence"
-                elif abs_val < 5:
-                    return "Moderate evidence"
-                elif abs_val < 10:
-                    return "Strong evidence"
-                else:
-                    return "Decisive evidence"
+            jeffreys_interp = interpret_jeffreys_scale(delta_logz_vs_gr)
+            logger.info(f"\n📊 Model Comparison:")
+            logger.info(f"   GR Baseline logZ: {BASELINE_LOGZ_GR:.2f}")
+            logger.info(f"   This run logZ: {logz:.2f}")
+            logger.info(f"   ΔlogZ: {delta_logz_vs_gr:+.2f} → {jeffreys_interp}")
 
             jeffreys_interp = interpret_jeffreys_scale(delta_logz_vs_gr)
             logger.info(f"\n📊 Model Comparison:")
