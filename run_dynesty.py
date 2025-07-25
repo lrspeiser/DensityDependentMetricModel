@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 run_dynesty.py - Enhanced dynamic nested sampling for the Density-Metric model.
@@ -558,7 +557,7 @@ def check_physical_plausibility(
         passes_cassini, cassini_msg = check_cassini_compatibility(params, args_obj.xi)
         if not passes_cassini:
             # --- We will KEEP this one as a hard block, as it's a fundamental constraint ---
-            logger.warning(f"Cassini test failed: {cassini_msg}")
+            # logger.warning(f"Cassini test failed: {cassini_msg}")
             return False, cassini_msg
 
     except Exception as e:

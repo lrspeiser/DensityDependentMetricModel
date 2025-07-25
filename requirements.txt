@@ -23,3 +23,10 @@ jaxlib
 # Optional but good to have
 tqdm>=4.64
 numba>=0.57.0
+
+# Jax
+# jax==0.4.26
+# jaxlib==0.4.26
+# jax-metal==0.1.1
+# need this version of jax: pip install jax==0.4.26 jaxlib==0.4.26 --extra-index-url https://us-python.pkg.dev/ml-oss-artifacts-published/jax/simple/
+# and this: pip install --no-deps jax-metal==0.1.1
