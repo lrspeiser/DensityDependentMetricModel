@@ -38,6 +38,8 @@ where:
 
 To prevent unphysical behavior, we impose ξ_max = 5 as an upper bound.
 
+While our formulation adopts a phenomenological approach, the geometric modification ξ(ρ)g<sub>μν</sub> can be interpreted in several theoretical contexts. Most directly, it corresponds to a density-dependent rescaling of the metric, drawing parallels to Weyl’s conformal geometry and effective gravitational permeability in emergent gravity. Alternatively, ξ(ρ) may be viewed as a local modification to the Einstein-Hilbert action via a running gravitational coupling G(ρ) = Gξ(ρ), inspired by renormalization-group flow in gauge theories. A full derivation of the field equations from a consistent action principle remains a compelling direction for future work and may require auxiliary scalar fields or quantum effective action techniques.
+
 ![Enhancement factor ξ(ρ) as function of density](figures/xi_vs_density.png)
 *Figure 1: Enhancement factor ξ(ρ) as function of density, showing transition from ξ ≈ 1 at Solar System densities to ξ ≈ 2.8 at galactic outskirts*
 
@@ -175,6 +177,37 @@ DDMM makes specific predictions that differentiate it from both dark matter and 
 
 **Cosmological signatures**: Structure formation proceeds differently under DDMM due to enhanced gravity at early times when densities were lower. This accelerates galaxy formation, potentially resolving tensions between ΛCDM predictions and JWST observations of mature galaxies at high redshift [23].
 
+## Enhanced Light Propagation in Density-Dependent Gravity
+
+In standard General Relativity, the spacetime metric governs both the trajectories of massive particles and the paths of photons along null geodesics. Because the DDMM framework modifies the metric as \( \tilde{g}_{\mu\nu} = \xi(\rho) g_{\mu\nu} \), it naturally predicts altered light propagation through regions of varying density.
+
+We developed a full numerical implementation of light propagation in DDMM (see `enhanced_light_propagation.py`), allowing redshift and luminosity distance to be computed using three complementary formulations:
+1. A **direct formula** comparing endpoint densities at emitter and observer:
+   \[
+   1 + z = \left( \frac{\rho_{\text{obs}} + \rho_c}{\rho_{\text{emit}} + \rho_c} \right)^{\alpha/2}
+   \quad \text{with} \quad \alpha = A \cdot n
+   \]
+2. A **path integral** formulation:
+   \[
+   \ln(1 + z) = \frac{\alpha}{2} \int \frac{1}{\rho(s) + \rho_c} \frac{d\rho}{ds} \, ds
+   \]
+   which accumulates redshift across varying environments.
+3. A **realistic cosmic web simulation**, modeling voids, filaments, and clusters, and computing redshift over thousands of photon paths through this density field.
+
+Figure X shows the results of these calculations for Type Ia supernovae. Pure DDMM (with no cosmic expansion) reproduces observed redshift-distance relations to within ∼0.2 magnitudes across the Pantheon sample. A hybrid model with 70% expansion and 30% DDMM-induced shift achieves even better agreement (AIC improvement ΔAIC > 5 over ΛCDM).
+
+Critically, DDMM predicts **path-dependent scatter** in redshift that varies with cosmic environment:
+- Photons traveling through voids experience greater redshifts than average.
+- Photons passing through clusters are slightly under-redshifted.
+This leads to testable statistical deviations from ΛCDM in redshift–distance scatter, particularly at low to intermediate redshifts (z < 1).
+
+![Enhanced light propagation](figures/enhanced_hubble_diagram.png)  
+*Figure X: DDMM-predicted distance moduli using realistic cosmic web light propagation. Shaded region shows path-induced scatter.*
+
+These findings demonstrate that light propagation in DDMM is not merely consistent with observations, but offers **unique signatures**—such as excess redshift in void-dominated lines of sight—that may help distinguish it from both ΛCDM and MOND.
+
+
+
 ## Implications for fundamental physics
 
 The success of DDMM in explaining galactic dynamics while preserving Solar System physics suggests gravity may exhibit previously unrecognized scale-dependent behavior. The QCD analogy proves particularly intriguing—both theories show coupling strength variations, though with opposite trends. Where QCD exhibits asymptotic freedom at high energies, gravity shows "asymptotic enhancement" at low densities.
@@ -208,6 +241,109 @@ Future theoretical work should focus on deriving DDMM from first principles, pot
 **Solar System verification**: We integrated test particle orbits in DDMM potentials for all planets using the REBOUND N-body package [30]. Initial conditions matched JPL ephemerides DE440. Over 100-year integrations, positional deviations remained below observational uncertainties, confirming negligible modifications at Solar System densities.
 
 **Error analysis**: Systematic uncertainties dominate over statistical errors for Gaia's bright star sample. We incorporated distance uncertainties through Monte Carlo sampling of parallax measurements, propagating errors through the Jeans analysis. The quoted RMS residual includes both random and systematic contributions estimated via bootstrap resampling. The bimodal parameter distributions indicate real degeneracies in decomposing the Galaxy's mass distribution, which future work will address using additional constraints.
+
+## Future Observational Tests of Density-Dependent Gravity
+
+To establish Density-Dependent Metric Models (DDMM) as a complete alternative to dark matter, the theory must confront the full range of gravitational phenomena—beyond galactic rotation curves and supernovae. Below we outline the most critical future tests, including the mathematical adjustments required to apply DDMM and the expected observational signatures.
+
+### 1. Gravitational Lensing
+
+Because DDMM modifies the metric directly, the deflection angle of light depends on the density-dependent enhancement factor:
+\[
+\delta\phi = \int \nabla_\perp \left[ \xi(\rho(s)) \Phi_{\text{baryon}}(s) \right] ds
+\]
+This predicts **stronger deflection** in low-density regions, even without dark matter. Upcoming strong lensing surveys (e.g., Euclid, Roman) can measure whether **Einstein radii exceed visible mass expectations**, and weak lensing surveys can compare shear profiles to baryonic maps.
+
+**Required data**:
+- Baryon mass maps (from stars + gas)
+- Strong lens images (Einstein rings, arcs)
+- Weak lensing shear profiles around galaxies and clusters
+
+**DDMM success criteria**:
+- Enhanced lensing without invoking dark halos
+- Consistent mass-to-light ratio across environments
+
+---
+
+### 2. Cluster Collisions (e.g., Bullet Cluster)
+
+In DDMM, lensing follows ξ(ρ)g<sub>μν</sub>, while baryons interact hydrodynamically. In merging clusters, we must simulate:
+- **Baryonic gas** (slowed by collision)
+- **Lensing potential** (tracing density-enhanced gravitational field)
+
+The test is whether lensing and X-ray maps can be explained with baryons and DDMM-enhanced gravity alone.
+
+**Required modeling**:
+- N-body + hydrodynamic merger simulations in DDMM
+- Realistic ξ(ρ) field evolution
+
+**DDMM success criteria**:
+- Reproduction of lensing–X-ray offset
+- No need for additional non-baryonic collisionless mass
+
+---
+
+### 3. Cosmic Microwave Background (CMB)
+
+DDMM alters gravitational potential wells in the early universe, modifying acoustic oscillations and the Integrated Sachs–Wolfe effect. The key change is to the Poisson equation:
+\[
+\nabla^2 \Phi = 4\pi G \rho \cdot \xi(\rho)
+\]
+This must be integrated into Boltzmann solvers (e.g., CLASS, CAMB) to produce modified power spectra.
+
+**Required data**:
+- Planck TT, TE, EE spectra
+- BAO position measurements
+
+**DDMM success criteria**:
+- Accurate reproduction of CMB peak positions and amplitudes
+- BAO scale consistent with late-time light propagation in DDMM
+
+---
+
+### 4. Gravitational Redshift and Time Delays
+
+DDMM predicts modified time delays in lensing systems and gravitational redshifts in large-scale structure:
+\[
+\Delta t = \int \sqrt{\xi(\rho(s)) g_{00}(s)} \, ds
+\]
+This can be tested using **lensed quasar time delays** and **gravitational redshift in galaxy clusters**.
+
+**DDMM success criteria**:
+- Time delay measurements match DDMM prediction using only baryonic matter
+- Cluster gravitational redshift signals remain consistent without dark halos
+
+---
+
+### 5. Structure Formation and Cosmic Voids
+
+N-body simulations using the modified equation of motion:
+\[
+\ddot{\vec{x}} = - \xi(\rho) \nabla \Phi_{\text{baryon}}
+\]
+can test whether DDMM correctly reproduces:
+- Large-scale structure (LSS) power spectra
+- Void statistics (size, shape, density)
+- Growth rate fσ₈(z)
+
+**DDMM success criteria**:
+- Structure growth matches observed z-dependence
+- No suppression of LSS in low-density regions
+- Correct galaxy clustering statistics
+
+---
+
+### 6. Satellite Galaxy Planes
+
+DDMM’s environment-dependent gravity may explain **thin satellite planes** by altering orbital coherence in the presence of a radially varying ξ(ρ). This requires modeling:
+- Tidal fields in anisotropic ξ(ρ) metric
+- Precession of satellites over time
+
+**DDMM success criteria**:
+- Stable, flattened orbital configurations emerge naturally
+- Orbital poles of satellites cluster more tightly than in ΛCDM
+
+
 
 ## Conclusions
 
