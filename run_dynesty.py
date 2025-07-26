@@ -1814,6 +1814,41 @@ def check_prior_bounds_compatibility(args):
 # Parameter Configuration Functions
 # ============================================================================
 
+def ensure_valid_disk_parameters(param_dict, param_names, logger=None):
+    """
+    Ensure thick disk parameters are physically consistent with thin disk.
+    Modifies param_dict in place.
+    """
+    if logger:
+        logger.debug("Ensuring valid disk parameter relationships...")
+    
+    # Get indices
+    idx_map = {name: i for i, name in enumerate(param_names)}
+    
+    # Fix scale heights: h_z_thick must be >= 2 * h_z_thin
+    if 'h_z_thin_kpc' in idx_map and 'h_z_thick_kpc' in idx_map:
+        h_z_thin = param_dict[idx_map['h_z_thin_kpc']]
+        h_z_thick = param_dict[idx_map['h_z_thick_kpc']]
+        
+        min_h_z_thick = 2.0 * h_z_thin
+        if h_z_thick < min_h_z_thick:
+            param_dict[idx_map['h_z_thick_kpc']] = min_h_z_thick * 1.1  # 10% buffer
+            if logger:
+                logger.info(f"   Adjusted h_z_thick from {h_z_thick:.3f} to {param_dict[idx_map['h_z_thick_kpc']]:.3f} kpc")
+    
+    # Fix scale lengths: R_d_thick must be > R_d_thin
+    if 'R_d_thin_kpc' in idx_map and 'R_d_thick_kpc' in idx_map:
+        R_d_thin = param_dict[idx_map['R_d_thin_kpc']]
+        R_d_thick = param_dict[idx_map['R_d_thick_kpc']]
+        
+        min_R_d_thick = R_d_thin * 1.5  # Thick disk typically 1.5-2x larger
+        if R_d_thick < min_R_d_thick:
+            param_dict[idx_map['R_d_thick_kpc']] = min_R_d_thick
+            if logger:
+                logger.info(f"   Adjusted R_d_thick from {R_d_thick:.3f} to {param_dict[idx_map['R_d_thick_kpc']]:.3f} kpc")
+    
+    return param_dict
+
 def get_param_labels_and_bounds(ARGS):
     """
     Enhanced parameter configuration with log-prior flags, optional prior tightening,
@@ -1982,6 +2017,40 @@ def get_param_labels_and_bounds(ARGS):
             'log_prior': p_details.get('log_prior', False),
             'physical_check': p_details.get('physical_check', True)
         })
+        
+    if ARGS.include_disk_thin and ARGS.include_disk_thick:
+        logger.info("Checking disk parameter relationships...")
+        
+        # Find the relevant parameters in param_info_list
+        param_updates = {}
+        param_indices = {}
+        
+        for i, p in enumerate(param_info_list):
+            if p['name'] in ['h_z_thin_kpc', 'h_z_thick_kpc', 'R_d_thin_kpc', 'R_d_thick_kpc']:
+                param_indices[p['name']] = i
+        
+        # Check and fix scale heights
+        if 'h_z_thin_kpc' in param_indices and 'h_z_thick_kpc' in param_indices:
+            h_z_thin = param_info_list[param_indices['h_z_thin_kpc']]['current_val']
+            h_z_thick = param_info_list[param_indices['h_z_thick_kpc']]['current_val']
+            
+            min_h_z_thick = 2.0 * h_z_thin
+            if h_z_thick < min_h_z_thick:
+                new_h_z_thick = min_h_z_thick * 1.1  # 10% buffer
+                param_info_list[param_indices['h_z_thick_kpc']]['current_val'] = new_h_z_thick
+                logger.info(f"   Adjusted h_z_thick from {h_z_thick:.3f} to {new_h_z_thick:.3f} kpc (must be ≥2x thin)")
+        
+        # Check and fix scale lengths
+        if 'R_d_thin_kpc' in param_indices and 'R_d_thick_kpc' in param_indices:
+            R_d_thin = param_info_list[param_indices['R_d_thin_kpc']]['current_val']
+            R_d_thick = param_info_list[param_indices['R_d_thick_kpc']]['current_val']
+            
+            min_R_d_thick = R_d_thin * 1.5  # Thick disk typically 1.5-2x larger
+            if R_d_thick < min_R_d_thick:
+                new_R_d_thick = min_R_d_thick
+                param_info_list[param_indices['R_d_thick_kpc']]['current_val'] = new_R_d_thick
+                logger.info(f"   Adjusted R_d_thick from {R_d_thick:.3f} to {new_R_d_thick:.3f} kpc (must be >1.5x thin)")
+    
 
     ARGS.all_param_info_list = param_info_list
     fitted_params_info = [p for p in param_info_list if p['is_fitted']]
@@ -2815,6 +2884,41 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     
     logger.info("\n" + "="*60)
     logger.info("🔥 Starting warm-up test...")
+    logger.info(f"   Xi type: {args.xi}")
+    logger.info(f"   Components: thin={args.include_disk_thin}, thick={args.include_disk_thick}, "
+            f"bulge={args.include_bulge}, gas={args.include_gas}")
+
+    # Check initial parameters BEFORE testing
+    logger.info("\n   Initial parameter values:")
+    param_dict = {}
+    for i, name in enumerate(fitted_names):
+        param_dict[name] = p0_guess[i]
+        logger.info(f"   - {name}: {p0_guess[i]:.3f}")
+
+    # Check disk parameter relationships
+    if 'h_z_thin_kpc' in param_dict and 'h_z_thick_kpc' in param_dict:
+        ratio = param_dict['h_z_thick_kpc'] / param_dict['h_z_thin_kpc']
+        logger.info(f"\n   Disk height ratio (thick/thin): {ratio:.2f}")
+        if ratio < 2.0:
+            logger.warning(f"   ⚠️  Invalid: thick disk height must be ≥ 2x thin disk!")
+            
+            # Fix it
+            idx_thin = fitted_names.index('h_z_thin_kpc')
+            idx_thick = fitted_names.index('h_z_thick_kpc')
+            p0_guess[idx_thick] = p0_guess[idx_thin] * 2.5
+            logger.info(f"   Fixed: h_z_thick adjusted to {p0_guess[idx_thick]:.3f} kpc")
+
+    if 'R_d_thin_kpc' in param_dict and 'R_d_thick_kpc' in param_dict:
+        ratio = param_dict['R_d_thick_kpc'] / param_dict['R_d_thin_kpc']
+        logger.info(f"   Disk length ratio (thick/thin): {ratio:.2f}")
+        if ratio < 1.0:
+            logger.warning(f"   ⚠️  Invalid: thick disk scale length must be > thin disk!")
+            
+            # Fix it
+            idx_thin = fitted_names.index('R_d_thin_kpc')
+            idx_thick = fitted_names.index('R_d_thick_kpc')
+            p0_guess[idx_thick] = p0_guess[idx_thin] * 1.5
+            logger.info(f"   Fixed: R_d_thick adjusted to {p0_guess[idx_thick]:.3f} kpc")
 
     try:
         # Arguments for the likelihood function
