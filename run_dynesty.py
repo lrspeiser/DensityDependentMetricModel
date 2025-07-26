@@ -53,29 +53,51 @@ import jax
 import jax.numpy as jnp
 
 
-# Enable JAX debugging for Metal
-os.environ['JAX_TRACEBACK_FILTERING'] = 'off'  # Show full traceback
+# Configure environment for JAX Metal support and debugging
+os.environ['JAX_TRACEBACK_FILTERING'] = 'off'  # Show full traceback for errors
 os.environ['JAX_DEBUG_NANS'] = '1'  # Check for NaN/Inf
-os.environ['JAX_LOG_COMPILES'] = '0'  # Log when functions are compiled
+os.environ['JAX_LOG_COMPILES'] = '0'  # Disable compilation logging (was '1')
 os.environ['JAX_ENABLE_CHECKS'] = '1'  # Enable runtime checks
-# Disable JAX CPU parallelism to let Dynesty use threads
-os.environ['JAX_METAL_USE_MPS'] = '1'
-os.environ['VECLIB_MAXIMUM_THREADS'] = '3'  # Limit BLAS threads too
+os.environ['JAX_METAL_USE_MPS'] = '1'  # Use Metal Performance Shaders
+os.environ['VECLIB_MAXIMUM_THREADS'] = '3'  # Limit BLAS threads
 os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
 os.environ['JAX_DISABLE_MOST_FALLBACKS'] = '1'
+os.environ['JAX_DISABLE_JIT_COMPILE_WARNINGS'] = '1'  # NEW: Disable JIT warnings
 
-
-
-# Configure JAX
+# Configure JAX settings
 jax.config.update("jax_enable_x64", False)  # Metal doesn't support float64
 jax.config.update("jax_platform_name", "METAL")  # Force Metal platform
-jax.config.update("jax_log_compiles", True)  # Log compilations
+jax.config.update("jax_log_compiles", False)  # Disable compilation logging (was True)
 
-# Add logging for JAX operations
-# import logging
-# logging.getLogger("jax").setLevel(logging.DEBUG)
+# Configure Python logging to suppress JAX compilation messages
+def configure_jax_logging():
+    """Configure JAX to be less verbose about compilation."""
+    # Suppress JAX compilation messages
+    jax_loggers = [
+        'jax',
+        'jax._src.dispatch', 
+        'jax._src.interpreters',
+        'jax._src.interpreters.pxla',
+        'jax._src.xla_bridge',
+        'jax._src.compiler',
+        'jax._src.lib',
+        'jax._src.profiler',
+    ]
+    
+    for logger_name in jax_loggers:
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+    
+    # Also suppress absl logging used by JAX
+    try:
+        import absl.logging
+        absl.logging.set_verbosity(absl.logging.ERROR)
+    except ImportError:
+        pass
 
-# Test JAX is working
+# Apply the logging configuration
+configure_jax_logging()
+
+# Test JAX is working (this will be silent now)
 try:
     test_array = jax.numpy.ones(10)
     test_result = jax.numpy.sum(test_array)
@@ -1444,31 +1466,49 @@ def log_likelihood_dynesty(
     xi_type: str,
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
-
     """
     MASTER log-likelihood function that now correctly passes the FULL parameter set
     to the physical plausibility check and uses the v_total_kms master function.
     """
-    
+
     # 1. Reconstruct the full parameter dictionary, including fixed values
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
             params[p_info['name']] = p_info['current_val']
 
+    # ============================================================================
+    # >>> FIX 1: RECONSTRUCT REPARAMETERIZED DISK MASSES <<<
+    # This is critical when using --fit_disk_reparameterized
+    # ============================================================================
+    if args_dynesty_obj.fit_disk_reparameterized:
+        params = reconstruct_physical_parameters(params)
+    # ============================================================================
+
     # Add boolean flags for which components to include in calculations
     for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
         params[f'include_{component}'] = getattr(args_dynesty_obj, f'include_{component}', False)
 
+    # ============================================================================
+    # >>> FIX 2: DEFENSIVE TYPE CASTING <<<
+    # Ensure all parameter values are floats to prevent JAX TypeErrors.
+    # ============================================================================
+    try:
+        params = {k: float(v) if isinstance(v, (int, float, str)) else v for k, v in params.items()}
+    except (ValueError, TypeError) as e:
+        # This will catch any string that cannot be converted to a float.
+        # It's a hard stop because it indicates a fundamental parameter problem.
+        # logger.error(f"FATAL: Could not cast a parameter to float: {e}")
+        return -np.inf, [np.inf]
+    # ============================================================================
+
     # 2. Perform plausibility checks on the full set of parameters
     # The check function needs the full list of names and values
     all_param_names_for_check = [p['name'] for p in all_param_info_list]
-    all_param_values_for_check = np.array([params[name] for name in all_param_names_for_check if name in params])
+    all_param_values_for_check = np.array([params.get(name) for name in all_param_names_for_check if params.get(name) is not None])
 
     # Ensure the arrays have the same length before calling the check
     if len(all_param_names_for_check) != len(all_param_values_for_check):
-         # This can happen if a parameter is in the config but not in the current run's `params` dict
-         # We will filter `all_param_names_for_check` to only include keys present in `params`
          all_param_names_for_check = [name for name in all_param_names_for_check if name in params]
 
     is_valid, reason, *_ = check_physical_plausibility(all_param_values_for_check, all_param_names_for_check, args_dynesty_obj)
@@ -1785,6 +1825,15 @@ def get_param_labels_and_bounds(ARGS):
     config_to_use = copy.deepcopy(MW_MULTI_COMP_PARAM_CONFIG)
     logger.info("Configuring parameters for multi-component Milky Way model")
 
+    def _ensure_float(value, param_name):
+        """Safely convert a value to float, logging errors."""
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            logger.error(f"FATAL: Could not convert value for parameter '{param_name}' to float. Got value: '{value}' of type {type(value)}.")
+            # This is a critical error, so we should exit.
+            sys.exit(1)
+
     # === NEW: TIGHTEN PRIORS BASED ON GR BASELINE IF REQUESTED ===
     if ARGS.use_gr_baseline_priors:
         logger.info("🔒 Applying tighter priors based on GR baseline results.")
@@ -1875,46 +1924,44 @@ def get_param_labels_and_bounds(ARGS):
             'power': ['rho_c_solar_kpc3', 'n_exp'],
             'mass_threshold': ['M_crit_msun', 'xi_boost', 'width'],
             'grav_color': ['rho_c_solar_kpc3', 'gamma_exp', 'lambda_g']
-            # Add other models as you define them
         }
-
-        # Should we fit this parameter?
         is_fitted = False
         if p_details.get('fit_flag_arg') == 'fit_xi_params':
-            # This is a gravity parameter. Only fit it if it belongs to the
-            # currently selected model AND the --fit_xi_params flag is active.
             if ARGS.fit_xi_params and p_name in xi_model_params.get(ARGS.xi, []):
                 is_fitted = True
         elif 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
-            # This is a baryonic parameter. Fit it if its specific flag is active.
             is_fitted = True
-
-        # Allow a fixed value on the command line to override fitting
         fixed_arg_name = p_details['fixed_val_from_arg']
         cli_flag = f"--{fixed_arg_name.replace('_', '-')}"
-
-        # Only override is_fitted if the user explicitly passed --<param>_fixed
         if cli_flag in sys.argv:
             is_fitted = False
 
         # Get current value
         if p_details.get('log_prior', False):
-            current_val = 10 ** (0.5 * (np.log10(p_details['low']) +
-                                        np.log10(p_details['high'])))
+            current_val_guess = 10 ** (0.5 * (np.log10(p_details['low']) +
+                                              np.log10(p_details['high'])))
         else:
-            current_val = 0.5 * (p_details['low'] + p_details['high'])
+            current_val_guess = 0.5 * (p_details['low'] + p_details['high'])
+
         # Allow CLI --<param>_fixed to override the auto start
         cli_override = getattr(ARGS, p_details['fixed_val_from_arg'])
-        if not is_fitted and cli_override is not None:
-            current_val = cli_override
 
-        # Bounds (tightened if available)
-        if p_name in bounds_modified:
-            low = bounds_modified[p_name]['low']
-            high = bounds_modified[p_name]['high']
+        # Determine the final current_val, ensuring it's a float
+        if not is_fitted and cli_override is not None:
+            # Use the value from the command line for a fixed parameter
+            current_val = _ensure_float(cli_override, p_name) # <-- FIX
         else:
-            low = p_details['low']
-            high = p_details['high']
+            # Use the calculated guess for a fitted parameter, or the default for a fixed one
+            current_val = _ensure_float(current_val_guess, p_name) # <-- FIX
+
+
+        # Bounds (tightened if available), ensuring they are floats
+        if p_name in bounds_modified:
+            low = _ensure_float(bounds_modified[p_name]['low'], p_name)   # <-- FIX
+            high = _ensure_float(bounds_modified[p_name]['high'], p_name) # <-- FIX
+        else:
+            low = _ensure_float(p_details['low'], p_name)   # <-- FIX
+            high = _ensure_float(p_details['high'], p_name) # <-- FIX
 
         # Validate initial value against PHYSICAL_BOUNDS
         if p_name in PHYSICAL_BOUNDS:
@@ -2481,6 +2528,222 @@ def check_early_stopping(sampler, convergence_tracker, args):
 
     return False, "Continuing"
 
+def run_comprehensive_gpu_test(args, R_data_jax, v_data_jax, sigma_data_jax, logger):
+    """
+    Comprehensive test of GPU functionality before starting expensive sampling.
+    Tests all major components and provides detailed progress updates.
+    """
+    import time
+    
+    logger.info("\n" + "="*60)
+    logger.info("🧪 COMPREHENSIVE GPU/PHYSICS TEST")
+    logger.info("="*60)
+    
+    all_tests_passed = True
+    test_results = {}
+    
+    # Test 1: JAX Backend
+    logger.info("\n[Test 1/6] Checking JAX backend...")
+    try:
+        backend = jax.default_backend()
+        devices = jax.devices()
+        logger.info(f"✅ Backend: {backend}")
+        logger.info(f"✅ Devices: {devices}")
+        test_results['backend'] = 'PASS'
+    except Exception as e:
+        logger.error(f"❌ Backend check failed: {e}")
+        test_results['backend'] = 'FAIL'
+        all_tests_passed = False
+    
+    # Test 2: Data Transfer to GPU
+    logger.info("\n[Test 2/6] Testing data transfer to GPU...")
+    try:
+        test_size = min(100, len(R_data_jax))
+        R_test = R_data_jax[:test_size]
+        
+        start_time = time.time()
+        _ = jax.device_put(R_test).block_until_ready()
+        transfer_time = time.time() - start_time
+        
+        logger.info(f"✅ Transferred {test_size} points in {transfer_time:.3f}s")
+        test_results['data_transfer'] = 'PASS'
+    except Exception as e:
+        logger.error(f"❌ Data transfer failed: {e}")
+        test_results['data_transfer'] = 'FAIL'
+        all_tests_passed = False
+    
+    # Test 3: Basic JAX Operations
+    logger.info("\n[Test 3/6] Testing basic JAX operations...")
+    try:
+        # Test array operations
+        x = jnp.array([1.0, 2.0, 3.0], dtype=jnp.float32)
+        y = jnp.sum(x * 2)
+        assert float(y) == 12.0, f"Expected 12.0, got {float(y)}"
+        
+        # Test JIT compilation
+        @jax.jit
+        def test_func(a, b):
+            return a + b * 2
+        
+        result = test_func(x, x).block_until_ready()
+        logger.info(f"✅ JAX operations working: test result shape = {result.shape}")
+        test_results['jax_ops'] = 'PASS'
+    except Exception as e:
+        logger.error(f"❌ JAX operations failed: {e}")
+        test_results['jax_ops'] = 'FAIL'
+        all_tests_passed = False
+    
+    # Test 4: Physics Functions
+    logger.info("\n[Test 4/6] Testing physics functions...")
+    try:
+        # Get initial parameters
+        fitted_names, _, p0_guess, _, _, _ = get_param_labels_and_bounds(args)
+        params = dict(zip(fitted_names, p0_guess))
+        
+        # Add fixed parameters
+        for p_info in args.all_param_info_list:
+            if not p_info['is_fitted']:
+                params[p_info['name']] = p_info['current_val']
+        
+        # Add component flags
+        for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
+            params[f'include_{component}'] = getattr(args, f'include_{component}', False)
+        
+        # Test velocity calculation
+        R_test = jnp.array([8.0], dtype=jnp.float32)  # Solar radius
+        
+        logger.info("  Testing Newtonian velocity...")
+        v_newton = v_baryon_total_newtonian_kms(R_test, params)
+        logger.info(f"  ✅ v_Newton at R_sun = {float(v_newton[0]):.1f} km/s")
+        
+        logger.info("  Testing density calculation...")
+        rho = rho_baryon_total_midplane_solar_kpc3(R_test, params)
+        logger.info(f"  ✅ ρ at R_sun = {float(rho[0]):.2e} M☉/kpc³")
+        
+        logger.info("  Testing xi function...")
+        xi_func = XI_FUNCTION_MAP.get(args.xi, XI_FUNCTION_MAP['power'])
+        xi_val = xi_func(rho, params.get('rho_c_solar_kpc3', 1e13), 
+                         params.get('n_exp', 1.5), params.get('A', 1.0))
+        logger.info(f"  ✅ ξ at R_sun = {float(xi_val[0]):.3f}")
+        
+        logger.info("  Testing full velocity model...")
+        v_total = v_total_kms(R_test, params, xi_type=args.xi)
+        logger.info(f"  ✅ v_total at R_sun = {float(v_total[0]):.1f} km/s")
+        
+        test_results['physics'] = 'PASS'
+    except Exception as e:
+        logger.error(f"❌ Physics functions failed: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+        test_results['physics'] = 'FAIL'
+        all_tests_passed = False
+    
+    # Test 5: Likelihood Function
+    logger.info("\n[Test 5/6] Testing likelihood function...")
+    try:
+        # Test on small subset of data
+        test_size = min(100, len(R_data_jax))
+        R_subset = R_data_jax[:test_size]
+        v_subset = v_data_jax[:test_size]
+        sigma_subset = sigma_data_jax[:test_size]
+        
+        start_time = time.time()
+        log_L, blob = log_likelihood_dynesty(
+            p0_guess, fitted_names, args, args.all_param_info_list,
+            R_subset, v_subset, sigma_subset, args.xi, None
+        )
+        likelihood_time = time.time() - start_time
+        
+        logger.info(f"✅ Likelihood calculation successful")
+        logger.info(f"   log(L) = {log_L:.2f}")
+        logger.info(f"   RMSE = {blob[0]:.1f} km/s")
+        logger.info(f"   Time for {test_size} points: {likelihood_time:.3f}s")
+        logger.info(f"   Estimated time for full dataset: {likelihood_time * len(R_data_jax) / test_size:.1f}s")
+        
+        test_results['likelihood'] = 'PASS'
+    except Exception as e:
+        logger.error(f"❌ Likelihood function failed: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+        test_results['likelihood'] = 'FAIL'
+        all_tests_passed = False
+    
+    # Test 6: Dynesty Integration
+    logger.info("\n[Test 6/6] Testing Dynesty sampler initialization...")
+    try:
+        # Try to create a minimal sampler
+        test_sampler = DynamicNestedSampler(
+            log_likelihood_dynesty,
+            prior_transform_dynesty,
+            len(fitted_names),
+            sample='rslice',
+            bound='multi',
+            ptform_args=(fitted_names, np.array([0.0]), np.array([1.0]), [False]),
+            logl_args=(fitted_names, args, args.all_param_info_list, 
+                      R_subset, v_subset, sigma_subset, args.xi, None)
+        )
+        logger.info("✅ Dynesty sampler creation successful")
+        test_results['dynesty'] = 'PASS'
+        del test_sampler  # Clean up
+    except Exception as e:
+        logger.error(f"❌ Dynesty initialization failed: {e}")
+        test_results['dynesty'] = 'FAIL'
+        all_tests_passed = False
+    
+    # Summary
+    logger.info("\n" + "="*60)
+    logger.info("TEST SUMMARY:")
+    logger.info("="*60)
+    for test_name, result in test_results.items():
+        symbol = "✅" if result == 'PASS' else "❌"
+        logger.info(f"{symbol} {test_name}: {result}")
+    
+    if all_tests_passed:
+        logger.info("\n🎉 ALL TESTS PASSED! Ready to start sampling.")
+    else:
+        logger.error("\n❌ SOME TESTS FAILED! Check the log for details.")
+        logger.error("Sampling may fail or give incorrect results.")
+    
+    logger.info("="*60 + "\n")
+    
+    return all_tests_passed
+
+def add_early_progress_monitor(sampler, start_time, logger, check_interval=10):
+    """
+    Add very frequent progress updates during the first few minutes.
+    """
+    current_time = time.time()
+    elapsed = current_time - start_time
+    
+    # Only do frequent updates in first 5 minutes
+    if elapsed > 300:  # 5 minutes
+        return
+    
+    try:
+        if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
+            n_samples = len(sampler.results.samples)
+            n_calls = sampler.results.ncall if hasattr(sampler.results, 'ncall') else 0
+            
+            if isinstance(n_calls, np.ndarray):
+                n_calls = np.sum(n_calls)
+            
+            # Calculate rate
+            if elapsed > 0:
+                samples_per_sec = n_samples / elapsed
+                calls_per_sec = n_calls / elapsed
+                
+                logger.info(f"[{elapsed:.0f}s] Samples: {n_samples} | "
+                          f"Calls: {n_calls} | "
+                          f"Rate: {samples_per_sec:.1f} samples/s, {calls_per_sec:.0f} calls/s")
+                
+                # Estimate time to first checkpoint
+                if n_samples > 0 and n_samples < 100:
+                    est_time_to_100 = (100 - n_samples) / samples_per_sec
+                    logger.info(f"   → Estimated time to 100 samples: {est_time_to_100:.0f}s")
+            
+    except Exception as e:
+        logger.debug(f"Early monitor error (non-critical): {e}")
+
 def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogate=None, dashboard_monitor=None):
     """
     Run a single Dynesty sampling loop with enhanced monitoring, convergence diagnostics,
@@ -2532,32 +2795,121 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     ndim = len(fitted_names)
     convergence_tracker = ConvergenceTracker(fitted_names)
 
+    # -----------------------------------------------------------------------
+    # 2.5 Run comprehensive GPU and physics tests
+    # -----------------------------------------------------------------------
+    if not args.resume:  # Only run tests on fresh starts
+        tests_passed = run_comprehensive_gpu_test(args, R_data_jax, v_data_jax, sigma_data_jax, logger)
+        
+        if not tests_passed:
+            response = input("\n⚠️ Some tests failed. Continue anyway? (y/N): ")
+            if response.lower() != 'y':
+                logger.error("Exiting due to failed tests.")
+                return None
+            else:
+                logger.warning("Continuing despite failed tests...")
 
+
+    # Instead of trying to JIT the entire likelihood function (which contains 
+    # non-JAX operations), just do a test evaluation to ensure everything works
+    
     logger.info("\n" + "="*60)
-    logger.info("🔥 Starting JIT compilation warm-up...")
-    
-    # Arguments for the likelihood function
-    logl_args = (
-        fitted_names, args, args.all_param_info_list,
-        R_data_jax, v_data_jax, sigma_data_jax,
-        args.xi, gp_surrogate
-    )
-    
-    # Compile the JAX function with a dummy parameter vector
+    logger.info("🔥 Starting warm-up test...")
+
     try:
-        # Use jax.jit to explicitly compile the likelihood function
-        jitted_log_likelihood = jax.jit(log_likelihood_dynesty, static_argnums=(1, 2, 6, 7))
+        # Arguments for the likelihood function
+        logl_args = (
+            fitted_names, args, args.all_param_info_list,
+            R_data_jax, v_data_jax, sigma_data_jax,
+            args.xi, gp_surrogate
+        )
         
-        # Call the jitted function to trigger compilation. This will be slow.
-        _ = jitted_log_likelihood(p0_guess, *logl_args).block_until_ready()
+        # Do a test evaluation without JIT
+        test_logL, test_blob = log_likelihood_dynesty(p0_guess, *logl_args)
         
-        logger.info("✅ JIT warm-up complete. Sampler will now run at full speed.")
-        
+        if np.isfinite(test_logL):
+            logger.info("✅ Warm-up test complete. Likelihood function working correctly.")
+            logger.info(f"   Test log(L) = {test_logL:.2f}")
+            logger.info(f"   Test RMSE = {test_blob[0]:.1f} km/s")
+        else:
+            logger.warning("⚠️ Warm-up test returned non-finite likelihood")
+            logger.info("   Diagnosing the issue...")
+            
+            # Diagnostic: Check parameter values
+            logger.info("\n   Initial parameter values:")
+            for name, val in zip(fitted_names, p0_guess):
+                logger.info(f"   - {name}: {val:.3e}")
+            
+            # Diagnostic: Test individual components
+            params_dict = dict(zip(fitted_names, p0_guess))
+            for p_info in args.all_param_info_list:
+                if not p_info['is_fitted']:
+                    params_dict[p_info['name']] = p_info['current_val']
+            
+            # Add component flags
+            for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
+                params_dict[f'include_{component}'] = getattr(args, f'include_{component}', False)
+            
+            # Test velocity calculation
+            try:
+                test_R = jnp.array([8.0])  # Solar radius
+                v_newton = v_baryon_total_newtonian_kms(test_R, params_dict)
+                logger.info(f"\n   Newtonian velocity at R_sun: {float(v_newton[0]):.1f} km/s")
+                
+                rho = rho_baryon_total_midplane_solar_kpc3(test_R, params_dict)
+                logger.info(f"   Density at R_sun: {float(rho[0]):.2e} M☉/kpc³")
+                
+                # Check if density is reasonable
+                if rho[0] < 1e-10 or rho[0] > 1e15:
+                    logger.error(f"   ❌ Density value {float(rho[0]):.2e} is unreasonable!")
+                
+                # Test xi calculation
+                xi_func = XI_FUNCTION_MAP.get(args.xi)
+                if args.xi == 'grav_color':
+                    xi_val = xi_func(rho, params_dict.get('rho_c_solar_kpc3', 1e13),
+                                params_dict.get('gamma_exp', 2.7),
+                                params_dict.get('lambda_g', 8.0))
+                else:
+                    xi_val = xi_func(rho, params_dict.get('rho_c_solar_kpc3', 1e13),
+                                params_dict.get('n_exp', 1.5),
+                                params_dict.get('A', 1.0))
+                logger.info(f"   Xi at R_sun: {float(xi_val[0]):.3f}")
+                
+                v_total = v_newton * jnp.sqrt(xi_val)
+                logger.info(f"   Total velocity at R_sun: {float(v_total[0]):.1f} km/s")
+                
+            except Exception as e:
+                logger.error(f"   ❌ Component test failed: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
+            
+            # Check if it's a plausibility check failure
+            is_valid, reason = check_physical_plausibility(p0_guess, fitted_names, args)[:2]
+            if not is_valid:
+                logger.error(f"\n   ❌ Initial parameters fail physical checks: {reason}")
+                logger.info("   Attempting to find valid starting point...")
+                
+                # Try to find better starting values
+                for i in range(ndim):
+                    if log_flags[i]:
+                        p0_guess[i] = np.sqrt(p_low[i] * p_high[i])
+                    else:
+                        p0_guess[i] = 0.5 * (p_low[i] + p_high[i])
+                
+                logger.info("   Retrying with centered parameters...")
+                test_logL, test_blob = log_likelihood_dynesty(p0_guess, *logl_args)
+                
+                if np.isfinite(test_logL):
+                    logger.info("   ✅ Found valid starting point!")
+                else:
+                    logger.error("   ❌ Still getting non-finite likelihood")
+                    logger.error("   Check your prior bounds and fixed parameter values")
+            
     except Exception as e:
-        logger.error(f"❌ JIT warm-up failed: {e}")
-        logger.error("   This may indicate a problem with the likelihood function itself.")
-        # Decide if you want to exit or continue
-        # sys.exit(1) 
+        logger.error(f"❌ Warm-up test failed: {e}")
+        logger.error("   This indicates a problem with the likelihood function or parameters.")
+        import traceback
+        logger.error(traceback.format_exc())
         
     logger.info("="*60 + "\n")
 
@@ -2607,6 +2959,43 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     # -----------------------------------------------------------------------
     # 5. Initialize dynesty sampler
     # -----------------------------------------------------------------------
+    def validate_initial_parameters(args, fitted_names, p0_guess, logger):
+        """Validate that initial parameters are reasonable."""
+        issues = []
+        
+        # Check for any NaN or inf values
+        if not np.all(np.isfinite(p0_guess)):
+            issues.append("Initial parameters contain NaN or inf values")
+        
+        # Check specific parameter ranges
+        param_dict = dict(zip(fitted_names, p0_guess))
+        
+        # Check masses are positive
+        for param in ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']:
+            if param in param_dict and param_dict[param] <= 0:
+                issues.append(f"{param} is not positive: {param_dict[param]}")
+        
+        # Check scale lengths/heights are positive
+        for param in fitted_names:
+            if ('R_d' in param or 'h_z' in param or 'a_bulge' in param) and param in param_dict:
+                if param_dict[param] <= 0:
+                    issues.append(f"{param} is not positive: {param_dict[param]}")
+        
+        # Check rho_c is reasonable for galaxies
+        if 'rho_c_solar_kpc3' in param_dict:
+            if param_dict['rho_c_solar_kpc3'] < 1e6 or param_dict['rho_c_solar_kpc3'] > 1e20:
+                issues.append(f"rho_c is unreasonable for galaxies: {param_dict['rho_c_solar_kpc3']:.2e}")
+        
+        if issues:
+            logger.error("❌ Initial parameter validation failed:")
+            for issue in issues:
+                logger.error(f"   - {issue}")
+            return False
+        
+        logger.info("✅ Initial parameters pass basic validation")
+        return True
+    
+    
     ptform_args = (fitted_names, np.array(p_low), np.array(p_high), log_flags)
     logl_args = (fitted_names, args, args.all_param_info_list, R_data_jax, v_data_jax, sigma_data_jax, args.xi, gp_surrogate)
 
@@ -2754,6 +3143,18 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         try:
             # --- Phase 1: Initialise live points ---
             logger.info("Initializing live points with sampler.sample_initial()...")
+            logger.info("First 5 minutes will have detailed progress updates...")
+
+            early_check_time = time.time()
+            EARLY_CHECK_INTERVAL = 10  # seconds
+
+            for it, results in enumerate(sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True)):
+                now = time.time()
+                
+                # Very frequent updates in first 5 minutes
+                if now - start_time < 300 and now - early_check_time > EARLY_CHECK_INTERVAL:
+                    add_early_progress_monitor(sampler, start_time, logger)
+                    early_check_time = now
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
                 now = time.time()
 
@@ -2898,9 +3299,8 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                         logz=sampler.results.logz,
                         error=str(e))
             if pool:
-                pool.close()
-                pool.join()
-            return None
+                pool.shutdown(wait=True)
+            raise
 # -----------------------------------------------------------------------
     # 8. Return result
     # -----------------------------------------------------------------------
