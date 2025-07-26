@@ -61,6 +61,9 @@ os.environ['JAX_ENABLE_CHECKS'] = '1'  # Enable runtime checks
 # Disable JAX CPU parallelism to let Dynesty use threads
 os.environ['JAX_METAL_USE_MPS'] = '1'
 os.environ['VECLIB_MAXIMUM_THREADS'] = '3'  # Limit BLAS threads too
+os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
+os.environ['JAX_DISABLE_MOST_FALLBACKS'] = '1'
+
 
 
 # Configure JAX
@@ -1319,17 +1322,23 @@ def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
             
         # Build timestamp for unique filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        npz_path = Path(output_dir) / f"dynesty_checkpoint_{timestamp}.npz"
+        
+        # Include xi_type in filename
+        xi_type = getattr(sampler, '_xi_type', 'power')  # Store xi_type in sampler
+        npz_path = Path(output_dir) / f"dynesty_checkpoint_{xi_type}_{timestamp}.npz"
         
         # Also save to a fixed filename that overwrites (for easy resumption)
-        npz_latest = Path(output_dir) / "dynesty_checkpoint_latest.npz"
+        npz_latest = Path(output_dir) / f"dynesty_checkpoint_{xi_type}_latest.npz"
         
         # Calculate weights if possible
         weights = None
         if hasattr(res, 'logwt') and hasattr(res, 'logz') and len(res.logz) > 0:
             weights = np.exp(res.logwt - res.logz[-1])
         
-        # Save the checkpoint
+        # Get run configuration from sampler
+        run_config = getattr(sampler, '_run_config', {})
+        
+        # Save the checkpoint with metadata
         save_data = {
             'samples': res.samples,
             'logz': getattr(res, "logz", np.array([])),
@@ -1341,7 +1350,18 @@ def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
             'weights': weights,
             'n_calls': getattr(res, "ncall", None),
             'timestamp': timestamp,
-            'n_samples': len(res.samples)
+            'n_samples': len(res.samples),
+            # Add metadata for analyzer
+            'xi_type': xi_type,
+            'include_bulge': run_config.get('include_bulge', False),
+            'include_disk_thin': run_config.get('include_disk_thin', True),
+            'include_disk_thick': run_config.get('include_disk_thick', False),
+            'include_gas': run_config.get('include_gas', False),
+            'fit_disk_thin': run_config.get('fit_disk_thin', False),
+            'fit_disk_thick': run_config.get('fit_disk_thick', False),
+            'fit_bulge': run_config.get('fit_bulge', False),
+            'fit_gas': run_config.get('fit_gas', False),
+            'fit_xi_params': run_config.get('fit_xi_params', False)
         }
         
         # Save with timestamp
@@ -1357,6 +1377,7 @@ def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
     except Exception as e:
         logger.warning(f"⚠️ Failed to save .npz checkpoint: {e}")
         return False
+
 
 
 # ============================================================================
@@ -2601,6 +2622,8 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             'fit_gas': args.fit_gas, 'fit_xi_params': args.fit_xi_params, 'xi': args.xi
         }
         
+        sampler._xi_type = args.xi
+        
         # Initialize logz tracking safely
         if not hasattr(sampler, "saved_logz"):
             sampler.saved_logz = []
@@ -2697,10 +2720,12 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         args.fitted_param_names = fitted_names
         early_stop_counter = 0
         last_monitor = last_check = time.time()
-        last_npz_save = time.time()  # ADD THIS
+        last_npz_save = time.time()
         NPZ_SAVE_INTERVAL = 300  # Save every 5 minutes (300 seconds)
-        
+
         try:
+            # --- Phase 1: Initialise live points ---
+            logger.info("Initializing live points with sampler.sample_initial()...")
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
                 now = time.time()
 
@@ -2713,6 +2738,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                     except Exception as e:
                         logger.warning(f"⚠️ Checkpoint failed: {e}")
 
+                # NPZ Snapshot
                 if now - last_npz_save > NPZ_SAVE_INTERVAL:
                     save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
                     last_npz_save = now
@@ -2721,9 +2747,46 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                 if now - last_monitor > args.monitor_interval_s:
                     last_monitor = now
                     enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
-                                                      run_start_time, logger, gp_surrogate, args,
-                                                      dashboard_monitor)
-                    
+                                                    run_start_time, logger, gp_surrogate, args,
+                                                    dashboard_monitor)
+
+                # Early stop check every 5 min
+                if now - last_check > 300:
+                    last_check = now
+                    stop, reason = check_early_stopping(sampler, convergence_tracker, args)
+                    if stop:
+                        early_stop_counter += 1
+                        logger.warning(f"Early stop check {early_stop_counter}/3: {reason}")
+                        if early_stop_counter >= 3:
+                            raise RuntimeError("Early stopping: unphysical region")
+                    else:
+                        early_stop_counter = 0
+
+            # --- Phase 2: Dynamic sampling loop ---
+            logger.info("Starting dynamic sampling with sampler.sample()...")
+            for _ in sampler.sample(dlogz_stop=args.dlogz_target, maxcall=args.maxcall, save_samples=True):
+                now = time.time()
+
+                # Checkpoint
+                if now - getattr(sampler, '_last_checkpoint_time', 0) > args.checkpoint_every:
+                    try:
+                        sampler.save(str(checkpoint_file))
+                        logger.info(f"💾 Checkpoint saved at {checkpoint_file}")
+                        sampler._last_checkpoint_time = now
+                    except Exception as e:
+                        logger.warning(f"⚠️ Checkpoint failed: {e}")
+
+                # NPZ Snapshot
+                if now - last_npz_save > NPZ_SAVE_INTERVAL:
+                    save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
+                    last_npz_save = now
+
+                # Monitor progress
+                if now - last_monitor > args.monitor_interval_s:
+                    last_monitor = now
+                    enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
+                                                    run_start_time, logger, gp_surrogate, args,
+                                                    dashboard_monitor)
 
                 # Early stop check every 5 min
                 if now - last_check > 300:
@@ -2745,7 +2808,6 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                 try:
                     res = sampler.results
                     if hasattr(res, 'samples') and len(res.samples) > 0:
-                        # Build output filename similar to final results
                         output_parts = ["dynesty_mw_interrupted", args.xi]
                         if args.include_bulge:       output_parts.append("B"  + ("f" if args.fit_bulge       else "x"))
                         if args.include_disk_thin:   output_parts.append("DT" + ("f" if args.fit_disk_thin   else "x"))
@@ -2754,20 +2816,32 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 
                         output_basename = "_".join(output_parts)
                         output_npz = Path(args.output_dir) / f"{output_basename}_samples.npz"
-
-                        # Calculate weights if possible
                         weights = np.exp(res.logwt - res.logz[-1]) if hasattr(res, 'logwt') and hasattr(res, 'logz') else None
 
-                        np.savez(output_npz,
-                                samples=res.samples,
-                                weights=weights,
-                                param_names=np.array(fitted_names),
-                                logl=getattr(res, 'logl', None),
-                                logz=getattr(res, 'logz', None),
-                                logzerr=getattr(res, 'logzerr', None),
-                                blob=getattr(res, 'blob', None),
-                                n_calls=getattr(res, 'ncall', None),
-                                interrupted=True)
+                        np.savez(
+                            output_npz,
+                            samples=res.samples,
+                            weights=weights,
+                            param_names=np.array(fitted_p_names),
+                            logl=res.logl,
+                            logz=res.logz,
+                            logzerr=res.logzerr,
+                            ess=ess,
+                            blob=getattr(res, 'blob', None),
+                            # Add metadata
+                            xi_type=args.xi,
+                            include_bulge=args.include_bulge,
+                            include_disk_thin=args.include_disk_thin,
+                            include_disk_thick=args.include_disk_thick,
+                            include_gas=args.include_gas,
+                            fit_disk_thin=args.fit_disk_thin,
+                            fit_disk_thick=args.fit_disk_thick,
+                            fit_bulge=args.fit_bulge,
+                            fit_gas=args.fit_gas,
+                            fit_xi_params=args.fit_xi_params,
+                            output_dir=str(args.output_dir),
+                            run_id=RUN_ID
+                        )
 
                         logger.info(f"✅ Saved interrupted results to {output_npz}")
                         logger.info(f"   Samples: {len(res.samples)}")
@@ -2782,27 +2856,23 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                     logger.debug(traceback.format_exc())
             else:
                 logger.warning("No results available to save")
-
-            # Clean up pool if exists
+            
             if pool:
                 pool.close()
                 pool.join()
-
-            # Re-raise to exit cleanly
             raise
 
         except RuntimeError as e:
-            logger.error(str(e))
+            logger.error(f"🛑 Sampling stopped by runtime error: {e}")
             if hasattr(sampler, 'results'):
-                np.savez(Path(args.output_dir) / "partial_results_unphysical.npz",
-                         samples=sampler.results.samples,
-                         logz=sampler.results.logz,
-                         error=str(e))
+                np.savez(Path(args.output_dir) / "partial_results_error.npz",
+                        samples=sampler.results.samples,
+                        logz=sampler.results.logz,
+                        error=str(e))
             if pool:
                 pool.close()
                 pool.join()
             return None
-
 # -----------------------------------------------------------------------
     # 8. Return result
     # -----------------------------------------------------------------------
@@ -3022,6 +3092,35 @@ def main_dynesty():
 
     # Parse args
     args = parser.parse_args()
+    
+    checkpoint_path = Path(args.output_dir) / "dynesty_checkpoint.pkl"
+    # Check for final output files, which indicate a clean previous exit.
+    final_npz_files = list(Path(args.output_dir).glob('*_samples.npz'))
+    final_summary_files = list(Path(args.output_dir).glob('*_summary.json'))
+
+    # If a checkpoint exists, but no final files were written, and we aren't
+    # explicitly resuming, it's likely the previous run was killed.
+    if checkpoint_path.exists() and not final_npz_files and not final_summary_files and not args.resume:
+        logger.warning("🧠 Detected potential prior crash (checkpoint exists but no final results).")
+        logger.warning("   Activating recovery mode: reducing load and forcing resumption.")
+
+        # Modify args for a safer run
+        original_nlive = args.nlive_init
+        original_maxcall = args.maxcall
+
+        args.nlive_init = max(300, int(args.nlive_init * 0.75))
+        args.maxcall = max(100000, int(args.maxcall * 0.75))
+        args.use_run_nested = True  # Fallback to the built-in loop to minimize memory usage
+
+        # Force the script into resume mode from the recovered checkpoint
+        args.resume = True
+        args.checkpoint_file = str(checkpoint_path)
+
+        logger.info(f"   - nlive_init reduced: {original_nlive} -> {args.nlive_init}")
+        logger.info(f"   - maxcall reduced: {original_maxcall} -> {args.maxcall}")
+        logger.info("   - Switched to built-in 'run_nested' loop for better stability.")
+        logger.info(f"   - Forcing resume from: {args.checkpoint_file}")
+
 
     # Ensure output directory exists and save run config
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
@@ -3186,21 +3285,106 @@ def main_dynesty():
         if not checkpoint_path.exists():
             logger.error(f"Checkpoint not found: {checkpoint_path}")
             sys.exit(1)
-        
-        # Store the checkpoint file path for later use
+
+        # Store the checkpoint file path for the sampler to use later
         args._resume_checkpoint_file = str(checkpoint_path)
-        
-        # Load checkpoint to check for configuration
-        with open(checkpoint_path, 'rb') as f:
-            import pickle
-            temp_sampler = pickle.load(f)
+
+        # --- ENHANCED RESUME LOGIC V3 ---
+        try:
+            with open(checkpoint_path, 'rb') as f:
+                import pickle
+                checkpoint_data = pickle.load(f)
+            
+            # Check if this is a dynesty dictionary-format checkpoint
+            if isinstance(checkpoint_data, dict) and 'sampler' in checkpoint_data:
+                temp_sampler = checkpoint_data['sampler']
+            else:
+                temp_sampler = checkpoint_data
+            
+            config_restored = False
             if hasattr(temp_sampler, '_run_config'):
-                # Restore configuration from checkpoint
+                # --- Case 1: Modern checkpoint with config inside ---
+                logger.info("✅ Restoring run configuration from inside checkpoint file...")
                 for key, value in temp_sampler._run_config.items():
                     setattr(args, key, value)
-                logger.info("✅ Restored run configuration from checkpoint")
+                
+                # CRITICAL: Ensure fit flags are boolean, not stored as 0/1
+                fit_flag_keys = ['fit_xi_params', 'fit_disk_thin', 'fit_disk_thick', 
+                                'fit_bulge', 'fit_gas', 'fit_rho_c', 'fit_gamma', 
+                                'fit_lambda_g', 'fit_disk_reparameterized']
+                for flag in fit_flag_keys:
+                    if hasattr(args, flag):
+                        # Convert to bool if needed
+                        setattr(args, flag, bool(getattr(args, flag)))
+                config_restored = True
             else:
-                logger.warning("⚠️ Checkpoint missing configuration - using command line flags")
+                # --- Case 2: Old checkpoint, fallback to JSON ---
+                logger.warning("⚠️ Checkpoint missing configuration. Attempting to restore from JSON file...")
+                
+                config_filenames = ["run_config_enhanced.json", "run_config.json"]
+                for filename in config_filenames:
+                    config_path = Path(args.output_dir) / filename
+                    if config_path.exists():
+                        try:
+                            logger.info(f"   Found configuration file: {config_path}")
+                            with open(config_path, 'r') as f_json:
+                                saved_config_data = json.load(f_json)
+
+                            # Use .get() for safety, falling back to the top-level dict
+                            saved_args = saved_config_data.get('all_parameters', saved_config_data)
+                            
+                            logger.info("   [DEBUG] Applying saved arguments from JSON...")
+                            for key, value in saved_args.items():
+                                if key != 'resume': # Don't override the intent to resume
+                                    # Ensure boolean flags are properly typed
+                                    if key in ['fit_xi_params', 'fit_disk_thin', 'fit_disk_thick', 
+                                            'fit_bulge', 'fit_gas', 'fit_rho_c', 'fit_gamma', 
+                                            'fit_lambda_g', 'fit_disk_reparameterized']:
+                                        setattr(args, key, bool(value))
+                                    else:
+                                        setattr(args, key, value)
+                            
+                            logger.info(f"✅ Successfully restored run configuration from {filename}.")
+                            config_restored = True
+                            break # Stop after finding the first valid config
+                        
+                        except Exception as e:
+                            logger.error(f"   Error reading or parsing {config_path}: {e}")
+                            continue
+            
+            # --- DIAGNOSTIC CHECK ---
+            if config_restored:
+                logger.info("   [DIAGNOSTIC] Final state of 'fit' flags before proceeding:")
+                logger.info(f"   - args.fit_xi_params: {getattr(args, 'fit_xi_params', 'MISSING')}")
+                logger.info(f"   - args.fit_bulge: {getattr(args, 'fit_bulge', 'MISSING')}")
+                logger.info(f"   - args.fit_gas: {getattr(args, 'fit_gas', 'MISSING')}")
+                logger.info(f"   - args.fit_disk_reparameterized: {getattr(args, 'fit_disk_reparameterized', 'MISSING')}")
+            else:
+                logger.error("❌ CRITICAL: Could not find configuration in checkpoint or JSON file.")
+                logger.error("   Please provide the full original command line flags to resume this run.")
+                sys.exit(1)
+
+        except Exception as e:
+            logger.error(f"❌ Failed to load or process checkpoint file at {checkpoint_path}: {e}")
+            sys.exit(1)
+            
+            # --- DIAGNOSTIC CHECK ---
+            # After attempting to restore, log the current state of critical flags
+            # to confirm they were set correctly before the script continues.
+            if config_restored:
+                logger.info("   [DIAGNOSTIC] Final state of 'fit' flags before proceeding:")
+                logger.info(f"   - args.fit_xi_params: {getattr(args, 'fit_xi_params', 'MISSING')}")
+                logger.info(f"   - args.fit_bulge: {getattr(args, 'fit_bulge', 'MISSING')}")
+                logger.info(f"   - args.fit_gas: {getattr(args, 'fit_gas', 'MISSING')}")
+                logger.info(f"   - args.fit_disk_reparameterized: {getattr(args, 'fit_disk_reparameterized', 'MISSING')}")
+            else:
+                logger.error("❌ CRITICAL: Could not find configuration in checkpoint or JSON file.")
+                logger.error("   Please provide the full original command line flags to resume this run.")
+                sys.exit(1)
+
+        except Exception as e:
+            logger.error(f"❌ Failed to load or process checkpoint file at {checkpoint_path}: {e}")
+            sys.exit(1)
 
     if args.enable_dashboard and not args.disable_dashboard:
         try:

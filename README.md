@@ -115,7 +115,34 @@ These results quantitatively demonstrate that pure Newtonian gravity requires ~4
 
 ## Precision fits to Gaia rotation curves with DDMM
 
-[Placeholder for DDMM results - analysis in progress]
+We systematically test four functional forms for the enhancement factor ξ(ρ), ranging from simple phenomenological fits to theoretically motivated expressions:
+
+**1. Simple Power Law**: The most basic parameterization uses ξ = 1 + A/(1 + (ρ/ρ_c)^n), where A controls maximum enhancement (typically A=1), ρ_c sets the transition density, and n determines transition sharpness. This provides smooth interpolation between regimes but may transition too gradually for Solar System screening.
+
+**2. Enhanced Power Law**: Identical functional form but with A >> 1 (typically A=8), allowing stronger low-density enhancement. The increased dynamic range may help achieve sharper transitions between galactic (ξ >> 1) and Solar System (ξ ≈ 1) regimes.
+
+**3. Logistic Function**: Uses ξ = 1 + A/(1 + exp(n·log₁₀(ρ/ρ_c))), creating a sharper S-curve transition. The exponential term provides more abrupt switching between regimes compared to power laws.
+
+**4. Gravitational Color**: Inspired by QCD confinement, this uses ξ = 1 + λ_g·exp(-(ρ/ρ_c)^γ), where γ=2.7 and λ_g=8 are theoretically predicted rather than fitted. At low densities (ρ << ρ_c), gravity is "deconfined" yielding ξ ≈ 9, while at high densities the exponential suppression ensures ξ → 1 much faster than any power law.
+
+The key difference lies in high-density behavior. For Solar System densities (ρ ~ 10²⁹ M_☉/kpc³) with ρ_c ~ 10¹² M_☉/kpc³:
+- Power law: ξ - 1 ∝ (ρ_c/ρ)^n ≈ 10^(-17n) — too large unless n is enormous
+- Gravitational color: ξ - 1 ∝ exp(-(ρ/ρ_c)^2.7) ≈ exp(-10^46) — essentially zero
+
+All forms are tested using identical Bayesian inference on Gaia DR3 data, allowing direct comparison of their ability to simultaneously fit galactic rotation curves and satisfy Solar System constraints.
+
+### Simple power-law results
+
+Initial attempts using simple power-law ξ functions successfully fit galaxy rotation curves (RMSE = 23 km/s, log evidence = -1.46×10⁶) with physically reasonable baryon masses (5.3×10¹⁰ M_☉). However, the best-fit critical density ρ_c = 1.14×10¹² M_☉/kpc³ falls at galactic rather than Solar System scales, yielding ξ(Earth) = 1.10 instead of the required < 1.00001 from Cassini constraints. This ~10⁵-fold violation confirms that successful DDMM models require ρ_c > 10¹⁵ M_☉/kpc³ to automatically screen modifications in high-density environments. The power-law form with n ≈ 0.5 provides insufficient transition sharpness between regimes.
+
+### Enhanced power-law and logistic results
+
+[Results pending - these forms may provide intermediate improvements]
+
+### Gravitational color results  
+
+[Results pending - the exponential suppression and theoretically constrained parameters (γ=2.7, λ_g=8) are expected to naturally satisfy both galactic and Solar System constraints]
+
 
 When DDMM is applied to the same Gaia DR3 dataset, we expect:
 - **Higher Bayesian evidence**: Δlog(Z) > 10 would provide decisive support

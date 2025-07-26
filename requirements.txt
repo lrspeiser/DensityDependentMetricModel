@@ -17,8 +17,7 @@ dynesty>=2.0.0
 
 # Machine learning and acceleration
 scikit-learn>=1.1.0
-jax[metal]>=0.4.0
-jaxlib
+
 
 # Optional but good to have
 tqdm>=4.64

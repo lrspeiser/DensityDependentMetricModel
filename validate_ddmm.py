@@ -72,15 +72,14 @@ EXPECTED_PARAMS = {
 
 # Patch for loading dynesty checkpoints that reference run_dynesty functions
 try:
-    from run_dynesty import (
-        log_likelihood_dynesty_debug,
-        prior_transform_dynesty,
-        get_param_labels_and_bounds,
-        MW_MULTI_COMP_PARAM_CONFIG,  # if needed by default values
-    )
+    import run_dynesty
+    # Create aliases for any missing functions
+    if hasattr(run_dynesty, 'log_likelihood_dynesty'):
+        if not hasattr(run_dynesty, 'log_likelihood_dynesty_debug'):
+            run_dynesty.log_likelihood_dynesty_debug = run_dynesty.log_likelihood_dynesty
 except ImportError as e:
-    print(f"WARNING: Could not import functions from run_dynesty: {e}")
-    print("Unpickling may fail unless all referenced functions are in scope.")
+    print(f"WARNING: Could not import run_dynesty module: {e}")
+    print("This is OK if you're just running validation on results.")
     
     
 @dataclass
@@ -171,13 +170,37 @@ class DDMMValidator:
         """Calculate xi with physical cap"""
         if params is None:
             params = self.model_params
-            
-        xi_uncapped = self._xi_func_base(
-            rho, 
-            params['rho_c_solar_kpc3'], 
-            params['n_exp'], 
-            params['A']
-        )
+        
+        # Call the xi function with the correct number of arguments
+        xi_type = params.get('xi_type', 'power')
+        
+        if xi_type in ['enhanced', 'grav_color']:
+            # These functions use additional parameters
+            if xi_type == 'enhanced':
+                A = params.get('A', 1.0)
+                xi_uncapped = self._xi_func_base(
+                    rho, 
+                    params['rho_c_solar_kpc3'], 
+                    params['n_exp'], 
+                    A
+                )
+            else:  # grav_color
+                gamma = params.get('gamma_exp', 2.7)
+                lambda_g = params.get('lambda_g', 8.0)
+                xi_uncapped = self._xi_func_base(
+                    rho,
+                    params['rho_c_solar_kpc3'],
+                    gamma,
+                    lambda_g
+                )
+        else:
+            # Standard power law and others - only 3 arguments
+            xi_uncapped = self._xi_func_base(
+                rho, 
+                params['rho_c_solar_kpc3'], 
+                params['n_exp']
+            )
+        
         xi_capped = np.minimum(xi_uncapped, 5.0)
         
         # Return scalar if input was scalar
@@ -210,6 +233,138 @@ class DDMMValidator:
             logger.info(f"  {name:<12} {status:<15} ({path})")
             
         return availability
+    
+    def run_diagnostic_mode(self):
+        """Run validation with detailed diagnostics"""
+        logger.info("\n" + "="*70)
+        logger.info("DIAGNOSTIC MODE: Why Tests Are Failing")
+        logger.info("="*70)
+        
+        # 1. Show xi transition curve
+        rho_range = np.logspace(6, 35, 1000)
+        xi_values = self._calculate_xi(rho_range)
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+        
+        # Xi vs density
+        ax1.loglog(rho_range, xi_values, 'b-', lw=2)
+        
+        # Mark critical densities
+        critical_densities = {
+            'Galaxy': (1e8, 'green'),
+            'Solar System': (1e16, 'orange'),
+            'Laboratory': (1e31, 'red')
+        }
+        
+        for name, (rho, color) in critical_densities.items():
+            xi = self._calculate_xi(rho)
+            ax1.axvline(rho, color=color, ls='--', alpha=0.5)
+            ax1.plot(rho, xi, 'o', color=color, markersize=10)
+            ax1.text(rho*1.5, float(xi)*0.9, name, color=color, fontsize=10)
+        
+        ax1.set_xlabel('Density ρ (M☉/kpc³)')
+        ax1.set_ylabel('ξ(ρ)')
+        ax1.set_title('DDMM Enhancement Factor vs Density')
+        ax1.grid(True, alpha=0.3)
+        ax1.set_xlim(1e6, 1e35)
+        
+        # Deviation from unity
+        deviations = np.abs(xi_values - 1.0)
+        ax2.loglog(rho_range, deviations, 'r-', lw=2)
+        
+        # Mark constraint levels
+        constraints = {
+            'Mercury (1000 ppm)': 1e-3,
+            'Cassini': 2.3e-5,
+            'Eöt-Wash': 1e-6,
+            'MICROSCOPE': 1e-14
+        }
+        
+        for name, limit in constraints.items():
+            ax2.axhline(limit, color='gray', ls=':', alpha=0.5)
+            ax2.text(1e7, limit*1.5, name, fontsize=8, color='gray')
+        
+        # Mark critical densities on deviation plot too
+        for name, (rho, color) in critical_densities.items():
+            xi = self._calculate_xi(rho)
+            dev = abs(float(xi) - 1.0)
+            ax2.axvline(rho, color=color, ls='--', alpha=0.5)
+            ax2.plot(rho, dev, 'o', color=color, markersize=10)
+        
+        ax2.set_xlabel('Density ρ (M☉/kpc³)')
+        ax2.set_ylabel('|ξ - 1|')
+        ax2.set_title('Deviation from GR vs Observational Constraints')
+        ax2.grid(True, alpha=0.3)
+        ax2.set_xlim(1e6, 1e35)
+        ax2.set_ylim(1e-16, 10)
+        
+        plt.tight_layout()
+        plt.savefig(self.output_dir / 'xi_diagnostic_plot.png', dpi=150)
+        plt.close()
+        
+        # 2. Calculate "safe" density ranges
+        logger.info("\nDensity ranges where tests pass:")
+        
+        for test_name, limit in constraints.items():
+            safe_idx = np.where(deviations < limit)[0]
+            if len(safe_idx) > 0:
+                rho_min_safe = rho_range[safe_idx[0]]
+                logger.info(f"  {test_name}: ρ > {rho_min_safe:.2e} M☉/kpc³")
+            else:
+                logger.info(f"  {test_name}: NEVER PASSES")
+        
+        # 3. Show what n value would be needed
+        logger.info("\nWhat n value would help?")
+        target_rho = 1e16  # Solar System
+        target_xi_dev = 1e-5  # Cassini limit
+        
+        # For power law: xi = 1 + A/(1 + (rho/rho_c)^n)
+        # At high rho: xi ≈ 1 + A*(rho_c/rho)^n
+        # Need: A*(rho_c/rho)^n < target_xi_dev
+        
+        if self.model_params['A'] > 0:
+            n_needed = np.log(target_xi_dev/self.model_params['A']) / np.log(self.model_params['rho_c_solar_kpc3']/target_rho)
+            logger.info(f"  To pass Cassini with current ρ_c:")
+            logger.info(f"  Need n > {n_needed:.2f} (you have n = {self.model_params['n_exp']:.2f})")
+        
+        # 4. Show specific problem areas
+        logger.info("\nSpecific ξ values at test locations:")
+        test_densities = [
+            ('Milky Way disk (R=8kpc)', 1e8),
+            ('Solar neighborhood', 3e10),
+            ('Jupiter orbit', 3e13),
+            ('Mercury orbit', 1e15),
+            ('Earth surface', 8e31),
+            ('LHC collision', 1e40)
+        ]
+        
+        for name, rho in test_densities:
+            xi = float(self._calculate_xi(rho))
+            logger.info(f"  {name:<30} ρ={rho:.1e}  ξ={xi:.15f}  |ξ-1|={abs(xi-1):.2e}")
+        
+        # 5. Alternative approaches
+        logger.info("\nAlternative approaches that might work:")
+        logger.info("  1. Enhanced function: Sharper transition")
+        logger.info("  2. Gravitational color: Natural high-density suppression")  
+        logger.info("  3. Screening mechanism: Environmental dependence")
+        logger.info("  4. Hybrid: Different physics in different regimes")
+        
+        # 6. Save diagnostic data
+        diagnostic_data = {
+            'rho_range': rho_range.tolist(),
+            'xi_values': xi_values.tolist() if hasattr(xi_values, 'tolist') else [float(xi_values)] * len(rho_range),
+            'deviations': deviations.tolist() if hasattr(deviations, 'tolist') else [float(deviations)] * len(rho_range),
+            'model_params': self.model_params,
+            'critical_densities': {k: v[0] for k, v in critical_densities.items()},
+            'constraints': constraints
+        }
+        
+        with open(self.output_dir / 'diagnostic_data.json', 'w') as f:
+            json.dump(diagnostic_data, f, indent=2)
+        
+        logger.info(f"\nDiagnostic plot saved to: {self.output_dir}/xi_diagnostic_plot.png")
+        logger.info(f"Diagnostic data saved to: {self.output_dir}/diagnostic_data.json")
+
     
     # ========================================================================
     # TEST 1: Solar System Consistency
@@ -1673,6 +1828,9 @@ def main():
                        help="Skip data availability check")
     parser.add_argument('--run_cosmology', action='store_true',
                     help="Run the advanced cosmological light propagation tests instead of the baseline.")
+    parser.add_argument('--diagnostic', action='store_true',
+                       help="Run diagnostic mode to understand test failures")
+
     
     args = parser.parse_args()
     
@@ -1753,6 +1911,11 @@ def main():
     
     # Initialize validator
     validator = DDMMValidator(model_params, args.output_dir)
+    
+    if args.diagnostic:
+        validator.run_diagnostic_mode()
+        return  # Exit after diagnostics
+
     
     # Integrate enhanced light propagation
     # propagator = integrate_with_existing_validator(validator, Path(args.output_dir))

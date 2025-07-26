@@ -1,14 +1,16 @@
 {
   "model_parameters": {
-    "M_disk_thin_solar": 54563008583.800934,
-    "R_d_thin_kpc": 3.482327637067669,
-    "h_z_thin_kpc": 0.32753097728339803,
-    "rho_c_solar_kpc3": 1000000000.0,
-    "n_exp": 1.0,
-    "A": 1.0,
     "xi_type": "power",
+    "A": 1.0,
+    "rho_c_solar_kpc3": 1137456381078.205,
+    "n_exp": 0.508199409751132,
+    "M_bulge_solar": 5045052768.524862,
+    "a_bulge_kpc": 1.9730948518158753,
+    "M_gas_solar": 47491074554.47071,
+    "R_d_gas_kpc": 14.714594288469645,
+    "h_z_gas_kpc": 0.19575216610189053,
     "include_disk_thin": true,
-    "include_disk_thick": true,
+    "include_disk_thick": false,
     "include_bulge": true,
     "include_gas": true
   },
@@ -16,45 +18,48 @@
     {
       "test_name": "Solar System Consistency",
       "passed": false,
-      "score": 0.6936000124001995,
+      "score": 0.0,
       "details": {
         "mercury": {
-          "passed": true,
-          "score": 0.9990000009999285,
-          "xi": 1.000000999999,
-          "deviation_ppm": 0.9999990000715328
+          "passed": false,
+          "score": 0.0,
+          "xi": 1.030916452407837,
+          "deviation_ppm": 30916.452407836914
         },
         "lunar": {
-          "passed": true,
-          "score": 0.9800000400007605,
-          "eta": 1.9999959999239536e-06
+          "passed": false,
+          "score": 0.0,
+          "eta": 0.04340493679046631
         },
         "cassini": {
           "passed": "False",
           "score": 0.0,
-          "gamma_deviation": 0.0009990009990010762
+          "gamma_deviation": "0.5163574"
         }
       },
       "recommendations": [
+        "\u03be deviates from unity in Solar System - check \u03c1_c value",
+        "Equivalence principle violation detected",
         "Light deflection shows deviation from GR"
       ]
     },
     {
       "test_name": "Galaxy Rotation Curves",
       "passed": false,
-      "score": 0.2679456019082153,
+      "score": 0.26722498456117044,
       "details": {
         "gaia": {
-          "passed": false,
-          "score": 0.0,
-          "error": "'x' and 'y' must have the same size"
+          "passed": "False",
+          "score": "0.0",
+          "chi2_dof": "27722.22",
+          "mean_residual": -32.481536865234375
         },
         "sparc": {
           "passed": true,
-          "score": 0.5358912038164306,
+          "score": 0.5344499691223409,
           "n_galaxies": 30,
-          "successful": 28,
-          "median_rms": 11.096624899632339
+          "successful": 29,
+          "median_rms": 11.852312087222955
         }
       },
       "recommendations": [
@@ -64,15 +69,20 @@
     {
       "test_name": "Type Ia Supernovae",
       "passed": "True",
-      "score": 0.4018787018551933,
+      "score": 0.4723893925681941,
       "details": {
         "model_comparison": {
           "ddmm_no_expansion_max_dev": null,
           "ddmm_hybrid_max_dev": null,
           "chi2_results": {
-            "lcdm": 214535388.37927735,
-            "ddmm_no_exp": 195571526.83951712,
-            "ddmm_hybrid": 203845124.26893824
+            "lcdm": 4244.835800867935,
+            "lcdm_chi2_dof": 2.4999032985087957,
+            "ddmm_no_exp": 348756.7661901576,
+            "ddmm_no_exp_chi2_dof": 205.51371018866095,
+            "ddmm_hybrid": 25036.55042722408,
+            "ddmm_hybrid_chi2_dof": 14.753418047863335,
+            "offset_mag": -0.09482143204785132,
+            "intrinsic_scatter": 0.12
           }
         }
       },
@@ -92,8 +102,8 @@
         "microscope": {
           "passed": false,
           "score": 0.0,
-          "eta": 1.000000082740371e-11,
-          "xi": 1.00000000001
+          "eta": 9.179115295410156e-05,
+          "xi": 1.000091791152954
         }
       },
       "recommendations": [
@@ -109,13 +119,13 @@
         "galaxy_galaxy": {
           "passed": "False",
           "score": 0.0,
-          "theta_ratio": 1.413085782807741,
-          "mass_ratio": 1.996811429573366
+          "theta_ratio": 1.413869848118242,
+          "mass_ratio": 1.9990279474179002
         },
         "cluster": {
           "passed": "False",
           "score": 0.0,
-          "mass_ratio": 1.9999972258281082
+          "mass_ratio": 1.9999646860014064
         }
       },
       "recommendations": [
@@ -126,18 +136,18 @@
     {
       "test_name": "Large Scale Structure",
       "passed": false,
-      "score": 8.51138825589332e-08,
+      "score": 8.483120606484587e-08,
       "details": {
         "growth_rate": {
           "passed": "False",
-          "score": 1.702277651178664e-07,
-          "f_ddmm": 0.7291606034329466,
-          "deviation_sigma": 5.583212068658932
+          "score": 1.6966241212969174e-07,
+          "f_ddmm": 0.7291903936853383,
+          "deviation_sigma": 5.583807873706766
         },
         "bao": {
           "passed": false,
           "score": 0.0,
-          "DV_ratio": 1.1221471970290937
+          "DV_ratio": 1.122317065239886
         }
       },
       "recommendations": [
@@ -146,12 +156,12 @@
       ]
     }
   ],
-  "overall_score": 0.3105707335462485,
+  "overall_score": 0.20660241032676177,
   "tests_passed": 1,
   "tests_total": 6,
   "summary": {
     "status": "POOR",
     "message": "DDMM has significant issues that need addressing",
-    "score": "0.31"
+    "score": "0.21"
   }
 }
