@@ -505,7 +505,34 @@ def check_physical_plausibility(
     but always returns True to allow the sampler to explore.
     """
     logger = get_or_create_logger()
-    logger.debug("\n--- Running check_physical_plausibility (Non-Blocking Mode) ---")
+    # logger.debug("\n--- Running check_physical_plausibility (Non-Blocking Mode) ---")
+    
+    # ALWAYS LOG when this function is called
+    logger.info("\n=== PHYSICAL PLAUSIBILITY CHECK ===")
+    
+    try:
+        params = dict(zip(param_names, theta_values))
+    except Exception as e:
+        logger.error(f"❌ Failed to unpack parameters: {e}")
+        return False, "Parameter unpacking failure"
+
+    # Log all parameters
+    logger.info("Parameters being checked:")
+    for name, value in params.items():
+        logger.info(f"  {name}: {value:.3e}")
+    
+    try:
+        params = dict(zip(param_names, theta_values))
+        logger.info("   Parameters unpacked successfully")
+        
+        # Log the actual values
+        for name, value in params.items():
+            logger.info(f"   - {name}: {value:.3e}")
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to unpack parameters: {e}")
+        # In this case, we still return False because the parameters are invalid
+        return False, "Parameter unpacking failure"
 
     try:
         params = dict(zip(param_names, theta_values))
@@ -529,8 +556,8 @@ def check_physical_plausibility(
             total_mass > PHYSICAL_BOUNDS['M_total']['max']
         ):
             # --- CHANGED ---
-            logger.warning(f"Plausibility FAIL: Total mass {total_mass:.2e} outside physical bounds.")
-            # return False, f"Total mass {total_mass:.2e} outside physical bounds." # <-- OLD BEHAVIOR
+            # logger.warning(f"Plausibility FAIL: Total mass {total_mass:.2e} outside physical bounds.")
+            return False, f"Total mass {total_mass:.2e} outside physical bounds." # <-- OLD BEHAVIOR
     except Exception as e:
         logger.error(f"Error during mass check: {e}")
         return False, "Failed during total mass check"
@@ -539,15 +566,15 @@ def check_physical_plausibility(
     if 'R_d_thick_kpc' in params and 'R_d_thin_kpc' in params:
         if params['R_d_thick_kpc'] < params['R_d_thin_kpc']:
             # --- CHANGED ---
-            logger.warning("Plausibility FAIL: Thick disk scale length smaller than thin disk.")
-            # return False, "Thick disk scale length cannot be smaller than thin disk." # <-- OLD BEHAVIOR
+            # logger.warning("Plausibility FAIL: Thick disk scale length smaller than thin disk.")
+            return False, "Thick disk scale length cannot be smaller than thin disk." # <-- OLD BEHAVIOR
 
     # 3. Check scale height ordering
     if 'h_z_thick_kpc' in params and 'h_z_thin_kpc' in params:
         if params['h_z_thick_kpc'] < 2 * params['h_z_thin_kpc']:
             # --- CHANGED ---
-            logger.warning("Plausibility FAIL: Thick disk scale height must be at least 2x thin disk.")
-            # return False, "Thick disk scale height must be at least 2x thin disk." # <-- OLD BEHAVIOR
+            # logger.warning("Plausibility FAIL: Thick disk scale height must be at least 2x thin disk.")
+            return False, "Thick disk scale height must be at least 2x thin disk." # <-- OLD BEHAVIOR
 
     # 4. Check xi and velocity at solar radius
     try:
@@ -572,11 +599,11 @@ def check_physical_plausibility(
 
         if not (EXPECTED_V_AT_SOLAR[0] <= v_model_solar <= EXPECTED_V_AT_SOLAR[1]):
             # --- CHANGED ---
-            logger.warning(
-                f"Plausibility FAIL: Predicted v(R_sun) = {v_model_solar:.0f} km/s is outside the expected range "
-                f"[{EXPECTED_V_AT_SOLAR[0]}, {EXPECTED_V_AT_SOLAR[1]}]"
-            )
-            # return False, ... # <-- OLD BEHAVIOR
+            # logger.warning(
+            #    f"Plausibility FAIL: Predicted v(R_sun) = {v_model_solar:.0f} km/s is outside the expected range "
+            #    f"[{EXPECTED_V_AT_SOLAR[0]}, {EXPECTED_V_AT_SOLAR[1]}]"
+            # )
+            return False, ... # <-- OLD BEHAVIOR
 
         # 5. Cassini test (still important to enforce)
         passes_cassini, cassini_msg = check_cassini_compatibility(params, args_obj.xi)
@@ -1513,6 +1540,7 @@ def log_likelihood_dynesty(
 
     is_valid, reason, *_ = check_physical_plausibility(all_param_values_for_check, all_param_names_for_check, args_dynesty_obj)
     if not is_valid:
+        get_or_create_logger().error(f"Plausibility check failed for initial point. Reason: {reason}")
         return -np.inf, [np.inf]
 
     # 2b. Enforce Cassini constraints
@@ -1556,23 +1584,27 @@ def log_likelihood_dynesty(
     except Exception:
         return -np.inf, [np.inf]
 
-    # 4. Plausibility penalty for overshooting
+    # 4. Calculate the base chi-squared and log-likelihood on the GPU FIRST
+    chi2 = jnp.sum(((v_data_jax - v_model) / sigma_data_jax)**2)
+    log_L = -0.5 * chi2
+
+    # Immediately check if the base likelihood is valid before proceeding
+    if not jnp.isfinite(log_L):
+        return -np.inf, [np.inf]
+
+    # 5. THEN, apply a "soft" penalty for unphysical behavior (e.g., overshooting)
     v_model_solar_mask = (R_data_jax > 7.5) & (R_data_jax < 8.5)
     if jnp.any(v_model_solar_mask):
         v_model_solar = jnp.median(v_model[v_model_solar_mask])
         if v_model_solar > 300.0:
-            return -np.inf, [np.inf]
-    # 5. Calculate chi-squared and log-likelihood on the GPU
-    chi2 = jnp.sum(((v_data_jax - v_model) / sigma_data_jax)**2)
-    log_L = -0.5 * chi2
+            # Apply a quadratic penalty for velocities over 300 km/s
+            # The denominator (e.g., 25.0) controls how "hard" the penalty is
+            penalty = -0.5 * ((v_model_solar - 300.0) / 25.0)**2
+            log_L += penalty # Safely add the penalty to the existing log_L
 
-    if not jnp.isfinite(log_L):
-        return -np.inf, [np.inf]
-
+    # 6. Calculate the blob (RMSE) and return
     rmse = jnp.sqrt(jnp.mean((v_data_jax - v_model)**2))
-    # Return standard Python floats for Dynesty
     return float(log_L), [float(rmse)]
-
 
 def v_model_for_dynesty(
     R_kpc_array: np.ndarray,
@@ -2066,6 +2098,29 @@ def get_param_labels_and_bounds(ARGS):
         prior_type = "Log-uniform" if p['log_prior'] else "Uniform"
         logger.info(f"  {p['name']:<25} | Prior: {prior_type} | Range: [{p['low']:.2e}, {p['high']:.2e}]")
 
+    logger.info("\n🔍 INITIAL PARAMETER VALUES CHECK:")
+    param_dict = {p['name']: p['current_val'] for p in param_info_list}
+    
+    # Check disk parameters
+    if 'R_d_thin_kpc' in param_dict and 'R_d_thick_kpc' in param_dict:
+        ratio = param_dict['R_d_thick_kpc'] / param_dict['R_d_thin_kpc']
+        logger.info(f"  R_d ratio (thick/thin): {ratio:.2f} (should be > 1)")
+        if ratio < 1:
+            logger.warning("  ⚠️ WARNING: Thick disk scale length < thin disk!")
+    
+    if 'h_z_thin_kpc' in param_dict and 'h_z_thick_kpc' in param_dict:
+        ratio = param_dict['h_z_thick_kpc'] / param_dict['h_z_thin_kpc']
+        logger.info(f"  h_z ratio (thick/thin): {ratio:.2f} (should be >= 2)")
+        if ratio < 2:
+            logger.warning("  ⚠️ WARNING: Thick disk scale height < 2x thin disk!")
+    
+    # Check total mass
+    mass_components = ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']
+    total_mass = sum(param_dict.get(comp, 0.0) for comp in mass_components)
+    logger.info(f"  Total initial mass: {total_mass:.2e} M☉")
+    logger.info(f"  Expected range: [{PHYSICAL_BOUNDS['M_total']['min']:.2e}, {PHYSICAL_BOUNDS['M_total']['max']:.2e}]")
+
+
     # Return as required
     use_log_flags = [p['log_prior'] for p in fitted_params_info]
     return (
@@ -2344,12 +2399,7 @@ def test_likelihood_at_typical_params(args, gaia_data):
     # Get parameter configuration, which includes the correct starting guess (p0_guess)
     fitted_p_names, _, p0_guess, _, _, _ = \
         get_param_labels_and_bounds(args)
-
-    # --- THIS IS THE CRITICAL FIX ---
-    # We now use p0_guess directly. It is the true starting point of the run.
     test_params = p0_guess
-    # --- END OF FIX ---
-
     logger.info("Testing with initial parameters (center of prior ranges):")
     for name, val in zip(fitted_p_names, test_params):
         logger.info(f"  {name}: {val:.3e}")
@@ -2359,6 +2409,37 @@ def test_likelihood_at_typical_params(args, gaia_data):
         for p_info in args.all_param_info_list:
             if not p_info['is_fitted']:
                 logger.info(f"  {p_info['name']}: {p_info['current_val']:.3e}")
+                
+    logger.info("\n🔍 DETAILED PARAMETER CHECK:")
+
+    # Build full parameter dict for debugging
+    full_params = dict(zip(fitted_p_names, test_params))
+    for p_info in args.all_param_info_list:
+        if not p_info['is_fitted']:
+            full_params[p_info['name']] = p_info['current_val']
+    
+    # Check total mass
+    mass_components = ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']
+    total_mass = sum(full_params.get(comp, 0.0) for comp in mass_components)
+    logger.info(f"  Total baryonic mass: {total_mass:.2e} M☉")
+    logger.info(f"  Mass bounds: [{PHYSICAL_BOUNDS['M_total']['min']:.2e}, {PHYSICAL_BOUNDS['M_total']['max']:.2e}]")
+    
+    # Check scale parameters
+    if 'R_d_thick_kpc' in full_params and 'R_d_thin_kpc' in full_params:
+        logger.info(f"  R_d_thin: {full_params['R_d_thin_kpc']:.2f} kpc")
+        logger.info(f"  R_d_thick: {full_params['R_d_thick_kpc']:.2f} kpc")
+        logger.info(f"  Ratio (thick/thin): {full_params['R_d_thick_kpc']/full_params['R_d_thin_kpc']:.2f}")
+    
+    if 'h_z_thick_kpc' in full_params and 'h_z_thin_kpc' in full_params:
+        logger.info(f"  h_z_thin: {full_params['h_z_thin_kpc']:.3f} kpc")
+        logger.info(f"  h_z_thick: {full_params['h_z_thick_kpc']:.3f} kpc")
+        logger.info(f"  Ratio (thick/thin): {full_params['h_z_thick_kpc']/full_params['h_z_thin_kpc']:.2f}")
+    
+    # Check xi parameters
+    logger.info(f"\n  Xi parameters:")
+    logger.info(f"  - rho_c: {full_params.get('rho_c_solar_kpc3', 'NOT SET')}")
+    logger.info(f"  - n_exp: {full_params.get('n_exp', 'NOT SET')}")
+    logger.info(f"  - A: {full_params.get('A', 'NOT SET')}")
 
     # Temporarily make the plausibility check more lenient for this one test
     args._is_preflight_check = True
@@ -2867,16 +2948,22 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     # -----------------------------------------------------------------------
     # 2.5 Run comprehensive GPU and physics tests
     # -----------------------------------------------------------------------
+    logger.info("About to run GPU tests. args.resume = %s", args.resume)
+    tests_passed = True  # Initialize the variable with a default value
     if not args.resume:  # Only run tests on fresh starts
+        logger.info("Starting comprehensive GPU tests...")
         tests_passed = run_comprehensive_gpu_test(args, R_data_jax, v_data_jax, sigma_data_jax, logger)
-        
-        if not tests_passed:
-            response = input("\n⚠️ Some tests failed. Continue anyway? (y/N): ")
-            if response.lower() != 'y':
-                logger.error("Exiting due to failed tests.")
-                return None
-            else:
-                logger.warning("Continuing despite failed tests...")
+    else:
+        logger.info("Skipping GPU tests because resuming from checkpoint")
+
+    # Now, this 'if' statement will always have a valid 'tests_passed' variable to check
+    if not tests_passed:
+        response = input("\n⚠️ Some tests failed. Continue anyway? (y/N): ")
+        if response.lower() != 'y':
+            logger.error("Exiting due to failed tests.")
+            return None
+        else:
+            logger.warning("Continuing despite failed tests...")
 
 
     # Instead of trying to JIT the entire likelihood function (which contains 
@@ -2888,134 +2975,138 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     logger.info(f"   Components: thin={args.include_disk_thin}, thick={args.include_disk_thick}, "
             f"bulge={args.include_bulge}, gas={args.include_gas}")
 
-    # Check initial parameters BEFORE testing
-    logger.info("\n   Initial parameter values:")
-    param_dict = {}
-    for i, name in enumerate(fitted_names):
-        param_dict[name] = p0_guess[i]
-        logger.info(f"   - {name}: {p0_guess[i]:.3f}")
+    # Build complete parameter dictionary for testing
+    test_params = dict(zip(fitted_names, p0_guess))
+    for p_info in args.all_param_info_list:
+        if not p_info['is_fitted']:
+            test_params[p_info['name']] = p_info['current_val']
 
-    # Check disk parameter relationships
-    if 'h_z_thin_kpc' in param_dict and 'h_z_thick_kpc' in param_dict:
-        ratio = param_dict['h_z_thick_kpc'] / param_dict['h_z_thin_kpc']
-        logger.info(f"\n   Disk height ratio (thick/thin): {ratio:.2f}")
-        if ratio < 2.0:
-            logger.warning(f"   ⚠️  Invalid: thick disk height must be ≥ 2x thin disk!")
-            
-            # Fix it
-            idx_thin = fitted_names.index('h_z_thin_kpc')
-            idx_thick = fitted_names.index('h_z_thick_kpc')
-            p0_guess[idx_thick] = p0_guess[idx_thin] * 2.5
-            logger.info(f"   Fixed: h_z_thick adjusted to {p0_guess[idx_thick]:.3f} kpc")
+    # Show critical parameters
+    logger.info("\n   Critical parameters:")
+    logger.info(f"   - rho_c_solar_kpc3: {test_params.get('rho_c_solar_kpc3', 'NOT SET'):.2e}")
+    logger.info(f"   - n_exp: {test_params.get('n_exp', 'NOT SET')}")
+    logger.info(f"   - A: {test_params.get('A', 'NOT SET')}")
 
-    if 'R_d_thin_kpc' in param_dict and 'R_d_thick_kpc' in param_dict:
-        ratio = param_dict['R_d_thick_kpc'] / param_dict['R_d_thin_kpc']
-        logger.info(f"   Disk length ratio (thick/thin): {ratio:.2f}")
-        if ratio < 1.0:
-            logger.warning(f"   ⚠️  Invalid: thick disk scale length must be > thin disk!")
-            
-            # Fix it
-            idx_thin = fitted_names.index('R_d_thin_kpc')
-            idx_thick = fitted_names.index('R_d_thick_kpc')
-            p0_guess[idx_thick] = p0_guess[idx_thin] * 1.5
-            logger.info(f"   Fixed: R_d_thick adjusted to {p0_guess[idx_thick]:.3f} kpc")
+    # Test individual components before full likelihood
+    logger.info("\n   Testing individual physics components...")
 
     try:
-        # Arguments for the likelihood function
+        # Test 1: Simple array operations
+        test_R = jnp.array([8.0])  # Solar radius
+        logger.info(f"   Test radius: R = {float(test_R[0]):.1f} kpc")
+        
+        logger.info("\n   🔍 FULL PARAMETER SET FOR WARM-UP:")
+        for key, value in sorted(test_params.items()):
+            if isinstance(value, (int, float)):
+                logger.info(f"      {key}: {value:.3e}")
+            else:
+                logger.info(f"      {key}: {value}")
+
+
+        
+        # Test 2: Newtonian velocity
+        for comp in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
+            test_params[f'include_{comp}'] = getattr(args, f'include_{comp}', False)
+        
+        v_newton = v_baryon_total_newtonian_kms(test_R, test_params)
+        logger.info(f"   ✓ Newtonian velocity: {float(v_newton[0]):.1f} km/s")
+        
+        if v_newton[0] < 10 or v_newton[0] > 500:
+            logger.warning(f"   ⚠️ Newtonian velocity seems unrealistic!")
+        
+        # Test 3: Density
+        rho = rho_baryon_total_midplane_solar_kpc3(test_R, test_params)
+        logger.info(f"   ✓ Density: {float(rho[0]):.2e} M☉/kpc³")
+        
+        if rho[0] < 1e3 or rho[0] > 1e12:
+            logger.warning(f"   ⚠️ Density seems unrealistic for solar neighborhood!")
+        
+        # Test 4: Xi calculation (this is likely where it fails)
+        logger.info("\n   Testing xi calculation...")
+        xi_func = XI_FUNCTION_MAP.get(args.xi, XI_FUNCTION_MAP['power'])
+        
+        # Get the actual parameters used
+        rho_c = test_params.get('rho_c_solar_kpc3', 1e13)
+        n_exp = test_params.get('n_exp', 1.5)
+        A_val = test_params.get('A', 1.0)
+        
+        logger.info(f"   Xi parameters: rho_c={rho_c:.2e}, n={n_exp}, A={A_val}")
+        
+        # Calculate the ratio that goes into xi
+        ratio = float(rho[0] / rho_c)
+        logger.info(f"   Density ratio (ρ/ρ_c): {ratio:.2e}")
+        
+        # For enhanced model: xi = 1 + A / (1 + (ρ/ρ_c)^n)
+        if args.xi == 'enhanced':
+            denominator = 1.0 + ratio**n_exp
+            logger.info(f"   Denominator [1 + (ρ/ρ_c)^n]: {denominator:.2e}")
+            
+            enhancement = A_val / denominator
+            logger.info(f"   Enhancement term [A/denominator]: {enhancement:.2e}")
+            
+            xi_expected = 1.0 + enhancement
+            logger.info(f"   Expected xi value: {xi_expected:.3f}")
+            
+            if xi_expected > 10:
+                logger.warning(f"   ⚠️ Xi value is very large! This might cause numerical issues.")
+        
+        # Actually calculate xi
+        xi_val = xi_func(rho, rho_c, n_exp, A_val)
+        logger.info(f"   ✓ Calculated xi: {float(xi_val[0]):.3f}")
+        
+        # Test 5: Modified velocity
+        v_modified = float(v_newton[0]) * np.sqrt(float(xi_val[0]))
+        logger.info(f"   ✓ Modified velocity: {v_modified:.1f} km/s")
+        
+        if v_modified > 1000:
+            logger.warning(f"   ⚠️ Modified velocity is unrealistically high!")
+        
+    except Exception as e:
+        logger.error(f"   ❌ Component test failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+    # Now test the full likelihood
+    logger.info("\n   Testing full likelihood calculation...")
+    try:
         logl_args = (
             fitted_names, args, args.all_param_info_list,
             R_data_jax, v_data_jax, sigma_data_jax,
             args.xi, gp_surrogate
         )
         
-        # Do a test evaluation without JIT
+        # ADD THIS DEBUG CODE BEFORE CALLING LIKELIHOOD:
+        logger.info("\n   🔍 DEBUG: About to call log_likelihood_dynesty with:")
+        logger.info(f"      Number of fitted params: {len(p0_guess)}")
+        logger.info(f"      Fitted param names: {fitted_names}")
+        logger.info(f"      Initial values: {p0_guess}")
+        logger.info(f"      Xi type: {args.xi}")
+        logger.info(f"      Number of data points: {len(R_data_jax)}")
+        
+        # Also check if A is being passed correctly
+        full_params_debug = dict(zip(fitted_names, p0_guess))
+        for p_info in args.all_param_info_list:
+            if not p_info['is_fitted']:
+                full_params_debug[p_info['name']] = p_info['current_val']
+        
+        logger.info(f"\n      Fixed parameters being used:")
+        logger.info(f"      - A: {full_params_debug.get('A', 'NOT FOUND')}")
+        logger.info(f"      - rho_c_solar_kpc3: {full_params_debug.get('rho_c_solar_kpc3', 'NOT FOUND')}")
+        logger.info(f"      - n_exp: {full_params_debug.get('n_exp', 'NOT FOUND')}")
+        
         test_logL, test_blob = log_likelihood_dynesty(p0_guess, *logl_args)
         
         if np.isfinite(test_logL):
-            logger.info("✅ Warm-up test complete. Likelihood function working correctly.")
+            logger.info(f"✅ Warm-up test PASSED!")
             logger.info(f"   Test log(L) = {test_logL:.2f}")
             logger.info(f"   Test RMSE = {test_blob[0]:.1f} km/s")
         else:
-            logger.warning("⚠️ Warm-up test returned non-finite likelihood")
-            logger.info("   Diagnosing the issue...")
-            
-            # Diagnostic: Check parameter values
-            logger.info("\n   Initial parameter values:")
-            for name, val in zip(fitted_names, p0_guess):
-                logger.info(f"   - {name}: {val:.3e}")
-            
-            # Diagnostic: Test individual components
-            params_dict = dict(zip(fitted_names, p0_guess))
-            for p_info in args.all_param_info_list:
-                if not p_info['is_fitted']:
-                    params_dict[p_info['name']] = p_info['current_val']
-            
-            # Add component flags
-            for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
-                params_dict[f'include_{component}'] = getattr(args, f'include_{component}', False)
-            
-            # Test velocity calculation
-            try:
-                test_R = jnp.array([8.0])  # Solar radius
-                v_newton = v_baryon_total_newtonian_kms(test_R, params_dict)
-                logger.info(f"\n   Newtonian velocity at R_sun: {float(v_newton[0]):.1f} km/s")
-                
-                rho = rho_baryon_total_midplane_solar_kpc3(test_R, params_dict)
-                logger.info(f"   Density at R_sun: {float(rho[0]):.2e} M☉/kpc³")
-                
-                # Check if density is reasonable
-                if rho[0] < 1e-10 or rho[0] > 1e15:
-                    logger.error(f"   ❌ Density value {float(rho[0]):.2e} is unreasonable!")
-                
-                # Test xi calculation
-                xi_func = XI_FUNCTION_MAP.get(args.xi)
-                if args.xi == 'grav_color':
-                    xi_val = xi_func(rho, params_dict.get('rho_c_solar_kpc3', 1e13),
-                                params_dict.get('gamma_exp', 2.7),
-                                params_dict.get('lambda_g', 8.0))
-                else:
-                    xi_val = xi_func(rho, params_dict.get('rho_c_solar_kpc3', 1e13),
-                                params_dict.get('n_exp', 1.5),
-                                params_dict.get('A', 1.0))
-                logger.info(f"   Xi at R_sun: {float(xi_val[0]):.3f}")
-                
-                v_total = v_newton * jnp.sqrt(xi_val)
-                logger.info(f"   Total velocity at R_sun: {float(v_total[0]):.1f} km/s")
-                
-            except Exception as e:
-                logger.error(f"   ❌ Component test failed: {e}")
-                import traceback
-                logger.debug(traceback.format_exc())
-            
-            # Check if it's a plausibility check failure
-            is_valid, reason = check_physical_plausibility(p0_guess, fitted_names, args)[:2]
-            if not is_valid:
-                logger.error(f"\n   ❌ Initial parameters fail physical checks: {reason}")
-                logger.info("   Attempting to find valid starting point...")
-                
-                # Try to find better starting values
-                for i in range(ndim):
-                    if log_flags[i]:
-                        p0_guess[i] = np.sqrt(p_low[i] * p_high[i])
-                    else:
-                        p0_guess[i] = 0.5 * (p_low[i] + p_high[i])
-                
-                logger.info("   Retrying with centered parameters...")
-                test_logL, test_blob = log_likelihood_dynesty(p0_guess, *logl_args)
-                
-                if np.isfinite(test_logL):
-                    logger.info("   ✅ Found valid starting point!")
-                else:
-                    logger.error("   ❌ Still getting non-finite likelihood")
-                    logger.error("   Check your prior bounds and fixed parameter values")
+            logger.error(f"❌ Likelihood is {test_logL}")
             
     except Exception as e:
-        logger.error(f"❌ Warm-up test failed: {e}")
-        logger.error("   This indicates a problem with the likelihood function or parameters.")
+        logger.error(f"❌ Likelihood calculation crashed: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        
-    logger.info("="*60 + "\n")
 
     # -----------------------------------------------------------------------
     # 3. Inject all_param_info_list if needed (safety patch)
@@ -3253,12 +3344,12 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             EARLY_CHECK_INTERVAL = 10  # seconds
 
             for it, results in enumerate(sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True)):
-                now = time.time()
-                
-                # Very frequent updates in first 5 minutes
-                if now - start_time < 300 and now - early_check_time > EARLY_CHECK_INTERVAL:
-                    add_early_progress_monitor(sampler, start_time, logger)
-                    early_check_time = now
+                            now = time.time()
+                            
+                            # Very frequent updates in first 5 minutes
+                            if now - run_start_time < 300 and now - early_check_time > EARLY_CHECK_INTERVAL:
+                                add_early_progress_monitor(sampler, run_start_time, logger)
+                                early_check_time = now
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
                 now = time.time()
 
@@ -3390,9 +3481,8 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             else:
                 logger.warning("No results available to save")
             
-            if pool:
-                pool.close()
-                pool.join()
+            if pool and hasattr(pool, 'shutdown'):
+                pool.shutdown(wait=True)
             raise
 
         except RuntimeError as e:
@@ -3624,6 +3714,11 @@ def main_dynesty():
 
     # Parse args
     args = parser.parse_args()
+    logger = get_or_create_logger()
+    logger.info("\n🔍 CHECKING FIXED PARAMETER VALUES:")
+    logger.info(f"  A_fixed: {args.A_fixed}")
+    logger.info(f"  rho_c_fixed: {args.rho_c_fixed}")
+    logger.info(f"  n_exp_fixed: {args.n_exp_fixed}")
     
     checkpoint_path = Path(args.output_dir) / "dynesty_checkpoint.pkl"
     # Check for final output files, which indicate a clean previous exit.
