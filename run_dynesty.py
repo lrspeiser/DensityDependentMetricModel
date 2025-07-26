@@ -56,7 +56,7 @@ import jax.numpy as jnp
 # Enable JAX debugging for Metal
 os.environ['JAX_TRACEBACK_FILTERING'] = 'off'  # Show full traceback
 os.environ['JAX_DEBUG_NANS'] = '1'  # Check for NaN/Inf
-os.environ['JAX_LOG_COMPILES'] = '1'  # Log when functions are compiled
+os.environ['JAX_LOG_COMPILES'] = '0'  # Log when functions are compiled
 os.environ['JAX_ENABLE_CHECKS'] = '1'  # Enable runtime checks
 # Disable JAX CPU parallelism to let Dynesty use threads
 os.environ['JAX_METAL_USE_MPS'] = '1'
