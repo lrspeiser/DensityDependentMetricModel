@@ -2533,6 +2533,34 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     convergence_tracker = ConvergenceTracker(fitted_names)
 
 
+    logger.info("\n" + "="*60)
+    logger.info("🔥 Starting JIT compilation warm-up...")
+    
+    # Arguments for the likelihood function
+    logl_args = (
+        fitted_names, args, args.all_param_info_list,
+        R_data_jax, v_data_jax, sigma_data_jax,
+        args.xi, gp_surrogate
+    )
+    
+    # Compile the JAX function with a dummy parameter vector
+    try:
+        # Use jax.jit to explicitly compile the likelihood function
+        jitted_log_likelihood = jax.jit(log_likelihood_dynesty, static_argnums=(1, 2, 6, 7))
+        
+        # Call the jitted function to trigger compilation. This will be slow.
+        _ = jitted_log_likelihood(p0_guess, *logl_args).block_until_ready()
+        
+        logger.info("✅ JIT warm-up complete. Sampler will now run at full speed.")
+        
+    except Exception as e:
+        logger.error(f"❌ JIT warm-up failed: {e}")
+        logger.error("   This may indicate a problem with the likelihood function itself.")
+        # Decide if you want to exit or continue
+        # sys.exit(1) 
+        
+    logger.info("="*60 + "\n")
+
     # -----------------------------------------------------------------------
     # 3. Inject all_param_info_list if needed (safety patch)
     # -----------------------------------------------------------------------
