@@ -377,7 +377,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'fixed_val_from_arg': 'rho_c_fixed',
         'default_fixed': 1e13,    # Cassini-safe value
         'low': 1e12,              # Must be >> 1e8 (galaxy)
-        'high': 1e29,             # Must be << 1e29 (Saturn)
+        'high': 1e15,             # Must be << 1e29 (Saturn)
         'fit_flag_arg': 'fit_xi_params',
         'log_prior': True
     },
@@ -1441,46 +1441,50 @@ def prior_transform_dynesty(
     use_log_prior_flags: List[bool]
 ) -> np.ndarray:
     """
-    Generic prior transform that uses the bounds from configuration.
+    Prior transform that enforces physical relationships between parameters.
+    This prevents the sampler from exploring unphysical regions.
     """
-    params = np.zeros_like(u_array)
+    params = {}
+    u_dict = {name: u for name, u in zip(fitted_param_names, u_array)}
+    bounds_low_dict = {name: b for name, b in zip(fitted_param_names, prior_bounds_low)}
+    bounds_high_dict = {name: b for name, b in zip(fitted_param_names, prior_bounds_high)}
+    log_flags_dict = {name: f for name, f in zip(fitted_param_names, use_log_prior_flags)}
 
-    for i, (name, u_val) in enumerate(zip(fitted_param_names, u_array)):
-        low = prior_bounds_low[i]
-        high = prior_bounds_high[i]
-        use_log = use_log_prior_flags[i]
+    # Create a processing order to handle dependencies: thin disk first, then thick disk.
+    param_order = sorted(fitted_param_names, key=lambda p: ('thick' in p, p))
 
-        if use_log:
-            # Log-uniform prior
-            log_low = np.log10(low)
-            log_high = np.log10(high)
-            params[i] = 10**(log_low + u_val * (log_high - log_low))
+    # Process all parameters, handling dependencies explicitly
+    for name in param_order:
+        low = bounds_low_dict[name]
+        high = bounds_high_dict[name]
+        u_val = u_dict[name]
+        use_log = log_flags_dict[name]
+
+        # --- Enforce physical relationships by dynamically adjusting the lower bound ---
+        if name == 'R_d_thick_kpc' and 'R_d_thin_kpc' in params:
+            # Ensure R_d_thick is always > R_d_thin
+            low = max(low, params['R_d_thin_kpc'] * 1.01) # Use thin disk value as new lower bound
+
+        if name == 'h_z_thick_kpc' and 'h_z_thin_kpc' in params:
+            # Ensure h_z_thick is always >= 2 * h_z_thin
+            low = max(low, params['h_z_thin_kpc'] * 2.0) # Use thin disk value as new lower bound
+
+        # Transform the parameter from the unit cube [0, 1]
+        if low >= high:
+            # If the calculated lower bound is already too high, clip to the high bound
+            params[name] = high
         else:
-            # Uniform prior
-            params[i] = low + u_val * (high - low)
+            if use_log:
+                log_low = np.log10(low)
+                log_high = np.log10(high)
+                params[name] = 10**(log_low + u_val * (log_high - log_low))
+            else:
+                params[name] = low + u_val * (high - low)
 
-    # Quick Cassini check before returning
-    if 'rho_c_solar_kpc3' in fitted_param_names and 'n_exp' in fitted_param_names:
-        idx_rho_c = fitted_param_names.index('rho_c_solar_kpc3')
-        idx_n = fitted_param_names.index('n_exp')
-
-        # Check at Saturn density
-        rho_saturn = 2.3e21
-        rho_c = params[idx_rho_c]
-        n = params[idx_n]
-
-        # For power law enhancement: ξ = 1 + λ/(1 + (ρ/ρ_c)^n)
-        xi_saturn = 1.0 + 2.0 / (1.0 + (rho_saturn / rho_c)**n)
-
-        if abs(xi_saturn - 1.0) > 2.3e-5:
-            # This prior sample would fail Cassini
-            # You could either reject it or adjust parameters
-            try:
-                logger
-            except NameError:
-                from run_dynesty import get_or_create_logger
-                logger = get_or_create_logger()
-    return params
+    # Convert the dictionary back to a numpy array in the original, expected order
+    final_params_array = np.array([params[name] for name in fitted_param_names])
+    
+    return final_params_array
 
 def log_likelihood_dynesty(
     theta_values_fitted: np.ndarray,
@@ -1596,7 +1600,7 @@ def log_likelihood_dynesty(
     v_model_solar_mask = (R_data_jax > 7.5) & (R_data_jax < 8.5)
     if jnp.any(v_model_solar_mask):
         v_model_solar = jnp.median(v_model[v_model_solar_mask])
-        if v_model_solar > 300.0:
+        if v_model_solar > 1500.0:
             # Apply a quadratic penalty for velocities over 300 km/s
             # The denominator (e.g., 25.0) controls how "hard" the penalty is
             penalty = -0.5 * ((v_model_solar - 300.0) / 25.0)**2
@@ -1989,6 +1993,7 @@ def get_param_labels_and_bounds(ARGS):
         # Define which parameters belong to which xi model
         xi_model_params = {
             'power': ['rho_c_solar_kpc3', 'n_exp'],
+            'enhanced': ['rho_c_solar_kpc3', 'n_exp', 'A'],  # <-- Add this line
             'mass_threshold': ['M_crit_msun', 'xi_boost', 'width'],
             'grav_color': ['rho_c_solar_kpc3', 'gamma_exp', 'lambda_g']
         }
@@ -2169,7 +2174,43 @@ def make_json_serializable(obj):
     else:
         return obj
 
+# ============================================================================
+# Model derived from Deur Gravity concept
+# ============================================================================
 
+
+class DeurGravity:
+    def __init__(self, geometry='disk'):
+        self.geometry = geometry
+        # Coupling strength
+        self.alpha = 0.1  # Needs calibration
+        
+    def enhancement_factor(self, r, density_profile):
+        """
+        Calculate Deur's enhancement at radius r
+        """
+        # Local mass scale
+        M_local = self.enclosed_mass(r, density_profile)
+        L_local = self.scale_length(r, density_profile)
+        
+        # Field self-interaction parameter
+        coupling = np.sqrt(G * M_local / L_local)
+        
+        # Base enhancement
+        xi = 1.0
+        
+        # Add self-interaction contribution
+        if self.geometry == 'disk':
+            # Stronger enhancement for disk confinement
+            xi += self.alpha * coupling * 1.5
+        elif self.geometry == 'elliptical':
+            # Weaker for 3D systems
+            xi += self.alpha * coupling * 1.0
+            
+        # Saturation at low densities (field fully self-interacting)
+        xi = min(xi, 3.0)  # Maximum enhancement ~3
+        
+        return xi
 
 # ============================================================================
 # Gaussian Process Surrogate Model (unchanged but included for completeness)
@@ -2986,6 +3027,21 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     logger.info(f"   - rho_c_solar_kpc3: {test_params.get('rho_c_solar_kpc3', 'NOT SET'):.2e}")
     logger.info(f"   - n_exp: {test_params.get('n_exp', 'NOT SET')}")
     logger.info(f"   - A: {test_params.get('A', 'NOT SET')}")
+    
+    logger.info("\n   🔍 DEBUGGING ENHANCED MODEL:")
+    logger.info(f"   - xi_type: {args.xi}")
+    logger.info(f"   - fit_xi_params: {args.fit_xi_params}")
+    logger.info(f"   - A_fixed from args: {args.A_fixed}")
+
+    # Check if A is in all_param_info_list
+    a_in_param_list = False
+    for p_info in args.all_param_info_list:
+        if p_info['name'] == 'A':
+            logger.info(f"   - A in param list: current_val={p_info['current_val']}, is_fitted={p_info['is_fitted']}")
+            a_in_param_list = True
+            
+    if not a_in_param_list:
+        logger.error("   ❌ A parameter NOT FOUND in all_param_info_list!")
 
     # Test individual components before full likelihood
     logger.info("\n   Testing individual physics components...")
@@ -3053,6 +3109,14 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         # Actually calculate xi
         xi_val = xi_func(rho, rho_c, n_exp, A_val)
         logger.info(f"   ✓ Calculated xi: {float(xi_val[0]):.3f}")
+        rho_saturn = 2.3e21
+        xi_saturn = xi_func(rho_saturn, rho_c, n_exp, A_val)
+        logger.info(f"\n   🪐 CASSINI TEST:")
+        logger.info(f"   - Saturn density: {rho_saturn:.1e}")
+        logger.info(f"   - xi at Saturn: {float(xi_saturn[0]):.6f}")
+        logger.info(f"   - |xi - 1|: {abs(float(xi_saturn[0]) - 1.0):.2e}")
+        logger.info(f"   - Cassini tolerance: 2.3e-5")
+        logger.info(f"   - Passes Cassini: {abs(float(xi_saturn[0]) - 1.0) < 2.3e-5}")
         
         # Test 5: Modified velocity
         v_modified = float(v_newton[0]) * np.sqrt(float(xi_val[0]))
@@ -3387,8 +3451,8 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                         early_stop_counter = 0
 
             # --- Phase 2: Dynamic sampling loop ---
-            logger.info("Starting dynamic sampling with sampler.sample()...")
-            for _ in sampler.sample(dlogz_stop=args.dlogz_target, maxcall=args.maxcall, save_samples=True):
+            logger.info("Starting dynamic sampling with sampler.sample_batch()...")
+            for _ in sampler.sample_batch(dlogz=args.dlogz_target, maxcall=args.maxcall):
                 now = time.time()
 
                 # Checkpoint

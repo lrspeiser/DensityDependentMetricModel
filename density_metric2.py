@@ -466,6 +466,7 @@ def xi_anisotropic(rho, direction, rho_c_rad=5e8, rho_c_vert=1e7):
 
     return jnp.where(direction == 'radial', xi_radial, xi_vertical)
 
+
 # ============================================================================
 # High-level test functions (remain on CPU using numpy)
 # ============================================================================
