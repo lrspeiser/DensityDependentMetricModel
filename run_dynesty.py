@@ -1596,8 +1596,13 @@ def log_likelihood_dynesty(
         else:
             xi_saturn = 1.0  # Skip check for mass_threshold etc.
 
-        if abs(xi_saturn - 1.0) > 2.3e-5:  # Cassini tolerance
-            return -np.inf, [np.inf]  # Reject sample
+        cassini_deviation, cassini_msg = check_cassini_compatibility(params, xi_type)
+        cassini_tolerance = 2.3e-5
+
+        if np.isfinite(cassini_deviation) and cassini_deviation > cassini_tolerance:
+            penalty_strength = 500.0  # Can adjust as needed
+            penalty = -0.5 * ((cassini_deviation - cassini_tolerance) / cassini_tolerance)**2 * penalty_strength
+            log_L += penalty
 
     except Exception as e:
         logger = get_or_create_logger()
@@ -1829,12 +1834,8 @@ def ensure_grav_color_params_in_config(args):
 
 def check_cassini_compatibility(params, xi_type):
     """
-    Check if parameters pass Cassini test.
+    Returns Cassini deviation for penalty-based enforcement.
     """
-    # If rho_c is very large, this is a GR baseline run. It passes by definition.
-    if params.get('rho_c_solar_kpc3', 0.0) > 1e20:
-        return True, "Passes Cassini (GR Baseline)"
-
     from density_metric2 import XI_FUNCTION_MAP
 
     rho_saturn = 2.3e21  # Saturn orbit density
@@ -1842,29 +1843,29 @@ def check_cassini_compatibility(params, xi_type):
 
     xi_func = XI_FUNCTION_MAP.get(xi_type)
     if xi_func is None:
-        return False, f"Unknown xi_type: {xi_type}"
+        return float("inf"), f"Unknown xi_type: {xi_type}"
 
     try:
         if xi_type == 'mass_threshold':
-            return False, "mass_threshold model cannot pass Cassini test"
+            return float("inf"), "mass_threshold cannot pass Cassini"
+
         elif xi_type == 'grav_color':
             rho_c = params.get('rho_c_solar_kpc3', 1e13)
             gamma = params.get('gamma_exp', 2.7)
             lambda_g = params.get('lambda_g', 8.0)
             xi_saturn = xi_func(rho_saturn, rho_c, gamma, lambda_g)[0]
+
         else:
             rho_c = params.get('rho_c_solar_kpc3', 1e13)
             n_exp = params.get('n_exp', 1.5)
             A = params.get('A', 1.0)
             xi_saturn = xi_func(rho_saturn, rho_c, n_exp, A)[0]
 
-        if abs(xi_saturn - 1.0) > cassini_precision:
-            return False, f"Fails Cassini: |ξ({rho_saturn:.1e}) - 1| = {abs(xi_saturn - 1.0):.2e} > {cassini_precision}"
-
-        return True, "Passes Cassini test"
+        deviation = abs(xi_saturn - 1.0)
+        return deviation, f"xi({rho_saturn:.1e}) = {xi_saturn:.6f} (Δ = {deviation:.2e})"
 
     except Exception as e:
-        return False, f"Cassini check error: {e}"
+        return float("inf"), f"Cassini error: {e}"
 
 def check_prior_bounds_compatibility(args):
     """Check if prior bounds are compatible with constraints"""
