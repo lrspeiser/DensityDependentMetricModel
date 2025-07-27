@@ -1,20 +1,32 @@
-# Test the enhanced model at galaxy scale
+# Save as test_enhanced.py
+import sys
+sys.path.append('.')  # Ensure we can import local modules
+
+from density_metric2 import XI_FUNCTION_MAP, v_total_kms
 import numpy as np
 
-def xi_enhanced(rho, rho_c, n, A):
-    return 1 + A / (1 + (rho/rho_c)**n)
+# Test parameters
+params = {
+    'rho_c_solar_kpc3': 1e13,
+    'n_exp': 1.5,
+    'A': 1.0,
+    'M_disk_thin_solar': 4e10,
+    'R_d_thin_kpc': 2.5,
+    'h_z_thin_kpc': 0.3,
+    'include_disk_thin': True,
+    'include_disk_thick': False,
+    'include_bulge': False,
+    'include_gas': False
+}
 
-# Galaxy scale test
-rho_galaxy = 1e9  # Typical galaxy density
-rho_c = 1e13
-n = 1.5
-A = 1.0
+# Test at solar radius
+R_test = np.array([8.0])
+print(f"Testing enhanced model at R={R_test[0]} kpc...")
 
-xi_gal = xi_enhanced(rho_galaxy, rho_c, n, A)
-print(f"Galaxy: rho={rho_galaxy:.1e}, xi={xi_gal:.3f}")
-
-# Saturn test
-rho_saturn = 2.3e21
-xi_sat = xi_enhanced(rho_saturn, rho_c, n, A)
-print(f"Saturn: rho={rho_saturn:.1e}, xi={xi_sat:.10f}")
-print(f"Cassini test: |xi-1| = {abs(xi_sat-1):.2e} < 2.3e-5? {abs(xi_sat-1) < 2.3e-5}")
+try:
+    v = v_total_kms(R_test, params, xi_type='enhanced')
+    print(f"Success! v = {v[0]:.1f} km/s")
+except Exception as e:
+    print(f"Error: {e}")
+    import traceback
+    traceback.print_exc()

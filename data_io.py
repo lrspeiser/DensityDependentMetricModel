@@ -568,6 +568,103 @@ def process_raw_gaia_df_enhanced(df_raw: pd.DataFrame) -> pd.DataFrame:
     
     return df_processed
 
+def process_gaia_data(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Processes a raw Gaia DataFrame to calculate Galactocentric coordinates
+    and velocities needed for rotation curve analysis.
+
+    This function takes a DataFrame with raw Gaia observables (ra, dec, parallax,
+    pmra, pmdec, radial_velocity) and adds the following columns:
+    - R_kpc: Galactocentric radius in the plane (in kpc).
+    - v_obs: Observed circular velocity (in km/s).
+    - sigma_v: Propagated error in the observed velocity (in km/s).
+
+    Args:
+        df_raw (pd.DataFrame): DataFrame containing the raw Gaia data.
+
+    Returns:
+        pd.DataFrame: The processed DataFrame with the new columns added.
+    """
+    if not HAS_ASTROPY_AND_QUERY:
+        logger.error("Cannot process Gaia data: astropy/astroquery not available.")
+        return pd.DataFrame()
+
+    logger.info("Processing raw Gaia data into physical units...")
+    
+    # Define the Sun's Galactocentric frame for transformations.
+    gc_frame = Galactocentric(
+        galcen_distance=R0_KPC_ASTRO,
+        z_sun=ZSUN_KPC_ASTRO,
+        galcen_v_sun=VSUN_KMS_ASTRO
+    )
+    
+    # Create Astropy SkyCoord object from the raw Gaia data.
+    try:
+        coords = SkyCoord(
+            ra=df_raw['ra'].values * u.deg,
+            dec=df_raw['dec'].values * u.deg,
+            distance=(1000 / df_raw['parallax'].values) * u.pc,
+            pm_ra_cosdec=df_raw['pmra'].values * u.mas/u.yr,
+            pm_dec=df_raw['pmdec'].values * u.mas/u.yr,
+            radial_velocity=df_raw['radial_velocity'].values * u.km/u.s,
+            frame='icrs'
+        )
+    except Exception as e:
+        logger.error(f"Failed to create SkyCoord object: {e}")
+        return pd.DataFrame() # Return empty frame on failure
+    
+    # 1. Get the velocity components in cylindrical coordinates.
+    #    This requires the 'base' (the position) for the transformation.
+    galcen_coords = coords.transform_to(gc_frame)
+    cylindrical_velocities = galcen_coords.velocity.represent_as(
+        CylindricalDifferential, galcen_coords.data
+    )
+
+    # 2. Calculate the tangential velocity (v_phi).
+    #    It is the radius (rho) multiplied by the angular velocity (d_phi).
+    v_phi_kms = (galcen_coords.cylindrical.rho * cylindrical_velocities.d_phi).to(
+        u.km/u.s, equivalencies=u.dimensionless_angles()
+    ).value
+
+    # 3. The observed rotation velocity is the absolute value of v_phi.
+    v_obs_kms = np.abs(v_phi_kms)
+
+    
+    # Calculate the cylindrical coordinates.
+    # R_kpc is the distance from the galactic center in the plane.
+    R_kpc = galcen_coords.cylindrical.rho.to(u.kpc).value
+    
+    # Use the v_phi_kms we already calculated correctly above
+    v_obs = np.abs(v_phi_kms)
+
+    # --- Simplified Error Propagation ---
+    # A full error propagation is complex. We estimate the error by combining
+    # the main sources in quadrature, which is a common and reasonable approximation.
+    dist_kpc = coords.distance.to(u.kpc).value
+    pm_error_kms = np.sqrt(df_raw['pmra_error']**2 + df_raw['pmdec_error']**2) * dist_kpc * 4.74047
+    
+    sigma_v = np.sqrt(
+        df_raw['radial_velocity_error'].fillna(0)**2 + 
+        pm_error_kms.fillna(0)**2
+    )
+
+    # Create a new DataFrame with the processed data and merge it
+    df_processed = pd.DataFrame({
+        'R_kpc': R_kpc,
+        'v_obs': v_obs,
+        'sigma_v': np.clip(sigma_v, MIN_VELOCITY_ERROR_KMS, MAX_VELOCITY_ERROR_KMS), # Apply floor/ceiling
+        'z_kpc': galcen_coords.z.to(u.kpc).value,
+        'v_R_kms': cylindrical_velocities.d_rho.to(u.km/u.s).value,
+        'v_z_kms': cylindrical_velocities.d_z.to(u.km/u.s).value
+    })
+    
+    df_final = pd.concat([df_raw.reset_index(drop=True), df_processed.reset_index(drop=True)], axis=1)
+    
+    logger.info(f"Processing complete. Added columns: {df_processed.columns.tolist()}")
+    
+    return df_final
+
+
 
 def _calculate_velocity_errors_enhanced(
     df_raw: pd.DataFrame, 

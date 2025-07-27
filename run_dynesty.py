@@ -182,6 +182,8 @@ try:
     from data_io import load_gaia
     # This was in your original file; it's good practice to keep it for compatibility.
 
+    logging.getLogger("density_metric2").setLevel(logging.INFO)
+
 # This is the missing clause that must follow the 'try' block.
 except ImportError as e:
     # Provide a more informative error message for the user.
@@ -303,11 +305,11 @@ def get_or_create_logger():
     """Get or create the module logger. Safe for multiprocessing."""
     import logging
     logger = logging.getLogger("run_dynesty")
-    if not logger.handlers:  # Only add handler if none exist
+    if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
         logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"))
-        logger.addHandler(handler)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"))
+        logger.addHandler(stream_handler)
     return logger
 
 
@@ -508,7 +510,7 @@ def check_physical_plausibility(
     # logger.debug("\n--- Running check_physical_plausibility (Non-Blocking Mode) ---")
     
     # ALWAYS LOG when this function is called
-    logger.info("\n=== PHYSICAL PLAUSIBILITY CHECK ===")
+    logger.debug("\n=== PHYSICAL PLAUSIBILITY CHECK ===")
     
     try:
         params = dict(zip(param_names, theta_values))
@@ -517,17 +519,17 @@ def check_physical_plausibility(
         return False, "Parameter unpacking failure"
 
     # Log all parameters
-    logger.info("Parameters being checked:")
+    logger.debug("Parameters being checked:")
     for name, value in params.items():
-        logger.info(f"  {name}: {value:.3e}")
+        logger.debug(f"  {name}: {value:.3e}")
     
     try:
         params = dict(zip(param_names, theta_values))
-        logger.info("   Parameters unpacked successfully")
+        logger.debug("   Parameters unpacked successfully")
         
         # Log the actual values
         for name, value in params.items():
-            logger.info(f"   - {name}: {value:.3e}")
+            logger.debug(f"   - {name}: {value:.3e}")
             
     except Exception as e:
         logger.error(f"❌ Failed to unpack parameters: {e}")
@@ -1219,6 +1221,7 @@ def enhanced_monitor_sampler_progress(
         if debug_counter < 5:
             logger = get_or_create_logger()
             logger.info(f"\n=== LIKELIHOOD DEBUG {debug_counter} ===")
+            xi_type = getattr(args_obj, "xi", "UNKNOWN")
             logger.info(f"xi_type: {xi_type}")
             logger.info(f"fitted_param_names: {fitted_param_names}")
             logger.info(f"theta_values_fitted: {theta_values_fitted}")
@@ -3585,166 +3588,81 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 # Main Entry Point
 # ============================================================================
 
+# In run_dynesty.py, replace the entire main_dynesty() function with this.
+
 def main_dynesty():
     """
-    Main entry point for running the Enhanced Dynesty Sampler with full physical plausibility,
-    curriculum learning, dashboard monitoring, and optional GP acceleration.
-
-    This function initializes arguments, validates Gaia data, sets up the xi model,
-    injects default/fixed values, and then delegates execution to a standard
-    Dynesty run or curriculum-learning-based staged sampler.
-
-    Includes: robust resumption, logger initialization, theory mode fixes,
-    and defensive patch to ensure `args.all_param_info_list` is always populated.
+    Main entry point for running the Enhanced Dynesty Sampler...
     """
     global logger, debug_counter, RUN_ID
     from datetime import datetime
     import uuid
-    RUN_ID = None
-    RUN_ID = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
-    
-    # Initialize run tracking with safe imports
-    run_tracking_enabled = True
-    try:
-        from run_history import start_record, finalize_record as _finalize_record
-    except ImportError:
-        logger.warning("run_history module not available, disabling run tracking")
-        run_tracking_enabled = False
-        _finalize_record = lambda *args, **kwargs: None  # No-op function
-    
-    # Safe wrapper for finalize_record
-    def finalize_record(*args, **kwargs):
-        try:
-            return _finalize_record(*args, **kwargs)
-        except Exception as e:
-            logger.error(f"Failed to finalize run record: {e}")
-            return False
-    
-    
-    logger = get_or_create_logger()
-    debug_counter = 0
-
-
+    import pandas as pd
     import argparse
-    from data_io import load_all_sky_gaia_slices
+    from data_io import load_all_sky_gaia_slices, process_gaia_data
     from pathlib import Path
 
-
-    # Argument parser
+    # ============================================================================
+    # 1. ARGUMENT PARSING (must come first to get --debug and --output_dir)
+    # ============================================================================
     parser = argparse.ArgumentParser(
         description="Enhanced Dynesty sampler for Density-Metric model with physical constraints",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
     # Core run options
-    parser.add_argument('--resume', action='store_true', default=False,
-                        help="Resume from checkpoint in output_dir/dynesty_checkpoint.pkl")
-    parser.add_argument('--debug', action='store_true', default=False,
-                        help="Enable verbose debug logging")
-    parser.add_argument('--xi', type=str, default='power',
-                            choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold', 'gr', 'deur'],
-                            help="Choice of xi(ρ) function")
-    parser.add_argument('--max_sample_gaia', type=int, default=10000,
-                        help="Maximum number of Gaia stars to use")
-    parser.add_argument('--output_dir', type=str, default="chains_dynesty",
-                        help="Output directory for results")
-    parser.add_argument('--R_d_thin_high', type=float, default=None,
-                    help="Override upper prior bound for R_d_thin_kpc")
-
+    parser.add_argument('--resume', action='store_true', default=False, help="Resume from checkpoint")
+    parser.add_argument('--debug', action='store_true', default=False, help="Enable verbose debug logging")
+    parser.add_argument('--xi', type=str, default='power', choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold', 'gr', 'deur'], help="Choice of xi(ρ) function")
+    parser.add_argument('--max_sample_gaia', type=int, default=10000, help="Maximum number of Gaia stars to use")
+    parser.add_argument('--output_dir', type=str, default="chains_dynesty", help="Output directory for results")
+    parser.add_argument('--R_d_thin_high', type=float, default=None, help="Override upper prior bound for R_d_thin_kpc")
 
     # Sampler options
-    parser.add_argument('--nlive_init', type=int, default=800,
-                        help="Initial number of live points")
-    parser.add_argument('--nlive_batch', type=int, default=200,
-                        help="Live points per batch")
-    parser.add_argument('--dlogz_target', type=float, default=0.01,
-                        help="Target dlogz for convergence")
-    parser.add_argument('--num_threads', type=int, default=8,
-                        help="Number of threads for parallelization")
-    parser.add_argument('--maxcall', type=int, default=2000000,
-                        help="Maximum likelihood calls")
-    parser.add_argument('--monitor_interval_s', type=int, default=60,
-                        help="Monitoring interval in seconds")
-    parser.add_argument('--enable_dashboard', action='store_true', default=True,
-                        help="Enable enhanced monitoring dashboard")
-    parser.add_argument('--monitor_config', type=str, default=None,
-                        help="Path to monitoring configuration file")
-    parser.add_argument('--use_run_nested', action='store_true', default=False,
-                        help="Use run_nested instead of custom loop with early stopping")
-    parser.add_argument('--checkpoint_every', type=int, default=60,
-                        help="Checkpoint interval in seconds")
-    parser.add_argument('--checkpoint_file', type=str, default=None,
-                        help="Path to a specific dynesty checkpoint to resume from")
-    parser.add_argument('--max_thick_thin_ratio', type=float, default=None,
-                        help="Max allowed thick/thin disk mass ratio (default: 0.7 for Milky Way)")
-    parser.add_argument('--M_disk_thin_min', type=float, default=None,
-                        help="Override lower prior bound for M_disk_thin_solar")
-    parser.add_argument('--M_disk_thin_max', type=float, default=None,
-                        help="Override upper prior bound for M_disk_thin_solar")
-    parser.add_argument('--M_disk_total_min', type=float, default=None,
-                        help="Override lower prior bound for M_disk_total_solar")
-    parser.add_argument('--M_disk_total_max', type=float, default=None,
-                        help="Override upper prior bound for M_disk_total_solar")
-    parser.add_argument('--h_z_thin_min', type=float, default=None,
-                        help="Override lower prior bound for h_z_thin_kpc")
-    parser.add_argument('--R_d_thick_max', type=float, default=None,
-                        help="Override upper prior bound for R_d_thick_kpc")
-    parser.add_argument('--M_gas_max', type=float, default=None,
-                        help="Override upper prior bound for M_gas_solar")
-    parser.add_argument('--force_new_query_gaia', action='store_true', default=False,
-                        help="Force new Gaia query, ignoring raw cache")
-    parser.add_argument('--force_reprocess_raw', action='store_true', default=False,
-                        help="Force reprocessing of raw Gaia data, ignoring processed cache")
-
-
-
-
-
+    parser.add_argument('--nlive_init', type=int, default=800, help="Initial number of live points")
+    parser.add_argument('--nlive_batch', type=int, default=200, help="Live points per batch")
+    parser.add_argument('--dlogz_target', type=float, default=0.01, help="Target dlogz for convergence")
+    parser.add_argument('--num_threads', type=int, default=8, help="Number of threads for parallelization")
+    parser.add_argument('--maxcall', type=int, default=2000000, help="Maximum likelihood calls")
+    parser.add_argument('--monitor_interval_s', type=int, default=60, help="Monitoring interval in seconds")
+    parser.add_argument('--enable_dashboard', action='store_true', default=True, help="Enable enhanced monitoring dashboard")
+    parser.add_argument('--monitor_config', type=str, default=None, help="Path to monitoring configuration file")
+    parser.add_argument('--use_run_nested', action='store_true', default=False, help="Use run_nested instead of custom loop")
+    parser.add_argument('--checkpoint_every', type=int, default=60, help="Checkpoint interval in seconds")
+    parser.add_argument('--checkpoint_file', type=str, default=None, help="Path to a specific dynesty checkpoint to resume from")
+    parser.add_argument('--max_thick_thin_ratio', type=float, default=None, help="Max allowed thick/thin disk mass ratio")
+    parser.add_argument('--M_disk_thin_min', type=float, default=None, help="Override lower prior bound for M_disk_thin_solar")
+    parser.add_argument('--M_disk_thin_max', type=float, default=None, help="Override upper prior bound for M_disk_thin_solar")
+    parser.add_argument('--M_disk_total_min', type=float, default=None, help="Override lower prior bound for M_disk_total_solar")
+    parser.add_argument('--M_disk_total_max', type=float, default=None, help="Override upper prior bound for M_disk_total_solar")
+    parser.add_argument('--h_z_thin_min', type=float, default=None, help="Override lower prior bound for h_z_thin_kpc")
+    parser.add_argument('--R_d_thick_max', type=float, default=None, help="Override upper prior bound for R_d_thick_kpc")
+    parser.add_argument('--M_gas_max', type=float, default=None, help="Override upper prior bound for M_gas_solar")
+    parser.add_argument('--force_new_query_gaia', action='store_true', default=False, help="Force new Gaia query")
+    parser.add_argument('--force_reprocess_raw', action='store_true', default=False, help="Force reprocessing of raw Gaia data")
 
     # Dynesty sampler group
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
-    dynesty_g.add_argument('--sample_method', type=str, default='rslice',
-                           choices=['rwalk', 'rslice', 'hslice'],
-                           help="Sampling method")
-    dynesty_g.add_argument('--walks', type=int, default=25,
-                           help="Number of walks for rwalk sampler (ignored if not using rwalk)")
-    dynesty_g.add_argument('--enlarge_factor', type=float, default=2.5,
-                           help="Bound enlargement factor")
-    dynesty_g.add_argument('--bound_method', type=str, default='multi',
-                           choices=['none', 'single', 'multi', 'balls', 'cubes'],
-                           help="Bounding method")
+    dynesty_g.add_argument('--sample_method', type=str, default='rslice', choices=['rwalk', 'rslice', 'hslice'], help="Sampling method")
+    dynesty_g.add_argument('--walks', type=int, default=25, help="Number of walks for rwalk sampler")
+    dynesty_g.add_argument('--enlarge_factor', type=float, default=2.5, help="Bound enlargement factor")
+    dynesty_g.add_argument('--bound_method', type=str, default='multi', choices=['none', 'single', 'multi', 'balls', 'cubes'], help="Bounding method")
 
     # Enhanced features
     ai_g = parser.add_argument_group('Enhanced Features')
-    ai_g.add_argument('--use_curriculum_learning', action='store_true', default=False,
-                      help="Use curriculum learning (recommended for many parameters)")
-    ai_g.add_argument('--use_gp_surrogate', action='store_true', default=False,
-                      help="Use Gaussian Process surrogate for speedup")
-    ai_g.add_argument('--gp_n_initial', type=int, default=500,
-                      help="Initial training points for GP")
-    ai_g.add_argument('--gp_uncertainty_threshold', type=float, default=0.1,
-                      help="GP uncertainty threshold")
-    ai_g.add_argument('--validate_data', action='store_true', default=True,
-                      help="Validate loaded data quality")
-    parser.add_argument('--use_previous_best', action='store_true', default=False,
-                        help="Initialize from previous best-fit parameters")
-    parser.add_argument('--previous_results_file', type=str,
-                        default="chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz",
-                        help="Path to previous results for initialization")
-    parser.add_argument('--tighten_bounds_factor', type=float, default=0.1,
-                        help="Factor for tightening bounds around previous best (0.1 = 10% window)")
-    parser.add_argument('--disable_dashboard', action='store_true', default=False,
-                        help="Disable dashboard monitoring to avoid JSON errors")
-    ai_g.add_argument('--fix_gamma', type=float, default=None,
-                      help="Fix gamma exponent (theory predicts 2.7)")
-    ai_g.add_argument('--fix_lambda_g', type=float, default=None,
-                      help="Fix lambda_g enhancement factor (theory predicts 8.0)")
-    ai_g.add_argument('--theory_mode', action='store_true', default=False,
-                      help="Use theoretical values: gamma=2.7, lambda_g=8.0")
-    # ADDED: New argument for using GR baseline priors
-    ai_g.add_argument('--use_gr_baseline_priors', action='store_true', default=False,
-                      help="Use tighter priors centered on GR baseline results for DDMM runs")
-
+    ai_g.add_argument('--use_curriculum_learning', action='store_true', default=False, help="Use curriculum learning")
+    ai_g.add_argument('--use_gp_surrogate', action='store_true', default=False, help="Use Gaussian Process surrogate")
+    ai_g.add_argument('--gp_n_initial', type=int, default=500, help="Initial training points for GP")
+    ai_g.add_argument('--gp_uncertainty_threshold', type=float, default=0.1, help="GP uncertainty threshold")
+    ai_g.add_argument('--validate_data', action='store_true', default=True, help="Validate loaded data quality")
+    parser.add_argument('--use_previous_best', action='store_true', default=False, help="Initialize from previous best-fit")
+    parser.add_argument('--previous_results_file', type=str, default="chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz", help="Path to previous results")
+    parser.add_argument('--tighten_bounds_factor', type=float, default=0.1, help="Factor for tightening bounds")
+    parser.add_argument('--disable_dashboard', action='store_true', default=False, help="Disable dashboard monitoring")
+    ai_g.add_argument('--fix_gamma', type=float, default=None, help="Fix gamma exponent")
+    ai_g.add_argument('--fix_lambda_g', type=float, default=None, help="Fix lambda_g enhancement factor")
+    ai_g.add_argument('--theory_mode', action='store_true', default=False, help="Use theoretical values")
+    ai_g.add_argument('--use_gr_baseline_priors', action='store_true', default=False, help="Use tighter priors from GR baseline")
 
     # Model components
     mw_model_g = parser.add_argument_group('Model Components')
@@ -3753,211 +3671,255 @@ def main_dynesty():
     mw_model_g.add_argument('--include_disk_thick', action='store_true', default=False)
     mw_model_g.add_argument('--include_gas', action='store_true', default=False)
 
-    # Fit flags (original + grav_color extensions)
+    # Fit flags
     fit_g = parser.add_argument_group('Parameters to Fit')
-    fit_g.add_argument('--fit_xi_params', action='store_true',
-                       help="Fit xi function parameters")
-    fit_g.add_argument('--fit_rho_c', action='store_true',
-                       help="Fit rho_c (for grav_color mode)")
-    fit_g.add_argument('--fit_gamma', action='store_true',
-                       help="Fit gamma exponent (grav_color)")
-    fit_g.add_argument('--fit_lambda_g', action='store_true',
-                       help="Fit lambda_g enhancement (grav_color)")
-    fit_g.add_argument('--fit_disk_thin', action='store_true',
-                       help="Fit thin disk parameters")
-    fit_g.add_argument('--fit_disk_thick', action='store_true',
-                       help="Fit thick disk parameters")
-    fit_g.add_argument('--fit_bulge', action='store_true',
-                       help="Fit bulge parameters")
-    fit_g.add_argument('--fit_gas', action='store_true',
-                       help="Fit gas parameters")
-    fit_g.add_argument('--fit_disk_reparameterized', action='store_true',
-                       help="Fit disk masses using total+fraction parameterization")
-
+    fit_g.add_argument('--fit_xi_params', action='store_true', help="Fit xi function parameters")
+    fit_g.add_argument('--fit_rho_c', action='store_true', help="Fit rho_c (for grav_color mode)")
+    fit_g.add_argument('--fit_gamma', action='store_true', help="Fit gamma exponent (grav_color)")
+    fit_g.add_argument('--fit_lambda_g', action='store_true', help="Fit lambda_g enhancement (grav_color)")
+    fit_g.add_argument('--fit_disk_thin', action='store_true', help="Fit thin disk parameters")
+    fit_g.add_argument('--fit_disk_thick', action='store_true', help="Fit thick disk parameters")
+    fit_g.add_argument('--fit_bulge', action='store_true', help="Fit bulge parameters")
+    fit_g.add_argument('--fit_gas', action='store_true', help="Fit gas parameters")
+    fit_g.add_argument('--fit_disk_reparameterized', action='store_true', help="Fit disk masses using total+fraction")
 
     # Fixed values
     fixed_g = parser.add_argument_group('Fixed Parameter Values')
     for p_name, p_details in MW_MULTI_COMP_PARAM_CONFIG.items():
-        fixed_g.add_argument(f"--{p_details['fixed_val_from_arg']}",
-                             type=float,
-                             default=p_details['default_fixed'],
-                             help=f"Fixed/initial value for {p_name}")
+        fixed_g.add_argument(f"--{p_details['fixed_val_from_arg']}", type=float, default=p_details['default_fixed'], help=f"Fixed/initial value for {p_name}")
 
-
-    # Parse args
     args = parser.parse_args()
-    logger = get_or_create_logger()
-    logger.info("\n🔍 CHECKING FIXED PARAMETER VALUES:")
-    logger.info(f"  A_fixed: {args.A_fixed}")
-    logger.info(f"  rho_c_fixed: {args.rho_c_fixed}")
-    logger.info(f"  n_exp_fixed: {args.n_exp_fixed}")
+
+    # ============================================================================
+    # 2. LOGGING SETUP
+    # ============================================================================
+    log_dir = Path(args.output_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "dynesty_debug.log"
+    console_level = logging.DEBUG if args.debug else logging.INFO
+
+    # Configure the root logger directly. This is the most reliable method.
+    logging.basicConfig(
+        level=logging.DEBUG,  # Capture ALL levels of messages
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, mode='w'),  # Handler 0: Always writes DEBUG to file
+            logging.StreamHandler(sys.stdout)         # Handler 1: Writes to console
+        ],
+        force=True  # Override any previous configurations
+    )
+
+    # Now, get the root logger and set the console handler's level specifically.
+    # This prevents DEBUG messages from showing on the console unless --debug is used.
+    logging.getLogger().handlers[1].setLevel(console_level)
     
+    # Get our specific logger for the rest of the script
+    logger = logging.getLogger("run_dynesty")
+    
+    logger.info(f"📡 Full debug log initialized. Writing to: {log_file}")
+    logger.info(f"Console log level set to: {logging.getLevelName(console_level)}")
+
+    # ============================================================================
+    # 3. INITIALIZATION AND CRASH RECOVERY
+    # ============================================================================
+    RUN_ID = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+    debug_counter = 0
+
+    run_tracking_enabled = True
+    try:
+        from run_history import start_record, finalize_record as _finalize_record
+        RUN_ID = start_record(args)
+        logger.info(f"Run tracking initialized with ID: {RUN_ID}")
+    except ImportError:
+        logger.warning("run_history module not available, disabling run tracking")
+        run_tracking_enabled = False
+        _finalize_record = lambda *args, **kwargs: None
+    
+    def finalize_record(*args, **kwargs):
+        try:
+            return _finalize_record(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Failed to finalize run record: {e}")
+            return False
+
     checkpoint_path = Path(args.output_dir) / "dynesty_checkpoint.pkl"
-    # Check for final output files, which indicate a clean previous exit.
     final_npz_files = list(Path(args.output_dir).glob('*_samples.npz'))
     final_summary_files = list(Path(args.output_dir).glob('*_summary.json'))
-
-    # If a checkpoint exists, but no final files were written, and we aren't
-    # explicitly resuming, it's likely the previous run was killed.
     if checkpoint_path.exists() and not final_npz_files and not final_summary_files and not args.resume:
         logger.warning("🧠 Detected potential prior crash (checkpoint exists but no final results).")
         logger.warning("   Activating recovery mode: reducing load and forcing resumption.")
-
-        # Modify args for a safer run
         original_nlive = args.nlive_init
         original_maxcall = args.maxcall
-
         args.nlive_init = max(300, int(args.nlive_init * 0.75))
         args.maxcall = max(100000, int(args.maxcall * 0.75))
-        args.use_run_nested = True  # Fallback to the built-in loop to minimize memory usage
-
-        # Force the script into resume mode from the recovered checkpoint
+        args.use_run_nested = True
         args.resume = True
         args.checkpoint_file = str(checkpoint_path)
-
         logger.info(f"   - nlive_init reduced: {original_nlive} -> {args.nlive_init}")
         logger.info(f"   - maxcall reduced: {original_maxcall} -> {args.maxcall}")
         logger.info("   - Switched to built-in 'run_nested' loop for better stability.")
         logger.info(f"   - Forcing resume from: {args.checkpoint_file}")
 
-
-    # Ensure output directory exists and save run config
-    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     save_run_metadata(args, args.output_dir)
     
-    # Initialize run tracking
-    if run_tracking_enabled:
-        try:
-            RUN_ID = start_record(args)
-            logger.info(f"Run tracking initialized: {RUN_ID}")
-        except Exception as e:
-            logger.warning(f"Failed to start run tracking: {e}")
-            run_tracking_enabled = False
-            # Keep the fallback RUN_ID that was already generated
-
-    logger = get_or_create_logger()
+    
+    # --- Setup Logging ---
     log_dir = Path(args.output_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "dynesty_debug.log"
 
-    file_handler = logging.FileHandler(log_file, mode='w')
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"))
+    # Determine the logging level for the console based on the --debug flag
+    console_level = logging.DEBUG if args.debug else logging.INFO
 
-    if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
-        logger.addHandler(file_handler)
-
-
-
-    logger.info("📡 Logger initialized. Writing to: %s", log_file)
-
-
-    # Configure logging
+    # Configure the root logger. This is the simplest and most robust way.
+    # It removes any existing handlers and sets up new ones from scratch.
     logging.basicConfig(
-        level=logging.WARNING,  # Set to WARNING to reduce output
+        level=logging.DEBUG,  # Capture ALL messages at the root level
         format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        force=True  # Override any existing configuration
+        handlers=[
+            logging.FileHandler(log_file, mode='w'),  # File handler always gets DEBUG
+            logging.StreamHandler(sys.stdout)         # Console handler will be configured next
+        ],
+        force=True  # This is crucial to override any previous settings
     )
 
-    # Clear any existing handlers to prevent duplicates
-    logger.handlers.clear()
+    # Get the root logger and set the console handler's level separately
+    logger = logging.getLogger("run_dynesty")
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            handler.setLevel(console_level)    
+    logger.info(f"📡 Full debug log initialized. Writing to: {log_file}")
+    logger.info(f"Console log level set to: {logging.getLevelName(console_level)}")
 
-    # Add only ONE handler
-    file_handler = logging.FileHandler(log_file, mode='w')
-    file_handler.setLevel(logging.DEBUG)  # File gets everything
-    file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"))
-    logger.addHandler(file_handler)
-
-    # Set logger level based on production vs debug mode
-    if args.debug:  # Add --debug flag to your argparser
-        logger.setLevel(logging.INFO)
-    else:
-        logger.setLevel(logging.WARNING)  # Only warnings and errors to console
-
-    logger.info("Starting Enhanced Dynesty Sampler v2.0")
-
+    logger.info("Starting Enhanced Dynesty Sampler v2.1")
     if not DYNESTY_AVAILABLE:
-        logger.error("Dynesty library not available.")
+        logger.error("CRITICAL: Dynesty library not available. Please install it.")
         sys.exit(1)
-        
-    gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
 
-    if not gaia_cache_file.exists() or args.force_new_query_gaia:
-        logger.info("📡 Querying Gaia slices from scratch...")
-        df_all_sky = load_all_sky_gaia_slices(
-            lon_bin_width=30,
-            stars_per_bin=12000,
-            output_dir="gaia_sky_slices",
-            force_query=args.force_new_query_gaia,
-            max_distance_kpc=30.0
-        )
-    else:
-        import pandas as pd
+    # ============================================================================
+    # GAIA DATA LOADING WITH ENHANCED LOGGING
+    # ============================================================================
+    logger.info("\n" + "="*60)
+    logger.info("🔭 GAIA DATA LOADING & PROCESSING")
+    logger.info("="*60)
+    
+    gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
+    df_all_sky = None
+
+    if not gaia_cache_file.exists() or args.force_new_query_gaia or args.force_reprocess_raw:
+        if args.force_new_query_gaia:
+            logger.info("Force flag enabled: Bypassing all caches to query Gaia from scratch.")
+        elif args.force_reprocess_raw:
+            logger.info("Force flag enabled: Bypassing merged cache to re-process raw slice files.")
+        else:
+            logger.info(f"Merged cache file not found at '{gaia_cache_file}'.")
+
+        # Fallback 1: Try to merge raw slice files
         raw_dir = Path("gaia_sky_slices")
         raw_files = sorted(raw_dir.glob("raw_L*.csv"))
+        logger.info(f"Searching for raw data in: '{raw_dir.resolve()}'")
 
-        if not raw_files:
-            logger.error("❌ No raw Gaia CSVs found in gaia_sky_slices/")
-            sys.exit(1)
+        if raw_files and not args.force_new_query_gaia:
+            logger.info(f"Found {len(raw_files)} raw Gaia slice files. Attempting to merge...")
+            dfs = []
+            for f in raw_files:
+                try:
+                    df_slice = pd.read_csv(f)
+                    dfs.append(df_slice)
+                    logger.info(f"  ✅ Successfully loaded {f.name} with {len(df_slice)} rows.")
+                except Exception as e:
+                    logger.warning(f"  ⚠️ Failed to load or parse {f.name}: {e}")
 
-        logger.info(f"📂 Found {len(raw_files)} raw Gaia slice files. Merging...")
+            if not dfs:
+                logger.error("❌ All raw Gaia slice files failed to load. Cannot proceed.")
+                sys.exit(1)
 
-        dfs = []
-        for f in raw_files:
+            logger.info("Concatenating all loaded slices into a single DataFrame...")
+            df_all_sky = pd.concat(dfs, ignore_index=True)
+            logger.info(f"  ✅ Merged DataFrame created with {len(df_all_sky)} total rows.")
+            
             try:
-                df = pd.read_csv(f)
-                dfs.append(df)
-                logger.info(f"✅ Loaded {f.name} with {len(df)} rows")
+                logger.info(f"Attempting to cache the merged data to: {gaia_cache_file}")
+                df_all_sky.to_csv(gaia_cache_file, index=False)
+                logger.info(f"  💾 Cached merged Gaia data successfully.")
             except Exception as e:
-                logger.warning(f"⚠️ Failed to load {f.name}: {e}")
+                logger.warning(f"  ⚠️ Failed to write cache file: {e}")
 
-        if not dfs:
-            logger.error("❌ All Gaia slice files failed to load")
+        else:
+            # Fallback 2: Query from scratch
+            logger.info("No suitable raw files found or new query forced. Querying Gaia from scratch...")
+            df_all_sky = load_all_sky_gaia_slices(
+                lon_bin_width=30,
+                stars_per_bin=12000,
+                output_dir="gaia_sky_slices",
+                force_query=True, # We are in this block, so we must query
+                max_distance_kpc=30.0
+            )
+            logger.info("  ✅ Gaia query completed.")
+            
+    else:
+        logger.info(f"✅ Found existing merged cache file. Loading data from: {gaia_cache_file}")
+        try:
+            df_all_sky = pd.read_csv(gaia_cache_file)
+            logger.info(f"  ✅ Loaded {len(df_all_sky)} stars from cache.")
+        except Exception as e:
+            logger.error(f"❌ Failed to load cached Gaia data: {e}")
+            logger.error("   Try running with --force_reprocess_raw to rebuild the cache from slices.")
             sys.exit(1)
 
-        df_all_sky = pd.concat(dfs, ignore_index=True)
+    logger.info("\n--- Processing Raw Gaia Data into Physical Units ---")
+    df_all_sky = process_gaia_data(df_all_sky)
 
-        # Cache the merged result for next time
-        try:
-            df_all_sky.to_csv(gaia_cache_file, index=False)
-            logger.info(f"💾 Cached merged Gaia data to: {gaia_cache_file}")
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to cache merged Gaia CSV: {e}")
 
-    # --- Basic validity check ---
-    required_cols = ["R_kpc", "v_obs", "sigma_v"]
-    missing_cols = [col for col in required_cols if col not in df_all_sky.columns]
-    if df_all_sky.empty or missing_cols:
-        logger.error(f"❌ Gaia data load failed. Missing columns: {missing_cols}")
+    # --- Data Validation Step ---
+    logger.info("\n--- Validating loaded Gaia DataFrame ---")
+    if df_all_sky is None or df_all_sky.empty:
+        logger.error("❌ DataFrame is empty after loading attempts. Cannot proceed.")
         sys.exit(1)
 
-    gaia_data_dict = {col: df_all_sky[col].values for col in df_all_sky.columns}
+    logger.info(f"DataFrame shape: {df_all_sky.shape}")
+    logger.info(f"Columns: {df_all_sky.columns.tolist()}")
 
-    # --- Defensive validation of Gaia data ---
     required_cols = ["R_kpc", "v_obs", "sigma_v"]
+    missing_cols = [col for col in required_cols if col not in df_all_sky.columns]
+    if missing_cols:
+        logger.error(f"❌ Gaia data is missing required columns: {missing_cols}")
+        sys.exit(1)
+    
+    logger.info(f"Checking for non-finite values in critical columns...")
     for col in required_cols:
-        if col not in gaia_data_dict or len(gaia_data_dict[col]) == 0:
-            logger.error(f"❌ Missing or empty Gaia field: {col}")
-            sys.exit(1)
-
+        n_bad = np.sum(~np.isfinite(df_all_sky[col]))
+        if n_bad > 0:
+            logger.warning(f"  ⚠️ Found {n_bad} NaN/inf values in column '{col}'. These will be filtered.")
+            df_all_sky.dropna(subset=[col], inplace=True)
+    logger.info(f"DataFrame shape after cleaning non-finite values: {df_all_sky.shape}")
+    logger.info("Validation of DataFrame contents complete.")
+    
+    # --- Convert to JAX arrays ---
+    logger.info("\n--- Converting data to JAX arrays for GPU ---")
     try:
-        # Move to JAX (with validation)
-        logger.info(f"📦 Moving Gaia data to JAX backend: {jax.default_backend()}...")
+        gaia_data_dict = {col: df_all_sky[col].values for col in required_cols}
+        
         R_data_np = gaia_data_dict["R_kpc"].astype(np.float32)
         v_data_np = gaia_data_dict["v_obs"].astype(np.float32)
         sigma_data_np = gaia_data_dict["sigma_v"].astype(np.float32)
+        logger.info(f"NumPy arrays created with dtype={R_data_np.dtype}.")
 
         R_data_jax = jax.device_put(R_data_np)
         v_data_jax = jax.device_put(v_data_np)
         sigma_data_jax = jax.device_put(sigma_data_np)
 
-        logger.info(f"✅ {len(R_data_np)} stars transferred to GPU")
+        logger.info(f"✅ Successfully transferred {len(R_data_jax)} stars to JAX backend: {jax.default_backend()}")
+        logger.info("="*60 + "\n")
     except Exception as e:
-        logger.error(f"❌ Error converting Gaia data to JAX arrays: {e}")
-        R_data_jax = v_data_jax = sigma_data_jax = None
+        logger.error(f"❌ An error occurred during conversion to JAX arrays: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         sys.exit(1)
+    # ============================================================================
+    # END OF GAIA DATA LOADING SECTION
+    # ============================================================================
     
-
     # Ensure physical prior bounds match -- override if needed
     if args.R_d_thin_high is not None:
         MW_MULTI_COMP_PARAM_CONFIG['R_d_thin_kpc']['high'] = args.R_d_thin_high
@@ -4066,24 +4028,6 @@ def main_dynesty():
         except Exception as e:
             logger.error(f"❌ Failed to load or process checkpoint file at {checkpoint_path}: {e}")
             sys.exit(1)
-            
-            # --- DIAGNOSTIC CHECK ---
-            # After attempting to restore, log the current state of critical flags
-            # to confirm they were set correctly before the script continues.
-            if config_restored:
-                logger.info("   [DIAGNOSTIC] Final state of 'fit' flags before proceeding:")
-                logger.info(f"   - args.fit_xi_params: {getattr(args, 'fit_xi_params', 'MISSING')}")
-                logger.info(f"   - args.fit_bulge: {getattr(args, 'fit_bulge', 'MISSING')}")
-                logger.info(f"   - args.fit_gas: {getattr(args, 'fit_gas', 'MISSING')}")
-                logger.info(f"   - args.fit_disk_reparameterized: {getattr(args, 'fit_disk_reparameterized', 'MISSING')}")
-            else:
-                logger.error("❌ CRITICAL: Could not find configuration in checkpoint or JSON file.")
-                logger.error("   Please provide the full original command line flags to resume this run.")
-                sys.exit(1)
-
-        except Exception as e:
-            logger.error(f"❌ Failed to load or process checkpoint file at {checkpoint_path}: {e}")
-            sys.exit(1)
 
     if args.enable_dashboard and not args.disable_dashboard:
         try:
@@ -4102,14 +4046,6 @@ def main_dynesty():
         logger.error("WARNING: mass_threshold model CANNOT simultaneously pass Cassini and galaxy tests!")
         logger.error("This model is fundamentally incompatible with Solar System constraints.")
         logger.error("Consider using 'power', 'enhanced', or 'grav_color' instead.")
-        logger.info("DEBUG: Checking M_crit_msun config:")
-        if 'M_crit_msun' in MW_MULTI_COMP_PARAM_CONFIG:
-            config = MW_MULTI_COMP_PARAM_CONFIG['M_crit_msun']
-            logger.info(f"  Low: {config['low']}")
-            logger.info(f"  High: {config['high']}")
-            logger.info(f"  Default: {config['default_fixed']}")
-        else:
-            logger.error("  M_crit_msun NOT FOUND in config!")
 
     # Theory mode overrides
     if args.theory_mode:
@@ -4154,58 +4090,36 @@ def main_dynesty():
 
     # Sampling logic
     logger.info("Beginning sampling...")
+    results = None
+    stage_args_per_stage = {}
     try:
         if args.use_curriculum_learning:
             results, stage_args_per_stage = run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax, sigma_data_jax, dashboard_monitor)
         else:
             results = run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogate=gp_surrogate, dashboard_monitor=dashboard_monitor)
     except KeyboardInterrupt:
-        logger.warning("Run interrupted by user")
-        finalize_record(RUN_ID, success=False,
-                       logz=np.nan, logz_err=np.nan,
-                       eff=0, rmse=np.nan,
-                       n_samples=0, n_calls=0,
-                       param_stats={}, phys_ok=False,
-                       phys_reason="User interrupted")
-        raise
-    except Exception as e:
-        logger.error(f"Sampling failed: {e}")
-        finalize_record(RUN_ID, success=False,
-                       logz=np.nan, logz_err=np.nan,
-                       eff=0, rmse=np.nan,
-                       n_samples=0, n_calls=0,
-                       param_stats={}, phys_ok=False,
-                       phys_reason=f"Exception: {str(e)[:200]}")
-        raise
-
-    if results is None or not hasattr(results, 'samples') or len(results.samples) == 0:
-        try:
-            # Try to save whatever is available in results
-            output_file = Path(args.output_dir) / "partial_results_unphysical.npz"
-            if results is not None and hasattr(results, 'samples'):
-                np.savez(output_file,
-                        samples=results.samples,
-                        logz=getattr(results, 'logz', None),
-                        logzerr=getattr(results, 'logzerr', None),
-                        logl=getattr(results, 'logl', None),
-                        blob=getattr(results, 'blob', None))
-                logger.info(f"🧪 Saved partial results to: {output_file}")
-            else:
-                logger.warning("⚠️ No valid results to save. No partial output saved.")
-        except Exception as e:
-            logger.error(f"❌ Failed to save partial results: {e}")
-
-        logger.error("No results to save")
-        finalize_record(RUN_ID, success=False,
+            logger.warning("Run interrupted by user")
+            finalize_record(RUN_ID, success=False,
                         logz=np.nan, logz_err=np.nan,
                         eff=0, rmse=np.nan,
                         n_samples=0, n_calls=0,
                         param_stats={}, phys_ok=False,
-                        phys_reason="No results to save")
+                        phys_reason="User interrupted")
+            # Do not re-raise, allow finalization
+    except Exception as e:
+        logger.error(f"Sampling failed with a critical error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        finalize_record(RUN_ID, success=False, phys_reason=f"Exception: {str(e)[:200]}")
+        # Do not re-raise, allow finalization if possible
+
+    if results is None or not hasattr(results, 'samples') or len(results.samples) == 0:
+        logger.error("No valid results were produced to save.")
+        finalize_record(RUN_ID, success=False, phys_reason="No results to save")
         return
 
-
     # =================================================================================
+    # START OF RESTORED CODE BLOCK
     # FINAL RESULTS PROCESSING AND SAVING
     # This block determines the final results object and then safely processes it.
     # =================================================================================
