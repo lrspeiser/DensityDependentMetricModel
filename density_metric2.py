@@ -538,6 +538,77 @@ def xi_gr_baseline(rho, *args, **kwargs):
     # jnp.ones_like ensures the output has the same shape as the input density array.
     return jnp.ones_like(jnp.atleast_1d(rho))
 
+# ============================================================================
+# Model derived from Deur Gravity concept
+# ============================================================================
+class DeurGravity:
+    """
+    A physics model inspired by the work of A. Deur on gravitational
+    self-interaction. This version is implemented in JAX for performance.
+    """
+    def __init__(self, geometry='disk'):
+        self.geometry = geometry
+        # The coupling strength, alpha, should ideally be a fittable parameter.
+        # For this implementation, it is a fixed attribute.
+        self.alpha = 0.1  # Needs calibration
+
+    def enclosed_mass(self, r_kpc, params):
+        """
+        Calculates the enclosed baryonic mass at a given radius using the
+        Newtonian velocity, based on the relation M_enc = v_newton^2 * r / G.
+        """
+        v_newton = v_baryon_total_newtonian_kms(r_kpc, params)
+        # Add a small epsilon to r_kpc to avoid division by zero at the center.
+        r_safe = r_kpc + 1e-9
+        m_enclosed = (v_newton**2 * r_safe) / G_ASTRO_UNITS
+        return m_enclosed
+
+    def scale_length(self, r_kpc, params):
+        """
+        Defines the local scale length for the self-interaction term.
+        The simplest and most common choice is the radius r itself.
+        """
+        # Add epsilon to avoid division by zero. 'params' is unused but kept for API consistency.
+        return r_kpc + 1e-9
+
+    @jax.jit
+    def enhancement_factor(self, r_kpc, params):
+        """
+        Calculates Deur's gravity enhancement factor xi at a given radius r.
+        This version is JIT-compiled with JAX.
+        """
+        r_arr = jnp.atleast_1d(r_kpc)
+
+        # Calculate local mass and scale length.
+        M_local = self.enclosed_mass(r_arr, params)
+        L_local = self.scale_length(r_arr, params)
+
+        # Calculate the field self-interaction parameter.
+        # Use jnp.sqrt and ensure the argument is non-negative.
+        coupling = jnp.sqrt(G_ASTRO_UNITS * jnp.maximum(0, M_local) / L_local)
+
+        # Add the self-interaction contribution.
+        enhancement = jnp.where(self.geometry == 'disk', self.alpha * coupling * 1.5, self.alpha * coupling * 1.0)
+        xi = 1.0 + enhancement
+
+        # Apply saturation to prevent runaway enhancement.
+        return jnp.minimum(xi, 3.0)
+    
+def xi_deur_wrapper(rho, rho_c, n_exp, A, r_kpc, params, **_):
+    """
+    Wrapper for the DeurGravity model to make it compatible with the
+    v_total_kms function and XI_FUNCTION_MAP.
+    """
+    # Instantiate the model. 'disk' geometry is appropriate for this project.
+    deur_model = DeurGravity(geometry='disk')
+
+    # The Deur model calculates xi directly from radius (r_kpc) and the mass
+    # distribution (params), so it ignores the other standard arguments.
+    xi = deur_model.enhancement_factor(r_kpc, params)
+
+    return xi
+
+
 XI_FUNCTION_MAP = {
     'gr': xi_gr_baseline, 
     'power': xi_power_law_wrapper,
@@ -547,7 +618,8 @@ XI_FUNCTION_MAP = {
     'exp_enhance': xi_exponential,
     'grav_color': xi_grav_color_standard_interface,
     'gaussian': xi_gaussian_wrapper,
-    'mass_threshold': xi_mass_threshold
+    'mass_threshold': xi_mass_threshold,
+    'deur': xi_deur_wrapper
 }
 
 # ============================================================================

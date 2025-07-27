@@ -1214,6 +1214,27 @@ def enhanced_monitor_sampler_progress(
         for p_info in args_obj.all_param_info_list:
             if not p_info['is_fitted']:
                 full_params[p_info['name']] = p_info['current_val']
+
+        global debug_counter
+        if debug_counter < 5:
+            logger = get_or_create_logger()
+            logger.info(f"\n=== LIKELIHOOD DEBUG {debug_counter} ===")
+            logger.info(f"xi_type: {xi_type}")
+            logger.info(f"fitted_param_names: {fitted_param_names}")
+            logger.info(f"theta_values_fitted: {theta_values_fitted}")
+            
+            # Check what's in params after reconstruction
+            logger.info("Reconstructed params:")
+            for key in ['rho_c_solar_kpc3', 'n_exp', 'A']:
+                logger.info(f"  {key}: {params.get(key, 'MISSING')}")
+            
+            # Check all_param_info_list
+            logger.info("all_param_info_list contents:")
+            for p_info in all_param_info_list:
+                if p_info['name'] in ['rho_c_solar_kpc3', 'n_exp', 'A']:
+                    logger.info(f"  {p_info['name']}: current_val={p_info['current_val']}, is_fitted={p_info['is_fitted']}")
+            
+            debug_counter += 1
                 
         # 1b. Convert reparameterized parameters to physical parameters
         full_params = reconstruct_physical_parameters(full_params)
@@ -1662,8 +1683,25 @@ def v_model_for_dynesty(
 
             rho_c_solar_kpc3 = p_all_params_dict['rho_c_solar_kpc3']
             n_exp = p_all_params_dict['n_exp']
+            
+            if xi_type_str == 'enhanced':
+                if 'A' not in p_all_params_dict:
+                    logger.error(f"ERROR: A missing for enhanced model!")
+                    logger.error(f"Available: {list(p_all_params_dict.keys())}")
+                    return np.zeros_like(R_kpc_array)
+                A = p_all_params_dict['A']
+            else:
+                A = 1.0  # Default for non-enhanced models
+  
             gamma = None
-            lambda_g = None
+            lambda_g = None           
+        if not hasattr(v_model_for_dynesty, "_enhanced_logged") and xi_type_str == 'enhanced':
+            logger.info("\n[ENHANCED MODEL DEBUG]")
+            logger.info(f"  Parameters received: {list(p_all_params_dict.keys())}")
+            logger.info(f"  A value: {p_all_params_dict.get('A', 'MISSING')}")
+            logger.info(f"  rho_c: {p_all_params_dict.get('rho_c_solar_kpc3', 'MISSING')}")
+            logger.info(f"  n_exp: {p_all_params_dict.get('n_exp', 'MISSING')}")
+            v_model_for_dynesty._enhanced_logged = True
 
     except Exception as e:
         logger.error(f"Error extracting parameters: {e}")
@@ -1698,7 +1736,7 @@ def v_model_for_dynesty(
         elif xi_type_str == 'enhanced':
             xi_func = XI_FUNCTION_MAP['enhanced']
             # For enhanced, use A=8.0 for theory test
-            xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp, 8.0)
+            xi_raw = xi_func(rho_midplane_for_xi, rho_c_solar_kpc3, n_exp, A)
         else:
             # Standard xi functions (power, logistic, etc.)
             xi_func = XI_FUNCTION_MAP.get(xi_type_str, XI_FUNCTION_MAP['power'])
@@ -2126,6 +2164,13 @@ def get_param_labels_and_bounds(ARGS):
     logger.info(f"  Expected range: [{PHYSICAL_BOUNDS['M_total']['min']:.2e}, {PHYSICAL_BOUNDS['M_total']['max']:.2e}]")
 
 
+    logger.info("\n📋 FINAL PARAMETER CONFIGURATION:")
+    logger.info(f"Total parameters: {len(param_info_list)}")
+    logger.info("Xi-related parameters:")
+    for p in param_info_list:
+        if p['name'] in ['rho_c_solar_kpc3', 'n_exp', 'A', 'gamma_exp', 'lambda_g']:
+            logger.info(f"  {p['name']}: fitted={p['is_fitted']}, value={p['current_val']}")
+
     # Return as required
     use_log_flags = [p['log_prior'] for p in fitted_params_info]
     return (
@@ -2174,43 +2219,6 @@ def make_json_serializable(obj):
     else:
         return obj
 
-# ============================================================================
-# Model derived from Deur Gravity concept
-# ============================================================================
-
-
-class DeurGravity:
-    def __init__(self, geometry='disk'):
-        self.geometry = geometry
-        # Coupling strength
-        self.alpha = 0.1  # Needs calibration
-        
-    def enhancement_factor(self, r, density_profile):
-        """
-        Calculate Deur's enhancement at radius r
-        """
-        # Local mass scale
-        M_local = self.enclosed_mass(r, density_profile)
-        L_local = self.scale_length(r, density_profile)
-        
-        # Field self-interaction parameter
-        coupling = np.sqrt(G * M_local / L_local)
-        
-        # Base enhancement
-        xi = 1.0
-        
-        # Add self-interaction contribution
-        if self.geometry == 'disk':
-            # Stronger enhancement for disk confinement
-            xi += self.alpha * coupling * 1.5
-        elif self.geometry == 'elliptical':
-            # Weaker for 3D systems
-            xi += self.alpha * coupling * 1.0
-            
-        # Saturation at low densities (field fully self-interacting)
-        xi = min(xi, 3.0)  # Maximum enhancement ~3
-        
-        return xi
 
 # ============================================================================
 # Gaussian Process Surrogate Model (unchanged but included for completeness)
@@ -3634,7 +3642,7 @@ def main_dynesty():
     parser.add_argument('--debug', action='store_true', default=False,
                         help="Enable verbose debug logging")
     parser.add_argument('--xi', type=str, default='power',
-                            choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold', 'gr'],
+                            choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold', 'gr', 'deur'],
                             help="Choice of xi(ρ) function")
     parser.add_argument('--max_sample_gaia', type=int, default=10000,
                         help="Maximum number of Gaia stars to use")
