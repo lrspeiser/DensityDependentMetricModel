@@ -52,6 +52,8 @@ import corner
 import jax
 import jax.numpy as jnp
 
+RUN_ID = None
+
 
 # Configure environment for JAX Metal support and debugging
 os.environ['JAX_TRACEBACK_FILTERING'] = 'off'  # Show full traceback for errors
@@ -305,11 +307,7 @@ def get_or_create_logger():
     """Get or create the module logger. Safe for multiprocessing."""
     import logging
     logger = logging.getLogger("run_dynesty")
-    if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
-        logger.setLevel(logging.INFO)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"))
-        logger.addHandler(stream_handler)
+    # Don't add any handlers here - let the root logger handle it
     return logger
 
 
@@ -338,7 +336,7 @@ PHYSICAL_BOUNDS = {
 
     # Other parameters
     'M_total':             {'min': 5e10, 'max': 2e11,   'typical': 1e11},
-    'rho_c_solar_kpc3':    {'min': 1e12,  'max': 1e15,   'typical': 1e13},
+    'rho_c_solar_kpc3':    {'min': 5e13,  'max': 1e16,   'typical': 5e13},
     'n_exp':               {'min': 0.5,  'max': 4.0,    'typical': 2.7},
 }
 
@@ -496,130 +494,42 @@ MW_MULTI_COMP_PARAM_CONFIG = {
 # ============================================================================
 # Physical Plausibility Checks
 # ============================================================================
+# ------------------------------------------------------------------
+# Revised NON‑BLOCKING plausibility checker
+# ------------------------------------------------------------------
 def check_physical_plausibility(
-    theta_values: np.ndarray,
-    param_names: List[str],
-    args_obj: argparse.Namespace
+        theta_values: np.ndarray,
+        param_names: List[str],
+        args_obj: argparse.Namespace
 ) -> Tuple[bool, str]:
     """
-    Check if parameters are physically reasonable.
-    This version is NON-BLOCKING: it logs warnings for failed checks
-    but always returns True to allow the sampler to explore.
+    Minimal plausibility checker - only checks for catastrophic issues.
+    Everything else is handled by penalties in the likelihood.
     """
-    logger = get_or_create_logger()
-    # logger.debug("\n--- Running check_physical_plausibility (Non-Blocking Mode) ---")
-    
-    # ALWAYS LOG when this function is called
-    logger.debug("\n=== PHYSICAL PLAUSIBILITY CHECK ===")
-    
+    log = get_or_create_logger()
+
+    # Just unpack parameters
     try:
         params = dict(zip(param_names, theta_values))
     except Exception as e:
-        logger.error(f"❌ Failed to unpack parameters: {e}")
+        log.error(f"Parameter unpacking failed: {e}")
         return False, "Parameter unpacking failure"
 
-    # Log all parameters
-    logger.debug("Parameters being checked:")
+    # Only check for truly catastrophic issues that would crash the physics
     for name, value in params.items():
-        logger.debug(f"  {name}: {value:.3e}")
-    
-    try:
-        params = dict(zip(param_names, theta_values))
-        logger.debug("   Parameters unpacked successfully")
+        if not np.isfinite(value):
+            return False, f"{name} is NaN or Inf"
         
-        # Log the actual values
-        for name, value in params.items():
-            logger.debug(f"   - {name}: {value:.3e}")
-            
-    except Exception as e:
-        logger.error(f"❌ Failed to unpack parameters: {e}")
-        # In this case, we still return False because the parameters are invalid
-        return False, "Parameter unpacking failure"
+        # Check masses are positive
+        if 'M_' in name and 'solar' in name and value <= 0:
+            return False, f"{name} is negative or zero"
+        
+        # Check scale parameters are positive
+        if ('R_d' in name or 'h_z' in name or 'a_bulge' in name) and value <= 0:
+            return False, f"{name} is negative or zero"
 
-    try:
-        params = dict(zip(param_names, theta_values))
-    except Exception as e:
-        logger.error(f"❌ Failed to unpack parameters: {e}")
-        # In this case, we still return False because the parameters are invalid
-        return False, "Parameter unpacking failure"
-
-    # --- The following checks will now only log warnings ---
-
-    # 1. Check total baryonic mass
-    try:
-        mass_components = ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']
-        total_mass = sum(
-            params.get(comp, 0.0)
-            for comp in mass_components
-            if getattr(args_obj, f"include_{comp.split('_solar')[0]}", False)
-        )
-        if total_mass > 1e6 and (
-            total_mass < PHYSICAL_BOUNDS['M_total']['min'] or
-            total_mass > PHYSICAL_BOUNDS['M_total']['max']
-        ):
-            # --- CHANGED ---
-            # logger.warning(f"Plausibility FAIL: Total mass {total_mass:.2e} outside physical bounds.")
-            return False, f"Total mass {total_mass:.2e} outside physical bounds." # <-- OLD BEHAVIOR
-    except Exception as e:
-        logger.error(f"Error during mass check: {e}")
-        return False, "Failed during total mass check"
-
-    # 2. Check scale length ordering
-    if 'R_d_thick_kpc' in params and 'R_d_thin_kpc' in params:
-        if params['R_d_thick_kpc'] < params['R_d_thin_kpc']:
-            # --- CHANGED ---
-            # logger.warning("Plausibility FAIL: Thick disk scale length smaller than thin disk.")
-            return False, "Thick disk scale length cannot be smaller than thin disk." # <-- OLD BEHAVIOR
-
-    # 3. Check scale height ordering
-    if 'h_z_thick_kpc' in params and 'h_z_thin_kpc' in params:
-        if params['h_z_thick_kpc'] < 2 * params['h_z_thin_kpc']:
-            # --- CHANGED ---
-            # logger.warning("Plausibility FAIL: Thick disk scale height must be at least 2x thin disk.")
-            return False, "Thick disk scale height must be at least 2x thin disk." # <-- OLD BEHAVIOR
-
-    # 4. Check xi and velocity at solar radius
-    try:
-        params_for_calc = params.copy()
-        # ... (code to reconstruct params_for_calc is unchanged) ...
-        if getattr(args_obj, "all_param_info_list", None):
-            for p_info in args_obj.all_param_info_list:
-                if p_info['name'] not in params_for_calc:
-                    params_for_calc[p_info['name']] = p_info['current_val']
-
-        for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
-            params_for_calc[f'include_{component}'] = getattr(args_obj, f'include_{component}', False)
-
-        r_solar = jnp.array([R_SUN_KPC], dtype=DEFAULT_DTYPE)
-        v_model_solar = v_total_kms(r_solar, params_for_calc, xi_type=args_obj.xi).item()
-        v_newton_solar = v_baryon_total_newtonian_kms(r_solar, params_for_calc).item()
-
-        if v_newton_solar > 1e-6:
-            xi_solar = (v_model_solar / v_newton_solar) ** 2
-        else:
-            xi_solar = 1.0
-
-        if not (EXPECTED_V_AT_SOLAR[0] <= v_model_solar <= EXPECTED_V_AT_SOLAR[1]):
-            # --- CHANGED ---
-            # logger.warning(
-            #    f"Plausibility FAIL: Predicted v(R_sun) = {v_model_solar:.0f} km/s is outside the expected range "
-            #    f"[{EXPECTED_V_AT_SOLAR[0]}, {EXPECTED_V_AT_SOLAR[1]}]"
-            # )
-            return False, ... # <-- OLD BEHAVIOR
-
-        # 5. Cassini test (still important to enforce)
-        passes_cassini, cassini_msg = check_cassini_compatibility(params, args_obj.xi)
-        if not passes_cassini:
-            # --- We will KEEP this one as a hard block, as it's a fundamental constraint ---
-            # logger.warning(f"Cassini test failed: {cassini_msg}")
-            return False, cassini_msg
-
-    except Exception as e:
-        logger.warning(f"⚠️ Plausibility check for xi/velocity failed with error: {e}")
-        return False, "Velocity calculation failed during plausibility check"
-
-    # If all checks pass (or are now non-blocking), always return True.
-    return True, "OK (Non-Blocking)"
+    # Everything else is fine - let penalties handle the rest
+    return True, "OK"
 
 def reconstruct_physical_parameters(params_dict):
     """
@@ -991,31 +901,86 @@ class ConvergenceTracker:
             lines.append("   Consider: wider priors, different sampler settings, or curriculum learning")
 
         return "\n".join(lines)
+    
+class BimodalAnalyzer:
+    """
+    Separates physical vs unphysical samples using your check_physical_plausibility().
+    Computes weight fractions and weighted median parameters for each mode.
+    """
+
+    def __init__(self, args_obj):
+        self.args_obj = args_obj
+        self.samples = None
+        self.weights = None
+        self.param_names = None
+
+    def separate_physical_modes(self):
+        physical_idx = []
+        unphysical_idx = []
+
+        for i, theta in enumerate(self.samples):
+            param_dict = dict(zip(self.param_names, theta))
+            values = [param_dict.get(name) for name in self.param_names]
+            is_valid, *_ = check_physical_plausibility(values, self.param_names, self.args_obj)
+            if is_valid:
+                physical_idx.append(i)
+            else:
+                unphysical_idx.append(i)
+
+        def gather(indices):
+            return {
+                "samples": self.samples[indices],
+                "weights": self.weights[indices] if len(indices) > 0 else [],
+                "weight_fraction": float(np.sum(self.weights[indices])) / np.sum(self.weights)
+                if len(indices) > 0 else 0.0
+            }
+
+        return gather(physical_idx), gather(unphysical_idx)
+
+    def get_mode_parameters(self, samples, weights):
+        """
+        Return weighted median parameter vector for a set of samples.
+        """
+        import numpy as np
+
+        def weighted_median(data, weights):
+            """Compute weighted median across 1D array."""
+            sorted_idx = np.argsort(data)
+            data_sorted = data[sorted_idx]
+            weights_sorted = weights[sorted_idx]
+            cum_weights = np.cumsum(weights_sorted)
+            cutoff = np.sum(weights_sorted) / 2.0
+            return data_sorted[np.searchsorted(cum_weights, cutoff)]
+
+        num_params = samples.shape[1]
+        medians = []
+        for i in range(num_params):
+            param_column = samples[:, i]
+            medians.append(weighted_median(param_column, weights))
+
+        return [np.array(medians)]
+
 
 class AdaptiveModeMonitor:
-    """Monitor sampling and adapt strategy in real-time."""
-
+    """Monitor sampling and steer strategy in real-time based on physical modes."""
     def __init__(self, param_names, switch_threshold=0.7):
         self.param_names = param_names
         self.switch_threshold = switch_threshold
         self.mode_history = []
+        self.mode_action_log = []
         self.current_mode = None
-        self.mode_lifetimes = {}
 
     def update(self, samples, weights):
-        """Check current mode and recommend actions."""
         if len(samples) < 500:
             return None
 
-        # Identify current dominant mode
-        analyzer = BimodalAnalyzer(None)  # Modify to accept arrays
+        analyzer = BimodalAnalyzer(args_obj)
         analyzer.samples = samples
         analyzer.weights = weights
         analyzer.param_names = self.param_names
 
         physical_mode, unphysical_mode = analyzer.separate_physical_modes()
 
-        # Track mode evolution
         mode_info = {
             'iteration': len(self.mode_history),
             'physical_weight': physical_mode['weight_fraction'],
@@ -1024,20 +989,23 @@ class AdaptiveModeMonitor:
         }
         self.mode_history.append(mode_info)
 
-        # Decide on action
         if physical_mode['weight_fraction'] > self.switch_threshold:
             if self.current_mode != 'physical':
                 logger.info("🎯 Switching focus to PHYSICAL mode")
                 self.current_mode = 'physical'
+                new_bounds_center = analyzer.get_mode_parameters(
+                    physical_mode['samples'],
+                    physical_mode['weights']
+                )[0]
+                self.mode_action_log.append(("tighten_bounds", new_bounds_center))
                 return {
                     'action': 'tighten_bounds',
-                    'mode_params': analyzer.get_mode_parameters(
-                        physical_mode['samples'],
-                        physical_mode['weights']
-                    )[0]
+                    'mode_params': new_bounds_center
                 }
+
         elif physical_mode['weight_fraction'] < 0.3:
             logger.warning("⚠️ Sampling dominated by unphysical mode!")
+            self.mode_action_log.append(("add_constraints", {'strength': 200}))
             return {
                 'action': 'add_constraints',
                 'constraint_strength': 200
@@ -1045,14 +1013,15 @@ class AdaptiveModeMonitor:
 
         return None
 
+
 def enhanced_monitor_sampler_progress(
     sampler,
     fitted_param_names: List[str],
     fitted_param_labels: List[str],
     start_time: float,
     logger: logging.Logger,
+    args_obj,  # <-- Moved here (before defaults)
     gp_surrogate=None,
-    args_obj=None,
     dashboard_monitor=None
 ):
     """
@@ -1115,6 +1084,15 @@ def enhanced_monitor_sampler_progress(
         # Show error estimate
         if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
             logger.info(f"   Error: ±{res.logzerr[-1]:.3f}")
+            
+        logger.info(f"\n🎯 CONVERGENCE STATUS:")
+        if args_obj and hasattr(args_obj, 'dlogz_target'):
+            logger.info(f"   dlogZ: {dlogz:.6f} (target: {args_obj.dlogz_target:.3f})")
+            if np.isfinite(dlogz) and args_obj.dlogz_target > 0:
+                progress_pct = (args_obj.dlogz_target / dlogz) * 100 if dlogz > 0 else 0
+                logger.info(f"   Progress to target: {min(progress_pct, 100):.1f}%")
+        else:
+            logger.info(f"   dlogZ: {dlogz:.6f}")
 
         if np.isfinite(current_logz):
             delta_logz_vs_gr = current_logz - BASELINE_LOGZ_GR
@@ -1451,7 +1429,68 @@ def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
         logger.warning(f"⚠️ Failed to save .npz checkpoint: {e}")
         return False
 
-
+def save_progress_json(sampler, fitted_names, args, start_time, logger):
+    """Save current progress to JSON file that updates every minute."""
+    try:
+        res = getattr(sampler, "results", None)
+        if res is None:
+            return
+            
+        progress_file = Path(args.output_dir) / "progress.json"
+        
+        # Get current stats
+        current_time = time.time()
+        elapsed = current_time - start_time
+        n_samples = len(res.samples) if hasattr(res, 'samples') else 0
+        n_calls = np.sum(res.ncall) if hasattr(res, 'ncall') else 0
+        
+        # Get logZ and dlogZ
+        current_logz = -np.inf
+        dlogz = np.nan
+        if hasattr(res, 'logz') and len(res.logz) > 0:
+            current_logz = float(res.logz[-1])
+            if len(res.logz) >= 2:
+                dlogz = float(res.logz[-1] - res.logz[-2])
+        
+        # GR baseline comparison
+        delta_logz_vs_gr = current_logz - BASELINE_LOGZ_GR if np.isfinite(current_logz) else np.nan
+        gr_diff_percent = (np.exp(delta_logz_vs_gr) - 1) * 100 if np.isfinite(delta_logz_vs_gr) else np.nan
+        
+        # Get current parameter estimates
+        param_estimates = {}
+        if hasattr(res, 'samples') and len(res.samples) > 0:
+            recent_samples = res.samples[-min(1000, len(res.samples)):]
+            for i, name in enumerate(fitted_names):
+                param_estimates[name] = {
+                    'median': float(np.median(recent_samples[:, i])),
+                    'std': float(np.std(recent_samples[:, i]))
+                }
+        
+        progress_data = {
+            'timestamp': datetime.now().isoformat(),
+            'elapsed_hours': elapsed / 3600,
+            'n_samples': n_samples,
+            'n_calls': n_calls,
+            'efficiency_percent': 100.0 * n_samples / n_calls if n_calls > 0 else 0,
+            'current_logz': current_logz,
+            'dlogz': dlogz,
+            'target_dlogz': args.dlogz_target,
+            'dlogz_ratio': dlogz / args.dlogz_target if np.isfinite(dlogz) and args.dlogz_target > 0 else np.nan,
+            'gr_baseline_logz': BASELINE_LOGZ_GR,
+            'delta_logz_vs_gr': delta_logz_vs_gr,
+            'gr_diff_percent': gr_diff_percent,
+            'jeffreys_interpretation': interpret_jeffreys_scale(delta_logz_vs_gr) if np.isfinite(delta_logz_vs_gr) else "Unknown",
+            'parameter_estimates': param_estimates,
+            'xi_type': args.xi,
+            'run_id': getattr(args, 'run_id', 'unknown')
+        }
+        
+        # Save to JSON
+        with open(progress_file, 'w') as f:
+            json.dump(make_json_serializable(progress_data), f, indent=2)
+            
+    except Exception as e:
+        logger.debug(f"Failed to save progress.json: {e}")
 
 # ============================================================================
 # Prior Transform and Likelihood Functions
@@ -1522,122 +1561,134 @@ def log_likelihood_dynesty(
     gp_surrogate=None
 ) -> Tuple[float, List[float]]:
     """
-    MASTER log-likelihood function that now correctly passes the FULL parameter set
-    to the physical plausibility check and uses the v_total_kms master function.
+    Log-likelihood with penalty tracking that only prints every 1000th evaluation.
     """
+    logger = get_or_create_logger()
+    
+    # Initialize tracking
+    if not hasattr(log_likelihood_dynesty, '_eval_stats'):
+        log_likelihood_dynesty._eval_stats = {
+            'count': 0,
+            'penalties_applied': {'cassini': 0, 'velocity': 0, 'mass': 0},
+            'penalty_totals': {'cassini': 0.0, 'velocity': 0.0, 'mass': 0.0},
+            'worst_penalties': {'cassini': 0.0, 'velocity': 0.0, 'mass': 0.0}
+        }
+    
+    stats = log_likelihood_dynesty._eval_stats
+    stats['count'] += 1
 
-    # 1. Reconstruct the full parameter dictionary, including fixed values
+    # 1. Reconstruct full parameter dictionary
     params = dict(zip(fitted_param_names, theta_values_fitted))
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
             params[p_info['name']] = p_info['current_val']
 
-    # ============================================================================
-    # >>> FIX 1: RECONSTRUCT REPARAMETERIZED DISK MASSES <<<
-    # This is critical when using --fit_disk_reparameterized
-    # ============================================================================
+    # Reconstruct disk masses if reparameterized
     if args_dynesty_obj.fit_disk_reparameterized:
         params = reconstruct_physical_parameters(params)
-    # ============================================================================
 
-    # Add boolean flags for which components to include in calculations
+    # Add boolean flags for included components
     for component in ['disk_thin', 'disk_thick', 'bulge', 'gas']:
         params[f'include_{component}'] = getattr(args_dynesty_obj, f'include_{component}', False)
 
-    # ============================================================================
-    # >>> FIX 2: DEFENSIVE TYPE CASTING <<<
-    # Ensure all parameter values are floats to prevent JAX TypeErrors.
-    # ============================================================================
+    # Defensive float casting to avoid JAX issues
     try:
         params = {k: float(v) if isinstance(v, (int, float, str)) else v for k, v in params.items()}
     except (ValueError, TypeError) as e:
-        # This will catch any string that cannot be converted to a float.
-        # It's a hard stop because it indicates a fundamental parameter problem.
-        # logger.error(f"FATAL: Could not cast a parameter to float: {e}")
-        return -np.inf, [np.inf]
-    # ============================================================================
+        return -np.inf, [np.inf, np.inf]
 
-    # 2. Perform plausibility checks on the full set of parameters
-    # The check function needs the full list of names and values
+    # 2. Physical plausibility check
     all_param_names_for_check = [p['name'] for p in all_param_info_list]
     all_param_values_for_check = np.array([params.get(name) for name in all_param_names_for_check if params.get(name) is not None])
 
-    # Ensure the arrays have the same length before calling the check
     if len(all_param_names_for_check) != len(all_param_values_for_check):
-         all_param_names_for_check = [name for name in all_param_names_for_check if name in params]
+        all_param_names_for_check = [name for name in all_param_names_for_check if name in params]
 
     is_valid, reason, *_ = check_physical_plausibility(all_param_values_for_check, all_param_names_for_check, args_dynesty_obj)
+
+    # Don't block sample — but optionally log it
     if not is_valid:
-        get_or_create_logger().error(f"Plausibility check failed for initial point. Reason: {reason}")
-        return -np.inf, [np.inf]
+        logger.warning(f"⚠️ Physical plausibility soft fail: {reason} (penalized, not blocked)")
 
-    # 2b. Enforce Cassini constraints
-    try:
-        rho_saturn = 2.3e21  # Cassini orbit density
-
-        # Import at function level to avoid circular imports
-        from density_metric2 import XI_FUNCTION_MAP
-
-        xi_func = XI_FUNCTION_MAP.get(xi_type, XI_FUNCTION_MAP['power'])
-
-        if xi_type == 'grav_color':
-            gamma = params.get('gamma_exp', 2.7)
-            lambda_g = params.get('lambda_g', 1.5)
-            rho_c = params.get('rho_c_solar_kpc3', 1e13)
-            xi_saturn = xi_func(rho_saturn, rho_c, gamma, lambda_g)[0]
-        elif xi_type in ('power', 'logistic', 'enhanced'):
-            n = params.get('n_exp', 1.5)
-            A = params.get('A', 1.0) if 'enhanced' in xi_type else None
-            rho_c = params.get('rho_c_solar_kpc3', 1e13)
-            if A is not None:
-                xi_saturn = xi_func(rho_saturn, rho_c, n, A)[0]
-            else:
-                xi_saturn = xi_func(rho_saturn, rho_c, n)[0]
-        else:
-            xi_saturn = 1.0  # Skip check for mass_threshold etc.
-
-        cassini_deviation, cassini_msg = check_cassini_compatibility(params, xi_type)
-        cassini_tolerance = 2.3e-5
-
-        if np.isfinite(cassini_deviation) and cassini_deviation > cassini_tolerance:
-            penalty_strength = 500.0  # Can adjust as needed
-            penalty = -0.5 * ((cassini_deviation - cassini_tolerance) / cassini_tolerance)**2 * penalty_strength
-            log_L += penalty
-
-    except Exception as e:
-        logger = get_or_create_logger()
-        logger.warning(f"⚠️ Cassini check failed: {e}")
-        return -np.inf, [np.inf]
-
-    # 3. Compute the model velocity using the JAX v_total_kms function
+    # 3. Compute model velocities
     try:
         v_model = v_total_kms(R_data_jax, params, xi_type=xi_type)
         if not jnp.all(jnp.isfinite(v_model)):
-            return -np.inf, [np.inf]
+            return -np.inf, [np.inf, np.inf]
     except Exception:
-        return -np.inf, [np.inf]
+        return -np.inf, [np.inf, np.inf]
 
-    # 4. Calculate the base chi-squared and log-likelihood on the GPU FIRST
+    # Base likelihood
     chi2 = jnp.sum(((v_data_jax - v_model) / sigma_data_jax)**2)
     log_L = -0.5 * chi2
-
-    # Immediately check if the base likelihood is valid before proceeding
-    if not jnp.isfinite(log_L):
-        return -np.inf, [np.inf]
-
-    # 5. THEN, apply a "soft" penalty for unphysical behavior (e.g., overshooting)
-    v_model_solar_mask = (R_data_jax > 7.5) & (R_data_jax < 8.5)
-    if jnp.any(v_model_solar_mask):
-        v_model_solar = jnp.median(v_model[v_model_solar_mask])
-        if v_model_solar > 1500.0:
-            # Apply a quadratic penalty for velocities over 300 km/s
-            # The denominator (e.g., 25.0) controls how "hard" the penalty is
-            penalty = -0.5 * ((v_model_solar - 300.0) / 25.0)**2
-            log_L += penalty # Safely add the penalty to the existing log_L
-
-    # 6. Calculate the blob (RMSE) and return
+    current_penalties = {}
+    
+    # Cassini penalty
+    try:
+        cassini_dev, _ = check_cassini_compatibility(params, xi_type)
+        if np.isfinite(cassini_dev) and cassini_dev > 2.3e-5:
+            penalty = -500.0 * ((cassini_dev - 2.3e-5) / 2.3e-5)**2
+            log_L += penalty
+            current_penalties['cassini'] = penalty
+            stats['penalties_applied']['cassini'] += 1
+            stats['penalty_totals']['cassini'] += penalty
+            stats['worst_penalties']['cassini'] = min(stats['worst_penalties']['cassini'], penalty)
+    except Exception:
+        return -np.inf, [np.inf, np.inf]
+    
+    # Velocity penalty
+    v_solar_mask = (R_data_jax > 7.5) & (R_data_jax < 8.5)
+    if jnp.any(v_solar_mask):
+        v_solar = jnp.median(v_model[v_solar_mask])
+        if v_solar > 300.0:
+            penalty = -0.5 * ((v_solar - 300.0) / 25.0)**2
+            log_L += penalty
+            current_penalties['velocity'] = penalty
+            stats['penalties_applied']['velocity'] += 1
+            stats['penalty_totals']['velocity'] += penalty
+            stats['worst_penalties']['velocity'] = min(stats['worst_penalties']['velocity'], penalty)
+    
+    # Mass penalty
+    total_mass = sum(params.get(c, 0.0) for c in 
+                    ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar'])
+    if total_mass > 0:
+        if total_mass < 5e10 or total_mass > 2e11:
+            if total_mass < 5e10:
+                penalty = -50.0 * ((5e10 - total_mass) / 5e10)**2
+            else:
+                penalty = -50.0 * ((total_mass - 2e11) / 2e11)**2
+            log_L += penalty
+            current_penalties['mass'] = penalty
+            stats['penalties_applied']['mass'] += 1
+            stats['penalty_totals']['mass'] += penalty
+            stats['worst_penalties']['mass'] = min(stats['worst_penalties']['mass'], penalty)
+    
+    # Print summary every 1000th evaluation
+    if stats['count'] % 1000 == 0:
+        logger.info(f"\n📊 PENALTY SUMMARY (Evaluations: {stats['count']:,})")
+        logger.info("─" * 60)
+        
+        for ptype in ['cassini', 'velocity', 'mass']:
+            count = stats['penalties_applied'][ptype]
+            if count > 0:
+                avg_penalty = stats['penalty_totals'][ptype] / count
+                worst = stats['worst_penalties'][ptype]
+                pct = 100.0 * count / stats['count']
+                logger.info(f"   {ptype.capitalize():8s}: {pct:5.1f}% violations | "
+                           f"Avg penalty: {avg_penalty:8.1f} | Worst: {worst:8.1f}")
+        
+        # Reset accumulators for next batch
+        for ptype in ['cassini', 'velocity', 'mass']:
+            stats['penalties_applied'][ptype] = 0
+            stats['penalty_totals'][ptype] = 0.0
+            stats['worst_penalties'][ptype] = 0.0
+        
+        logger.info("─" * 60)
+    
+    # Return
     rmse = jnp.sqrt(jnp.mean((v_data_jax - v_model)**2))
-    return float(log_L), [float(rmse)]
+    cassini_dev_return = cassini_dev if 'cassini_dev' in locals() else 0.0
+    return float(log_L), [float(rmse), float(cassini_dev_return)]
 
 def v_model_for_dynesty(
     R_kpc_array: np.ndarray,
@@ -2911,7 +2962,7 @@ def run_comprehensive_gpu_test(args, R_data_jax, v_data_jax, sigma_data_jax, log
     
     return all_tests_passed
 
-def add_early_progress_monitor(sampler, start_time, logger, check_interval=10):
+def add_early_progress_monitor(sampler, start_time, logger, args_obj, check_interval=10):
     """
     Add very frequent progress updates during the first few minutes.
     """
@@ -2924,11 +2975,23 @@ def add_early_progress_monitor(sampler, start_time, logger, check_interval=10):
     
     try:
         if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
-            n_samples = len(sampler.results.samples)
-            n_calls = sampler.results.ncall if hasattr(sampler.results, 'ncall') else 0
+            res = sampler.results
+            n_samples = len(res.samples)
+            n_calls = res.ncall if hasattr(res, 'ncall') else 0
             
             if isinstance(n_calls, np.ndarray):
                 n_calls = np.sum(n_calls)
+            
+            # Get logZ and dlogZ
+            current_logz = -np.inf
+            dlogz = np.nan
+            if hasattr(res, 'logz') and len(res.logz) > 0:
+                current_logz = res.logz[-1]
+                if len(res.logz) >= 2:
+                    dlogz = res.logz[-1] - res.logz[-2]
+            
+            # GR comparison
+            delta_vs_gr = current_logz - BASELINE_LOGZ_GR if np.isfinite(current_logz) else np.nan
             
             # Calculate rate
             if elapsed > 0:
@@ -2937,7 +3000,9 @@ def add_early_progress_monitor(sampler, start_time, logger, check_interval=10):
                 
                 logger.info(f"[{elapsed:.0f}s] Samples: {n_samples} | "
                           f"Calls: {n_calls} | "
-                          f"Rate: {samples_per_sec:.1f} samples/s, {calls_per_sec:.0f} calls/s")
+                          f"Rate: {samples_per_sec:.1f} samples/s, {calls_per_sec:.0f} calls/s | "
+                          f"dlogZ: {dlogz:.4f} (target: {args_obj.dlogz_target:.3f}) | "
+                          f"vs GR: {delta_vs_gr:+.1f}")
                 
                 # Estimate time to first checkpoint
                 if n_samples > 0 and n_samples < 100:
@@ -3409,7 +3474,9 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         early_stop_counter = 0
         last_monitor = last_check = time.time()
         last_npz_save = time.time()
+        last_progress_json = time.time()  # ADD THIS
         NPZ_SAVE_INTERVAL = 300  # Save every 5 minutes (300 seconds)
+        PROGRESS_JSON_INTERVAL = 60  # Save progress.json every minute
 
         try:
             # --- Phase 1: Initialise live points ---
@@ -3419,15 +3486,14 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             early_check_time = time.time()
             EARLY_CHECK_INTERVAL = 10  # seconds
 
-            for it, results in enumerate(sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True)):
-                            now = time.time()
-                            
-                            # Very frequent updates in first 5 minutes
-                            if now - run_start_time < 300 and now - early_check_time > EARLY_CHECK_INTERVAL:
-                                add_early_progress_monitor(sampler, run_start_time, logger)
-                                early_check_time = now
+            # SINGLE LOOP - FIXED VERSION
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
                 now = time.time()
+                
+                # Very frequent updates in first 5 minutes
+                if now - run_start_time < 300 and now - early_check_time > EARLY_CHECK_INTERVAL:
+                    add_early_progress_monitor(sampler, run_start_time, logger, args)
+                    early_check_time = now
 
                 # Checkpoint
                 if now - getattr(sampler, '_last_checkpoint_time', 0) > args.checkpoint_every:
@@ -3442,6 +3508,11 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                 if now - last_npz_save > NPZ_SAVE_INTERVAL:
                     save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
                     last_npz_save = now
+
+                # Progress JSON (NEW)
+                if now - last_progress_json > PROGRESS_JSON_INTERVAL:
+                    save_progress_json(sampler, fitted_names, args, run_start_time, logger)
+                    last_progress_json = now
 
                 # Monitor progress
                 if now - last_monitor > args.monitor_interval_s:
@@ -3481,6 +3552,11 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                     save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
                     last_npz_save = now
 
+                # Progress JSON (NEW)
+                if now - last_progress_json > PROGRESS_JSON_INTERVAL:
+                    save_progress_json(sampler, fitted_names, args, run_start_time, logger)
+                    last_progress_json = now
+
                 # Monitor progress
                 if now - last_monitor > args.monitor_interval_s:
                     last_monitor = now
@@ -3499,7 +3575,6 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                             raise RuntimeError("Early stopping: unphysical region")
                     else:
                         early_stop_counter = 0
-
         except KeyboardInterrupt:
             logger.warning("\n🛑 Sampling interrupted by user (Ctrl+C)!")
 
@@ -3516,17 +3591,24 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 
                         output_basename = "_".join(output_parts)
                         output_npz = Path(args.output_dir) / f"{output_basename}_samples.npz"
-                        weights = np.exp(res.logwt - res.logz[-1]) if hasattr(res, 'logwt') and hasattr(res, 'logz') else None
+                        
+                        # Calculate weights and ESS properly
+                        weights = None
+                        ess = 0.0
+                        if hasattr(res, 'logwt') and hasattr(res, 'logz') and len(res.logz) > 0:
+                            weights = np.exp(res.logwt - res.logz[-1])
+                            if np.sum(weights**2) > 0:
+                                ess = 1.0 / np.sum(weights**2)
 
                         np.savez(
                             output_npz,
                             samples=res.samples,
                             weights=weights,
-                            param_names=np.array(fitted_p_names),
-                            logl=res.logl,
-                            logz=res.logz,
-                            logzerr=res.logzerr,
-                            ess=ess,
+                            param_names=np.array(fitted_names),  # <-- FIXED: Use fitted_names
+                            logl=getattr(res, 'logl', None),
+                            logz=getattr(res, 'logz', None),
+                            logzerr=getattr(res, 'logzerr', None),
+                            ess=ess,  # <-- FIXED: Now defined
                             blob=getattr(res, 'blob', None),
                             # Add metadata
                             xi_type=args.xi,
@@ -3540,7 +3622,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                             fit_gas=args.fit_gas,
                             fit_xi_params=args.fit_xi_params,
                             output_dir=str(args.output_dir),
-                            run_id=RUN_ID
+                            run_id=getattr(args, 'run_id', 'unknown')  # <-- FIXED: Handle missing RUN_ID
                         )
 
                         logger.info(f"✅ Saved interrupted results to {output_npz}")
@@ -3582,8 +3664,324 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             logger.info("ThreadPoolExecutor shut down successfully")
 
 
+def run_gr_baseline_fixed(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax):
+    """
+    Run a pure GR/Newtonian baseline with fixed observational baryon parameters.
+    No fitting - just calculate likelihood with realistic MW parameters.
+    """
+    logger.info("\n" + "="*80)
+    logger.info("🌌 RUNNING GR BASELINE WITH FIXED OBSERVATIONAL PARAMETERS")
+    logger.info("="*80)
+    
+    # Create a copy of args for the baseline run
+    baseline_args = argparse.Namespace(**vars(args))
+    
+    # Set to GR mode
+    baseline_args.xi = 'gr'
+    baseline_args.output_dir = args.gr_baseline_dir
+    
+    # Fixed observational parameters from literature
+    observational_params = {
+        'M_disk_thin_fixed': 5.0e10,    # McMillan 2017
+        'R_d_thin_fixed': 2.6,           # Bovy & Rix 2013
+        'h_z_thin_fixed': 0.3,           # Jurić et al. 2008
+        'M_disk_thick_fixed': 1.0e10,   # Bland-Hawthorn & Gerhard 2016
+        'R_d_thick_fixed': 3.6,          # Robin et al. 2014
+        'h_z_thick_fixed': 0.9,          # Jurić et al. 2008
+        'M_bulge_fixed': 1.4e10,         # Portail et al. 2017
+        'a_bulge_fixed': 0.5,            # Cao et al. 2013
+        'M_gas_fixed': 1.5e10,           # Kalberla & Dedes 2008
+        'R_d_gas_fixed': 7.0,            # Kalberla & Kerp 2009
+        'h_z_gas_fixed': 0.15,           # Nakanishi & Sofue 2016
+        'rho_c_fixed': 1e13,             # Not used but needed
+        'n_exp_fixed': 1.5,              # Not used but needed
+        'A_fixed': 1.0,                  # Not used but needed
+    }
+    
+    # Apply fixed parameters
+    for param, value in observational_params.items():
+        setattr(baseline_args, param, value)
+    
+    # Don't fit anything - all parameters are fixed
+    baseline_args.fit_xi_params = False
+    baseline_args.fit_disk_thin = False
+    baseline_args.fit_disk_thick = False
+    baseline_args.fit_bulge = False
+    baseline_args.fit_gas = False
+    baseline_args.fit_disk_reparameterized = False
+    
+    # Include all components
+    baseline_args.include_disk_thin = True
+    baseline_args.include_disk_thick = True
+    baseline_args.include_bulge = True
+    baseline_args.include_gas = True
+    
+    # Quick run settings
+    baseline_args.nlive_init = 500
+    baseline_args.maxcall = 50000
+    baseline_args.dlogz_target = 0.1
+    baseline_args.use_curriculum_learning = False
+    
+    logger.info("\n📊 Fixed Baryon Parameters:")
+    logger.info("─" * 60)
+    for param, value in observational_params.items():
+        logger.info(f"  {param:<20}: {value:.2e}")
+    
+    # Run the baseline
+    logger.info("\n🚀 Starting GR baseline calculation...")
+    results = run_single_dynesty(baseline_args, gaia_data_dict, R_data_jax, 
+                                v_data_jax, sigma_data_jax)
+    
+    if results and hasattr(results, 'logz'):
+        logger.info(f"\n✅ GR Baseline Complete!")
+        logger.info(f"   Final log(Z): {results.logz[-1]:.2f}")
+        logger.info(f"   This represents pure Newton/GR with realistic MW baryons")
+        logger.info(f"   (No dark matter, no modifications)")
+    
+    return results
 
 
+def run_gr_baseline_fixed(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax):
+    """
+    Run a pure GR/Newtonian baseline with fixed observational baryon parameters.
+    No fitting - just calculate likelihood with realistic MW parameters.
+    """
+    logger.info("\n" + "="*80)
+    logger.info("🌌 RUNNING GR BASELINE WITH FIXED OBSERVATIONAL PARAMETERS")
+    logger.info("="*80)
+    
+    # Create a copy of args for the baseline run
+    baseline_args = argparse.Namespace(**vars(args))
+    
+    # Set to GR mode
+    baseline_args.xi = 'gr'
+    baseline_args.output_dir = args.gr_baseline_dir
+    
+    # Fixed observational parameters from literature
+    observational_params = {
+        'M_disk_thin_fixed': 5.0e10,    # McMillan 2017
+        'R_d_thin_fixed': 2.6,           # Bovy & Rix 2013
+        'h_z_thin_fixed': 0.3,           # Jurić et al. 2008
+        'M_disk_thick_fixed': 1.0e10,   # Bland-Hawthorn & Gerhard 2016
+        'R_d_thick_fixed': 3.6,          # Robin et al. 2014
+        'h_z_thick_fixed': 0.9,          # Jurić et al. 2008
+        'M_bulge_fixed': 1.4e10,         # Portail et al. 2017
+        'a_bulge_fixed': 0.5,            # Cao et al. 2013
+        'M_gas_fixed': 1.5e10,           # Kalberla & Dedes 2008
+        'R_d_gas_fixed': 7.0,            # Kalberla & Kerp 2009
+        'h_z_gas_fixed': 0.15,           # Nakanishi & Sofue 2016
+        'rho_c_fixed': 1e13,             # Not used but needed
+        'n_exp_fixed': 1.5,              # Not used but needed
+        'A_fixed': 1.0,                  # Not used but needed
+    }
+    
+    # Apply fixed parameters
+    for param, value in observational_params.items():
+        setattr(baseline_args, param, value)
+    
+    # Don't fit anything - all parameters are fixed
+    baseline_args.fit_xi_params = False
+    baseline_args.fit_disk_thin = False
+    baseline_args.fit_disk_thick = False
+    baseline_args.fit_bulge = False
+    baseline_args.fit_gas = False
+    baseline_args.fit_disk_reparameterized = False
+    
+    # Include all components
+    baseline_args.include_disk_thin = True
+    baseline_args.include_disk_thick = True
+    baseline_args.include_bulge = True
+    baseline_args.include_gas = True
+    
+    # Quick run settings
+    baseline_args.nlive_init = 500
+    baseline_args.maxcall = 50000
+    baseline_args.dlogz_target = 0.1
+    baseline_args.use_curriculum_learning = False
+    
+    logger.info("\n📊 Fixed Baryon Parameters:")
+    logger.info("─" * 60)
+    for param, value in observational_params.items():
+        logger.info(f"  {param:<20}: {value:.2e}")
+    
+    # Run the baseline
+    logger.info("\n🚀 Starting GR baseline calculation...")
+    results = run_single_dynesty(baseline_args, gaia_data_dict, R_data_jax, 
+                                v_data_jax, sigma_data_jax)
+    
+    if results and hasattr(results, 'logz'):
+        logger.info(f"\n✅ GR Baseline Complete!")
+        logger.info(f"   Final log(Z): {results.logz[-1]:.2f}")
+        logger.info(f"   This represents pure Newton/GR with realistic MW baryons")
+        logger.info(f"   (No dark matter, no modifications)")
+    
+    return results
+
+def analyze_model_vs_gr(enhanced_results, gr_baseline_file, args, gaia_data):
+    """
+    Compare enhanced model results to GR baseline.
+    Generate plots and statistics.
+    """
+    logger.info("\n" + "="*80)
+    logger.info("📊 MODEL COMPARISON: Enhanced vs GR Baseline")
+    logger.info("="*80)
+    
+    # Load GR baseline if file provided
+    if gr_baseline_file and Path(gr_baseline_file).exists():
+        gr_data = np.load(gr_baseline_file)
+        gr_logz = gr_data['logz'][-1]
+    else:
+        logger.warning("No GR baseline file found for comparison")
+        return
+    
+    # Get enhanced model log(Z)
+    enhanced_logz = enhanced_results.logz[-1]
+    
+    # Bayes factor
+    log_bayes_factor = enhanced_logz - gr_logz
+    bayes_factor = np.exp(log_bayes_factor)
+    
+    logger.info(f"\n🎯 EVIDENCE COMPARISON:")
+    logger.info(f"   GR Baseline log(Z):    {gr_logz:.2f}")
+    logger.info(f"   Enhanced Model log(Z): {enhanced_logz:.2f}")
+    logger.info(f"   Δlog(Z):               {log_bayes_factor:+.2f}")
+    logger.info(f"   Bayes Factor:          {bayes_factor:.2e}")
+    logger.info(f"   Interpretation:        {interpret_jeffreys_scale(log_bayes_factor)}")
+    
+    # Generate velocity curve comparison
+    try:
+        import matplotlib.pyplot as plt
+        
+        # Test radii
+        R_test = np.linspace(4, 30, 100)
+        
+        # Get best-fit parameters
+        enhanced_params = {}
+        if hasattr(enhanced_results, 'samples'):
+            weights = np.exp(enhanced_results.logwt - enhanced_results.logz[-1])
+            for i, name in enumerate(args.fitted_param_names):
+                enhanced_params[name] = np.average(enhanced_results.samples[:, i], 
+                                                 weights=weights)
+        
+        # Add fixed parameters
+        for p_info in args.all_param_info_list:
+            if not p_info['is_fitted']:
+                enhanced_params[p_info['name']] = p_info['current_val']
+        
+        # Calculate velocities
+        v_enhanced = v_total_kms(R_test, enhanced_params, xi_type=args.xi)
+        
+        # GR velocities with fixed parameters
+        gr_params = {
+            'M_disk_thin_solar': 5.0e10,
+            'R_d_thin_kpc': 2.6,
+            'h_z_thin_kpc': 0.3,
+            'M_disk_thick_solar': 1.0e10,
+            'R_d_thick_kpc': 3.6,
+            'h_z_thick_kpc': 0.9,
+            'M_bulge_solar': 1.4e10,
+            'a_bulge_kpc': 0.5,
+            'M_gas_solar': 1.5e10,
+            'R_d_gas_kpc': 7.0,
+            'h_z_gas_kpc': 0.15,
+            'include_disk_thin': True,
+            'include_disk_thick': True,
+            'include_bulge': True,
+            'include_gas': True
+        }
+        v_gr = v_total_kms(R_test, gr_params, xi_type='gr')
+        
+        # Plot
+        plt.figure(figsize=(12, 8))
+        
+        # Top panel: Velocity curves
+        plt.subplot(211)
+        plt.scatter(gaia_data['R_kpc'], gaia_data['v_obs'], 
+                   alpha=0.1, s=1, c='gray', label='Gaia data')
+        plt.plot(R_test, v_gr, 'b--', linewidth=2, 
+                label='Newton/GR (no DM)')
+        plt.plot(R_test, v_enhanced, 'r-', linewidth=2, 
+                label=f'Enhanced Model (ξ={args.xi})')
+        
+        # Approximate flat rotation curve
+        plt.axhline(y=220, color='k', linestyle=':', alpha=0.5, 
+                   label='Flat rotation (220 km/s)')
+        
+        plt.xlabel('Radius (kpc)')
+        plt.ylabel('Velocity (km/s)')
+        plt.title('Milky Way Rotation Curve Comparison')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.xlim(4, 30)
+        plt.ylim(0, 300)
+        
+        # Bottom panel: Residuals
+        plt.subplot(212)
+        # Interpolate to data points
+        from scipy.interpolate import interp1d
+        v_gr_interp = interp1d(R_test, v_gr, bounds_error=False, 
+                              fill_value='extrapolate')
+        v_enhanced_interp = interp1d(R_test, v_enhanced, bounds_error=False,
+                                   fill_value='extrapolate')
+        
+        R_data = gaia_data['R_kpc']
+        v_data = gaia_data['v_obs']
+        
+        residuals_gr = v_data - v_gr_interp(R_data)
+        residuals_enhanced = v_data - v_enhanced_interp(R_data)
+        
+        # Binned residuals
+        R_bins = np.linspace(4, 16, 13)
+        R_centers = (R_bins[:-1] + R_bins[1:]) / 2
+        
+        res_gr_binned = []
+        res_enhanced_binned = []
+        
+        for i in range(len(R_bins)-1):
+            mask = (R_data >= R_bins[i]) & (R_data < R_bins[i+1])
+            if np.sum(mask) > 0:
+                res_gr_binned.append(np.median(residuals_gr[mask]))
+                res_enhanced_binned.append(np.median(residuals_enhanced[mask]))
+        
+        plt.plot(R_centers[:len(res_gr_binned)], res_gr_binned, 
+                'bo-', label='GR residuals', linewidth=2)
+        plt.plot(R_centers[:len(res_enhanced_binned)], res_enhanced_binned, 
+                'ro-', label='Enhanced residuals', linewidth=2)
+        plt.axhline(y=0, color='k', linestyle='-', alpha=0.3)
+        
+        plt.xlabel('Radius (kpc)')
+        plt.ylabel('Residuals (km/s)')
+        plt.title('Model Residuals (Data - Model)')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plot_file = Path(args.output_dir) / 'model_comparison.png'
+        plt.savefig(plot_file, dpi=150)
+        logger.info(f"\n📈 Saved comparison plot to: {plot_file}")
+        
+        # Print summary statistics
+        logger.info(f"\n📊 RESIDUAL STATISTICS:")
+        logger.info(f"   GR RMS error:       {np.sqrt(np.mean(residuals_gr**2)):.1f} km/s")
+        logger.info(f"   Enhanced RMS error: {np.sqrt(np.mean(residuals_enhanced**2)):.1f} km/s")
+        
+        # Radial breakdown
+        logger.info(f"\n📍 PERFORMANCE BY RADIUS:")
+        logger.info(f"   {'Radius':<12} {'GR Error':<12} {'Enhanced Error':<12} {'Improvement':<12}")
+        logger.info("   " + "-"*48)
+        
+        for r_bin in [(4,8), (8,12), (12,16)]:
+            mask = (R_data >= r_bin[0]) & (R_data < r_bin[1])
+            if np.sum(mask) > 0:
+                gr_rms = np.sqrt(np.mean(residuals_gr[mask]**2))
+                enh_rms = np.sqrt(np.mean(residuals_enhanced[mask]**2))
+                improvement = (gr_rms - enh_rms) / gr_rms * 100
+                logger.info(f"   {r_bin[0]}-{r_bin[1]} kpc    "
+                          f"{gr_rms:>8.1f} km/s  {enh_rms:>8.1f} km/s     "
+                          f"{improvement:>+6.1f}%")
+        
+    except Exception as e:
+        logger.error(f"Failed to generate comparison plots: {e}")
 
 # ============================================================================
 # Main Entry Point
@@ -3636,11 +4034,20 @@ def main_dynesty():
     parser.add_argument('--M_disk_thin_max', type=float, default=None, help="Override upper prior bound for M_disk_thin_solar")
     parser.add_argument('--M_disk_total_min', type=float, default=None, help="Override lower prior bound for M_disk_total_solar")
     parser.add_argument('--M_disk_total_max', type=float, default=None, help="Override upper prior bound for M_disk_total_solar")
+    parser.add_argument('--M_disk_thick_min', type=float, default=None, help="Override lower prior bound for M_disk_thick_solar")
+    parser.add_argument('--M_disk_thick_max', type=float, default=None, help="Override upper prior bound for M_disk_thick_solar")
     parser.add_argument('--h_z_thin_min', type=float, default=None, help="Override lower prior bound for h_z_thin_kpc")
     parser.add_argument('--R_d_thick_max', type=float, default=None, help="Override upper prior bound for R_d_thick_kpc")
     parser.add_argument('--M_gas_max', type=float, default=None, help="Override upper prior bound for M_gas_solar")
     parser.add_argument('--force_new_query_gaia', action='store_true', default=False, help="Force new Gaia query")
     parser.add_argument('--force_reprocess_raw', action='store_true', default=False, help="Force reprocessing of raw Gaia data")
+    parser.add_argument('--run_gr_baseline', action='store_true', default=False,
+                    help="Run GR baseline with observational parameters before main run")
+    parser.add_argument('--compare_to_gr', action='store_true', default=False,
+                    help="Compare results to GR baseline after run")
+    parser.add_argument('--gr_baseline_dir', type=str, default="chains_gr_baseline_fixed",
+                    help="Directory containing GR baseline results")
+
 
     # Dynesty sampler group
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
@@ -3664,6 +4071,7 @@ def main_dynesty():
     ai_g.add_argument('--fix_lambda_g', type=float, default=None, help="Fix lambda_g enhancement factor")
     ai_g.add_argument('--theory_mode', action='store_true', default=False, help="Use theoretical values")
     ai_g.add_argument('--use_gr_baseline_priors', action='store_true', default=False, help="Use tighter priors from GR baseline")
+    
 
     # Model components
     mw_model_g = parser.add_argument_group('Model Components')
@@ -3697,6 +4105,8 @@ def main_dynesty():
     log_dir = Path(args.output_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "dynesty_debug.log"
+
+    # Define console level based on debug flag
     console_level = logging.DEBUG if args.debug else logging.INFO
 
     # Configure the root logger directly. This is the most reliable method.
@@ -3712,11 +4122,14 @@ def main_dynesty():
 
     # Now, get the root logger and set the console handler's level specifically.
     # This prevents DEBUG messages from showing on the console unless --debug is used.
-    logging.getLogger().handlers[1].setLevel(console_level)
-    
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            handler.setLevel(console_level)
+
     # Get our specific logger for the rest of the script
     logger = logging.getLogger("run_dynesty")
-    
+
     logger.info(f"📡 Full debug log initialized. Writing to: {log_file}")
     logger.info(f"Console log level set to: {logging.getLevelName(console_level)}")
 
@@ -3763,34 +4176,6 @@ def main_dynesty():
 
     save_run_metadata(args, args.output_dir)
     
-    
-    # --- Setup Logging ---
-    log_dir = Path(args.output_dir)
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "dynesty_debug.log"
-
-    # Determine the logging level for the console based on the --debug flag
-    console_level = logging.DEBUG if args.debug else logging.INFO
-
-    # Configure the root logger. This is the simplest and most robust way.
-    # It removes any existing handlers and sets up new ones from scratch.
-    logging.basicConfig(
-        level=logging.DEBUG,  # Capture ALL messages at the root level
-        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        handlers=[
-            logging.FileHandler(log_file, mode='w'),  # File handler always gets DEBUG
-            logging.StreamHandler(sys.stdout)         # Console handler will be configured next
-        ],
-        force=True  # This is crucial to override any previous settings
-    )
-
-    # Get the root logger and set the console handler's level separately
-    logger = logging.getLogger("run_dynesty")
-    for handler in logger.handlers:
-        if isinstance(handler, logging.StreamHandler):
-            handler.setLevel(console_level)    
-    logger.info(f"📡 Full debug log initialized. Writing to: {log_file}")
-    logger.info(f"Console log level set to: {logging.getLevelName(console_level)}")
 
     logger.info("Starting Enhanced Dynesty Sampler v2.1")
     if not DYNESTY_AVAILABLE:
@@ -3938,6 +4323,10 @@ def main_dynesty():
         MW_MULTI_COMP_PARAM_CONFIG['R_d_thick_kpc']['high'] = args.R_d_thick_max
     if args.M_gas_max is not None:
         MW_MULTI_COMP_PARAM_CONFIG['M_gas_solar']['high'] = args.M_gas_max
+    if args.M_disk_thick_min is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_disk_thick_solar']['low'] = args.M_disk_thick_min
+    if args.M_disk_thick_max is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_disk_thick_solar']['high'] = args.M_disk_thick_max
 
     if args.checkpoint_file is None:
         args.checkpoint_file = str(Path(args.output_dir) / "dynesty_checkpoint.pkl")
@@ -4074,6 +4463,11 @@ def main_dynesty():
         except Exception as e:
             logger.warning(f"Dashboard disabled due to error: {e}")
             dashboard_monitor = None
+            
+    if args.run_gr_baseline:
+        gr_results = run_gr_baseline_fixed(args, gaia_data_dict, R_data_jax, 
+                                         v_data_jax, sigma_data_jax)
+
 
     # GP surrogate (optional)
     gp_surrogate = None
@@ -4099,14 +4493,26 @@ def main_dynesty():
         else:
             results = run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax, gp_surrogate=gp_surrogate, dashboard_monitor=dashboard_monitor)
     except KeyboardInterrupt:
-            logger.warning("Run interrupted by user")
-            finalize_record(RUN_ID, success=False,
+        logger.warning("Run interrupted by user")
+        
+        # Try to get partial stats if available
+        partial_stats = {}
+        n_samples_partial = 0
+        n_calls_partial = 0
+        
+        if 'results' in locals() and hasattr(results, 'samples'):
+            n_samples_partial = len(results.samples)
+            if hasattr(results, 'ncall'):
+                n_calls_partial = int(np.sum(results.ncall))
+        
+        finalize_record(RUN_ID, success=False,
                         logz=np.nan, logz_err=np.nan,
-                        eff=0, rmse=np.nan,
-                        n_samples=0, n_calls=0,
-                        param_stats={}, phys_ok=False,
+                        eff=0.0, rmse=np.nan,
+                        n_samples=n_samples_partial, 
+                        n_calls=n_calls_partial,
+                        param_stats=partial_stats, 
+                        phys_ok=False,
                         phys_reason="User interrupted")
-            # Do not re-raise, allow finalization
     except Exception as e:
         logger.error(f"Sampling failed with a critical error: {e}")
         import traceback
@@ -4114,9 +4520,14 @@ def main_dynesty():
         finalize_record(RUN_ID, success=False, phys_reason=f"Exception: {str(e)[:200]}")
         # Do not re-raise, allow finalization if possible
 
-    if results is None or not hasattr(results, 'samples') or len(results.samples) == 0:
+    else:
         logger.error("No valid results were produced to save.")
-        finalize_record(RUN_ID, success=False, phys_reason="No results to save")
+        finalize_record(RUN_ID, success=False,
+                        logz=np.nan, logz_err=np.nan,
+                        eff=0.0, rmse=np.nan,
+                        n_samples=0, n_calls=0,
+                        param_stats={}, phys_ok=False,
+                        phys_reason="No results to save")
         return
 
     # =================================================================================
@@ -4227,6 +4638,12 @@ def main_dynesty():
             logger.error(f"❌ An error occurred during the final analysis and reporting step: {e}")
             import traceback
             logger.debug(traceback.format_exc())
+            
+    if args.compare_to_gr:
+        gr_baseline_npz = Path(args.gr_baseline_dir) / "dynesty_mw_gr_samples.npz"
+        if res and hasattr(res, 'samples'):
+            analyze_model_vs_gr(res, gr_baseline_npz, args, gaia_data_dict)
+    
     else:
         # This block executes if the run failed or was interrupted.
         logger.error("\n==========================================================")
@@ -4235,6 +4652,7 @@ def main_dynesty():
         logger.error("==========================================================")
         finalize_record(RUN_ID, success=False, phys_reason="No valid samples produced")
         return
+
 
 if __name__ == "__main__":
     print("DEBUG: Entering main block")

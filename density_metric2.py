@@ -610,7 +610,7 @@ def xi_deur_wrapper(rho, rho_c, n_exp, A, r_kpc, params, **_):
 
 
 XI_FUNCTION_MAP = {
-    'gr': xi_gr_baseline, 
+    'gr': lambda rho, *args, **kwargs: jnp.ones_like(jnp.atleast_1d(rho)),
     'power': xi_power_law_wrapper,
     'logistic': xi_logistic_law_wrapper,
     'enhanced': xi_power_law_wrapper,
