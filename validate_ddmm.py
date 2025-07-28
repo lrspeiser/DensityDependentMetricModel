@@ -171,9 +171,17 @@ class DDMMValidator:
         if params is None:
             params = self.model_params
         
-        # Call the xi function with the correct number of arguments
+        # Get xi type
         xi_type = params.get('xi_type', 'power')
         
+        # Handle GR case explicitly - xi = 1 everywhere
+        if xi_type == 'gr':
+            if np.isscalar(rho):
+                return 1.0
+            else:
+                return np.ones_like(rho)
+        
+        # Call the xi function with the correct number of arguments
         if xi_type in ['enhanced', 'grav_color']:
             # These functions use additional parameters
             if xi_type == 'enhanced':
@@ -211,7 +219,7 @@ class DDMMValidator:
                 return float(xi_capped)
         else:
             return xi_capped
-    
+        
     def check_data_availability(self) -> Dict[str, bool]:
         """Check which datasets are available"""
         data_paths = {

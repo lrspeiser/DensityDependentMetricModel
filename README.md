@@ -84,34 +84,29 @@ where σᵢ includes both measurement uncertainties and systematic errors.
 
 The GR baseline run with ξ = 1 everywhere (pure Newtonian gravity) conclusively demonstrates why dark matter or modified gravity is necessary. Key findings include:
 
-**Bayesian evidence**: log(Z) = -1475548.07 ± 0.27
+**Bayesian evidence**: log(Z) = -1490897.53 ± 0.01
 
 This serves as our reference value for model comparison. Following Jeffreys' scale [29], differences in log-evidence exceeding 5 indicate strong preference, while differences exceeding 10 are decisive.
 
 **Fitted baryon masses**:
-- Thin disk: 6.8 × 10¹⁰ M_☉
-- Thick disk: 2.5 × 10¹⁰ M_☉
-- Bulge: 2.5 × 10¹⁰ M_☉ (⚠️ at upper bound)
-- Gas: 6.0 × 10¹⁰ M_☉ (⚠️ at upper bound)
-- **Total**: 1.8 × 10¹¹ M_☉
+- Thin disk: 8.47 × 10¹⁰ M_☉
+- Thick disk: 2.99 × 10¹⁰ M_☉
+- Bulge: 5.30 × 10⁹ M_☉
+- Gas: 5.39 × 10¹⁰ M_☉ (⚠️ exceeds typical estimates)
+- **Total**: 1.74 × 10¹¹ M_☉
 
-The total baryonic mass is 2-3× higher than typical Milky Way estimates (5-7 × 10¹⁰ M_☉), yet still cannot reproduce the flat rotation curve.
+The total baryonic mass is ~2.5× higher than typical Milky Way estimates (5-7 × 10¹⁰ M_☉), with the thin disk mass at the upper edge of observational constraints and gas mass significantly exceeding expected values. Yet even with these inflated masses, the model still cannot reproduce the flat rotation curve.
 
 **Critical failures**:
-1. **Wrong velocity at Solar radius**: v(R_☉) = 258 km/s vs. observed 220 km/s
-2. **Keplerian decline**: velocity drops 36% from 5 to 25 kpc (should remain flat)
-3. **Parameters at bounds**: M_bulge, M_gas, and R_d_gas pushed to unphysical limits
+1. **Keplerian decline**: The rotation curve shows classic Newtonian fall-off beyond the Solar radius, contradicting the observed flat curve
+2. **Excessive mass requirements**: Even pushing baryonic masses to their observational limits fails to generate sufficient rotation velocities
+3. **Physical implausibility**: The required gas mass (5.39 × 10¹⁰ M_☉) exceeds most estimates by an order of magnitude
 
-![GR baseline rotation curve](figures/gr_baseline_rotation_curve.png)
-*Figure 2: GR baseline (blue) fails to match observed flat rotation curve (red dashed), showing classic Keplerian decline. Orange dot marks Solar position.*
+![GR baseline rotation curve](figures/GR_no_dark_rotation_curve_power.png)
+*Figure 2: GR baseline (blue) fails to match observed flat rotation curve (black data points), showing classic Keplerian decline. The model cannot reproduce the flat curve despite using masses ~2.5× typical estimates.*
 
-![Component contributions](figures/gr_baseline_components.png)
-*Figure 3: Individual component contributions to the rotation curve in the GR baseline, showing how even maximal baryon masses cannot produce the required flat curve.*
-
-![GR baseline summary](figures/gr_baseline_summary.png)
-*Figure 4: Summary of GR baseline results showing excessive baryon masses and missing velocity factor of 0.7× at the Solar radius.*
-
-These results quantitatively demonstrate that pure Newtonian gravity requires ~4× more mass than observed to explain galaxy rotation curves—the classic "missing mass problem" that motivates either dark matter halos (ΛCDM) or modified gravity (DDMM).
+![GR baseline corner plot](figures/GR_no_dark_corner_plot_power.png)
+*Figure 3: Corner plot for GR baseline parameters showing the fitted baryonic masses required when attempting to explain the rotation curve without dark matter.*
 
 ## Precision fits to Gaia rotation curves with DDMM
 

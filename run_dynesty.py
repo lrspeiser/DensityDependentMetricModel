@@ -107,7 +107,7 @@ try:
 except Exception as e:
     print(f"JAX test failed: {e}")
     
-BASELINE_LOGZ_GR = -1475548.0461717772  # From GR-only run with xi=1 everywhere
+BASELINE_LOGZ_GR = -1490897.5250096943  # From GR-only with no dark matter 
 
 # ============================================================================
 # Model Comparison Functions
