@@ -1020,7 +1020,7 @@ def enhanced_monitor_sampler_progress(
     fitted_param_labels: List[str],
     start_time: float,
     logger: logging.Logger,
-    args_obj,  # <-- Moved here (before defaults)
+    args_obj,
     gp_surrogate=None,
     dashboard_monitor=None
 ):
@@ -3518,8 +3518,9 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                 if now - last_monitor > args.monitor_interval_s:
                     last_monitor = now
                     enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
-                                                    run_start_time, logger, gp_surrogate, args,
-                                                    dashboard_monitor)
+                                  run_start_time, logger, args,
+                                  gp_surrogate, dashboard_monitor)
+
 
                 # Early stop check every 5 min
                 if now - last_check > 300:
@@ -3561,8 +3562,9 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                 if now - last_monitor > args.monitor_interval_s:
                     last_monitor = now
                     enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
-                                                    run_start_time, logger, gp_surrogate, args,
-                                                    dashboard_monitor)
+                                  run_start_time, logger, args,
+                                  gp_surrogate, dashboard_monitor)
+
 
                 # Early stop check every 5 min
                 if now - last_check > 300:

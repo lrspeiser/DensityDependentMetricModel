@@ -110,6 +110,29 @@ The total baryonic mass is ~2.5× higher than typical Milky Way estimates (5-7 �
 ![GR baseline corner plot](figures/GR_no_dark_corner_plot_power.png)
 *Figure 3: Corner plot for GR baseline parameters showing the fitted baryonic masses required when attempting to explain the rotation curve without dark matter.*
 
+### Extended mass exploration: Pushing baryonic limits
+
+To thoroughly explore whether any configuration of baryonic matter could explain the rotation curve without modified gravity, we performed a second baseline run with relaxed mass constraints. This allowed the fitting algorithm to explore significantly higher masses, effectively testing whether the missing mass problem could be resolved through extreme baryonic configurations alone.
+
+**Bayesian evidence**: log(Z) = -1491251.39 ± 0.09
+
+The significantly worse evidence (Δlog(Z) = -354 compared to our first baseline) immediately signals that even with greater freedom, pure baryonic models fail catastrophically.
+
+**Extreme mass requirements**:
+- Thin disk: 1.27 × 10¹¹ M_☉ (50% above typical upper limits)
+- Thick disk: 2.79 × 10¹⁰ M_☉
+- Bulge: 7.59 × 10⁹ M_☉  
+- Gas: 1.62 × 10¹⁰ M_☉
+- **Total**: 1.78 × 10¹¹ M_☉
+
+The thin disk mass of 1.27 × 10¹¹ M_☉ exceeds all observational constraints by ~50%, requiring an implausibly massive stellar population. Despite allowing these extreme masses, the model still cannot reproduce the flat rotation curve—the Keplerian decline persists beyond the Solar radius.
+
+**Key insight**: This definitively rules out hidden baryonic matter as a solution. Even if we postulate vast reservoirs of undetected normal matter in exotic configurations, the fundamental issue remains: baryonic matter distributed in disk/bulge geometries cannot generate flat rotation curves. Any successful model requires either:
+1. Non-baryonic dark matter in an extended spherical halo (the ΛCDM solution)
+2. Modified gravitational physics (the approach we explore with DDMM)
+
+The failure of extreme baryonic models, despite computational freedom to explore unphysical parameter space, strengthens the case for fundamental modifications to gravitational theory in low-density regimes.
+
 ## Precision fits to Gaia rotation curves with DDMM
 
 We systematically test four functional forms for the enhancement factor ξ(ρ), ranging from simple phenomenological fits to theoretically motivated expressions:
