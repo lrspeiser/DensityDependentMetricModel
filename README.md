@@ -16,6 +16,8 @@ We present Density-Dependent Metric Models (DDMM), a new approach that preserves
 
 The theoretical foundation of DDMM rests on an analogy with quantum chromodynamics' running coupling constant. In QCD, the strong force coupling α_s varies with energy scale, becoming stronger at low energies—a phenomenon known as infrared slavery [13]. We propose that gravity exhibits analogous behavior, with gravitational coupling enhanced in low-density environments typical of galactic outskirts.
 
+This concept finds theoretical support in recent work by Deur [31,32], who demonstrated that graviton-graviton interactions in General Relativity—typically neglected in galaxy dynamics—naturally produce enhanced binding forces in large, diffuse systems. His calculations show that GR's field self-interaction can flatten rotation curves without dark matter, suggesting gravity effectively has a "color" that strengthens within massive systems. Similarly, Reuter and Weyer [33] showed that a running Newton's constant increasing as a mild power law at large distances (from renormalization group effects) "would account for [galaxy rotation curves'] non-Keplerian behavior without any dark matter."
+
 The modified metric takes the form:
 
 **g̃_μν = ξ(ρ)g_μν**
@@ -38,7 +40,7 @@ where:
 
 To prevent unphysical behavior, we impose ξ_max = 5 as an upper bound.
 
-While our formulation adopts a phenomenological approach, the geometric modification ξ(ρ)g<sub>μν</sub> can be interpreted in several theoretical contexts. Most directly, it corresponds to a density-dependent rescaling of the metric, drawing parallels to Weyl’s conformal geometry and effective gravitational permeability in emergent gravity. Alternatively, ξ(ρ) may be viewed as a local modification to the Einstein-Hilbert action via a running gravitational coupling G(ρ) = Gξ(ρ), inspired by renormalization-group flow in gauge theories. A full derivation of the field equations from a consistent action principle remains a compelling direction for future work and may require auxiliary scalar fields or quantum effective action techniques.
+While our formulation adopts a phenomenological approach, the geometric modification ξ(ρ)g<sub>μν</sub> can be interpreted in several theoretical contexts. Most directly, it corresponds to a density-dependent rescaling of the metric, drawing parallels to Weyl's conformal geometry and effective gravitational permeability in emergent gravity. Alternatively, ξ(ρ) may be viewed as a local modification to the Einstein-Hilbert action via a running gravitational coupling G(ρ) = Gξ(ρ), inspired by renormalization-group flow in gauge theories. A full derivation of the field equations from a consistent action principle remains a compelling direction for future work and may require auxiliary scalar fields or quantum effective action techniques.
 
 ![Enhancement factor ξ(ρ) as function of density](figures/xi_vs_density.png)
 *Figure 1: Enhancement factor ξ(ρ) as function of density, showing transition from ξ ≈ 1 at Solar System densities to ξ ≈ 2.8 at galactic outskirts*
@@ -138,7 +140,6 @@ Initial attempts using simple power-law ξ functions successfully fit galaxy rot
 
 [Results pending - the exponential suppression and theoretically constrained parameters (γ=2.7, λ_g=8) are expected to naturally satisfy both galactic and Solar System constraints]
 
-
 When DDMM is applied to the same Gaia DR3 dataset, we expect:
 - **Higher Bayesian evidence**: Δlog(Z) > 10 would provide decisive support
 - **Physical baryon masses**: Total ~5-7 × 10¹⁰ M_☉ matching independent estimates
@@ -154,12 +155,13 @@ A critical test for any modified gravity theory lies in Solar System constraints
 At Solar System densities exceeding 10^12 M_☉/kpc³, the enhancement factor becomes negligible: ξ - 1 < 10⁻⁶. This automatic screening emerges from the functional form without requiring additional mechanisms or fine-tuning. The transition occurs smoothly over several orders of magnitude in density, avoiding discontinuities that plague some screening mechanisms.
 
 ![Enhancement factor screening](figures/xi_screening.png)
-*Figure 5: Enhancement factor ξ(ρ) - 1 vs density on logarithmic scale, highlighting Solar System regime where modifications vanish*
+*Figure 4: Enhancement factor ξ(ρ) - 1 vs density on logarithmic scale, highlighting Solar System regime where modifications vanish*
 
 We verified compatibility with all Solar System tests including:
 - **Perihelion precession**: Mercury's orbit shows no anomalous precession beyond general relativistic predictions
 - **Lunar laser ranging**: Earth-Moon distance variations remain within observational uncertainties  
 - **Planetary ephemerides**: Outer planet orbits match predictions to radar ranging precision
+- **Gravitational wave propagation**: The metric rescaling ξ(ρ)g_μν preserves light cones, ensuring gravitational waves travel at light speed as confirmed by GW170817 [11]
 
 The screening mechanism differs fundamentally from chameleon or symmetron models [20,21] by operating through the metric rather than scalar fields, maintaining the geometric interpretation of gravity while allowing environment-dependent effects.
 
@@ -188,12 +190,14 @@ DDMM makes specific predictions that differentiate it from both dark matter and 
 
 **Rotation curve signatures**: The functional form produces subtle but measurable deviations from MOND's interpolating function. Where MOND predicts ν(x) = x/(1+x) for the transition between regimes, DDMM yields a different functional form testable with percent-level rotation curve measurements.
 
-**Environmental dependencies**: Unlike dark matter halos whose properties depend primarily on formation history, DDMM predicts systematic variations based on large-scale density environments. Galaxies in voids should show stronger enhancement than those in clusters, a correlation absent in dark matter models.
+**Environmental dependencies**: Unlike dark matter halos whose properties depend primarily on formation history, DDMM predicts systematic variations based on large-scale density environments. Galaxies in voids should show stronger enhancement than those in clusters, a correlation absent in dark matter models. 
+
+This connects to the External Field Effect (EFE), a striking prediction of MOND and environment-dependent gravities that the internal dynamics of a low-density system can be influenced by external gravitational fields. Recent galaxy data strongly support this effect: Chae et al. [36] detected the EFE at 8-11σ confidence, finding that rotationally supported galaxies in strong external fields deviate from the standard mass-acceleration relation exactly as predicted by modified gravity theories. Such an effect is "not predicted by existing ΛCDM models" and constitutes a significant challenge to conventional gravity. DDMM naturally produces an EFE since the value of ξ in a region could be suppressed if that region lies in the gravity well of a larger system.
 
 **Gravitational lensing**: The metric modification affects light propagation, producing characteristic lensing signatures. Strong lensing by galaxies should show enhanced Einstein radii compared to visible matter predictions, while weak lensing profiles will deviate from NFW halos at large radii.
 
 ![Predicted differences between models](figures/model_comparison.png)
-*Figure 6: Predicted differences in rotation curves between DDMM (solid), MOND (dashed), and NFW dark matter (dotted) for a typical spiral galaxy*
+*Figure 5: Predicted differences in rotation curves between DDMM (solid), MOND (dashed), and NFW dark matter (dotted) for a typical spiral galaxy*
 
 **Dwarf galaxy dynamics**: Low surface brightness dwarfs provide ideal testing grounds due to their low densities. DDMM predicts these systems experience maximum enhancement, potentially explaining their surprisingly high velocity dispersions without invoking extreme dark matter fractions [22].
 
@@ -216,7 +220,7 @@ We developed a full numerical implementation of light propagation in DDMM (see `
    which accumulates redshift across varying environments.
 3. A **realistic cosmic web simulation**, modeling voids, filaments, and clusters, and computing redshift over thousands of photon paths through this density field.
 
-Figure X shows the results of these calculations for Type Ia supernovae. Pure DDMM (with no cosmic expansion) reproduces observed redshift-distance relations to within ∼0.2 magnitudes across the Pantheon sample. A hybrid model with 70% expansion and 30% DDMM-induced shift achieves even better agreement (AIC improvement ΔAIC > 5 over ΛCDM).
+Figure 6 shows the results of these calculations for Type Ia supernovae. Pure DDMM (with no cosmic expansion) reproduces observed redshift-distance relations to within ∼0.2 magnitudes across the Pantheon sample. A hybrid model with 70% expansion and 30% DDMM-induced shift achieves even better agreement (AIC improvement ΔAIC > 5 over ΛCDM).
 
 Critically, DDMM predicts **path-dependent scatter** in redshift that varies with cosmic environment:
 - Photons traveling through voids experience greater redshifts than average.
@@ -224,11 +228,9 @@ Critically, DDMM predicts **path-dependent scatter** in redshift that varies wit
 This leads to testable statistical deviations from ΛCDM in redshift–distance scatter, particularly at low to intermediate redshifts (z < 1).
 
 ![Enhanced light propagation](figures/enhanced_hubble_diagram.png)  
-*Figure X: DDMM-predicted distance moduli using realistic cosmic web light propagation. Shaded region shows path-induced scatter.*
+*Figure 6: DDMM-predicted distance moduli using realistic cosmic web light propagation. Shaded region shows path-induced scatter.*
 
 These findings demonstrate that light propagation in DDMM is not merely consistent with observations, but offers **unique signatures**—such as excess redshift in void-dominated lines of sight—that may help distinguish it from both ΛCDM and MOND.
-
-
 
 ## Implications for fundamental physics
 
@@ -242,6 +244,8 @@ The coincidence between transition density ρ_c ~ 10^13 M_☉/kpc³ (correspondi
 - 10^-18 times nuclear densities
 
 This suggests the modification is not tied to cosmological scales (as in some emergent gravity theories) but rather represents a breakdown of the standard metric description only in extremely rarefied environments. The functional form ξ ∝ (ρ_c/ρ)^n resembles dimensional transmutation in quantum field theory, where a dimensionless coupling runs with energy scale.
+
+DDMM joins a growing family of theories proposing environment-dependent gravitational strength, including Scalar-Tensor-Vector Gravity (STVG/MOG) [34], chameleon and symmetron fields [20,21], and emergent gravity approaches [35]. What distinguishes DDMM is its direct metric modification g̃_μν = ξ(ρ)g_μν, maintaining the geometric interpretation of gravity while allowing context-dependent effects. This parallels how different approaches to quantum gravity suggest gravitational couplings run with energy scale, potentially becoming weak in the ultraviolet and strong in the infrared [33].
 
 Several limitations require acknowledgment. Galaxy clusters present challenges similar to those facing MOND—while DDMM reduces missing mass requirements, some discrepancy remains [25]. The theory currently lacks a full cosmological formulation, limiting predictions for cosmic microwave background anisotropies and large-scale structure. The coincidence between transition density ρ_c and typical galactic densities appears fine-tuned, though anthropic arguments might apply.
 
@@ -285,8 +289,6 @@ This predicts **stronger deflection** in low-density regions, even without dark 
 - Enhanced lensing without invoking dark halos
 - Consistent mass-to-light ratio across environments
 
----
-
 ### 2. Cluster Collisions (e.g., Bullet Cluster)
 
 In DDMM, lensing follows ξ(ρ)g<sub>μν</sub>, while baryons interact hydrodynamically. In merging clusters, we must simulate:
@@ -302,8 +304,6 @@ The test is whether lensing and X-ray maps can be explained with baryons and DDM
 **DDMM success criteria**:
 - Reproduction of lensing–X-ray offset
 - No need for additional non-baryonic collisionless mass
-
----
 
 ### 3. Cosmic Microwave Background (CMB)
 
@@ -321,8 +321,6 @@ This must be integrated into Boltzmann solvers (e.g., CLASS, CAMB) to produce mo
 - Accurate reproduction of CMB peak positions and amplitudes
 - BAO scale consistent with late-time light propagation in DDMM
 
----
-
 ### 4. Gravitational Redshift and Time Delays
 
 DDMM predicts modified time delays in lensing systems and gravitational redshifts in large-scale structure:
@@ -334,8 +332,6 @@ This can be tested using **lensed quasar time delays** and **gravitational redsh
 **DDMM success criteria**:
 - Time delay measurements match DDMM prediction using only baryonic matter
 - Cluster gravitational redshift signals remain consistent without dark halos
-
----
 
 ### 5. Structure Formation and Cosmic Voids
 
@@ -353,11 +349,9 @@ can test whether DDMM correctly reproduces:
 - No suppression of LSS in low-density regions
 - Correct galaxy clustering statistics
 
----
-
 ### 6. Satellite Galaxy Planes
 
-DDMM’s environment-dependent gravity may explain **thin satellite planes** by altering orbital coherence in the presence of a radially varying ξ(ρ). This requires modeling:
+DDMM's environment-dependent gravity may explain **thin satellite planes** by altering orbital coherence in the presence of a radially varying ξ(ρ). This requires modeling:
 - Tidal fields in anisotropic ξ(ρ) metric
 - Precession of satellites over time
 
@@ -365,7 +359,9 @@ DDMM’s environment-dependent gravity may explain **thin satellite planes** by 
 - Stable, flattened orbital configurations emerge naturally
 - Orbital poles of satellites cluster more tightly than in ΛCDM
 
+### 7. Laboratory Tests
 
+While DDMM is constructed to pass Solar System tests by a wide margin (ρ_lab >> ρ_c), continued laboratory experiments provide crucial constraints. Recent tests have confirmed Newton's inverse-square law down to 52 μm scales [37], and any density-dependent theory must conform to these limits. Future atom interferometry experiments and tests in ultra-high vacuum could probe even smaller deviations, though DDMM's high ρ_c likely puts any laboratory effects far below detectability.
 
 ## Conclusions
 
@@ -436,3 +432,17 @@ Our results demonstrate that what we attribute to dark matter in galaxies may in
 [29] Jeffreys, H. Theory of Probability 3rd edn (Oxford Univ. Press, 1961).
 
 [30] Rein, H. & Liu, S.-F. REBOUND: an open-source multi-purpose N-body code for collisional dynamics. Astron. Astrophys. **537**, A128 (2012).
+
+[31] Deur, A. Implications of graviton-graviton interaction to dark matter. Phys. Lett. B **676**, 21–24 (2009).
+
+[32] Deur, A. An explanation for dark matter and dark energy consistent with the Standard Model of particle physics and General Relativity. Eur. Phys. J. C **79**, 883 (2019).
+
+[33] Reuter, M. & Weyer, H. Running Newton constant, improved gravitational actions, and galaxy rotation curves. Phys. Rev. D **70**, 124028 (2004).
+
+[34] Moffat, J. W. Scalar–tensor–vector gravity theory. J. Cosmol. Astropart. Phys. **2006**, 004 (2006).
+
+[35] Verlinde, E. Emergent gravity and the dark universe. SciPost Phys. **2**, 016 (2017).
+
+[36] Chae, K.-H. et al. Testing the strong equivalence principle: detection of the external field effect in rotationally supported galaxies. Astrophys. J. **904**, 51 (2020).
+
+[37] Adelberger, E. G. et al. Tests of the gravitational inverse-square law. Annu. Rev. Nucl. Part. Sci. **53**, 77–121 (2003).
