@@ -4036,6 +4036,7 @@ def main_dynesty():
     parser.add_argument('--M_disk_total_max', type=float, default=None, help="Override upper prior bound for M_disk_total_solar")
     parser.add_argument('--M_disk_thick_min', type=float, default=None, help="Override lower prior bound for M_disk_thick_solar")
     parser.add_argument('--M_disk_thick_max', type=float, default=None, help="Override upper prior bound for M_disk_thick_solar")
+    parser.add_argument('--M_bulge_max', type=float, default=None, help="Override upper prior bound for M_bulge_solar")
     parser.add_argument('--h_z_thin_min', type=float, default=None, help="Override lower prior bound for h_z_thin_kpc")
     parser.add_argument('--R_d_thick_max', type=float, default=None, help="Override upper prior bound for R_d_thick_kpc")
     parser.add_argument('--M_gas_max', type=float, default=None, help="Override upper prior bound for M_gas_solar")
@@ -4327,6 +4328,8 @@ def main_dynesty():
         MW_MULTI_COMP_PARAM_CONFIG['M_disk_thick_solar']['low'] = args.M_disk_thick_min
     if args.M_disk_thick_max is not None:
         MW_MULTI_COMP_PARAM_CONFIG['M_disk_thick_solar']['high'] = args.M_disk_thick_max
+    if args.M_bulge_max is not None:
+        MW_MULTI_COMP_PARAM_CONFIG['M_bulge_solar']['high'] = args.M_bulge_max
 
     if args.checkpoint_file is None:
         args.checkpoint_file = str(Path(args.output_dir) / "dynesty_checkpoint.pkl")
