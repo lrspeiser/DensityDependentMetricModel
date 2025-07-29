@@ -375,18 +375,18 @@ MW_MULTI_COMP_PARAM_CONFIG = {
     'rho_c_solar_kpc3': {
         'label': "rho_c (M_sun/kpc^3)",
         'fixed_val_from_arg': 'rho_c_fixed',
-        'default_fixed': 1e13,    # Cassini-safe value
-        'low': 1e12,              # Must be >> 1e8 (galaxy)
-        'high': 1e15,             # Must be << 1e29 (Saturn)
+        'default_fixed': 5e13,    # Changed from 1e13
+        'low': 5e12,              # Changed from 1e12 - CRITICAL!
+        'high': 1e16,             # Changed from 1e15 - allow higher values
         'fit_flag_arg': 'fit_xi_params',
         'log_prior': True
     },
     'A': {
         'label': "A (enhancement factor)",
         'fixed_val_from_arg': 'A_fixed',
-        'default_fixed': 1.0,  # This gives 2x total enhancement
-        'low': 0.5,
-        'high': 3.0,
+        'default_fixed': 8.0,     # Changed from 1.0 for enhanced model!
+        'low': 1.0,               # Changed from 0.5
+        'high': 10.0,             # Changed from 3.0
         'fit_flag_arg': 'fit_xi_params',
         'log_prior': False
     },
@@ -1989,6 +1989,21 @@ def get_param_labels_and_bounds(ARGS):
     config_to_use = copy.deepcopy(MW_MULTI_COMP_PARAM_CONFIG)
     logger.info("Configuring parameters for multi-component Milky Way model")
 
+    if ARGS.xi == 'enhanced':
+        logger.info("🔧 Enhanced model - setting sensible exploration bounds")
+        # Let A vary widely to find what works
+        config_to_use['A']['default_fixed'] = 2.0  # Starting guess
+        config_to_use['A']['low'] = 0.5            # Allow small enhancement
+        config_to_use['A']['high'] = 10.0          # Allow large enhancement
+        
+        # Ensure rho_c is high enough for Cassini
+        config_to_use['rho_c_solar_kpc3']['low'] = 1e13   # Minimum for Cassini
+        config_to_use['rho_c_solar_kpc3']['high'] = 1e16  # Maximum reasonable
+        
+        # Let n_exp explore
+        config_to_use['n_exp']['low'] = 0.5
+        config_to_use['n_exp']['high'] = 3.0
+        
     def _ensure_float(value, param_name):
         """Safely convert a value to float, logging errors."""
         try:
@@ -3171,6 +3186,11 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         
         # For enhanced model: xi = 1 + A / (1 + (ρ/ρ_c)^n)
         if args.xi == 'enhanced':
+            
+            MW_MULTI_COMP_PARAM_CONFIG['A']['default_fixed'] = 8.0
+            MW_MULTI_COMP_PARAM_CONFIG['A']['low'] = 7.9  # Very tight bounds
+            MW_MULTI_COMP_PARAM_CONFIG['A']['high'] = 8.1
+
             denominator = 1.0 + ratio**n_exp
             logger.info(f"   Denominator [1 + (ρ/ρ_c)^n]: {denominator:.2e}")
             
