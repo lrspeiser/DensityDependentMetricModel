@@ -2,26 +2,6 @@
 """
 run_dynesty.py - Enhanced dynamic nested sampling for the Density-Metric model.
 
-This module implements Bayesian parameter estimation for the density-dependent
-gravitational modification model using the dynesty nested sampling package.
-
-Key features:
-- Dynamic nested sampling with adaptive live points
-- Physical plausibility checks to prevent unphysical parameter exploration
-- Curriculum learning approach for complex parameter spaces
-- Gaussian Process surrogate modeling for computational efficiency
-- Comprehensive monitoring and diagnostic output
-- Checkpoint support for long runs
-- Multi-threading support
-
-Major improvements in v2.0:
-- Parameter sanity checks during sampling
-- Tighter, physically motivated prior bounds
-- Enhanced monitoring with parameter health checks
-- Automatic detection of pathological parameter regions
-- Better initialization strategies
-- Validation integration
-
 Author: Leonard Speiser
 Version: 2.1 (With GR Baseline Comparison and Priors)
 """
@@ -1198,20 +1178,29 @@ def enhanced_monitor_sampler_progress(
         global debug_counter
         if debug_counter < 5:
             logger = get_or_create_logger()
-            logger.info(f"\n=== LIKELIHOOD DEBUG {debug_counter} ===")
+            logger.info(f"\n=== MONITORING DEBUG {debug_counter} ===")
             xi_type = getattr(args_obj, "xi", "UNKNOWN")
             logger.info(f"xi_type: {xi_type}")
             logger.info(f"fitted_param_names: {fitted_param_names}")
-            logger.info(f"theta_values_fitted: {theta_values_fitted}")
             
-            # Check what's in params after reconstruction
-            logger.info("Reconstructed params:")
-            for key in ['rho_c_solar_kpc3', 'n_exp', 'A']:
-                logger.info(f"  {key}: {params.get(key, 'MISSING')}")
+            # Use current median parameters instead of theta_values_fitted
+            if len(samples) > 0:
+                current_medians = np.median(samples, axis=0)
+                logger.info(f"current_median_params: {current_medians}")
+                
+                # Build current parameter dict
+                current_params = dict(zip(fitted_param_names, current_medians))
+                for p_info in args_obj.all_param_info_list:
+                    if not p_info['is_fitted']:
+                        current_params[p_info['name']] = p_info['current_val']
+                
+                logger.info("Current reconstructed params:")
+                for key in ['rho_c_solar_kpc3', 'n_exp', 'A']:
+                    logger.info(f"  {key}: {current_params.get(key, 'MISSING')}")
             
             # Check all_param_info_list
             logger.info("all_param_info_list contents:")
-            for p_info in all_param_info_list:
+            for p_info in args_obj.all_param_info_list:
                 if p_info['name'] in ['rho_c_solar_kpc3', 'n_exp', 'A']:
                     logger.info(f"  {p_info['name']}: current_val={p_info['current_val']}, is_fitted={p_info['is_fitted']}")
             
@@ -1569,9 +1558,9 @@ def log_likelihood_dynesty(
     if not hasattr(log_likelihood_dynesty, '_eval_stats'):
         log_likelihood_dynesty._eval_stats = {
             'count': 0,
-            'penalties_applied': {'cassini': 0, 'velocity': 0, 'mass': 0},
-            'penalty_totals': {'cassini': 0.0, 'velocity': 0.0, 'mass': 0.0},
-            'worst_penalties': {'cassini': 0.0, 'velocity': 0.0, 'mass': 0.0}
+            'penalties_applied': {'cassini': 0, 'velocity': 0, 'mass': 0, 'rho_c': 0},  # Add rho_c
+            'penalty_totals': {'cassini': 0.0, 'velocity': 0.0, 'mass': 0.0, 'rho_c': 0.0},  # Add rho_c
+            'worst_penalties': {'cassini': 0.0, 'velocity': 0.0, 'mass': 0.0, 'rho_c': 0.0}  # Add rho_c
         }
     
     stats = log_likelihood_dynesty._eval_stats
@@ -1619,9 +1608,63 @@ def log_likelihood_dynesty(
         return -np.inf, [np.inf, np.inf]
 
     # Base likelihood
-    chi2 = jnp.sum(((v_data_jax - v_model) / sigma_data_jax)**2)
-    log_L = -0.5 * chi2
+    # REGIONAL BREAKDOWN FOR GRAVITY REGIMES
+    # Inner: High density, xi ≈ 1 (standard gravity regime)
+    # Outer: Low density, xi > 1 (enhanced gravity regime)
+
+    inner_mask = R_data_jax < 8.0    # Inner galaxy - should behave Newtonian
+    transition_mask = (R_data_jax >= 8.0) & (R_data_jax <= 12.0)  # Transition zone
+    outer_mask = R_data_jax > 12.0   # Outer galaxy - needs enhancement
+
+    # Calculate chi2 for each region
+    chi2_inner = 0.0
+    chi2_transition = 0.0  
+    chi2_outer = 0.0
+
+    if jnp.sum(inner_mask) > 0:
+        chi2_inner = jnp.sum(((v_data_jax[inner_mask] - v_model[inner_mask]) / sigma_data_jax[inner_mask])**2)
+
+    if jnp.sum(transition_mask) > 0:
+        chi2_transition = jnp.sum(((v_data_jax[transition_mask] - v_model[transition_mask]) / sigma_data_jax[transition_mask])**2)
+
+    if jnp.sum(outer_mask) > 0:
+        chi2_outer = jnp.sum(((v_data_jax[outer_mask] - v_model[outer_mask]) / sigma_data_jax[outer_mask])**2)
+
+    # Weight regions to emphasize different physics
+    weight_inner = 1.0      # Standard weight for Newtonian regime
+    weight_transition = 1.0  # Standard weight for transition
+    weight_outer = 1.5      # Higher weight for enhancement regime (where DDMM should shine)
+
+    # Combined chi2 with regional weighting
+    chi2_total = (weight_inner * chi2_inner + 
+                weight_transition * chi2_transition + 
+                weight_outer * chi2_outer)
+
+    log_L = -0.5 * chi2_total
+
+    # Calculate regional RMSE for diagnostics
+    rmse_inner = jnp.sqrt(chi2_inner / jnp.sum(inner_mask)) if jnp.sum(inner_mask) > 0 else 0.0
+    rmse_transition = jnp.sqrt(chi2_transition / jnp.sum(transition_mask)) if jnp.sum(transition_mask) > 0 else 0.0
+    rmse_outer = jnp.sqrt(chi2_outer / jnp.sum(outer_mask)) if jnp.sum(outer_mask) > 0 else 0.0
     current_penalties = {}
+    
+    # Penalty for poor inner galaxy fit (should be Newtonian-like)
+    if rmse_inner > 25.0:  # Inner galaxy should fit well with minimal enhancement
+        penalty = -50.0 * ((rmse_inner - 25.0) / 15.0)**2
+        log_L += penalty
+        current_penalties['inner_fit'] = penalty
+
+    # Penalty for poor outer galaxy fit (this is where DDMM should help)
+    if rmse_outer > 40.0:  # Outer galaxy is the main target for improvement
+        penalty = -100.0 * ((rmse_outer - 40.0) / 20.0)**2  # Stronger penalty
+        log_L += penalty
+        current_penalties['outer_fit'] = penalty
+
+    # Bonus for good outer galaxy fit (reward successful enhancement)
+    if rmse_outer < 20.0:
+        bonus = 10.0 * (20.0 - rmse_outer) / 20.0  # Small bonus for excellent outer fit
+        log_L += bonus
+        current_penalties['outer_bonus'] = bonus
     
     # Cassini penalty
     try:
@@ -1635,6 +1678,16 @@ def log_likelihood_dynesty(
             stats['worst_penalties']['cassini'] = min(stats['worst_penalties']['cassini'], penalty)
     except Exception:
         return -np.inf, [np.inf, np.inf]
+
+    rho_c = params.get('rho_c_solar_kpc3', 1e13)
+    if rho_c > 1e14:  # Too high for galaxy physics
+        penalty = -100.0 * (np.log10(rho_c / 1e14))**2  # Logarithmic penalty
+        log_L += penalty
+        current_penalties['rho_c'] = penalty
+        stats['penalties_applied']['rho_c'] += 1
+        stats['penalty_totals']['rho_c'] += penalty
+        stats['worst_penalties']['rho_c'] = min(stats['worst_penalties']['rho_c'], penalty)
+    
     
     # Velocity penalty
     v_solar_mask = (R_data_jax > 7.5) & (R_data_jax < 8.5)
@@ -1688,7 +1741,13 @@ def log_likelihood_dynesty(
     # Return
     rmse = jnp.sqrt(jnp.mean((v_data_jax - v_model)**2))
     cassini_dev_return = cassini_dev if 'cassini_dev' in locals() else 0.0
-    return float(log_L), [float(rmse), float(cassini_dev_return)]
+
+    # Add regional RMSE (calculated from the regional breakdown above)
+    rmse_inner = jnp.sqrt(chi2_inner / jnp.sum(inner_mask)) if jnp.sum(inner_mask) > 0 else 0.0
+    rmse_transition = jnp.sqrt(chi2_transition / jnp.sum(transition_mask)) if jnp.sum(transition_mask) > 0 else 0.0
+    rmse_outer = jnp.sqrt(chi2_outer / jnp.sum(outer_mask)) if jnp.sum(outer_mask) > 0 else 0.0
+    
+    return float(log_L), [float(rmse), float(cassini_dev_return), float(rmse_inner), float(rmse_transition), float(rmse_outer)]
 
 def v_model_for_dynesty(
     R_kpc_array: np.ndarray,
@@ -1989,6 +2048,16 @@ def get_param_labels_and_bounds(ARGS):
     config_to_use = copy.deepcopy(MW_MULTI_COMP_PARAM_CONFIG)
     logger.info("Configuring parameters for multi-component Milky Way model")
 
+    # === ADD RHO_C DEBUG SECTION HERE ===
+    logger.info("\n🔍 RHO_C DEBUG - COMMAND LINE ANALYSIS:")
+    logger.info(f"   --rho_c_fixed from args: {getattr(ARGS, 'rho_c_fixed', 'NOT SET')}")
+    logger.info(f"   --fit_xi_params from args: {getattr(ARGS, 'fit_xi_params', 'NOT SET')}")
+    logger.info(f"   Xi model: {ARGS.xi}")
+    
+    # Check if rho_c_fixed was provided via command line
+    rho_c_fixed_via_cli = '--rho-c-fixed' in sys.argv or '--rho_c_fixed' in sys.argv
+    logger.info(f"   rho_c_fixed provided via CLI: {rho_c_fixed_via_cli}")
+
     if ARGS.xi == 'enhanced':
         logger.info("🔧 Enhanced model - setting sensible exploration bounds")
         # Let A vary widely to find what works
@@ -1996,9 +2065,14 @@ def get_param_labels_and_bounds(ARGS):
         config_to_use['A']['low'] = 0.5            # Allow small enhancement
         config_to_use['A']['high'] = 10.0          # Allow large enhancement
         
-        # Ensure rho_c is high enough for Cassini
-        config_to_use['rho_c_solar_kpc3']['low'] = 1e13   # Minimum for Cassini
-        config_to_use['rho_c_solar_kpc3']['high'] = 1e16  # Maximum reasonable
+        # *** CRITICAL FIX: Only modify rho_c bounds if NOT fixed via CLI ***
+        if not rho_c_fixed_via_cli and not getattr(ARGS, 'rho_c_fixed', None):
+            logger.info("   🔧 No --rho_c_fixed provided, setting default enhanced bounds")
+            config_to_use['rho_c_solar_kpc3']['low'] = 1e13   # Minimum for Cassini
+            config_to_use['rho_c_solar_kpc3']['high'] = 1e16  # Maximum reasonable
+        else:
+            logger.info(f"   🔒 --rho_c_fixed={getattr(ARGS, 'rho_c_fixed', None)} provided, keeping original bounds")
+            logger.info(f"      Original bounds: [{config_to_use['rho_c_solar_kpc3']['low']:.1e}, {config_to_use['rho_c_solar_kpc3']['high']:.1e}]")
         
         # Let n_exp explore
         config_to_use['n_exp']['low'] = 0.5
@@ -2112,9 +2186,24 @@ def get_param_labels_and_bounds(ARGS):
         elif 'fit_flag_arg' in p_details and getattr(ARGS, p_details['fit_flag_arg'], False):
             is_fitted = True
         fixed_arg_name = p_details['fixed_val_from_arg']
-        cli_flag = f"--{fixed_arg_name.replace('_', '-')}"
-        if cli_flag in sys.argv:
+        cli_flag_dashes = f"--{fixed_arg_name.replace('_', '-')}"
+        cli_flag_underscores = f"--{fixed_arg_name}"
+        if cli_flag_dashes in sys.argv or cli_flag_underscores in sys.argv:
             is_fitted = False
+            logger.info(f"   🔒 CLI override detected - forcing {p_name} to be FIXED")
+            
+        if p_name == 'rho_c_solar_kpc3':
+            logger.info(f"\n🔬 DETAILED RHO_C ANALYSIS:")
+            logger.info(f"   Parameter: {p_name}")
+            logger.info(f"   fit_flag_arg: {p_details.get('fit_flag_arg', 'NONE')}")
+            logger.info(f"   ARGS.fit_xi_params: {getattr(ARGS, 'fit_xi_params', 'NOT SET')}")
+            logger.info(f"   In xi_model_params: {p_name in xi_model_params.get(ARGS.xi, [])}")
+            logger.info(f"   CLI flag dashes: {cli_flag_dashes}")
+            logger.info(f"   CLI flag underscores: {cli_flag_underscores}")
+            logger.info(f"   Dashes in sys.argv: {cli_flag_dashes in sys.argv}")
+            logger.info(f"   Underscores in sys.argv: {cli_flag_underscores in sys.argv}")
+            logger.info(f"   sys.argv: {sys.argv}")
+            logger.info(f"   Final is_fitted decision: {is_fitted}")
 
         # Get current value
         if p_details.get('log_prior', False):
@@ -2649,7 +2738,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax
         }
     ]
 
-    stage_args_per_stage = {}                       # NEW – keep every stage’s Namespace
+    stage_args_per_stage = {}                       # NEW – keep every stage's Namespace
 
     for i, stage in enumerate(curriculum):
         logger.info(f"\n{'='*80}")
@@ -3260,7 +3349,23 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         if np.isfinite(test_logL):
             logger.info(f"✅ Warm-up test PASSED!")
             logger.info(f"   Test log(L) = {test_logL:.2f}")
-            logger.info(f"   Test RMSE = {test_blob[0]:.1f} km/s")
+        # Existing code still works:
+        logger.info(f"   Test RMSE = {test_blob[0]:.1f} km/s")  # Overall RMSE
+
+        # Add new regional info:
+        if len(test_blob) >= 5:
+            logger.info(f"   📍 REGIONAL BREAKDOWN:")
+            logger.info(f"      Inner (R<8):       {test_blob[2]:.1f} km/s")
+            logger.info(f"      Transition (8-12): {test_blob[3]:.1f} km/s") 
+            logger.info(f"      Outer (R>12):      {test_blob[4]:.1f} km/s")
+            
+            # Analysis of where the model is struggling
+            if test_blob[4] > test_blob[2] * 1.5:
+                logger.info(f"      → Model struggling more in outer galaxy (enhancement regime)")
+            elif test_blob[2] > test_blob[4] * 1.5:
+                logger.info(f"      → Model struggling more in inner galaxy (Newtonian regime)")
+            else:
+                logger.info(f"      → Balanced performance across regions")
         else:
             logger.error(f"❌ Likelihood is {test_logL}")
             
@@ -4004,6 +4109,275 @@ def analyze_model_vs_gr(enhanced_results, gr_baseline_file, args, gaia_data):
         
     except Exception as e:
         logger.error(f"Failed to generate comparison plots: {e}")
+        
+        
+def run_multi_chain_analysis(args):
+    """Run multiple chains with different seeds and combine results."""
+    from scipy.special import logsumexp
+    import numpy as np
+    seeds = args.chain_seeds if args.chain_seeds is not None else [42, 123, 456]
+
+    logger.info(f"🔗 MULTI-CHAIN MODE: Running {len(args.chain_seeds)} independent chains")
+    
+    # Store results from each chain
+    chain_results = []
+    
+    # Original output directory
+    base_output_dir = args.output_dir
+    
+    for i, seed in enumerate(args.chain_seeds):
+        logger.info(f"\n{'='*80}")
+        logger.info(f"🎲 CHAIN {i+1}/{len(args.chain_seeds)} with seed={seed}")
+        logger.info(f"{'='*80}")
+        
+        # Create chain-specific output directory
+        args.output_dir = Path(base_output_dir) / f"chain_{seed}"
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Set random seed for numpy and JAX
+        np.random.seed(seed)
+        import jax
+        jax.random.PRNGKey(seed)
+        
+        # Run the chain
+        try:
+            # Load data (only once)
+            if i == 0:
+                gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax = load_and_prepare_data(args)
+            
+            # Run single chain
+            results = run_single_dynesty(args, gaia_data_dict, R_data_jax, 
+                                       v_data_jax, sigma_data_jax)
+            
+            if results and hasattr(results, 'logz'):
+                chain_info = {
+                    'seed': seed,
+                    'logz': results.logz[-1],
+                    'logzerr': results.logzerr[-1] if hasattr(results, 'logzerr') else 0,
+                    'samples': results.samples,
+                    'weights': np.exp(results.logwt - results.logz[-1]),
+                    'output_dir': args.output_dir
+                }
+                chain_results.append(chain_info)
+                logger.info(f"✅ Chain {i+1} complete: logZ = {chain_info['logz']:.2f}")
+            else:
+                logger.error(f"❌ Chain {i+1} failed!")
+                
+        except Exception as e:
+            logger.error(f"❌ Chain {i+1} crashed: {e}")
+            continue
+    
+    # Combine results
+    if chain_results:
+        combine_chain_results(chain_results, base_output_dir)
+    else:
+        logger.error("❌ All chains failed!")
+
+def combine_chain_results(chain_results, output_dir):
+    """Combine evidence and samples from multiple chains."""
+    from scipy.special import logsumexp
+    import json
+    
+    logger.info(f"\n{'='*80}")
+    logger.info("📊 COMBINING CHAIN RESULTS")
+    logger.info(f"{'='*80}")
+    
+    # Extract log evidences
+    logz_values = [chain['logz'] for chain in chain_results]
+    logzerr_values = [chain['logzerr'] for chain in chain_results]
+    
+    # Combined evidence (assuming equal prior probability for each chain)
+    combined_logz = logsumexp(logz_values) - np.log(len(logz_values))
+    
+    # Combined error (propagate errors)
+    combined_logzerr = np.sqrt(np.sum([err**2 for err in logzerr_values])) / len(logzerr_values)
+    
+    # Print individual results
+    logger.info("\nIndividual chain results:")
+    for i, chain in enumerate(chain_results):
+        logger.info(f"  Chain {i+1} (seed={chain['seed']}): "
+                   f"logZ = {chain['logz']:.2f} ± {chain['logzerr']:.2f}")
+    
+    logger.info(f"\nCombined evidence: logZ = {combined_logz:.2f} ± {combined_logzerr:.2f}")
+    
+    # Compare to GR baseline
+    delta_logz_vs_gr = combined_logz - BASELINE_LOGZ_GR
+    logger.info(f"Δlog(Z) vs GR: {delta_logz_vs_gr:+.2f}")
+    logger.info(f"Interpretation: {interpret_jeffreys_scale(delta_logz_vs_gr)}")
+    
+    # Combine samples (weighted by evidence)
+    weights_per_chain = np.exp(np.array(logz_values) - logsumexp(logz_values))
+    
+    all_samples = []
+    all_weights = []
+    
+    for chain, chain_weight in zip(chain_results, weights_per_chain):
+        # Weight each chain's samples by its relative evidence
+        chain_weights = chain['weights'] * chain_weight
+        all_samples.append(chain['samples'])
+        all_weights.append(chain_weights)
+    
+    combined_samples = np.vstack(all_samples)
+    combined_weights = np.hstack(all_weights)
+    combined_weights /= np.sum(combined_weights)  # Renormalize
+    
+    # Save combined results
+    output_path = Path(output_dir)
+    np.savez(output_path / 'combined_chains_results.npz',
+             samples=combined_samples,
+             weights=combined_weights,
+             logz=combined_logz,
+             logzerr=combined_logzerr,
+             individual_logz=logz_values,
+             chain_seeds=[c['seed'] for c in chain_results])
+    
+    # Save summary
+    summary = {
+        'n_chains': len(chain_results),
+        'seeds': [c['seed'] for c in chain_results],
+        'individual_logz': logz_values,
+        'combined_logz': combined_logz,
+        'combined_logzerr': combined_logzerr,
+        'delta_logz_vs_gr': delta_logz_vs_gr,
+        'interpretation': interpret_jeffreys_scale(delta_logz_vs_gr)
+    }
+    
+    with open(output_path / 'combined_chains_summary.json', 'w') as f:
+        json.dump(summary, f, indent=2)
+    
+    logger.info(f"\n✅ Combined results saved to {output_path}")
+
+def run_single_chain_analysis(args):
+    """Original single-chain analysis (existing code)."""
+    # This function will contain the rest of the original main_dynesty logic
+    # after the multi-chain check
+    pass
+    
+def load_and_prepare_data(args):
+    """Load and prepare Gaia data (separated to avoid reloading)."""
+    from data_io import load_all_sky_gaia_slices, process_gaia_data
+    import pandas as pd
+    
+    logger = logging.getLogger("run_dynesty")
+    
+    logger.info("\n" + "="*60)
+    logger.info("🔭 GAIA DATA LOADING & PROCESSING")
+    logger.info("="*60)
+    
+    gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
+    df_all_sky = None
+
+    if not gaia_cache_file.exists() or args.force_new_query_gaia or args.force_reprocess_raw:
+        if args.force_new_query_gaia:
+            logger.info("Force flag enabled: Bypassing all caches to query Gaia from scratch.")
+        elif args.force_reprocess_raw:
+            logger.info("Force flag enabled: Bypassing merged cache to re-process raw slice files.")
+        else:
+            logger.info(f"Merged cache file not found at '{gaia_cache_file}'.")
+
+        # Fallback 1: Try to merge raw slice files
+        raw_dir = Path("gaia_sky_slices")
+        raw_files = sorted(raw_dir.glob("raw_L*.csv"))
+        logger.info(f"Searching for raw data in: '{raw_dir.resolve()}'")
+
+        if raw_files and not args.force_new_query_gaia:
+            logger.info(f"Found {len(raw_files)} raw Gaia slice files. Attempting to merge...")
+            dfs = []
+            for f in raw_files:
+                try:
+                    df_slice = pd.read_csv(f)
+                    dfs.append(df_slice)
+                    logger.info(f"  ✅ Successfully loaded {f.name} with {len(df_slice)} rows.")
+                except Exception as e:
+                    logger.warning(f"  ⚠️ Failed to load or parse {f.name}: {e}")
+
+            if not dfs:
+                logger.error("❌ All raw Gaia slice files failed to load. Cannot proceed.")
+                sys.exit(1)
+
+            logger.info("Concatenating all loaded slices into a single DataFrame...")
+            df_all_sky = pd.concat(dfs, ignore_index=True)
+            logger.info(f"  ✅ Merged DataFrame created with {len(df_all_sky)} total rows.")
+            
+            try:
+                logger.info(f"Attempting to cache the merged data to: {gaia_cache_file}")
+                df_all_sky.to_csv(gaia_cache_file, index=False)
+                logger.info(f"  💾 Cached merged Gaia data successfully.")
+            except Exception as e:
+                logger.warning(f"  ⚠️ Failed to write cache file: {e}")
+
+        else:
+            # Fallback 2: Query from scratch
+            logger.info("No suitable raw files found or new query forced. Querying Gaia from scratch...")
+            df_all_sky = load_all_sky_gaia_slices(
+                lon_bin_width=30,
+                stars_per_bin=12000,
+                output_dir="gaia_sky_slices",
+                force_query=True, # We are in this block, so we must query
+                max_distance_kpc=30.0
+            )
+            logger.info("  ✅ Gaia query completed.")
+            
+    else:
+        logger.info(f"✅ Found existing merged cache file. Loading data from: {gaia_cache_file}")
+        try:
+            df_all_sky = pd.read_csv(gaia_cache_file)
+            logger.info(f"  ✅ Loaded {len(df_all_sky)} stars from cache.")
+        except Exception as e:
+            logger.error(f"❌ Failed to load cached Gaia data: {e}")
+            logger.error("   Try running with --force_reprocess_raw to rebuild the cache from slices.")
+            sys.exit(1)
+
+    logger.info("\n--- Processing Raw Gaia Data into Physical Units ---")
+    df_all_sky = process_gaia_data(df_all_sky)
+
+    # --- Data Validation Step ---
+    logger.info("\n--- Validating loaded Gaia DataFrame ---")
+    if df_all_sky is None or df_all_sky.empty:
+        logger.error("❌ DataFrame is empty after loading attempts. Cannot proceed.")
+        sys.exit(1)
+
+    logger.info(f"DataFrame shape: {df_all_sky.shape}")
+    logger.info(f"Columns: {df_all_sky.columns.tolist()}")
+
+    required_cols = ["R_kpc", "v_obs", "sigma_v"]
+    missing_cols = [col for col in required_cols if col not in df_all_sky.columns]
+    if missing_cols:
+        logger.error(f"❌ Gaia data is missing required columns: {missing_cols}")
+        sys.exit(1)
+    
+    logger.info(f"Checking for non-finite values in critical columns...")
+    for col in required_cols:
+        n_bad = np.sum(~np.isfinite(df_all_sky[col]))
+        if n_bad > 0:
+            logger.warning(f"  ⚠️ Found {n_bad} NaN/inf values in column '{col}'. These will be filtered.")
+            df_all_sky.dropna(subset=[col], inplace=True)
+    logger.info(f"DataFrame shape after cleaning non-finite values: {df_all_sky.shape}")
+    logger.info("Validation of DataFrame contents complete.")
+    
+    # --- Convert to JAX arrays ---
+    logger.info("\n--- Converting data to JAX arrays for GPU ---")
+    try:
+        gaia_data_dict = {col: df_all_sky[col].values for col in required_cols}
+        
+        R_data_np = gaia_data_dict["R_kpc"].astype(np.float32)
+        v_data_np = gaia_data_dict["v_obs"].astype(np.float32)
+        sigma_data_np = gaia_data_dict["sigma_v"].astype(np.float32)
+        logger.info(f"NumPy arrays created with dtype={R_data_np.dtype}.")
+
+        R_data_jax = jax.device_put(R_data_np)
+        v_data_jax = jax.device_put(v_data_np)
+        sigma_data_jax = jax.device_put(sigma_data_np)
+
+        logger.info(f"✅ Successfully transferred {len(R_data_jax)} stars to JAX backend: {jax.default_backend()}")
+        logger.info("="*60 + "\n")
+    except Exception as e:
+        logger.error(f"❌ An error occurred during conversion to JAX arrays: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        sys.exit(1)
+    
+    return gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax
 
 # ============================================================================
 # Main Entry Point
@@ -4038,6 +4412,8 @@ def main_dynesty():
     parser.add_argument('--max_sample_gaia', type=int, default=10000, help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty", help="Output directory for results")
     parser.add_argument('--R_d_thin_high', type=float, default=None, help="Override upper prior bound for R_d_thin_kpc")
+    parser.add_argument('--multi_chain', action='store_true', default=False, help="Run multiple chains with different seeds")
+    parser.add_argument('--chain_seeds', type=int, nargs='+', default=None, help="Random seeds for multi-chain runs")
 
     # Sampler options
     parser.add_argument('--nlive_init', type=int, default=800, help="Initial number of live points")
@@ -4162,6 +4538,13 @@ def main_dynesty():
     RUN_ID = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
     debug_counter = 0
 
+    # Check for multi-chain mode
+    if args.multi_chain:
+        run_multi_chain_analysis(args)
+        return  # Exit after multi-chain analysis
+    
+    # Continue with single-chain analysis (original code)
+
     run_tracking_enabled = True
     try:
         from run_history import start_record, finalize_record as _finalize_record
@@ -4208,126 +4591,7 @@ def main_dynesty():
     # ============================================================================
     # GAIA DATA LOADING WITH ENHANCED LOGGING
     # ============================================================================
-    logger.info("\n" + "="*60)
-    logger.info("🔭 GAIA DATA LOADING & PROCESSING")
-    logger.info("="*60)
-    
-    gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
-    df_all_sky = None
-
-    if not gaia_cache_file.exists() or args.force_new_query_gaia or args.force_reprocess_raw:
-        if args.force_new_query_gaia:
-            logger.info("Force flag enabled: Bypassing all caches to query Gaia from scratch.")
-        elif args.force_reprocess_raw:
-            logger.info("Force flag enabled: Bypassing merged cache to re-process raw slice files.")
-        else:
-            logger.info(f"Merged cache file not found at '{gaia_cache_file}'.")
-
-        # Fallback 1: Try to merge raw slice files
-        raw_dir = Path("gaia_sky_slices")
-        raw_files = sorted(raw_dir.glob("raw_L*.csv"))
-        logger.info(f"Searching for raw data in: '{raw_dir.resolve()}'")
-
-        if raw_files and not args.force_new_query_gaia:
-            logger.info(f"Found {len(raw_files)} raw Gaia slice files. Attempting to merge...")
-            dfs = []
-            for f in raw_files:
-                try:
-                    df_slice = pd.read_csv(f)
-                    dfs.append(df_slice)
-                    logger.info(f"  ✅ Successfully loaded {f.name} with {len(df_slice)} rows.")
-                except Exception as e:
-                    logger.warning(f"  ⚠️ Failed to load or parse {f.name}: {e}")
-
-            if not dfs:
-                logger.error("❌ All raw Gaia slice files failed to load. Cannot proceed.")
-                sys.exit(1)
-
-            logger.info("Concatenating all loaded slices into a single DataFrame...")
-            df_all_sky = pd.concat(dfs, ignore_index=True)
-            logger.info(f"  ✅ Merged DataFrame created with {len(df_all_sky)} total rows.")
-            
-            try:
-                logger.info(f"Attempting to cache the merged data to: {gaia_cache_file}")
-                df_all_sky.to_csv(gaia_cache_file, index=False)
-                logger.info(f"  💾 Cached merged Gaia data successfully.")
-            except Exception as e:
-                logger.warning(f"  ⚠️ Failed to write cache file: {e}")
-
-        else:
-            # Fallback 2: Query from scratch
-            logger.info("No suitable raw files found or new query forced. Querying Gaia from scratch...")
-            df_all_sky = load_all_sky_gaia_slices(
-                lon_bin_width=30,
-                stars_per_bin=12000,
-                output_dir="gaia_sky_slices",
-                force_query=True, # We are in this block, so we must query
-                max_distance_kpc=30.0
-            )
-            logger.info("  ✅ Gaia query completed.")
-            
-    else:
-        logger.info(f"✅ Found existing merged cache file. Loading data from: {gaia_cache_file}")
-        try:
-            df_all_sky = pd.read_csv(gaia_cache_file)
-            logger.info(f"  ✅ Loaded {len(df_all_sky)} stars from cache.")
-        except Exception as e:
-            logger.error(f"❌ Failed to load cached Gaia data: {e}")
-            logger.error("   Try running with --force_reprocess_raw to rebuild the cache from slices.")
-            sys.exit(1)
-
-    logger.info("\n--- Processing Raw Gaia Data into Physical Units ---")
-    df_all_sky = process_gaia_data(df_all_sky)
-
-
-    # --- Data Validation Step ---
-    logger.info("\n--- Validating loaded Gaia DataFrame ---")
-    if df_all_sky is None or df_all_sky.empty:
-        logger.error("❌ DataFrame is empty after loading attempts. Cannot proceed.")
-        sys.exit(1)
-
-    logger.info(f"DataFrame shape: {df_all_sky.shape}")
-    logger.info(f"Columns: {df_all_sky.columns.tolist()}")
-
-    required_cols = ["R_kpc", "v_obs", "sigma_v"]
-    missing_cols = [col for col in required_cols if col not in df_all_sky.columns]
-    if missing_cols:
-        logger.error(f"❌ Gaia data is missing required columns: {missing_cols}")
-        sys.exit(1)
-    
-    logger.info(f"Checking for non-finite values in critical columns...")
-    for col in required_cols:
-        n_bad = np.sum(~np.isfinite(df_all_sky[col]))
-        if n_bad > 0:
-            logger.warning(f"  ⚠️ Found {n_bad} NaN/inf values in column '{col}'. These will be filtered.")
-            df_all_sky.dropna(subset=[col], inplace=True)
-    logger.info(f"DataFrame shape after cleaning non-finite values: {df_all_sky.shape}")
-    logger.info("Validation of DataFrame contents complete.")
-    
-    # --- Convert to JAX arrays ---
-    logger.info("\n--- Converting data to JAX arrays for GPU ---")
-    try:
-        gaia_data_dict = {col: df_all_sky[col].values for col in required_cols}
-        
-        R_data_np = gaia_data_dict["R_kpc"].astype(np.float32)
-        v_data_np = gaia_data_dict["v_obs"].astype(np.float32)
-        sigma_data_np = gaia_data_dict["sigma_v"].astype(np.float32)
-        logger.info(f"NumPy arrays created with dtype={R_data_np.dtype}.")
-
-        R_data_jax = jax.device_put(R_data_np)
-        v_data_jax = jax.device_put(v_data_np)
-        sigma_data_jax = jax.device_put(sigma_data_np)
-
-        logger.info(f"✅ Successfully transferred {len(R_data_jax)} stars to JAX backend: {jax.default_backend()}")
-        logger.info("="*60 + "\n")
-    except Exception as e:
-        logger.error(f"❌ An error occurred during conversion to JAX arrays: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        sys.exit(1)
-    # ============================================================================
-    # END OF GAIA DATA LOADING SECTION
-    # ============================================================================
+    gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax = load_and_prepare_data(args)
     
     # Ensure physical prior bounds match -- override if needed
     if args.R_d_thin_high is not None:
