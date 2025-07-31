@@ -1008,9 +1008,16 @@ def enhanced_monitor_sampler_progress(
     try:
         res = sampler.results
 
-        logger.info("=" * 80)
-        logger.info(f"🔍 DYNESTY PROGRESS MONITOR - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("=" * 80)
+        # At the start of enhanced_monitor_sampler_progress
+        logger.info("="*80)
+        logger.info(f"🔍 DYNESTY PROGRESS - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        # Add health assessment
+        health = get_run_health_assessment(sampler, elapsed_time, logger)
+        logger.info(f"\n🏥 RUN HEALTH: {health['status']}")
+        logger.info(f"   {health['message']}")
+        logger.info(f"   → {health['recommendation']}")
+        logger.info("="*80)
 
         if not hasattr(res, 'samples') or len(res.samples) == 0:
             logger.info("❌ No samples available yet")
@@ -1021,14 +1028,52 @@ def enhanced_monitor_sampler_progress(
         ncall_total = np.sum(res.ncall) if isinstance(res.ncall, np.ndarray) else res.ncall
         elapsed_time = time.time() - start_time
         elapsed_str = str(timedelta(seconds=int(elapsed_time)))
-        eff = 100.0 * n_samples / ncall_total if ncall_total > 0 else 0.0
-
+        eff = 100.0 * n_samples / ncall_total if ncall_total > 0 else 0.0   
+        
+        # Determine run phase
+        if n_samples < 100:
+            run_phase = "INITIALIZATION"
+            phase_emoji = "🚀"
+        elif elapsed_time < 300:  # First 5 minutes
+            run_phase = "EARLY EXPLORATION"
+            phase_emoji = "🔍"
+        elif dlogz > 1.0:
+            run_phase = "ACTIVE EXPLORATION"
+            phase_emoji = "🎯"
+        elif dlogz > 0.1:
+            run_phase = "REFINEMENT"
+            phase_emoji = "🔧"
+        else:
+            run_phase = "CONVERGING"
+            phase_emoji = "✅"
+        
+        logger.info(f"\n{phase_emoji} RUN PHASE: {run_phase}")
+        logger.info(f"   Normal for this phase: {'Yes' if run_phase != 'CONVERGING' else 'Nearly complete'}")
         logger.info(f"⏱️  Elapsed: {elapsed_str} | 📊 Samples: {n_samples:,} | 🎲 Calls: {ncall_total:,} | 📈 Eff: {eff:.2f}%")
 
         if gp_surrogate is not None and GP_AVAILABLE:
             gp_stats = gp_surrogate.get_statistics()
             logger.info(f"🤖 GP Surrogate: {gp_stats['n_real_calls']:,} real, "
                         f"{gp_stats['n_surrogate_calls']:,} surrogate (speedup: {gp_stats['speedup_factor']:.1f}x)")
+
+        # Track improvement rate
+        if hasattr(sampler, '_logz_history'):
+            sampler._logz_history.append((elapsed_time, current_logz))
+            if len(sampler._logz_history) > 10:
+                sampler._logz_history.pop(0)
+            
+            # Calculate improvement rate over last 60 seconds
+            recent_history = [(t, z) for t, z in sampler._logz_history if elapsed_time - t < 60]
+            if len(recent_history) >= 2:
+                time_span = recent_history[-1][0] - recent_history[0][0]
+                logz_improvement = recent_history[-1][1] - recent_history[0][1]
+                improvement_rate = logz_improvement / time_span if time_span > 0 else 0
+                
+                logger.info(f"\n📈 IMPROVEMENT METRICS:")
+                logger.info(f"   Log(Z) improvement rate: {improvement_rate:+.1f} per second")
+                logger.info(f"   Status: {'IMPROVING RAPIDLY ✅' if improvement_rate > 100 else 'IMPROVING STEADILY ✅' if improvement_rate > 0 else 'PLATEAUING ⚠️'}")
+        else:
+            sampler._logz_history = []
 
         if n_samples < 50:
             logger.info("⚠️  Too few samples for detailed analysis")
@@ -1422,7 +1467,7 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
             return
         
         # Use a unique filename to avoid conflicts
-        progress_file = Path(args.output_dir) / "dynesty_progress.json"  # Changed from "progress.json"
+        progress_file = Path(args.output_dir) / "dynesty_progress.json"
         
         # Get current stats
         current_time = time.time()
@@ -1438,6 +1483,33 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
             if len(res.logz) >= 2:
                 dlogz = float(res.logz[-1] - res.logz[-2])
         
+        # Add phase determination (NOW we have the variables we need)
+        if n_samples < 100:
+            phase = "initialization"
+            expected_behavior = "Random exploration, very poor fits expected"
+        elif elapsed < 300:
+            phase = "early_exploration"
+            expected_behavior = "Rapid improvement expected, still finding good regions"
+        elif dlogz > 1.0:
+            phase = "active_exploration"
+            expected_behavior = "Steady improvement, model learning parameter space"
+        elif dlogz > 0.1:
+            phase = "refinement"
+            expected_behavior = "Slow improvement, fine-tuning parameters"
+        else:
+            phase = "converged"
+            expected_behavior = "Model converged, results reliable"
+        
+        # Calculate improvement metrics
+        improvement_metrics = {}
+        if hasattr(sampler, '_logz_checkpoint'):
+            minutes_ago = 5
+            if elapsed > minutes_ago * 60:
+                improvement_metrics['logz_improvement_5min'] = current_logz - sampler._logz_checkpoint
+                improvement_metrics['improvement_rate'] = (current_logz - sampler._logz_checkpoint) / (minutes_ago * 60)
+        else:
+            sampler._logz_checkpoint = current_logz
+        
         # GR baseline comparison
         delta_logz_vs_gr = current_logz - BASELINE_LOGZ_GR if np.isfinite(current_logz) else np.nan
         gr_diff_percent = (np.exp(delta_logz_vs_gr) - 1) * 100 if np.isfinite(delta_logz_vs_gr) else np.nan
@@ -1452,14 +1524,20 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
                     'std': float(np.std(recent_samples[:, i]))
                 }
         
+        # Create progress_data ONCE with ALL fields
         progress_data = {
-            'source': 'dynesty_sampler',  # Add source identifier
+            'source': 'dynesty_sampler',
             'timestamp': datetime.now().isoformat(),
             'elapsed_hours': elapsed / 3600,
+            'phase': phase,
+            'phase_description': expected_behavior,
+            'is_normal': phase != 'converged',
+            'health_status': 'NORMAL' if improvement_metrics.get('improvement_rate', 0) > 0 or phase == 'initialization' else 'CHECK',
             'n_samples': n_samples,
             'n_calls': n_calls,
             'efficiency_percent': 100.0 * n_samples / n_calls if n_calls > 0 else 0,
             'current_logz': current_logz,
+            'improvement_metrics': improvement_metrics,
             'dlogz': dlogz,
             'target_dlogz': args.dlogz_target,
             'dlogz_ratio': dlogz / args.dlogz_target if np.isfinite(dlogz) and args.dlogz_target > 0 else np.nan,
@@ -1697,27 +1775,34 @@ def log_likelihood_dynesty(
         current_penalties['outer_bonus'] = bonus
     
     # Cassini penalty
-    try:
-        cassini_dev, _ = check_cassini_compatibility(params, xi_type)
-        if np.isfinite(cassini_dev) and cassini_dev > 2.3e-5:
-            penalty = -500.0 * ((cassini_dev - 2.3e-5) / 2.3e-5)**2
-            log_L += penalty
-            current_penalties['cassini'] = penalty
-            stats['penalties_applied']['cassini'] += 1
-            stats['penalty_totals']['cassini'] += penalty
-            stats['worst_penalties']['cassini'] = min(stats['worst_penalties']['cassini'], penalty)
-    except Exception:
-        return -np.inf, [np.inf, np.inf]
+        if not getattr(args_dynesty_obj, 'disable_cassini_penalty', False):
+            try:
+                cassini_dev, _ = check_cassini_compatibility(params, xi_type)
+                if np.isfinite(cassini_dev) and cassini_dev > 2.3e-5:
+                    penalty = -500.0 * ((cassini_dev - 2.3e-5) / 2.3e-5)**2
+                    log_L += penalty
+                    current_penalties['cassini'] = penalty
+                    stats['penalties_applied']['cassini'] += 1
+                    stats['penalty_totals']['cassini'] += penalty
+                    stats['worst_penalties']['cassini'] = min(stats['worst_penalties']['cassini'], penalty)
+            except Exception:
+                return -np.inf, [np.inf, np.inf]
+        else:
+            # Log once that Cassini is disabled
+            if not hasattr(log_likelihood_dynesty, '_cassini_disabled_logged'):
+                logger.info("📌 Cassini penalty DISABLED for this run (galaxy-only fit)")
+                log_likelihood_dynesty._cassini_disabled_logged = True
 
-    rho_c = params.get('rho_c_solar_kpc3', 1e13)
-    if rho_c > 1e14:  # Too high for galaxy physics
-        penalty = -100.0 * (np.log10(rho_c / 1e14))**2  # Logarithmic penalty
-        log_L += penalty
-        current_penalties['rho_c'] = penalty
-        stats['penalties_applied']['rho_c'] += 1
-        stats['penalty_totals']['rho_c'] += penalty
-        stats['worst_penalties']['rho_c'] = min(stats['worst_penalties']['rho_c'], penalty)
-    
+        # rho_c penalty (might also want to make this conditional)
+        if not getattr(args_dynesty_obj, 'disable_rho_c_penalty', False):
+            rho_c = params.get('rho_c_solar_kpc3', 1e13)
+            if rho_c > 1e14:  # Too high for galaxy physics
+                penalty = -100.0 * (np.log10(rho_c / 1e14))**2  # Logarithmic penalty
+                log_L += penalty
+                current_penalties['rho_c'] = penalty
+                stats['penalties_applied']['rho_c'] += 1
+                stats['penalty_totals']['rho_c'] += penalty
+                stats['worst_penalties']['rho_c'] = min(stats['worst_penalties']['rho_c'], penalty)
     
     # Velocity penalty
     v_solar_mask = (R_data_jax > 7.5) & (R_data_jax < 8.5)
@@ -4416,6 +4501,76 @@ def load_and_prepare_data(args):
     
     return gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax
 
+def get_run_health_assessment(sampler, elapsed_time, logger):
+    """Provide a clear assessment of whether the run is healthy."""
+    
+    if not hasattr(sampler, 'results') or len(sampler.results.samples) < 10:
+        return {
+            'status': 'TOO_EARLY',
+            'message': 'Not enough samples yet to assess',
+            'recommendation': 'Wait at least 1 minute before assessment'
+        }
+    
+    res = sampler.results
+    n_samples = len(res.samples)
+    efficiency = 100.0 * n_samples / res.ncall if res.ncall > 0 else 0
+    
+    # Check improvement rate
+    if hasattr(sampler, '_logz_history') and len(sampler._logz_history) > 2:
+        recent = sampler._logz_history[-3:]
+        improving = all(recent[i][1] > recent[i-1][1] for i in range(1, len(recent)))
+    else:
+        improving = True  # Assume improving if no history
+    
+    # Health criteria
+    if elapsed_time < 300:  # First 5 minutes
+        if efficiency < 5:
+            return {
+                'status': 'CONCERN',
+                'message': 'Very low efficiency in early stage',
+                'recommendation': 'Check prior bounds - they might be too wide'
+            }
+        elif not improving and elapsed_time > 120:
+            return {
+                'status': 'CONCERN', 
+                'message': 'Not improving after 2 minutes',
+                'recommendation': 'Check model configuration'
+            }
+        else:
+            return {
+                'status': 'HEALTHY',
+                'message': f'Normal early exploration (efficiency: {efficiency:.1f}%)',
+                'recommendation': 'Continue running - rapid improvement expected'
+            }
+    
+    elif elapsed_time < 1800:  # First 30 minutes
+        if not improving:
+            return {
+                'status': 'WARNING',
+                'message': 'Improvement has stalled',
+                'recommendation': 'May need to adjust priors or model settings'
+            }
+        else:
+            return {
+                'status': 'HEALTHY',
+                'message': f'Active exploration phase (efficiency: {efficiency:.1f}%)',
+                'recommendation': 'Continue running - still exploring parameter space'
+            }
+    
+    else:  # After 30 minutes
+        if res.logz[-1] < -1e6:
+            return {
+                'status': 'PROBLEM',
+                'message': 'Log(Z) still very negative after 30 minutes',
+                'recommendation': 'Model may be mis-specified - check configuration'
+            }
+        else:
+            return {
+                'status': 'HEALTHY',
+                'message': 'Run progressing normally',
+                'recommendation': 'Continue until convergence (dlogZ < 0.1)'
+            }
+
 # ============================================================================
 # Main Entry Point
 # ============================================================================
@@ -4483,7 +4638,10 @@ def main_dynesty():
                     help="Compare results to GR baseline after run")
     parser.add_argument('--gr_baseline_dir', type=str, default="chains_gr_baseline_fixed",
                     help="Directory containing GR baseline results")
-
+    parser.add_argument('--disable_cassini_penalty', action='store_true', default=False,
+                        help="Disable Cassini constraint penalty (for galaxy-only fits)")
+    parser.add_argument('--disable_rho_c_penalty', action='store_true', default=False,
+                        help="Disable rho_c upper bound penalty (for galaxy-only fits)")
 
     # Dynesty sampler group
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')
