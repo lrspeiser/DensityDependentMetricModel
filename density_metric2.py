@@ -630,6 +630,11 @@ def v_total_kms(R_kpc, p, xi_type='power'):
     """MASTER function to compute the full circular velocity."""
     R_kpc_arr = jnp.atleast_1d(jnp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
     
+    if not hasattr(v_total_kms, '_logged'):
+        logger.info(f"[v_total_kms] xi_type: {xi_type}")
+        logger.info(f"[v_total_kms] params: {list(p.keys())}")
+        v_total_kms._logged = True
+    
     # 1. Calculate Newtonian velocity from baryons
     v_newton = v_baryon_total_newtonian_kms(R_kpc_arr, p)
     
@@ -642,11 +647,18 @@ def v_total_kms(R_kpc, p, xi_type='power'):
     try:
         rho = rho_baryon_total_midplane_solar_kpc3(R_kpc_arr, p)
         rho_c = p.get('rho_c_solar_kpc3', 1e9)
-        n_exp = p.get('n_exp', p.get('gamma_exp', 1.0))
-        A_param = p.get('A', p.get('lambda_g', 1.0))
         
-        kwargs = {'r_kpc': R_kpc_arr, 'params': p}
-        xi = xi_func(rho, rho_c, n_exp, A_param, **kwargs)
+        if xi_type == 'grav_color':
+            # For grav_color, the parameters are different
+            gamma = p.get('gamma_exp', 2.7)
+            lambda_g = p.get('lambda_g', 8.0)
+            xi = xi_func(rho, rho_c, gamma, lambda_g)
+        else:
+            # Standard xi functions
+            n_exp = p.get('n_exp', 1.5)
+            A_param = p.get('A', 1.0)
+            kwargs = {'r_kpc': R_kpc_arr, 'params': p}
+            xi = xi_func(rho, rho_c, n_exp, A_param, **kwargs)
 
     except Exception as e:
         logger.error(f"Error in v_total_kms with xi_type '{xi_type}': {e}")

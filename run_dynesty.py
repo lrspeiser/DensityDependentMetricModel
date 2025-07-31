@@ -316,7 +316,7 @@ PHYSICAL_BOUNDS = {
 
     # Other parameters
     'M_total':             {'min': 5e10, 'max': 2e11,   'typical': 1e11},
-    'rho_c_solar_kpc3':    {'min': 5e13,  'max': 1e16,   'typical': 5e13},
+    'rho_c_solar_kpc3':    {'min': 1e6,   'max': 1e16,   'typical': 5e8},
     'n_exp':               {'min': 0.5,  'max': 4.0,    'typical': 2.7},
 }
 
@@ -351,13 +351,12 @@ def load_previous_best_params():
 # Parameter Configuration with Enhanced Bounds
 # ============================================================================
 MW_MULTI_COMP_PARAM_CONFIG = {
-    # --- Gravity Parameters with MORE LENIENT PRIORS ---
     'rho_c_solar_kpc3': {
         'label': "rho_c (M_sun/kpc^3)",
         'fixed_val_from_arg': 'rho_c_fixed',
-        'default_fixed': 5e13,    # Changed from 1e13
-        'low': 5e12,              # Changed from 1e12 - CRITICAL!
-        'high': 1e16,             # Changed from 1e15 - allow higher values
+        'default_fixed': 5e8,    # FIX: Galaxy-appropriate default (was 5e13)
+        'low': 1e7,              # FIX: Realistic bounds (was 5e12)
+        'high': 1e9,             # FIX: Realistic bounds (was 1e16)
         'fit_flag_arg': 'fit_xi_params',
         'log_prior': True
     },
@@ -365,7 +364,7 @@ MW_MULTI_COMP_PARAM_CONFIG = {
         'label': "A (enhancement factor)",
         'fixed_val_from_arg': 'A_fixed',
         'default_fixed': 8.0,     # Changed from 1.0 for enhanced model!
-        'low': 1.0,               # Changed from 0.5
+        'low': 2.0,               # Changed from 0.5
         'high': 10.0,             # Changed from 3.0
         'fit_flag_arg': 'fit_xi_params',
         'log_prior': False
@@ -641,29 +640,24 @@ def setup_xi_parameters_for_mode(args):
 
         # CRITICAL: Ensure rho_c is in the args with a default value
         if not hasattr(args, 'rho_c_fixed') or args.rho_c_fixed is None:
-            args.rho_c_fixed = 5e8  # Default value
+            args.rho_c_fixed = 5e13  # Default value - MUCH HIGHER!
             logger.info(f"   Setting default rho_c_fixed = {args.rho_c_fixed:.1e}")
-
-        # CRITICAL: Ensure n_exp has a value (even if not used)
-        if not hasattr(args, 'n_exp_fixed') or args.n_exp_fixed is None:
-            args.n_exp_fixed = 2.0  # Not used but needed
-            logger.info(f"   Setting default n_exp_fixed = {args.n_exp_fixed}")
 
         # Add/update rho_c (still needed!)
         if 'rho_c_solar_kpc3' not in MW_MULTI_COMP_PARAM_CONFIG:
             MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'] = {}
-
+        
         MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'].update({
             'label': "rho_c (M_sun/kpc^3)",
             'fixed_val_from_arg': 'rho_c_fixed',
-            'default_fixed': 1e13,  # Galaxy-appropriate
-            'low': 1e12,
-            'high': 1e15,
+            'default_fixed': 5e13,      # FIXED: Galaxy+Cassini appropriate default
+            'low': 1e12,                # FIXED: Minimum for Cassini compatibility
+            'high': 1e15,               # FIXED: Upper bound for exploration
             'fit_flag_arg': 'fit_rho_c',
             'log_prior': True,
             'physical_check': True
         })
-
+        
         # Ensure gamma_exp is configured
         if 'gamma_exp' not in MW_MULTI_COMP_PARAM_CONFIG:
             MW_MULTI_COMP_PARAM_CONFIG['gamma_exp'] = {}
@@ -671,9 +665,9 @@ def setup_xi_parameters_for_mode(args):
         MW_MULTI_COMP_PARAM_CONFIG['gamma_exp'].update({
             'label': "γ (grav-color)",
             'fixed_val_from_arg': 'gamma_fixed',
-            'default_fixed': 2.0,  # Galaxy-appropriate
-            'low': 1.0,
-            'high': 3.0,
+            'default_fixed': 2.7,       # Theory value
+            'low': 2.0,                 # Tighter bounds around theory
+            'high': 3.5,
             'fit_flag_arg': 'fit_gamma',
             'log_prior': False,
             'physical_check': False
@@ -686,9 +680,9 @@ def setup_xi_parameters_for_mode(args):
         MW_MULTI_COMP_PARAM_CONFIG['lambda_g'].update({
             'label': "λ_g",
             'fixed_val_from_arg': 'lambda_g_fixed',
-            'default_fixed': 1.5,  # Galaxy-appropriate (NOT 8!)
-            'low': 0.5,
-            'high': 4.0,
+            'default_fixed': 8.0,       # Theory value
+            'low': 6.0,                 # Tighter bounds around theory
+            'high': 10.0,               # Allow some variation
             'fit_flag_arg': 'fit_lambda_g',
             'log_prior': False,
             'physical_check': False
@@ -736,7 +730,7 @@ def setup_xi_parameters_for_mode(args):
             'label': "rho_c (M_sun/kpc^3)",
             'fixed_val_from_arg': 'rho_c_fixed',
             'default_fixed': 1e13,
-            'low': 1e12,
+            'low': 1e6,
             'high': 1e15,
             'fit_flag_arg': 'fit_xi_params',
             'log_prior': True,
@@ -1418,14 +1412,17 @@ def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
         logger.warning(f"⚠️ Failed to save .npz checkpoint: {e}")
         return False
 
+# In run_dynesty.py, modify the save_progress_json function to use a unique filename:
+
 def save_progress_json(sampler, fitted_names, args, start_time, logger):
     """Save current progress to JSON file that updates every minute."""
     try:
         res = getattr(sampler, "results", None)
         if res is None:
             return
-            
-        progress_file = Path(args.output_dir) / "progress.json"
+        
+        # Use a unique filename to avoid conflicts
+        progress_file = Path(args.output_dir) / "dynesty_progress.json"  # Changed from "progress.json"
         
         # Get current stats
         current_time = time.time()
@@ -1456,6 +1453,7 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
                 }
         
         progress_data = {
+            'source': 'dynesty_sampler',  # Add source identifier
             'timestamp': datetime.now().isoformat(),
             'elapsed_hours': elapsed / 3600,
             'n_samples': n_samples,
@@ -1474,9 +1472,22 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
             'run_id': getattr(args, 'run_id', 'unknown')
         }
         
-        # Save to JSON
-        with open(progress_file, 'w') as f:
+        # Save with atomic write to prevent corruption
+        temp_file = progress_file.with_suffix('.tmp')
+        with open(temp_file, 'w') as f:
             json.dump(make_json_serializable(progress_data), f, indent=2)
+        
+        # Atomic rename
+        temp_file.replace(progress_file)
+        
+        # Also save a timestamped backup every 10 minutes
+        if not hasattr(save_progress_json, '_last_backup') or (current_time - save_progress_json._last_backup) > 600:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = Path(args.output_dir) / f"progress_backup_{timestamp}.json"
+            import shutil
+            shutil.copy2(progress_file, backup_file)
+            save_progress_json._last_backup = current_time
+            logger.debug(f"Progress backup saved to {backup_file}")
             
     except Exception as e:
         logger.debug(f"Failed to save progress.json: {e}")
@@ -1571,6 +1582,25 @@ def log_likelihood_dynesty(
     for p_info in all_param_info_list:
         if not p_info['is_fitted']:
             params[p_info['name']] = p_info['current_val']
+
+    # ADDITIONAL FIX for grav_color: Ensure theory mode parameters are included
+    if xi_type == 'grav_color':
+        # Make sure these critical parameters are present
+        if 'gamma_exp' not in params:
+            params['gamma_exp'] = getattr(args_dynesty_obj, 'gamma_fixed', 2.7)
+        if 'lambda_g' not in params:
+            params['lambda_g'] = getattr(args_dynesty_obj, 'lambda_g_fixed', 8.0)
+        # Still need rho_c
+        if 'rho_c_solar_kpc3' not in params:
+            params['rho_c_solar_kpc3'] = getattr(args_dynesty_obj, 'rho_c_fixed', 5e8)
+        
+        # Debug log (only once)
+        if not hasattr(log_likelihood_dynesty, '_grav_color_logged'):
+            logger.info(f"[GRAV_COLOR FIX] Parameters being used:")
+            logger.info(f"  gamma_exp: {params.get('gamma_exp')}")
+            logger.info(f"  lambda_g: {params.get('lambda_g')}")
+            logger.info(f"  rho_c_solar_kpc3: {params.get('rho_c_solar_kpc3')}")
+            log_likelihood_dynesty._grav_color_logged = True
 
     # Reconstruct disk masses if reparameterized
     if args_dynesty_obj.fit_disk_reparameterized:
@@ -1929,16 +1959,16 @@ def ensure_grav_color_params_in_config(args):
 
         # Ensure it's in the parameter config
         if 'rho_c_solar_kpc3' not in MW_MULTI_COMP_PARAM_CONFIG:
-            MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'] = {
+            MW_MULTI_COMP_PARAM_CONFIG['rho_c_solar_kpc3'].update({
                 'label': "rho_c (M_sun/kpc^3)",
                 'fixed_val_from_arg': 'rho_c_fixed',
-                'default_fixed': 1e13,  # Galaxy-appropriate
-                'low': 1e12,
-                'high': 1e15,
-                'fit_flag_arg': 'fit_rho_c',  # New flag
+                'default_fixed': 5e8,      # Galaxy-appropriate default
+                'low': 1e7,                # FIXED: Realistic galaxy minimum (was 1e6)
+                'high': 1e9,               # FIXED: Realistic galaxy maximum (was 1e10)
+                'fit_flag_arg': 'fit_rho_c',
                 'log_prior': True,
                 'physical_check': True
-            }
+            })
 
 
 
@@ -2061,8 +2091,8 @@ def get_param_labels_and_bounds(ARGS):
     if ARGS.xi == 'enhanced':
         logger.info("🔧 Enhanced model - setting sensible exploration bounds")
         # Let A vary widely to find what works
-        config_to_use['A']['default_fixed'] = 2.0  # Starting guess
-        config_to_use['A']['low'] = 0.5            # Allow small enhancement
+        config_to_use['A']['default_fixed'] = 3.0  # Starting guess
+        config_to_use['A']['low'] = 2.0            # Allow small enhancement
         config_to_use['A']['high'] = 10.0          # Allow large enhancement
         
         # *** CRITICAL FIX: Only modify rho_c bounds if NOT fixed via CLI ***
@@ -2211,6 +2241,13 @@ def get_param_labels_and_bounds(ARGS):
                                               np.log10(p_details['high'])))
         else:
             current_val_guess = 0.5 * (p_details['low'] + p_details['high'])
+
+        if p_name == 'rho_c_solar_kpc3':
+            logger.info(f"\n🔍 DEBUG rho_c_solar_kpc3:")
+            logger.info(f"   is_fitted: {is_fitted}")
+            logger.info(f"   cli_override will be: {getattr(ARGS, p_details['fixed_val_from_arg'], 'NOT FOUND')}")
+            logger.info(f"   p_details['fixed_val_from_arg']: {p_details['fixed_val_from_arg']}")
+            logger.info(f"   current_val_guess: {current_val_guess}")
 
         # Allow CLI --<param>_fixed to override the auto start
         cli_override = getattr(ARGS, p_details['fixed_val_from_arg'])
@@ -4495,7 +4532,6 @@ def main_dynesty():
     fixed_g = parser.add_argument_group('Fixed Parameter Values')
     for p_name, p_details in MW_MULTI_COMP_PARAM_CONFIG.items():
         fixed_g.add_argument(f"--{p_details['fixed_val_from_arg']}", type=float, default=p_details['default_fixed'], help=f"Fixed/initial value for {p_name}")
-
     args = parser.parse_args()
 
     # ============================================================================
@@ -4542,7 +4578,7 @@ def main_dynesty():
     if args.multi_chain:
         run_multi_chain_analysis(args)
         return  # Exit after multi-chain analysis
-    
+
     # Continue with single-chain analysis (original code)
 
     run_tracking_enabled = True
@@ -4554,7 +4590,7 @@ def main_dynesty():
         logger.warning("run_history module not available, disabling run tracking")
         run_tracking_enabled = False
         _finalize_record = lambda *args, **kwargs: None
-    
+
     def finalize_record(*args, **kwargs):
         try:
             return _finalize_record(*args, **kwargs)
@@ -4581,7 +4617,6 @@ def main_dynesty():
         logger.info(f"   - Forcing resume from: {args.checkpoint_file}")
 
     save_run_metadata(args, args.output_dir)
-    
 
     logger.info("Starting Enhanced Dynesty Sampler v2.1")
     if not DYNESTY_AVAILABLE:
@@ -4589,10 +4624,38 @@ def main_dynesty():
         sys.exit(1)
 
     # ============================================================================
+    # THEORY MODE AND XI PARAMETER SETUP (MOVED BEFORE DATA LOADING)
+    # ============================================================================
+    if args.xi == 'mass_threshold':
+        logger.error("WARNING: mass_threshold model CANNOT simultaneously pass Cassini and galaxy tests!")
+        logger.error("This model is fundamentally incompatible with Solar System constraints.")
+        logger.error("Consider using 'power', 'enhanced', or 'grav_color' instead.")
+
+    # Theory mode overrides - MUST come before setup_xi_parameters_for_mode
+    if args.theory_mode:
+        logger.info("🧪 THEORY MODE: gamma=2.7, lambda_g=8.0, only fitting rho_c")
+        args.fix_gamma = 2.7
+        args.fix_lambda_g = 8.0
+        args.gamma_fixed = 2.7
+        args.lambda_g_fixed = 8.0
+        args.fit_xi_params = False
+        args.fit_gamma = False
+        args.fit_lambda_g = False
+        if not hasattr(args, 'rho_c_fixed') or args.rho_c_fixed is None:
+            logger.info("   No --rho_c_fixed provided, will fit rho_c")
+            args.fit_rho_c = True
+        else:
+            logger.info(f"   Using fixed rho_c = {args.rho_c_fixed:.1e}")
+            args.fit_rho_c = False  # Respect the user's fixed value!
+
+    # Setup xi parameters AFTER theory mode settings
+    setup_xi_parameters_for_mode(args)
+
+    # ============================================================================
     # GAIA DATA LOADING WITH ENHANCED LOGGING
     # ============================================================================
     gaia_data_dict, R_data_jax, v_data_jax, sigma_data_jax = load_and_prepare_data(args)
-    
+
     # Ensure physical prior bounds match -- override if needed
     if args.R_d_thin_high is not None:
         MW_MULTI_COMP_PARAM_CONFIG['R_d_thin_kpc']['high'] = args.R_d_thin_high
@@ -4620,6 +4683,9 @@ def main_dynesty():
     if args.checkpoint_file is None:
         args.checkpoint_file = str(Path(args.output_dir) / "dynesty_checkpoint.pkl")
 
+    # ============================================================================
+    # RESUME LOGIC
+    # ============================================================================
     if args.resume:
         checkpoint_path = Path(args.checkpoint_file)
         if not checkpoint_path.exists():
@@ -4708,41 +4774,17 @@ def main_dynesty():
             logger.error(f"❌ Failed to load or process checkpoint file at {checkpoint_path}: {e}")
             sys.exit(1)
 
-    if args.enable_dashboard and not args.disable_dashboard:
-        try:
-            from monitor_dashboard import DynestyMonitor
-            dashboard_monitor = DynestyMonitor(Path(args.output_dir))
-            logger.info("Dashboard monitoring reinitialized on resume")
-        except Exception as e:
-            logger.warning(f"Dashboard disabled on resume due to error: {e}")
-
     # Safety patch for all_param_info_list (used by plausibility checks)
     if not hasattr(args, 'all_param_info_list') or args.all_param_info_list is None:
         logger.info("Injecting args.all_param_info_list with get_param_labels_and_bounds()")
         get_param_labels_and_bounds(args)
-
-    if args.xi == 'mass_threshold':
-        logger.error("WARNING: mass_threshold model CANNOT simultaneously pass Cassini and galaxy tests!")
-        logger.error("This model is fundamentally incompatible with Solar System constraints.")
-        logger.error("Consider using 'power', 'enhanced', or 'grav_color' instead.")
-
-    # Theory mode overrides
-    if args.theory_mode:
-        logger.info("🧪 THEORY MODE: gamma=2.7, lambda_g=8.0, only fitting rho_c")
-        args.fix_gamma = 2.7
-        args.fix_lambda_g = 8.0
-        args.gamma_fixed = 2.7
-        args.lambda_g_fixed = 8.0
-        args.fit_xi_params = False
-        args.fit_gamma = False
-        args.fit_lambda_g = False
 
     # Validate Gaia
     if not validate_gaia_data_for_fitting(gaia_data_dict):
         logger.error("❌ Gaia data validation failed.")
         sys.exit(1)
 
-    # Initialize dashboard monitor once
+    # Initialize dashboard monitor once (removed duplicate)
     dashboard_monitor = None
     if args.enable_dashboard and not args.disable_dashboard:
         try:
@@ -4752,11 +4794,11 @@ def main_dynesty():
         except Exception as e:
             logger.warning(f"Dashboard disabled due to error: {e}")
             dashboard_monitor = None
-            
+
+    # Run GR baseline if requested
     if args.run_gr_baseline:
         gr_results = run_gr_baseline_fixed(args, gaia_data_dict, R_data_jax, 
-                                         v_data_jax, sigma_data_jax)
-
+                                        v_data_jax, sigma_data_jax)
 
     # GP surrogate (optional)
     gp_surrogate = None
@@ -4802,25 +4844,15 @@ def main_dynesty():
                         param_stats=partial_stats, 
                         phys_ok=False,
                         phys_reason="User interrupted")
+        raise  # Re-raise to properly exit
     except Exception as e:
         logger.error(f"Sampling failed with a critical error: {e}")
         import traceback
         logger.error(traceback.format_exc())
         finalize_record(RUN_ID, success=False, phys_reason=f"Exception: {str(e)[:200]}")
-        # Do not re-raise, allow finalization if possible
-
-    else:
-        logger.error("No valid results were produced to save.")
-        finalize_record(RUN_ID, success=False,
-                        logz=np.nan, logz_err=np.nan,
-                        eff=0.0, rmse=np.nan,
-                        n_samples=0, n_calls=0,
-                        param_stats={}, phys_ok=False,
-                        phys_reason="No results to save")
-        return
+        raise  # Re-raise to properly exit
 
     # =================================================================================
-    # START OF RESTORED CODE BLOCK
     # FINAL RESULTS PROCESSING AND SAVING
     # This block determines the final results object and then safely processes it.
     # =================================================================================
@@ -4846,6 +4878,16 @@ def main_dynesty():
         # --- Handle Single Run Results ---
         res = results
         fitted_p_names, _, _, _, _, _ = get_param_labels_and_bounds(args)
+    else:
+        logger.error("No valid results were produced to save.")
+        finalize_record(RUN_ID, success=False,
+                        logz=np.nan, logz_err=np.nan,
+                        eff=0.0, rmse=np.nan,
+                        n_samples=0, n_calls=0,
+                        param_stats={}, phys_ok=False,
+                        phys_reason="No results to save")
+        return
+
 
     # =================================================================================
     # MASTER GUARD CLAUSE: Only proceed if 'res' is a valid, populated results object.
@@ -4923,6 +4965,7 @@ def main_dynesty():
                     "rmse_kms": rmse, "cmd": " ".join(sys.argv)
                 }), fh, indent=2)
             logger.info(f"📄 Run summary snapshot saved to {snapshot_path}")
+            return
         except Exception as e:
             logger.error(f"❌ An error occurred during the final analysis and reporting step: {e}")
             import traceback
