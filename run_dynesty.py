@@ -89,6 +89,102 @@ except Exception as e:
     
 BASELINE_LOGZ_GR = -1490897.5250096943  # From GR-only with no dark matter 
 
+
+def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
+    """
+    Run the analyzer on current results without interrupting sampling.
+    
+    Parameters
+    ----------
+    output_dir : Path
+        Directory containing results
+    xi_type : str
+        Xi function type
+    logger : logging.Logger
+        Logger instance
+    suppress_plots : bool
+        If True, only generate summary stats, skip plots for speed
+    """
+    try:
+        # Look for the latest checkpoint file
+        npz_files = list(Path(output_dir).glob(f"*{xi_type}*_samples.npz"))
+        checkpoint_files = list(Path(output_dir).glob(f"dynesty_checkpoint_{xi_type}_latest.npz"))
+        
+        analysis_file = None
+        if checkpoint_files:
+            analysis_file = checkpoint_files[0]
+        elif npz_files:
+            # Sort by modification time and get the latest
+            analysis_file = max(npz_files, key=lambda f: f.stat().st_mtime)
+        
+        if not analysis_file or not analysis_file.exists():
+            logger.debug("No results file found for periodic analysis")
+            return
+        
+        # Import analyzer (do it here to avoid circular imports)
+        try:
+            from analyze_results import DynestyAnalyzer
+        except ImportError:
+            logger.warning("analyze_results.py not found - skipping periodic analysis")
+            return
+        
+        # Create timestamped analysis subdirectory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        analysis_subdir = Path(output_dir) / "periodic_analyses" / f"analysis_{timestamp}"
+        analysis_subdir.mkdir(parents=True, exist_ok=True)
+        
+        # Run analyzer
+        logger.info(f"\n📊 Running periodic analysis on {analysis_file.name}")
+        analyzer = DynestyAnalyzer(str(analysis_file), str(analysis_subdir))
+        
+        # Get stats and save summary
+        stats_dict = analyzer.get_parameter_stats()
+        
+        # Save text summary
+        summary_file = analysis_subdir / "summary.txt"
+        with open(summary_file, 'w') as f:
+            # Redirect print output to file
+            import sys
+            old_stdout = sys.stdout
+            sys.stdout = f
+            
+            analyzer.print_summary(stats_dict)
+            analyzer.check_physical_plausibility()
+            
+            sys.stdout = old_stdout
+        
+        # Save JSON summary
+        from analyze_results import export_summary
+        json_summary = export_summary(analyzer, stats_dict)
+        json_file = analysis_subdir / "summary.json"
+        with open(json_file, 'w') as f:
+            json.dump(make_json_serializable(json_summary), f, indent=2)
+        
+        # Generate plots if not suppressed
+        if not suppress_plots:
+            analyzer.plot_corner(save=True)
+            analyzer.plot_rotation_curve(save=True)
+            analyzer.plot_xi_profile(save=True)
+        
+        # Also save a "latest" symlink for easy access
+        latest_link = Path(output_dir) / "periodic_analyses" / "latest"
+        if latest_link.exists():
+            latest_link.unlink()
+        latest_link.symlink_to(analysis_subdir.name)
+        
+        logger.info(f"✅ Periodic analysis saved to {analysis_subdir}")
+        
+        # Log key results
+        if 'M_disk_thin_solar' in stats_dict:
+            logger.info(f"   Current M_thin: {stats_dict['M_disk_thin_solar']['median']:.2e} M☉")
+        if analyzer.logz is not None:
+            logger.info(f"   Current log(Z): {analyzer.logz[-1]:.2f}")
+        
+    except Exception as e:
+        logger.warning(f"Periodic analysis failed (non-critical): {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+
 # ============================================================================
 # Model Comparison Functions
 # ============================================================================
@@ -143,6 +239,56 @@ def debug_jax_function(func):
             print(f"[JAX DEBUG] {func.__name__} failed: {e}")
             raise
     return wrapper
+
+def get_progress_aware_interpretation(delta_logz_vs_gr, phase, improvement_rate):
+    """
+    Get a nuanced interpretation that considers the run is still in progress.
+    
+    Parameters
+    ----------
+    delta_logz_vs_gr : float
+        Current log(Z) difference vs GR baseline
+    phase : str
+        Current sampling phase
+    improvement_rate : float
+        Rate of log(Z) improvement per second
+        
+    Returns
+    -------
+    str
+        Context-aware interpretation
+    """
+    # Get the basic Jeffreys interpretation
+    basic_interp = interpret_jeffreys_scale(delta_logz_vs_gr)
+    
+    # If we're in early phases, always caveat
+    if phase in ["initialization", "early_exploration"]:
+        return f"{basic_interp} (very early - results will change)"
+    
+    # If we're improving rapidly, note that
+    if improvement_rate > 10:  # Improving by >10 log units per second
+        if delta_logz_vs_gr < 0:
+            return f"Currently {basic_interp} favoring GR (but improving rapidly)"
+        else:
+            return f"{basic_interp} favoring DDMM (and improving)"
+    
+    # If we're in active exploration and currently worse than GR
+    if phase == "active_exploration" and delta_logz_vs_gr < 0:
+        if abs(delta_logz_vs_gr) > 10:
+            return "Currently strongly disfavors DDMM (still exploring)"
+        else:
+            return f"{basic_interp} (still exploring parameter space)"
+    
+    # If we're refining
+    if phase == "refinement":
+        return f"{basic_interp} (refining parameters)"
+    
+    # If converged, give the straight interpretation
+    if phase == "converged":
+        return basic_interp
+    
+    # Default: add context that we're still running
+    return f"{basic_interp} (sampling in progress)"
 
 
 # --- JAX Configuration ---
@@ -1007,6 +1153,9 @@ def enhanced_monitor_sampler_progress(
     # This 'try' block wraps the entire function to catch any unexpected errors during monitoring.
     try:
         res = sampler.results
+        elapsed_time = time.time() - start_time
+        elapsed_str = str(timedelta(seconds=int(elapsed_time)))
+
 
         # At the start of enhanced_monitor_sampler_progress
         logger.info("="*80)
@@ -1026,8 +1175,6 @@ def enhanced_monitor_sampler_progress(
         samples = res.samples
         n_samples, n_params = samples.shape
         ncall_total = np.sum(res.ncall) if isinstance(res.ncall, np.ndarray) else res.ncall
-        elapsed_time = time.time() - start_time
-        elapsed_str = str(timedelta(seconds=int(elapsed_time)))
         eff = 100.0 * n_samples / ncall_total if ncall_total > 0 else 0.0   
         
         # Determine run phase
@@ -1532,6 +1679,8 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
             'phase': phase,
             'phase_description': expected_behavior,
             'is_normal': phase != 'converged',
+            'is_improving': improvement_metrics.get('improvement_rate', 0) > 0,
+            'convergence_status': 'converged' if phase == 'converged' else 'in_progress',
             'health_status': 'NORMAL' if improvement_metrics.get('improvement_rate', 0) > 0 or phase == 'initialization' else 'CHECK',
             'n_samples': n_samples,
             'n_calls': n_calls,
@@ -1544,12 +1693,25 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
             'gr_baseline_logz': BASELINE_LOGZ_GR,
             'delta_logz_vs_gr': delta_logz_vs_gr,
             'gr_diff_percent': gr_diff_percent,
-            'jeffreys_interpretation': interpret_jeffreys_scale(delta_logz_vs_gr) if np.isfinite(delta_logz_vs_gr) else "Unknown",
+            'jeffreys_interpretation': get_progress_aware_interpretation(
+                            delta_logz_vs_gr, 
+                            phase, 
+                            improvement_metrics.get('improvement_rate', 0)
+                        ) if np.isfinite(delta_logz_vs_gr) else "Unknown",      
+            'heartbeat': {
+                'timestamp': datetime.now().isoformat(),
+                'samples_since_last': n_samples - getattr(save_progress_json, '_last_n_samples', 0),
+                'time_since_last': elapsed - getattr(save_progress_json, '_last_time', 0),
+                'is_stuck': n_samples == getattr(save_progress_json, '_last_n_samples', 0)
+            },
             'parameter_estimates': param_estimates,
             'xi_type': args.xi,
             'run_id': getattr(args, 'run_id', 'unknown')
         }
         
+        save_progress_json._last_n_samples = n_samples
+        save_progress_json._last_time = elapsed
+
         # Save with atomic write to prevent corruption
         temp_file = progress_file.with_suffix('.tmp')
         with open(temp_file, 'w') as f:
@@ -3259,6 +3421,49 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     import threading
     from io import StringIO
     global convergence_tracker
+    last_activity_time = time.time()
+    last_sample_count = 0
+    stuck_counter = 0
+    
+    
+    def setup_exit_handlers(output_dir):
+        """Set up handlers to log why the program is exiting."""
+        import atexit
+        import signal
+        
+        exit_log_path = Path(output_dir) / "exit_reason.log"
+        
+        def log_exit(reason):
+            with open(exit_log_path, 'a') as f:
+                f.write(f"[{datetime.now()}] EXIT: {reason}\n")
+        
+        # Normal exit
+        atexit.register(lambda: log_exit("Normal atexit called"))
+        
+        # Signal handlers
+        def signal_handler(signum, frame):
+            signal_names = {
+                signal.SIGTERM: "SIGTERM (killed by system/scheduler)",
+                signal.SIGINT: "SIGINT (Ctrl+C)",
+                signal.SIGSEGV: "SIGSEGV (segmentation fault)",
+            }
+            reason = signal_names.get(signum, f"Signal {signum}")
+            log_exit(f"Caught signal: {reason}")
+            
+            # Try to save current state
+            try:
+                if 'sampler' in frame.f_locals:
+                    log_exit("Attempting emergency checkpoint save...")
+                    sampler = frame.f_locals['sampler']
+                    if hasattr(sampler, 'save'):
+                        sampler.save(str(Path(output_dir) / "emergency_checkpoint.pkl"))
+            except:
+                pass
+            
+            sys.exit(128 + signum)
+        
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
 
     # -----------------------------------------------------------------------
     # 1. Load Gaia rotation curve data and validate
@@ -3662,6 +3867,8 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     # 6. Monitoring setup (dashboard, log files, convergence tracker)
     # -----------------------------------------------------------------------
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    setup_exit_handlers(args.output_dir)  # Add this line
+
     checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
 
     # Only create new dashboard monitor if none was passed
@@ -3720,10 +3927,18 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         args.fitted_param_names = fitted_names
         early_stop_counter = 0
         last_monitor = last_check = time.time()
+        last_activity_time = time.time()
+        last_sample_count = 0
+        stuck_counter = 0
+        init_counter = 0
+        batch_counter = 0
         last_npz_save = time.time()
-        last_progress_json = time.time()  # ADD THIS
+        last_progress_json = time.time()
         NPZ_SAVE_INTERVAL = 300  # Save every 5 minutes (300 seconds)
         PROGRESS_JSON_INTERVAL = 60  # Save progress.json every minute
+        last_analysis_time = time.time()
+        ANALYSIS_INTERVAL = args.analysis_interval_min * 60 if hasattr(args, 'analysis_interval_min') else 1800  # 30 min default
+        periodic_analysis_enabled = getattr(args, 'periodic_analysis', False)
 
         try:
             # --- Phase 1: Initialise live points ---
@@ -3735,6 +3950,10 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 
             # SINGLE LOOP - FIXED VERSION
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
+                init_counter += 1
+                if init_counter % 100 == 0:
+                    print(f"[DEBUG] Init sample {init_counter} at {time.strftime('%H:%M:%S')}", flush=True)
+                
                 now = time.time()
                 
                 # Very frequent updates in first 5 minutes
@@ -3760,10 +3979,57 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                 if now - last_progress_json > PROGRESS_JSON_INTERVAL:
                     save_progress_json(sampler, fitted_names, args, run_start_time, logger)
                     last_progress_json = now
+                    
+                if periodic_analysis_enabled and now - last_analysis_time > ANALYSIS_INTERVAL:
+                    # First, ensure we have a recent checkpoint
+                    save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
+                    
+                    # Run analysis in a separate thread to not block sampling
+                    import threading
+                    analysis_thread = threading.Thread(
+                        target=run_periodic_analysis,
+                        args=(args.output_dir, args.xi, logger, not args.analysis_with_plots),
+                        daemon=True
+                    )
+                    analysis_thread.start()
+                    last_analysis_time = now
 
                 # Monitor progress
                 if now - last_monitor > args.monitor_interval_s:
                     last_monitor = now
+                    
+                    current_time = time.time()
+                    if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
+                        current_sample_count = len(sampler.results.samples)
+                        
+                        if current_sample_count == last_sample_count:
+                            stuck_counter += 1
+                            time_since_activity = current_time - last_activity_time
+                            logger.warning(f"⚠️ No new samples for {stuck_counter} checks ({time_since_activity:.1f}s)")
+                            
+                            if stuck_counter > 5:
+                                logger.error("❌ SAMPLER APPEARS STUCK!")
+                                logger.error(f"Last sample count: {current_sample_count}")
+                                logger.error(f"Total calls: {sampler.ncall}")
+                                if hasattr(sampler, 'it'):
+                                    logger.error(f"Current iteration: {sampler.it}")
+                                logger.error(f"Bound: {sampler.bound}")
+                                
+                                # Dump last few samples
+                                if len(sampler.results.samples) > 0:
+                                    logger.error("Last 3 samples:")
+                                    for i in range(max(0, len(sampler.results.samples)-3), len(sampler.results.samples)):
+                                        sample = sampler.results.samples[i]
+                                        logger.error(f"  Sample {i}: {sample[:min(5, len(sample))]}")
+                        else:
+                            stuck_counter = 0
+                            last_sample_count = current_sample_count
+                            last_activity_time = current_time
+                    
+                    # NOW call the monitor function as before:
+                    enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
+                                run_start_time, logger, args,
+                                gp_surrogate, dashboard_monitor)                    
                     enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
                                   run_start_time, logger, args,
                                   gp_surrogate, dashboard_monitor)
@@ -3784,6 +4050,10 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             # --- Phase 2: Dynamic sampling loop ---
             logger.info("Starting dynamic sampling with sampler.sample_batch()...")
             for _ in sampler.sample_batch(dlogz=args.dlogz_target, maxcall=args.maxcall):
+                batch_counter += 1
+                if batch_counter % 100 == 0:
+                    print(f"[DEBUG] Batch {batch_counter} at {time.strftime('%H:%M:%S')}", flush=True)
+                
                 now = time.time()
 
                 # Checkpoint
@@ -3800,14 +4070,60 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                     save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
                     last_npz_save = now
 
-                # Progress JSON (NEW)
+                # Progress JSON
                 if now - last_progress_json > PROGRESS_JSON_INTERVAL:
                     save_progress_json(sampler, fitted_names, args, run_start_time, logger)
                     last_progress_json = now
+                    
+                # Periodic analysis
+                if periodic_analysis_enabled and now - last_analysis_time > ANALYSIS_INTERVAL:
+                    # First, ensure we have a recent checkpoint
+                    save_npz_checkpoint(sampler, fitted_names, args.output_dir, logger)
+                    
+                    # Run analysis in a separate thread to not block sampling
+                    import threading
+                    analysis_thread = threading.Thread(
+                        target=run_periodic_analysis,
+                        args=(args.output_dir, args.xi, logger, not args.analysis_with_plots),
+                        daemon=True
+                    )
+                    analysis_thread.start()
+                    last_analysis_time = now
 
                 # Monitor progress
                 if now - last_monitor > args.monitor_interval_s:
                     last_monitor = now
+                    
+                    current_time = time.time()
+                    if hasattr(sampler, 'results') and hasattr(sampler.results, 'samples'):
+                        current_sample_count = len(sampler.results.samples)
+                        
+                        if current_sample_count == last_sample_count:
+                            stuck_counter += 1
+                            time_since_activity = current_time - last_activity_time
+                            logger.warning(f"⚠️ No new samples for {stuck_counter} checks ({time_since_activity:.1f}s)")
+                            
+                            if stuck_counter > 5:
+                                logger.error("❌ SAMPLER APPEARS STUCK!")
+                                logger.error(f"Last sample count: {current_sample_count}")
+                                logger.error(f"Total calls: {sampler.ncall}")
+                                if hasattr(sampler, 'it'):
+                                    logger.error(f"Current iteration: {sampler.it}")
+                                logger.error(f"Bound: {sampler.bound}")
+                                
+                                # Dump last few samples
+                                if len(sampler.results.samples) > 0:
+                                    logger.error("Last 3 samples:")
+                                    for i in range(max(0, len(sampler.results.samples)-3), len(sampler.results.samples)):
+                                        sample = sampler.results.samples[i]
+                                        logger.error(f"  Sample {i}: {sample[:min(5, len(sample))]}")
+                        else:
+                            stuck_counter = 0
+                            last_sample_count = current_sample_count
+                            last_activity_time = current_time
+                    
+                    
+                    
                     enhanced_monitor_sampler_progress(sampler, fitted_names, fitted_labels,
                                   run_start_time, logger, args,
                                   gp_surrogate, dashboard_monitor)
@@ -4513,8 +4829,13 @@ def get_run_health_assessment(sampler, elapsed_time, logger):
     
     res = sampler.results
     n_samples = len(res.samples)
-    efficiency = 100.0 * n_samples / res.ncall if res.ncall > 0 else 0
-    
+    if isinstance(res.ncall, np.ndarray):
+        total_calls = np.sum(res.ncall)
+    else:
+        total_calls = res.ncall
+        
+    efficiency = 100.0 * n_samples / total_calls if total_calls > 0 else 0   
+     
     # Check improvement rate
     if hasattr(sampler, '_logz_history') and len(sampler._logz_history) > 2:
         recent = sampler._logz_history[-3:]
@@ -4589,6 +4910,7 @@ def main_dynesty():
     from data_io import load_all_sky_gaia_slices, process_gaia_data
     from pathlib import Path
 
+
     # ============================================================================
     # 1. ARGUMENT PARSING (must come first to get --debug and --output_dir)
     # ============================================================================
@@ -4642,6 +4964,13 @@ def main_dynesty():
                         help="Disable Cassini constraint penalty (for galaxy-only fits)")
     parser.add_argument('--disable_rho_c_penalty', action='store_true', default=False,
                         help="Disable rho_c upper bound penalty (for galaxy-only fits)")
+    parser.add_argument('--periodic_analysis', action='store_true', default=False,
+                        help='Run analysis periodically during sampling')
+    parser.add_argument('--analysis_interval_min', type=int, default=30,
+                        help='Interval between analyses in minutes (default: 30)')
+    parser.add_argument('--analysis_with_plots', action='store_true', default=False,
+                        help='Generate plots during periodic analysis (slower)')
+
 
     # Dynesty sampler group
     dynesty_g = parser.add_argument_group('Dynesty Sampler Settings')

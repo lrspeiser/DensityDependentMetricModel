@@ -133,6 +133,15 @@ class DynestyAnalyzer:
 
         else:
             raise ValueError(f"Unsupported results file format: {self.results_file}")
+        
+        # Handle incomplete results gracefully
+        if len(self.samples) < 100:
+            logger.warning(f"⚠️ Only {len(self.samples)} samples available - results may be unreliable")
+
+        # Handle missing weights gracefully
+        if self.weights is None or len(self.weights) == 0:
+            logger.warning("No weights found - using uniform weights")
+            self.weights = np.ones(len(self.samples)) / len(self.samples)
 
     def detect_xi_type_from_names(self):
         """Infer xi_type from parameter names"""
@@ -510,14 +519,24 @@ class DynestyAnalyzer:
             )
         else:
             xi_func = XI_FUNCTION_MAP.get(self.xi_type, XI_FUNCTION_MAP['power'])
-            xi_values = xi_func(
-                rho_values,
-                params_dict.get('rho_c_solar_kpc3', 5e8),
-                params_dict.get('n_exp', 1.5)
-            )
+            if self.xi_type == 'enhanced':
+                # Enhanced model needs A parameter
+                xi_values = xi_func(
+                    rho_values,
+                    params_dict.get('rho_c_solar_kpc3', 5e8),
+                    params_dict.get('n_exp', 1.5),
+                    params_dict.get('A', 1.0)  # THIS WAS MISSING!
+                )
+            else:
+                # Standard models don't use A
+                xi_values = xi_func(
+                    rho_values,
+                    params_dict.get('rho_c_solar_kpc3', 5e8),
+                    params_dict.get('n_exp', 1.5)
+                )
         
-        return xi_values
-    
+        return xi_values  
+     
     def calculate_modified_velocity(self, R_values, params_dict):
         """Calculate modified velocity including xi enhancement."""
         v_newton = v_baryon_total_newtonian_kms(R_values, params_dict)
