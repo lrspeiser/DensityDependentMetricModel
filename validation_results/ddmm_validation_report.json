@@ -1,44 +1,45 @@
 {
   "model_parameters": {
-    "xi_type": "power",
-    "A": 1.0,
-    "rho_c_solar_kpc3": 1137456381078.205,
-    "n_exp": 0.508199409751132,
-    "M_bulge_solar": 5045052768.524862,
-    "a_bulge_kpc": 1.9730948518158753,
-    "M_gas_solar": 47491074554.47071,
-    "R_d_gas_kpc": 14.714594288469645,
-    "h_z_gas_kpc": 0.19575216610189053,
-    "include_disk_thin": true,
-    "include_disk_thick": false,
-    "include_bulge": true,
-    "include_gas": true
+    "rho_c_solar_kpc3": 31062206576.921623,
+    "A": 2.298134335238905,
+    "n_exp": 0.6962221074275893,
+    "M_disk_thin_solar": 29696099368.164883,
+    "R_d_thin_kpc": 3.4384997227883343,
+    "h_z_thin_kpc": 0.20761246179145998,
+    "M_disk_thick_solar": 16307057474.867111,
+    "R_d_thick_kpc": 6.6618221459489995,
+    "h_z_thick_kpc": 1.1262645859113973,
+    "M_bulge_solar": 10259277698.942389,
+    "a_bulge_kpc": 1.4236765821841595,
+    "M_gas_solar": 12018923418.094362,
+    "R_d_gas_kpc": 10.636499627196784,
+    "h_z_gas_kpc": 0.214239860394074,
+    "xi_type": "power"
   },
   "test_results": [
     {
       "test_name": "Solar System Consistency",
       "passed": false,
-      "score": 0.0,
+      "score": 0.10936775207519532,
       "details": {
         "mercury": {
-          "passed": false,
-          "score": 0.0,
-          "xi": 1.030916452407837,
-          "deviation_ppm": 30916.452407836914
+          "passed": true,
+          "score": 0.2734193801879883,
+          "xi": 1.000726580619812,
+          "deviation_ppm": 726.5806198120117
         },
         "lunar": {
           "passed": false,
           "score": 0.0,
-          "eta": 0.04340493679046631
+          "eta": 0.0011767148971557617
         },
         "cassini": {
           "passed": "False",
           "score": 0.0,
-          "gamma_deviation": "0.5163574"
+          "gamma_deviation": "0.081876636"
         }
       },
       "recommendations": [
-        "\u03be deviates from unity in Solar System - check \u03c1_c value",
         "Equivalence principle violation detected",
         "Light deflection shows deviation from GR"
       ]
@@ -46,20 +47,20 @@
     {
       "test_name": "Galaxy Rotation Curves",
       "passed": false,
-      "score": 0.26722498456117044,
+      "score": 0.25864299976001387,
       "details": {
         "gaia": {
           "passed": "False",
           "score": "0.0",
-          "chi2_dof": "27722.22",
-          "mean_residual": -32.481536865234375
+          "chi2_dof": "26621.818",
+          "mean_residual": -31.76378059387207
         },
         "sparc": {
           "passed": true,
-          "score": 0.5344499691223409,
+          "score": 0.5172859995200277,
           "n_galaxies": 30,
-          "successful": 29,
-          "median_rms": 11.852312087222955
+          "successful": 30,
+          "median_rms": 13.18318733732437
         }
       },
       "recommendations": [
@@ -77,10 +78,10 @@
           "chi2_results": {
             "lcdm": 4244.835800867935,
             "lcdm_chi2_dof": 2.4999032985087957,
-            "ddmm_no_exp": 348756.7661901576,
-            "ddmm_no_exp_chi2_dof": 205.51371018866095,
-            "ddmm_hybrid": 25036.55042722408,
-            "ddmm_hybrid_chi2_dof": 14.753418047863335,
+            "ddmm_no_exp": 348756.76619019127,
+            "ddmm_no_exp_chi2_dof": 205.51371018868076,
+            "ddmm_hybrid": 25036.67334488785,
+            "ddmm_hybrid_chi2_dof": 14.753490480193195,
             "offset_mag": -0.09482143204785132,
             "intrinsic_scatter": 0.12
           }
@@ -102,8 +103,8 @@
         "microscope": {
           "passed": false,
           "score": 0.0,
-          "eta": 9.179115295410156e-05,
-          "xi": 1.000091791152954
+          "eta": 2.384185791015625e-07,
+          "xi": 1.000000238418579
         }
       },
       "recommendations": [
@@ -119,13 +120,13 @@
         "galaxy_galaxy": {
           "passed": "False",
           "score": 0.0,
-          "theta_ratio": 1.413869848118242,
-          "mass_ratio": 1.9990279474179002
+          "theta_ratio": 1.4138007450469599,
+          "mass_ratio": 1.9988325466953385
         },
         "cluster": {
           "passed": "False",
           "score": 0.0,
-          "mass_ratio": 1.9999646860014064
+          "mass_ratio": 1.9999891505445944
         }
       },
       "recommendations": [
@@ -136,18 +137,18 @@
     {
       "test_name": "Large Scale Structure",
       "passed": false,
-      "score": 8.483120606484587e-08,
+      "score": 8.467440468166814e-08,
       "details": {
         "growth_rate": {
           "passed": "False",
-          "score": 1.6966241212969174e-07,
-          "f_ddmm": 0.7291903936853383,
-          "deviation_sigma": 5.583807873706766
+          "score": 1.6934880936333628e-07,
+          "f_ddmm": 0.7292069598732653,
+          "deviation_sigma": 5.584139197465306
         },
         "bao": {
           "passed": false,
           "score": 0.0,
-          "DV_ratio": 1.122317065239886
+          "DV_ratio": 1.1222996359815454
         }
       },
       "recommendations": [
@@ -156,12 +157,12 @@
       ]
     }
   ],
-  "overall_score": 0.20660241032676177,
+  "overall_score": 0.22340003817963464,
   "tests_passed": 1,
   "tests_total": 6,
   "summary": {
     "status": "POOR",
     "message": "DDMM has significant issues that need addressing",
-    "score": "0.21"
+    "score": "0.22"
   }
 }

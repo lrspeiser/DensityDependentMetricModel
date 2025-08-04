@@ -2221,38 +2221,53 @@ def ensure_grav_color_params_in_config(args):
 
 def check_cassini_compatibility(params, xi_type):
     """
-    Returns Cassini deviation for penalty-based enforcement.
+    Enhanced Cassini compatibility check with detailed diagnostics.
+    Returns (deviation, xi_value, diagnostic_string)
     """
     from density_metric2 import XI_FUNCTION_MAP
 
-    rho_saturn = 2.3e21  # Saturn orbit density
+    rho_saturn = 2.3e21  # Saturn orbit density (M☉/kpc³)
     cassini_precision = 2.3e-5
 
     xi_func = XI_FUNCTION_MAP.get(xi_type)
     if xi_func is None:
-        return float("inf"), f"Unknown xi_type: {xi_type}"
+        return float("inf"), float("nan"), f"Unknown xi_type: {xi_type}"
 
     try:
         if xi_type == 'mass_threshold':
-            return float("inf"), "mass_threshold cannot pass Cassini"
+            return float("inf"), float("nan"), "mass_threshold cannot pass Cassini"
 
         elif xi_type == 'grav_color':
             rho_c = params.get('rho_c_solar_kpc3', 1e13)
             gamma = params.get('gamma_exp', 2.7)
             lambda_g = params.get('lambda_g', 8.0)
-            xi_saturn = xi_func(rho_saturn, rho_c, gamma, lambda_g)[0]
+            xi_saturn = float(xi_func(rho_saturn, rho_c, gamma, lambda_g)[0])
 
         else:
             rho_c = params.get('rho_c_solar_kpc3', 1e13)
             n_exp = params.get('n_exp', 1.5)
             A = params.get('A', 1.0)
-            xi_saturn = xi_func(rho_saturn, rho_c, n_exp, A)[0]
+            xi_saturn = float(xi_func(rho_saturn, rho_c, n_exp, A)[0])
 
         deviation = abs(xi_saturn - 1.0)
-        return deviation, f"xi({rho_saturn:.1e}) = {xi_saturn:.6f} (Δ = {deviation:.2e})"
+        
+        # Classify the result
+        if deviation < cassini_precision:
+            status = "PASS ✓"
+        elif deviation < 2 * cassini_precision:
+            status = "MARGINAL"
+        elif deviation < 10 * cassini_precision:
+            status = "POOR"
+        else:
+            status = "FAIL ✗"
+            
+        diagnostic = (f"ξ_Saturn = {xi_saturn:.8f} | |ξ-1| = {deviation:.2e} | "
+                     f"Target < {cassini_precision:.1e} | Status: {status}")
+        
+        return deviation, xi_saturn, diagnostic
 
     except Exception as e:
-        return float("inf"), f"Cassini error: {e}"
+        return float("inf"), float("nan"), f"Cassini error: {e}"
 
 def check_prior_bounds_compatibility(args):
     """Check if prior bounds are compatible with constraints"""
