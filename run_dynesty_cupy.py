@@ -63,16 +63,40 @@ def get_or_create_logger():
     return logger
 
 def check_physical_plausibility(theta_values, param_names):
-    """Check if parameters are physically plausible."""
+    """Check if parameters are physically plausible - SOFT VERSION."""
     for i, name in enumerate(param_names):
-        if 'mass' in name.lower() and theta_values[i] < 0: 
+        value = theta_values[i]
+        
+        # Mass parameters must be positive
+        if 'M_' in name and 'solar' in name:
+            if value <= 0:
+                return False
+        
+        # Scale length parameters must be positive
+        if any(x in name for x in ['R_', 'r_', 'a_']):
+            if value <= 0:
+                return False
+        
+        # Scale height parameters must be positive
+        if 'hz_' in name or 'h_z' in name:
+            if value <= 0:
+                return False
+        
+        # Additional checks for specific parameters
+        if 'rho_c' in name and value <= 0:
             return False
-        if 'radius' in name.lower() and theta_values[i] <= 0: 
+        
+        if 'n_exp' in name and value <= 0:
             return False
-        if 'M_' in name and 'solar' in name and theta_values[i] <= 0:
+        
+        if 'gamma_exp' in name and value <= 0:
             return False
-        if ('R_d' in name or 'h_z' in name or 'a_bulge' in name) and theta_values[i] <= 0:
+        
+        if 'lambda_g' in name and value <= 0:
             return False
+    
+    # REMOVED: Hard mass ratio vetoes that were causing sampling issues
+    # The likelihood function will naturally guide the fit to reasonable ratios
     return True
 
 def make_json_serializable(obj):
@@ -187,6 +211,81 @@ def get_progress_aware_interpretation(delta_logz_vs_gr, phase, improvement_rate)
 # ============================================================================
 # PROGRESS MONITORING FUNCTIONS
 # ============================================================================
+
+def save_run_stats(sampler, fitted_names, args, start_time, logger, output_dir):
+    """Save run statistics every 60 seconds."""
+    try:
+        current_time = time.time()
+        elapsed_seconds = current_time - start_time
+        elapsed_hours = elapsed_seconds / 3600
+        
+        # Get current sampler state
+        if hasattr(sampler, 'results') and sampler.results is not None:
+            results = sampler.results
+            iterations = len(results.logz) if hasattr(results, 'logz') else 0
+            ncall = int(np.sum(results.ncall)) if hasattr(results, 'ncall') else 0
+            final_logz = float(results.logz[-1]) if hasattr(results, 'logz') and len(results.logz) > 0 else 0
+            final_logzerr = float(results.logzerr[-1]) if hasattr(results, 'logzerr') and len(results.logzerr) > 0 else 0
+            efficiency = getattr(results, 'efficiency', None)
+            efficiency_percent = float(efficiency * 100) if efficiency is not None else 0
+            
+            # Calculate rate metrics
+            calls_per_second = ncall / elapsed_seconds if elapsed_seconds > 0 else 0
+            iterations_per_second = iterations / elapsed_seconds if elapsed_seconds > 0 else 0
+        else:
+            iterations = 0
+            ncall = 0
+            final_logz = 0
+            final_logzerr = 0
+            efficiency_percent = 0
+            calls_per_second = 0
+            iterations_per_second = 0
+        
+        # Create stats data
+        stats_data = {
+            'timestamp': datetime.now().isoformat(),
+            'elapsed_seconds': elapsed_seconds,
+            'elapsed_hours': elapsed_hours,
+            'iterations': iterations,
+            'ncall': ncall,
+            'efficiency_percent': efficiency_percent,
+            'final_logz': final_logz,
+            'final_logzerr': final_logzerr,
+            'calls_per_second': calls_per_second,
+            'iterations_per_second': iterations_per_second,
+            'run_id': args.run_id,
+            'xi_type': args.xi,
+            'nlive': args.nlive,
+            'maxcall': args.maxcall,
+            'dlogz_target': args.dlogz_target,
+            'sample_method': args.sample_method,
+            'bound_method': args.bound_method
+        }
+        
+        # Save to run stats file
+        stats_file = output_dir / "run_stats.json"
+        with open(stats_file, 'w') as f:
+            json.dump(make_json_serializable(stats_data), f, indent=2)
+            
+        # Also append to history file
+        history_file = output_dir / "run_stats_history.json"
+        try:
+            with open(history_file, 'r') as f:
+                history = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            history = []
+        
+        history.append(stats_data)
+        
+        # Keep only last 1000 entries to prevent file from getting too large
+        if len(history) > 1000:
+            history = history[-1000:]
+        
+        with open(history_file, 'w') as f:
+            json.dump(make_json_serializable(history), f, indent=2)
+            
+    except Exception as e:
+        logger.debug(f"Failed to save run stats: {e}")
 
 def save_progress_json(sampler, fitted_names, args, start_time, logger):
     """Save current progress to JSON file that updates every minute."""
@@ -521,10 +620,32 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
         chi2 = cp.sum(((v_data_cupy - v_model) / sigma_data_cupy)**2)
         logl = -0.5 * float(chi2)
 
+        # ADD SOFT PRIOR PENALTY for unreasonable mass ratios (instead of hard rejection)
+        log_prior_penalty = 0.0
+        if len(param_names) >= 11:  # Comprehensive model
+            thin_disk_idx = param_names.index('M_thin_disk_solar') if 'M_thin_disk_solar' in param_names else -1
+            thick_disk_idx = param_names.index('M_thick_disk_solar') if 'M_thick_disk_solar' in param_names else -1
+            bulge_idx = param_names.index('M_bulge_solar') if 'M_bulge_solar' in param_names else -1
+            
+            if thin_disk_idx >= 0 and thick_disk_idx >= 0:
+                thin_mass = theta[thin_disk_idx]
+                thick_mass = theta[thick_disk_idx]
+                if thin_mass < thick_mass:
+                    log_prior_penalty -= 10.0  # ~e^-10 penalty, not fatal
+            
+            if thin_disk_idx >= 0 and bulge_idx >= 0:
+                thin_mass = theta[thin_disk_idx]
+                bulge_mass = theta[bulge_idx]
+                if bulge_mass > thin_mass * 0.5:
+                    log_prior_penalty -= 5.0   # ~e^-5 penalty for very massive bulge
+        
+        # Apply the soft prior penalty
+        logl += log_prior_penalty
+
         rmse = float(cp.sqrt(cp.mean((v_data_cupy - v_model)**2)))
         
         if log_likelihood_dynesty_cupy.call_count <= 3:
-            print(f"LIKELIHOOD RESULT #{log_likelihood_dynesty_cupy.call_count}: logl={logl:.2f}, rmse={rmse:.2f}")
+            print(f"LIKELIHOOD RESULT #{log_likelihood_dynesty_cupy.call_count}: logl={logl:.2f}, rmse={rmse:.2f}, penalty={log_prior_penalty:.2f}")
         
         return logl
     except Exception as e:
@@ -535,11 +656,37 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
 def prior_transform_dynesty_cupy(u, param_names, bounds_low, bounds_high, use_log_prior):
     """Prior transform. Accepts and returns NumPy arrays."""
     theta = np.zeros_like(u)
-    for i in range(len(u)):
-        if use_log_prior[i]:
-            theta[i] = 10**(np.log10(bounds_low[i]) + u[i] * (np.log10(bounds_high[i]) - np.log10(bounds_low[i])))
+    
+    # Track thin disk mass for ordered mass generation
+    thin_mass = None
+    
+    for i, name in enumerate(param_names):
+        if name == 'M_thin_disk_solar':
+            # Generate thin disk mass first
+            if use_log_prior[i]:
+                theta[i] = 10**(np.log10(bounds_low[i]) + u[i] * (np.log10(bounds_high[i]) - np.log10(bounds_low[i])))
+            else:
+                theta[i] = bounds_low[i] + u[i] * (bounds_high[i] - bounds_low[i])
+            thin_mass = theta[i]
+        elif name == 'M_thick_disk_solar' and thin_mass is not None:
+            # Generate thick disk mass as fraction of thin disk (5-30%)
+            theta[i] = thin_mass * (0.05 + 0.25 * u[i])
+        elif name == 'M_bulge_solar' and thin_mass is not None:
+            # Generate bulge mass as fraction of thin disk (5-20%)
+            theta[i] = thin_mass * (0.05 + 0.15 * u[i])
+        elif name == 'M_gas_solar':
+            # Gas mass independent but reasonable range
+            if use_log_prior[i]:
+                theta[i] = 10**(np.log10(bounds_low[i]) + u[i] * (np.log10(bounds_high[i]) - np.log10(bounds_low[i])))
+            else:
+                theta[i] = bounds_low[i] + u[i] * (bounds_high[i] - bounds_low[i])
         else:
-            theta[i] = bounds_low[i] + u[i] * (bounds_high[i] - bounds_low[i])
+            # Standard transformation for all other parameters
+            if use_log_prior[i]:
+                theta[i] = 10**(np.log10(bounds_low[i]) + u[i] * (np.log10(bounds_high[i]) - np.log10(bounds_low[i])))
+            else:
+                theta[i] = bounds_low[i] + u[i] * (bounds_high[i] - bounds_low[i])
+    
     return theta
 
 # ============================================================================
@@ -721,26 +868,140 @@ def load_and_prepare_gaia_data_synthetic():
 def setup_parameter_bounds(xi_type):
     """Setup parameter bounds, returning NumPy arrays - Enhanced version."""
     if xi_type == 'gr':
-        param_names = ['M_disk_solar', 'R_d_kpc']
-        bounds_low = np.array([1e10, 1.0])    # More realistic bounds
-        bounds_high = np.array([5e11, 8.0])
-        use_log_prior = np.array([True, False])
+        # Full baryonic model for GR baseline (academically complete)
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc'
+        ]
+        
+        # Bounds based on Milky Way literature values
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk: mass, scale length, scale height
+            1e9, 3.0, 0.6,       # Thick disk: mass, scale length, scale height  
+            1e9, 0.5,            # Bulge: mass, scale length
+            1e9, 5.0, 0.1        # Gas: mass, scale length, scale height
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk bounds
+            1e10, 5.0, 1.0,      # Thick disk bounds
+            1e10, 2.0,           # Bulge bounds
+            1e10, 10.0, 0.3      # Gas bounds
+        ])
+        
+        # Use log priors for masses, linear for scale lengths/heights
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False   # Gas
+        ])
+        
     elif xi_type == 'enhanced':
-        param_names = ['M_disk_solar', 'R_d_kpc', 'rho_c_solar_kpc3', 'n_exp', 'A']
-        bounds_low = np.array([1e10, 1.0, 1e13, 0.5, 2.0])
-        bounds_high = np.array([5e11, 8.0, 1e16, 3.0, 10.0])
-        use_log_prior = np.array([True, False, True, False, False])
+        # Enhanced model with all baryonic components + modified gravity
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'n_exp', 'A'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e13, 0.5, 2.0       # Modified gravity parameters
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e16, 3.0, 10.0      # Modified gravity parameters
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Modified gravity
+        ])
+        
     elif xi_type == 'power':
-        param_names = ['M_disk_solar', 'R_d_kpc', 'rho_c_solar_kpc3', 'n_exp']
-        bounds_low = np.array([1e10, 1.0, 1e13, 0.5])
-        bounds_high = np.array([5e11, 8.0, 1e16, 3.0])
-        use_log_prior = np.array([True, False, True, False])
+        # Power law model with all baryonic components
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'n_exp'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e13, 0.5            # Modified gravity parameters
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e16, 3.0            # Modified gravity parameters
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False          # Modified gravity
+        ])
+        
     elif xi_type == 'grav_color':
-        param_names = ['M_disk_solar', 'R_d_kpc', 'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g']
-        bounds_low = np.array([1e10, 1.0, 1e12, 2.0, 6.0])
-        bounds_high = np.array([5e11, 8.0, 1e15, 3.5, 10.0])
-        use_log_prior = np.array([True, False, True, False, False])
-    else: # Fallback
+        # Gravitational color model with all baryonic components
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e12, 2.0, 6.0       # Modified gravity parameters
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e15, 3.5, 10.0      # Modified gravity parameters
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Modified gravity
+        ])
+        
+    else: # Fallback to simple model
         param_names = ['M_disk_solar', 'R_d_kpc']
         bounds_low = np.array([1e10, 1.0])
         bounds_high = np.array([5e11, 8.0])
@@ -766,9 +1027,9 @@ def main_cupy():
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory')
-    parser.add_argument('--nlive', type=int, default=500,
+    parser.add_argument('--nlive', type=int, default=2000,
                        help='Number of live points')
-    parser.add_argument('--maxcall', type=int, default=200000,
+    parser.add_argument('--maxcall', type=int, default=1500000,
                        help='Maximum likelihood calls')
     parser.add_argument('--num_threads', type=int, default=4,
                        help='Number of threads')
@@ -811,12 +1072,27 @@ def main_cupy():
     
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(exist_ok=True)
+    # Create unique output directory with timestamp and parameters
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_name = f"{args.xi}_{timestamp}"
+    output_dir = Path(f"runs/{run_name}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Store the original CLI command
+    import sys
+    cli_command = " ".join(sys.argv)
+    cli_file = output_dir / "cli_command.txt"
+    with open(cli_file, 'w') as f:
+        f.write(f"# Original CLI command used for this run\n")
+        f.write(f"# Generated: {datetime.now().isoformat()}\n")
+        f.write(f"#\n")
+        f.write(f"{cli_command}\n")
+    
     logger.info(f"Output directory: {output_dir}")
+    logger.info(f"CLI command saved to: {cli_file}")
 
     # Set run_id for tracking
-    args.run_id = f"cupy_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    args.run_id = f"cupy_{timestamp}"
 
     # --- Load REAL Gaia Data ---
     logger.info("Loading Gaia data...")
@@ -905,15 +1181,25 @@ def main_cupy():
             
             def _checkpoint_worker():
                 nonlocal last_progress_json, last_analysis_time
+                last_run_stats = time.time()
+                RUN_STATS_INTERVAL = 60  # Save run stats every 60 seconds
+                
                 while not stop_event.wait(args.checkpoint_every):
                     try:
+                        current_time = time.time()
+                        
                         # Save dynesty checkpoint
                         with open(output_dir / "dynesty_checkpoint.pkl", "wb") as cf:
                             pickle.dump(sampler.results, cf)
                         logger.info("✓ Checkpoint saved.")
                         
+                        # Save run stats every 60 seconds
+                        if current_time - last_run_stats > RUN_STATS_INTERVAL:
+                            save_run_stats(sampler, param_names, args, start_time, logger, output_dir)
+                            last_run_stats = current_time
+                            logger.debug("✓ Run stats saved.")
+                        
                         # Save progress JSON
-                        current_time = time.time()
                         if current_time - last_progress_json > PROGRESS_JSON_INTERVAL:
                             save_progress_json(sampler, param_names, args, start_time, logger)
                             last_progress_json = current_time
@@ -921,12 +1207,12 @@ def main_cupy():
                         # Run periodic analysis
                         if args.periodic_analysis and current_time - last_analysis_time > ANALYSIS_INTERVAL:
                             # First, ensure we have a recent checkpoint
-                            save_npz_checkpoint(sampler, param_names, args.output_dir, logger)
+                            save_npz_checkpoint(sampler, param_names, output_dir, logger)
                             
                             # Run analysis in a separate thread
                             analysis_thread = threading.Thread(
                                 target=run_periodic_analysis,
-                                args=(args.output_dir, args.xi, logger, not args.analysis_with_plots),
+                                args=(output_dir, args.xi, logger, not args.analysis_with_plots),
                                 daemon=True
                             )
                             analysis_thread.start()

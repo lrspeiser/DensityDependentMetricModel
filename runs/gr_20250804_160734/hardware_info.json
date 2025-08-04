@@ -1,0 +1,25 @@
+{
+  "cpu": {
+    "cores": 24,
+    "physical_cores": 24,
+    "frequency": {
+      "current": 3700.0,
+      "min": 0.0,
+      "max": 3700.0
+    },
+    "architecture": "win32"
+  },
+  "memory": {
+    "total_gb": 95.71322250366211,
+    "available_gb": 79.19223403930664
+  },
+  "gpu": {
+    "gpu_0": {
+      "name": "NVIDIA GeForce RTX 5090",
+      "memory_total_gb": 31.8427734375,
+      "memory_free_gb": 29.978515625,
+      "type": "nvidia"
+    }
+  },
+  "jax": {}
+}

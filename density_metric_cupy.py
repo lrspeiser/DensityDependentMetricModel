@@ -302,6 +302,163 @@ def xi_mond_like_cupy(rho, rho_c, n):
 # MAIN VELOCITY FUNCTION - CuPy Optimized
 # ============================================================================
 
+def v_baryon_comprehensive_kms_cupy(R_kpc, p):
+    """
+    Comprehensive baryonic velocity calculation including all Milky Way components.
+    
+    Parameters:
+    - p: dictionary with all baryonic parameters
+    """
+    R_kpc_arr = cp.atleast_1d(cp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+    
+    # Extract all baryonic parameters
+    M_thin_disk = p.get('M_thin_disk_solar', 0.0)
+    R_thin_disk = p.get('R_thin_disk_kpc', 3.0)
+    hz_thin_disk = p.get('hz_thin_disk_kpc', 0.3)
+    
+    M_thick_disk = p.get('M_thick_disk_solar', 0.0)
+    R_thick_disk = p.get('R_thick_disk_kpc', 3.5)
+    hz_thick_disk = p.get('hz_thick_disk_kpc', 0.8)
+    
+    M_bulge = p.get('M_bulge_solar', 0.0)
+    R_bulge = p.get('R_bulge_kpc', 0.5)
+    
+    M_gas = p.get('M_gas_solar', 0.0)
+    R_gas = p.get('R_gas_kpc', 7.0)
+    hz_gas = p.get('hz_gas_kpc', 0.1)
+    
+    # Convert to CuPy arrays
+    M_thin_disk_arr = cp.asarray(M_thin_disk, dtype=DEFAULT_DTYPE)
+    R_thin_disk_arr = cp.asarray(R_thin_disk, dtype=DEFAULT_DTYPE)
+    M_thick_disk_arr = cp.asarray(M_thick_disk, dtype=DEFAULT_DTYPE)
+    R_thick_disk_arr = cp.asarray(R_thick_disk, dtype=DEFAULT_DTYPE)
+    M_bulge_arr = cp.asarray(M_bulge, dtype=DEFAULT_DTYPE)
+    R_bulge_arr = cp.asarray(R_bulge, dtype=DEFAULT_DTYPE)
+    M_gas_arr = cp.asarray(M_gas, dtype=DEFAULT_DTYPE)
+    R_gas_arr = cp.asarray(R_gas, dtype=DEFAULT_DTYPE)
+    
+    # Initialize total velocity squared
+    v_total_sq = cp.zeros_like(R_kpc_arr, dtype=DEFAULT_DTYPE)
+    
+    # 1. Thin disk contribution (exponential disk)
+    if float(M_thin_disk) > 1e-9 and float(R_thin_disk) > 1e-9:
+        v_thin_disk_sq = (4.302e-3 * M_thin_disk_arr / R_kpc_arr) * \
+                        (1.0 - cp.exp(-R_kpc_arr / R_thin_disk_arr) * 
+                         (1.0 + R_kpc_arr / R_thin_disk_arr))
+        v_total_sq += v_thin_disk_sq
+    
+    # 2. Thick disk contribution (exponential disk)
+    if float(M_thick_disk) > 1e-9 and float(R_thick_disk) > 1e-9:
+        v_thick_disk_sq = (4.302e-3 * M_thick_disk_arr / R_kpc_arr) * \
+                         (1.0 - cp.exp(-R_kpc_arr / R_thick_disk_arr) * 
+                          (1.0 + R_kpc_arr / R_thick_disk_arr))
+        v_total_sq += v_thick_disk_sq
+    
+    # 3. Bulge contribution (Hernquist profile)
+    if float(M_bulge) > 1e-9 and float(R_bulge) > 1e-9:
+        R_safe = cp.maximum(R_kpc_arr, 1e-9)
+        v_bulge_sq = (4.302e-3 * M_bulge_arr / R_safe) * \
+                     (R_safe / (R_safe + R_bulge_arr))**2
+        v_total_sq += v_bulge_sq
+    
+    # 4. Gas contribution (exponential disk)
+    if float(M_gas) > 1e-9 and float(R_gas) > 1e-9:
+        v_gas_sq = (4.302e-3 * M_gas_arr / R_kpc_arr) * \
+                   (1.0 - cp.exp(-R_kpc_arr / R_gas_arr) * 
+                    (1.0 + R_kpc_arr / R_gas_arr))
+        v_total_sq += v_gas_sq
+    
+    # Ensure positive velocity squared
+    v_total_sq = cp.where((R_kpc_arr <= 1e-9) | (v_total_sq <= 1e-9), 0.0, v_total_sq)
+    
+    # ADD NaN PROTECTION to prevent numerical issues
+    v_total_sq = cp.nan_to_num(v_total_sq, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    # Return velocity
+    v_out_kms = cp.sqrt(cp.maximum(v_total_sq, 0.0))
+    
+    # Additional safety check for final result
+    v_out_kms = cp.nan_to_num(v_out_kms, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    return v_out_kms
+
+def volume_density_comprehensive_solar_kpc3_cupy(R_kpc, p):
+    """
+    Comprehensive volume density calculation including all Milky Way components.
+    
+    Parameters:
+    - p: dictionary with all baryonic parameters
+    """
+    R_kpc_arr = cp.atleast_1d(cp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+    
+    # Extract all baryonic parameters
+    M_thin_disk = p.get('M_thin_disk_solar', 0.0)
+    R_thin_disk = p.get('R_thin_disk_kpc', 3.0)
+    hz_thin_disk = p.get('hz_thin_disk_kpc', 0.3)
+    
+    M_thick_disk = p.get('M_thick_disk_solar', 0.0)
+    R_thick_disk = p.get('R_thick_disk_kpc', 3.5)
+    hz_thick_disk = p.get('hz_thick_disk_kpc', 0.8)
+    
+    M_bulge = p.get('M_bulge_solar', 0.0)
+    R_bulge = p.get('R_bulge_kpc', 0.5)
+    
+    M_gas = p.get('M_gas_solar', 0.0)
+    R_gas = p.get('R_gas_kpc', 7.0)
+    hz_gas = p.get('hz_gas_kpc', 0.1)
+    
+    # Convert to CuPy arrays
+    M_thin_disk_arr = cp.asarray(M_thin_disk, dtype=DEFAULT_DTYPE)
+    R_thin_disk_arr = cp.asarray(R_thin_disk, dtype=DEFAULT_DTYPE)
+    hz_thin_disk_arr = cp.asarray(hz_thin_disk, dtype=DEFAULT_DTYPE)
+    M_thick_disk_arr = cp.asarray(M_thick_disk, dtype=DEFAULT_DTYPE)
+    R_thick_disk_arr = cp.asarray(R_thick_disk, dtype=DEFAULT_DTYPE)
+    hz_thick_disk_arr = cp.asarray(hz_thick_disk, dtype=DEFAULT_DTYPE)
+    M_bulge_arr = cp.asarray(M_bulge, dtype=DEFAULT_DTYPE)
+    R_bulge_arr = cp.asarray(R_bulge, dtype=DEFAULT_DTYPE)
+    M_gas_arr = cp.asarray(M_gas, dtype=DEFAULT_DTYPE)
+    R_gas_arr = cp.asarray(R_gas, dtype=DEFAULT_DTYPE)
+    hz_gas_arr = cp.asarray(hz_gas, dtype=DEFAULT_DTYPE)
+    
+    # Initialize total density
+    rho_total = cp.zeros_like(R_kpc_arr, dtype=DEFAULT_DTYPE)
+    
+    # 1. Thin disk density (exponential disk)
+    if float(M_thin_disk) > 1e-9 and float(R_thin_disk) > 1e-9 and float(hz_thin_disk) > 1e-9:
+        Sigma0_thin = M_thin_disk_arr / (2.0 * cp.pi * R_thin_disk_arr**2)
+        rho_thin = (Sigma0_thin / (2.0 * hz_thin_disk_arr)) * cp.exp(-R_kpc_arr / R_thin_disk_arr)
+        rho_total += rho_thin
+    
+    # 2. Thick disk density (exponential disk)
+    if float(M_thick_disk) > 1e-9 and float(R_thick_disk) > 1e-9 and float(hz_thick_disk) > 1e-9:
+        Sigma0_thick = M_thick_disk_arr / (2.0 * cp.pi * R_thick_disk_arr**2)
+        rho_thick = (Sigma0_thick / (2.0 * hz_thick_disk_arr)) * cp.exp(-R_kpc_arr / R_thick_disk_arr)
+        rho_total += rho_thick
+    
+    # 3. Bulge density (Hernquist profile)
+    if float(M_bulge) > 1e-9 and float(R_bulge) > 1e-9:
+        R_eff_bulge = cp.maximum(R_kpc_arr, 1e-6)
+        rho_bulge_mid = (M_bulge_arr / (2.0 * cp.pi)) * \
+                       (R_bulge_arr / (R_eff_bulge * (R_eff_bulge + R_bulge_arr)**3))
+        
+        # Handle very small radii
+        min_r_b = 1e-5
+        fill_val_b = (M_bulge_arr / (2.0 * cp.pi)) * \
+                     (R_bulge_arr / (min_r_b * (min_r_b + R_bulge_arr)**3))
+        rho_bulge = cp.where(R_kpc_arr < 1e-5, fill_val_b, rho_bulge_mid)
+        rho_total += rho_bulge
+    
+    # 4. Gas density (exponential disk)
+    if float(M_gas) > 1e-9 and float(R_gas) > 1e-9 and float(hz_gas) > 1e-9:
+        Sigma0_gas = M_gas_arr / (2.0 * cp.pi * R_gas_arr**2)
+        rho_gas = (Sigma0_gas / (2.0 * hz_gas_arr)) * cp.exp(-R_kpc_arr / R_gas_arr)
+        rho_total += rho_gas
+    
+    # ADD NaN PROTECTION to prevent numerical issues
+    rho_total = cp.nan_to_num(rho_total, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    return rho_total
+
 def v_total_kms_cupy(R_kpc, p, xi_type='power'):
     """
     Total velocity including modified gravity effects - CuPy optimized.
@@ -311,29 +468,37 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
     """
     R_kpc_arr = cp.atleast_1d(cp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
     
-    # Extract baryonic parameters
-    p_baryons = {
-        'M_disk_solar': p.get('M_disk_solar', 0.0),
-        'R_d_kpc': p.get('R_d_kpc', 3.0),
-        'M_bulge_solar': p.get('M_bulge_solar', 0.0),
-        'R_b_kpc': p.get('R_b_kpc', 0.5),
-        'include_bulge': p.get('include_bulge', False),
-        'M_gas_solar': p.get('M_gas_solar', 0.0),
-        'R_gas_kpc': p.get('R_gas_kpc', 7.0),
-        'include_gas': p.get('include_gas', False),
-    }
-    
-    # Calculate baryonic velocity (Newtonian)
-    v_baryon_sq = v_baryon_total_newtonian_kms_cupy(R_kpc_arr, p_baryons)**2
-    
-    # Calculate total density for xi function
-    rho_total = volume_density_total_midplane_solar_kpc3_cupy(
-        R_kpc_arr,
-        p_baryons['M_disk_solar'], p_baryons['R_d_kpc'], p.get('hz_disk_kpc', 0.3),
-        p_baryons['M_bulge_solar'], p_baryons['R_b_kpc'], p_baryons['include_bulge'],
-        p_baryons['M_gas_solar'], p_baryons['R_gas_kpc'], p.get('hz_gas_kpc', 0.1),
-        p_baryons['include_gas']
-    )
+    # Check if we're using the new comprehensive parameter structure
+    if 'M_thin_disk_solar' in p:
+        # Use comprehensive baryonic model
+        v_baryon_sq = v_baryon_comprehensive_kms_cupy(R_kpc_arr, p)**2
+        
+        # Calculate total density for xi function
+        rho_total = volume_density_comprehensive_solar_kpc3_cupy(R_kpc_arr, p)
+    else:
+        # Legacy parameter structure (for backward compatibility)
+        p_baryons = {
+            'M_disk_solar': p.get('M_disk_solar', 0.0),
+            'R_d_kpc': p.get('R_d_kpc', 3.0),
+            'M_bulge_solar': p.get('M_bulge_solar', 0.0),
+            'R_b_kpc': p.get('R_b_kpc', 0.5),
+            'include_bulge': p.get('include_bulge', False),
+            'M_gas_solar': p.get('M_gas_solar', 0.0),
+            'R_gas_kpc': p.get('R_gas_kpc', 7.0),
+            'include_gas': p.get('include_gas', False),
+        }
+        
+        # Calculate baryonic velocity (Newtonian)
+        v_baryon_sq = v_baryon_total_newtonian_kms_cupy(R_kpc_arr, p_baryons)**2
+        
+        # Calculate total density for xi function
+        rho_total = volume_density_total_midplane_solar_kpc3_cupy(
+            R_kpc_arr,
+            p_baryons['M_disk_solar'], p_baryons['R_d_kpc'], p.get('hz_disk_kpc', 0.3),
+            p_baryons['M_bulge_solar'], p_baryons['R_b_kpc'], p_baryons['include_bulge'],
+            p_baryons['M_gas_solar'], p_baryons['R_gas_kpc'], p.get('hz_gas_kpc', 0.1),
+            p_baryons['include_gas']
+        )
     
     # Calculate xi enhancement factor
     rho_c = p.get('rho_c_solar_kpc3', 1e8)
@@ -373,7 +538,14 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
     
     # Apply xi enhancement to velocity
     v_total_sq = v_baryon_sq * xi
+    
+    # ADD NaN PROTECTION to prevent numerical issues
+    v_total_sq = cp.nan_to_num(v_total_sq, nan=0.0, posinf=0.0, neginf=0.0)
+    
     v_total = cp.sqrt(cp.maximum(v_total_sq, 0.0))
+    
+    # Additional safety check for final result
+    v_total = cp.nan_to_num(v_total, nan=0.0, posinf=0.0, neginf=0.0)
     
     return v_total
 

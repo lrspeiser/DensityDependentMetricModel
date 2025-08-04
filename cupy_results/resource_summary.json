@@ -1,29 +1,29 @@
 {
-  "monitoring_duration_seconds": 58.073117,
-  "samples_collected": 19,
+  "monitoring_duration_seconds": 85.598314,
+  "samples_collected": 28,
   "cpu": {
-    "mean_percent": 50.11052631578948,
-    "max_percent": 61.8,
-    "min_percent": 11.5,
-    "std_percent": 9.934516900120567
+    "mean_percent": 54.01785714285713,
+    "max_percent": 68.1,
+    "min_percent": 47.1,
+    "std_percent": 4.292606065868925
   },
   "memory": {
-    "mean_percent": 19.636842105263156,
-    "max_percent": 19.9,
-    "min_percent": 16.3,
-    "std_percent": 0.7875414951913322
+    "mean_percent": 20.249999999999996,
+    "max_percent": 20.4,
+    "min_percent": 16.8,
+    "std_percent": 0.6652067347825033
   },
   "process_memory": {
-    "mean_gb": 0.23290533768503288,
-    "max_gb": 0.342742919921875,
-    "min_gb": 0.20398330688476562,
-    "std_gb": 0.03837247302225834
+    "mean_gb": 0.22323812757219588,
+    "max_gb": 0.307403564453125,
+    "min_gb": 0.20352935791015625,
+    "std_gb": 0.021675099828338228
   },
   "gpu": {
-    "mean_utilization_percent": 59.10526315789474,
-    "max_utilization_percent": 82.0,
-    "mean_memory_percent": 28.985058100214193,
-    "max_memory_percent": 30.35237832367283
+    "mean_utilization_percent": 64.25,
+    "max_utilization_percent": 81.0,
+    "mean_memory_percent": 29.584247904700568,
+    "max_memory_percent": 30.79093446192535
   },
   "hardware_info": {
     "cpu": {
@@ -38,13 +38,13 @@
     },
     "memory": {
       "total_gb": 95.71322250366211,
-      "available_gb": 80.2879753112793
+      "available_gb": 79.83224487304688
     },
     "gpu": {
       "gpu_0": {
         "name": "NVIDIA GeForce RTX 5090",
         "memory_total_gb": 31.8427734375,
-        "memory_free_gb": 29.9697265625,
+        "memory_free_gb": 29.984375,
         "type": "nvidia"
       }
     },
