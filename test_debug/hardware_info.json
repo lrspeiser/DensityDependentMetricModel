@@ -1,0 +1,24 @@
+{
+  "cpu": {
+    "cores": 24,
+    "physical_cores": 24,
+    "frequency": {
+      "current": 3700.0,
+      "min": 0.0,
+      "max": 3700.0
+    },
+    "architecture": "win32"
+  },
+  "memory": {
+    "total_gb": 95.71322250366211,
+    "available_gb": 80.6830940246582
+  },
+  "gpu": {},
+  "jax": {
+    "backend": "cpu",
+    "devices": [
+      "TFRT_CPU_0"
+    ],
+    "device_count": 1
+  }
+}

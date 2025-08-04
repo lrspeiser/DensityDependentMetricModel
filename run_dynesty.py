@@ -32,6 +32,21 @@ import corner
 import jax
 import jax.numpy as jnp
 
+# Resource monitoring
+try:
+    from resource_monitor import ResourceMonitor
+    RESOURCE_MONITOR_AVAILABLE = True
+except ImportError:
+    RESOURCE_MONITOR_AVAILABLE = False
+    print("Warning: resource_monitor not available - hardware monitoring disabled")
+
+# Set UTF-8 encoding for Windows compatibility
+if sys.platform.startswith('win'):
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 RUN_ID = None
 
 
@@ -182,7 +197,7 @@ def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
         
         # Log key results
         if 'M_disk_thin_solar' in stats_dict:
-            logger.info(f"   Current M_thin: {stats_dict['M_disk_thin_solar']['median']:.2e} M☉")
+            logger.info(f"   Current M_thin: {stats_dict['M_disk_thin_solar']['median']:.2e} M_sun")
         if analyzer.logz is not None:
             logger.info(f"   Current log(Z): {analyzer.logz[-1]:.2f}")
         
@@ -507,7 +522,7 @@ def get_or_create_logger():
 
 # Physical bounds for parameters (based on MW observations and theory)
 PHYSICAL_BOUNDS = {
-    # Mass parameters (M☉)
+    # Mass parameters (M_sun)
     'M_disk_thin_solar':   {'min': 2.4e10, 'max': 9.0e10, 'typical': 4.0e10},   # Lower min, slightly higher max
     'M_disk_thick_solar':  {'min': 5e9,    'max': 3.5e10, 'typical': 1.5e10},   # Allow more mass if needed
     'M_bulge_solar':       {'min': 0.5e10, 'max': 2.5e10, 'typical': 1.2e10},   # Centered on MW bulge fits
@@ -1261,6 +1276,15 @@ def enhanced_monitor_sampler_progress(
         ncall_total = np.sum(res.ncall) if isinstance(res.ncall, np.ndarray) else res.ncall
         eff = 100.0 * n_samples / ncall_total if ncall_total > 0 else 0.0   
         
+        # Initialize current_logz and dlogz early to prevent UnboundLocalError
+        current_logz = -np.inf
+        dlogz = np.nan
+        
+        if hasattr(res, 'logz') and len(res.logz) > 0:
+            current_logz = res.logz[-1]
+            if len(res.logz) >= 2:
+                dlogz = current_logz - res.logz[-2]
+        
         # Determine run phase
         if n_samples < 100:
             run_phase = "INITIALIZATION"
@@ -1310,26 +1334,20 @@ def enhanced_monitor_sampler_progress(
             logger.info("WARNING  Too few samples for detailed analysis")
             return
 
-        # LogZ stats and dlogz
-        current_logz = -np.inf
-        dlogz = np.nan  # Default
+        # LogZ stats and dlogz (already initialized above, just check validity)
+        if not np.isfinite(current_logz):
+            logger.error("FAIL log(Z) = -inf. All live points have likelihood = -inf.")
+            return
+        else:
+            logger.info(f" Log(Z): {current_logz:.3f}")
 
-        if hasattr(res, 'logz') and len(res.logz) > 0:
-            current_logz = res.logz[-1]
-
-            if not np.isfinite(current_logz):
-                logger.error("FAIL log(Z) = -inf. All live points have likelihood = -inf.")
-                return
+            # Compute dlogz from last two logz values
+            if len(res.logz) >= 2:
+                prev_logz = res.logz[-2]
+                dlogz = current_logz - prev_logz
+                logger.info(f"   Δlog(Z): {dlogz:.6f}")
             else:
-                logger.info(f" Log(Z): {current_logz:.3f}")
-
-                # Compute dlogz from last two logz values
-                if len(res.logz) >= 2:
-                    prev_logz = res.logz[-2]
-                    dlogz = current_logz - prev_logz
-                    logger.info(f"   Δlog(Z): {dlogz:.6f}")
-                else:
-                    logger.info("   Δlog(Z): (not enough samples yet)")
+                logger.info("   Δlog(Z): (not enough samples yet)")
 
         # Show error estimate
         if hasattr(res, 'logzerr') and len(res.logzerr) > 0:
@@ -1590,14 +1608,14 @@ def format_parameter_value_enhanced(value: float, param_name: str) -> str:
     if 'M_' in param_name and 'solar' in param_name:
         # Mass parameters
         if value > 1e11:
-            return f"{value/1e11:.2f}×10¹¹ M☉"
+            return f"{value/1e11:.2f}x10^11 M_sun"
         elif value > 1e10:
-            return f"{value/1e10:.2f}e10 M☉"
+            return f"{value/1e10:.2f}e10 M_sun"
         else:
-            return f"{value:.2e} M☉"
+            return f"{value:.2e} M_sun"
     elif 'rho_c' in param_name:
         # Density parameters
-        return f"{value:.2e} M☉/kpc³"
+        return f"{value:.2e} M_sun/kpc^3"
     elif 'R_d' in param_name or 'a_' in param_name:
         # Scale lengths
         return f"{value:.3f} kpc"
@@ -2310,7 +2328,7 @@ def check_cassini_compatibility(params, xi_type):
     """
     from density_metric2 import XI_FUNCTION_MAP
 
-    rho_saturn = 2.3e21  # Saturn orbit density (M☉/kpc³)
+    rho_saturn = 2.3e21  # Saturn orbit density (M_sun/kpc^3)
     cassini_precision = 2.3e-5
 
     xi_func = XI_FUNCTION_MAP.get(xi_type)
@@ -2702,11 +2720,11 @@ def get_param_labels_and_bounds(ARGS):
     # Check total mass
     mass_components = ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']
     total_mass = sum(param_dict.get(comp, 0.0) for comp in mass_components)
-    logger.info(f"  Total initial mass: {total_mass:.2e} M☉")
+    logger.info(f"  Total initial mass: {total_mass:.2e} M_sun")
     logger.info(f"  Expected range: [{PHYSICAL_BOUNDS['M_total']['min']:.2e}, {PHYSICAL_BOUNDS['M_total']['max']:.2e}]")
 
 
-    logger.info("\n📋 FINAL PARAMETER CONFIGURATION:")
+    logger.info("\nFINAL PARAMETER CONFIGURATION:")
     logger.info(f"Total parameters: {len(param_info_list)}")
     logger.info("Xi-related parameters:")
     for p in param_info_list:
@@ -3012,7 +3030,7 @@ def test_likelihood_at_typical_params(args, gaia_data):
     # Check total mass
     mass_components = ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']
     total_mass = sum(full_params.get(comp, 0.0) for comp in mass_components)
-    logger.info(f"  Total baryonic mass: {total_mass:.2e} M☉")
+    logger.info(f"  Total baryonic mass: {total_mass:.2e} M_sun")
     logger.info(f"  Mass bounds: [{PHYSICAL_BOUNDS['M_total']['min']:.2e}, {PHYSICAL_BOUNDS['M_total']['max']:.2e}]")
     
     # Check scale parameters
@@ -3359,7 +3377,7 @@ def run_comprehensive_gpu_test(args, R_data_jax, v_data_jax, sigma_data_jax, log
         
         logger.info("  Testing density calculation...")
         rho = rho_baryon_total_midplane_solar_kpc3(R_test, params)
-        logger.info(f"  OK ρ at R_sun = {float(rho[0]):.2e} M☉/kpc³")
+        logger.info(f"  OK rho at R_sun = {float(rho[0]):.2e} M_sun/kpc^3")
         
         logger.info("  Testing xi function...")
         xi_func = XI_FUNCTION_MAP.get(args.xi, XI_FUNCTION_MAP['power'])
@@ -3968,6 +3986,19 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     setup_exit_handlers(args.output_dir)  # Add this line
 
+    # Initialize resource monitoring
+    resource_monitor = None
+    if RESOURCE_MONITOR_AVAILABLE:
+        try:
+            resource_monitor = ResourceMonitor(Path(args.output_dir), log_interval=300)  # 5 minutes = 300 seconds
+            resource_monitor.start_monitoring()
+            logger.info("Resource monitoring started - tracking CPU/GPU utilization (status every 5 minutes)")
+        except Exception as e:
+            logger.warning(f"Failed to start resource monitoring: {e}")
+            resource_monitor = None
+    else:
+        logger.info("Resource monitoring not available - skipping hardware utilization tracking")
+
     checkpoint_file = Path(args.output_dir) / "dynesty_checkpoint.pkl"
 
     # Only create new dashboard monitor if none was passed
@@ -4303,6 +4334,14 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             else:
                 logger.warning("No results available to save")
             
+            # Stop resource monitoring on exception
+            if resource_monitor is not None:
+                try:
+                    resource_monitor.stop_monitoring()
+                    logger.info("Resource monitoring stopped due to exception")
+                except Exception as e:
+                    logger.warning(f"Failed to stop resource monitoring: {e}")
+            
             if pool and hasattr(pool, 'shutdown'):
                 pool.shutdown(wait=True)
             raise
@@ -4314,6 +4353,15 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
                         samples=sampler.results.samples,
                         logz=sampler.results.logz,
                         error=str(e))
+            
+            # Stop resource monitoring on runtime error
+            if resource_monitor is not None:
+                try:
+                    resource_monitor.stop_monitoring()
+                    logger.info("Resource monitoring stopped due to runtime error")
+                except Exception as e2:
+                    logger.warning(f"Failed to stop resource monitoring: {e2}")
+            
             if pool:
                 pool.shutdown(wait=True)
             raise
@@ -4323,6 +4371,14 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     try:
         return sampler.results
     finally:
+        # Stop resource monitoring
+        if resource_monitor is not None:
+            try:
+                resource_monitor.stop_monitoring()
+                logger.info("Resource monitoring stopped - check resource_summary.json for utilization report")
+            except Exception as e:
+                logger.warning(f"Failed to stop resource monitoring: {e}")
+        
         if pool and hasattr(pool, 'shutdown'):
             pool.shutdown(wait=True)
             logger.info("ThreadPoolExecutor shut down successfully")

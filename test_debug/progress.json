@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-08-04T09:27:18.366475",
+  "elapsed_time": 0.02608149038420783,
+  "n_samples": 398,
+  "n_calls": 6577,
+  "efficiency": 6.051391211798692,
+  "logz": -20842117.95169623,
+  "logz_err": 0.31416185798739205,
+  "dlogz": 0.0,
+  "current_nlive": 0,
+  "parameter_estimates": {
+    "M_disk_thin_solar": 44063789052.763145,
+    "R_d_thin_kpc": 2.8266007867145406,
+    "h_z_thin_kpc": 0.3294175323298998
+  },
+  "parameter_uncertainties": {
+    "M_disk_thin_solar": 7946958054.139591,
+    "R_d_thin_kpc": 0.6820528999216159,
+    "h_z_thin_kpc": 0.09841558910531396
+  },
+  "convergence_status": {
+    "converged": true,
+    "near_convergence": true,
+    "dlogz": 0.0,
+    "efficiency_ok": true,
+    "stuck": false
+  },
+  "health_warnings": [],
+  "estimated_completion": null
+}

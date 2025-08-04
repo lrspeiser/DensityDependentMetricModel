@@ -1,0 +1,27 @@
+{
+  "run_id": "810987926b2f",
+  "success": 1,
+  "logZ": -17541885.416185454,
+  "logZ_err": 3.665895892508537,
+  "delta_logZ_vs_GR": -16050987.89117576,
+  "jeffreys_interpretation": "Decisive evidence",
+  "params": {
+    "M_disk_thin_solar": {
+      "median": 48158298773.91148,
+      "sigma": 6492524925.084443
+    },
+    "R_d_thin_kpc": {
+      "median": 2.089322914072515,
+      "sigma": 0.602295764400184
+    },
+    "h_z_thin_kpc": {
+      "median": 0.3250987886782999,
+      "sigma": 0.10105804757537942
+    }
+  },
+  "phys_ok": 1,
+  "phys_reason": "OK",
+  "n_samples": 4175,
+  "rmse_kms": Infinity,
+  "cmd": "run_dynesty.py --xi gr --output_dir test_debug --nlive_init 100 --maxcall 10000 --num_threads 1 --include_disk_thin --fit_disk_thin --monitor_interval_s 5 --debug"
+}

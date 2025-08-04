@@ -1,0 +1,45 @@
+{
+  "source": "dynesty_sampler",
+  "timestamp": "2025-08-04T08:04:51.259792",
+  "elapsed_hours": 0.016797169513172575,
+  "phase": "early_exploration",
+  "phase_description": "Rapid improvement expected, still finding good regions",
+  "is_normal": 1,
+  "is_improving": 0,
+  "convergence_status": "in_progress",
+  "health_status": "CHECK",
+  "n_samples": 330,
+  "n_calls": 4017,
+  "efficiency_percent": 8.215085884988797,
+  "current_logz": -22775445.27507373,
+  "improvement_metrics": {},
+  "dlogz": 60263.99004966766,
+  "target_dlogz": 0.01,
+  "dlogz_ratio": 6026399.004966766,
+  "gr_baseline_logz": -1490897.5250096943,
+  "delta_logz_vs_gr": -21284547.750064034,
+  "gr_diff_percent": -100.0,
+  "jeffreys_interpretation": "Decisive evidence (very early - results will change)",
+  "heartbeat": {
+    "timestamp": "2025-08-04T08:04:51.259806",
+    "samples_since_last": 330,
+    "time_since_last": 60.469810247421265,
+    "is_stuck": 0
+  },
+  "parameter_estimates": {
+    "M_disk_thin_solar": {
+      "median": 42388658165.26279,
+      "std": 8463997874.627327
+    },
+    "R_d_thin_kpc": {
+      "median": 3.092093759166313,
+      "std": 0.7071792555061112
+    },
+    "h_z_thin_kpc": {
+      "median": 0.3077095030994993,
+      "std": 0.09464174965556642
+    }
+  },
+  "xi_type": "gr",
+  "run_id": "unknown"
+}

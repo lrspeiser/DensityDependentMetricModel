@@ -1,0 +1,9 @@
+{
+  "nvidia_smi": true,
+  "pynvml": false,
+  "gputil": true,
+  "jax": true,
+  "torch": true,
+  "tensorflow": false,
+  "system_info": true
+}
