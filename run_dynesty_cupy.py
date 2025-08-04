@@ -56,6 +56,15 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
     Based on the successful debug_cupy_parallel.py script.
     """
     try:
+        # Log first few calls to verify function is working
+        if hasattr(log_likelihood_dynesty_cupy, 'call_count'):
+            log_likelihood_dynesty_cupy.call_count += 1
+        else:
+            log_likelihood_dynesty_cupy.call_count = 1
+            
+        if log_likelihood_dynesty_cupy.call_count <= 3:
+            print(f"LIKELIHOOD CALL #{log_likelihood_dynesty_cupy.call_count}: theta={theta}, params={param_names}")
+        
         if not check_physical_plausibility(theta, param_names):
             return -np.inf
 
@@ -74,10 +83,14 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
         logl = -0.5 * float(chi2)
 
         rmse = float(cp.sqrt(cp.mean((v_data_cupy - v_model)**2)))
-        blob = np.array([rmse, 0., 0., 0., 0.], dtype=np.float64)
+        
+        if log_likelihood_dynesty_cupy.call_count <= 3:
+            print(f"LIKELIHOOD RESULT #{log_likelihood_dynesty_cupy.call_count}: logl={logl:.2f}, rmse={rmse:.2f}")
         
         return logl
-    except Exception:
+    except Exception as e:
+        if log_likelihood_dynesty_cupy.call_count <= 3:
+            print(f"LIKELIHOOD ERROR #{log_likelihood_dynesty_cupy.call_count}: {e}")
         return -np.inf
 
 def prior_transform_dynesty_cupy(u, param_names, bounds_low, bounds_high, use_log_prior):
@@ -128,7 +141,7 @@ def main_cupy():
     parser.add_argument('--xi', type=str, default='gr')
     parser.add_argument('--output_dir', type=str, default='cupy_results')
     parser.add_argument('--nlive', type=int, default=500)
-    parser.add_argument('--maxcall', type=int, default=50000)
+    parser.add_argument('--maxcall', type=int, default=200000)
     parser.add_argument('--num_threads', type=int, default=4)
     parser.add_argument('--checkpoint_every', type=int, default=900, help='Seconds between automatic checkpoints')
     # Post-processing flags
@@ -157,9 +170,19 @@ def main_cupy():
         resource_monitor.start_monitoring()
 
     try:
+        logger.info("STEP 1: Importing dynesty...")
         import dynesty
-        logger.info(f"Starting sampling with {args.num_threads} threads...")
+        logger.info(f"✓ Dynesty imported successfully (version: {dynesty.__version__})")
+        
+        logger.info(f"STEP 2: Creating multiprocessing pool with {args.num_threads} threads...")
         with Pool(processes=args.num_threads) as pool:
+            logger.info("STEP 3: Creating DynamicNestedSampler...")
+            logger.info(f"  - ndim: {len(param_names)}")
+            logger.info(f"  - nlive: {args.nlive}")
+            logger.info(f"  - queue_size: {args.num_threads}")
+            logger.info(f"  - logl_args length: {len(logl_args)}")
+            logger.info(f"  - ptform_args length: {len(ptform_args)}")
+            
             sampler = dynesty.DynamicNestedSampler(
                 log_likelihood_dynesty_cupy,
                 prior_transform_dynesty_cupy,
@@ -170,50 +193,112 @@ def main_cupy():
                 queue_size=args.num_threads,
                 nlive=args.nlive
             )
-            # Start periodic checkpoint thread
+            logger.info("✓ DynamicNestedSampler created successfully")
+            logger.info("STEP 4: Setting up checkpoint thread...")
             stop_event = threading.Event()
             def _checkpoint_worker():
                 while not stop_event.wait(args.checkpoint_every):
                     try:
                         with open(output_dir / "dynesty_checkpoint.pkl", "wb") as cf:
                             pickle.dump(sampler.results, cf)
-                        logger.info("Checkpoint saved.")
+                        logger.info("✓ Checkpoint saved.")
                     except Exception as e:
-                        logger.warning(f"Checkpoint save failed: {e}")
+                        logger.warning(f"✗ Checkpoint save failed: {e}")
             chk_thread = threading.Thread(target=_checkpoint_worker, daemon=True)
             chk_thread.start()
+            logger.info("✓ Checkpoint thread started")
 
-            # Run the sampler
-            sampler.run_nested(maxcall=args.maxcall, print_progress=True)
+            logger.info("STEP 5: Starting nested sampling...")
+            logger.info(f"  - maxcall: {args.maxcall}")
+            logger.info(f"  - print_progress: True")
+            logger.info("  - Calling sampler.run_nested()...")
+            
+            try:
+                sampler.run_nested(maxcall=args.maxcall, print_progress=True)
+                logger.info("✓ sampler.run_nested() completed successfully")
+            except Exception as e:
+                logger.error(f"✗ sampler.run_nested() failed: {e}")
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error(f"Error args: {e.args}")
+                raise
+            
+            logger.info("STEP 6: Saving progress tracking...")
+            try:
+                # Helper function to convert numpy types to JSON-serializable
+                def to_json_serializable(obj):
+                    if hasattr(obj, 'tolist'):
+                        return obj.tolist()
+                    elif hasattr(obj, 'item'):
+                        return obj.item()
+                    elif isinstance(obj, (np.integer, np.floating)):
+                        return float(obj)
+                    else:
+                        return obj
+                
+                progress_data = {
+                    "iterations": len(sampler.results.logz),
+                    "logz": to_json_serializable(sampler.results.logz),
+                    "logzerr": to_json_serializable(sampler.results.logzerr) if hasattr(sampler.results, 'logzerr') else [],
+                    "ncall": to_json_serializable(sampler.results.ncall) if hasattr(sampler.results, 'ncall') else None,
+                    "efficiency": to_json_serializable(getattr(sampler.results, 'efficiency', None)),
+                    "final_logz": to_json_serializable(sampler.results.logz[-1]),
+                    "final_logzerr": to_json_serializable(sampler.results.logzerr[-1]) if hasattr(sampler.results, 'logzerr') else None
+                }
+                with open(output_dir / "dynesty_progress.json", "w") as f:
+                    json.dump(progress_data, f, indent=2)
+                logger.info("✓ Saved dynesty_progress.json")
+            except Exception as e:
+                logger.error(f"✗ Failed to save progress: {e}")
+                raise
 
             # Stop checkpoint thread after sampling completes
             stop_event.set()
             chk_thread.join(timeout=2)
         
+        logger.info("STEP 7: Saving final results...")
         results = sampler.results
-        logger.info("Saving results...")
-        with open(output_dir / "results.pkl", "wb") as f:
-            pickle.dump(results, f)
-        # Save compact NumPy archive
-        # Extract weights (not always present as an attribute)
-        if 'weights' in results:
-            weights_arr = results['weights']
-        elif hasattr(results, 'weights'):
-            weights_arr = results.weights
-        else:
-            # Compute importance weights from logwt and final evidence
-            weights_arr = np.exp(results['logwt'] - results['logz'][-1])
-        np.savez(
-            output_dir / "posterior_samples.npz",
-            samples=results['samples'],
-            logl=results['logl'],
-            weights=weights_arr,
-            logz=results['logz'][-1],
-            dlogz=(results['dlogz'][-1] if 'dlogz' in results else (
-                results.logzerr[-1] if hasattr(results, 'logzerr') else np.nan
-            ))
-        )
-        logger.info("Saved posterior_samples.npz")
+        logger.info(f"  - Results type: {type(results)}")
+        logger.info(f"  - Available attributes: {dir(results)}")
+        
+        try:
+            with open(output_dir / "results.pkl", "wb") as f:
+                pickle.dump(results, f)
+            logger.info("✓ Saved results.pkl")
+        except Exception as e:
+            logger.error(f"✗ Failed to save results.pkl: {e}")
+            raise
+        logger.info("STEP 8: Saving posterior samples...")
+        try:
+            # Extract weights (not always present as an attribute)
+            if 'weights' in results:
+                weights_arr = results['weights']
+                logger.info("  - Using results['weights']")
+            elif hasattr(results, 'weights'):
+                weights_arr = results.weights
+                logger.info("  - Using results.weights")
+            else:
+                # Compute importance weights from logwt and final evidence
+                weights_arr = np.exp(results['logwt'] - results['logz'][-1])
+                logger.info("  - Computed weights from logwt")
+            
+            logger.info(f"  - Weights shape: {weights_arr.shape}")
+            logger.info(f"  - Samples shape: {results['samples'].shape}")
+            logger.info(f"  - LogL shape: {results['logl'].shape}")
+            
+            np.savez(
+                output_dir / "posterior_samples.npz",
+                samples=results['samples'],
+                logl=results['logl'],
+                weights=weights_arr,
+                logz=results['logz'][-1],
+                dlogz=(results['dlogz'][-1] if 'dlogz' in results else (
+                    results.logzerr[-1] if hasattr(results, 'logzerr') else np.nan
+                ))
+            )
+            logger.info("✓ Saved posterior_samples.npz")
+        except Exception as e:
+            logger.error(f"✗ Failed to save posterior_samples.npz: {e}")
+            raise
         logger.info(f"Sampling completed! LogZ = {results.logz[-1]:.2f}")
 
         # Optional post-processing ------------------------------------------------
@@ -221,7 +306,12 @@ def main_cupy():
         if args.run_analysis:
             try:
                 import analyze_results as ar
-                ar.main([str(posterior_npz)])
+                # Fix: analyze_results.main() doesn't take arguments
+                import sys
+                original_argv = sys.argv
+                sys.argv = ['analyze_results.py', str(posterior_npz)]
+                ar.main()
+                sys.argv = original_argv
                 logger.info("analyze_results.py finished.")
             except Exception as e:
                 logger.error(f"analyze_results.py failed: {e}")
@@ -237,7 +327,8 @@ def main_cupy():
                 import sys
                 sys.path.append("Older Files")
                 import generate_paper_figures as gpf
-                # The script runs all plots when imported
+                # Execute the main block directly
+                exec(open("Older Files/generate_paper_figures.py").read())
                 logger.info("generate_paper_figures.py finished.")
             except Exception as e:
                 logger.error(f"generate_paper_figures.py failed: {e}")

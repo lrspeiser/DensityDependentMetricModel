@@ -11,13 +11,13 @@
   },
   "memory": {
     "total_gb": 95.71322250366211,
-    "available_gb": 80.30792236328125
+    "available_gb": 80.2879753112793
   },
   "gpu": {
     "gpu_0": {
       "name": "NVIDIA GeForce RTX 5090",
       "memory_total_gb": 31.8427734375,
-      "memory_free_gb": 30.0205078125,
+      "memory_free_gb": 29.9697265625,
       "type": "nvidia"
     }
   },
