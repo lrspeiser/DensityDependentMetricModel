@@ -1,0 +1,582 @@
+[
+  {
+    "timestamp": "2025-08-04T09:36:14.788070",
+    "cpu": {
+      "overall_percent": 6.7,
+      "per_core": [
+        21.7,
+        24.6,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        14.1,
+        7.8,
+        6.2,
+        13.8,
+        18.8,
+        6.2,
+        17.2,
+        12.5,
+        1.8,
+        1.8,
+        4.1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        29.2,
+        12.5
+      ],
+      "peak_percent": 6.7
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.9940299987793,
+      "used_gb": 14.719192504882812,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10396957397460938,
+      "memory_percent": 0.10862613467081977,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 7.000000000000001,
+        "memory_used_gb": 1.294921875,
+        "memory_percent": 4.066611463796117,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:17.845921",
+    "cpu": {
+      "overall_percent": 7.3,
+      "per_core": [
+        21.1,
+        13.8,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        6.2,
+        15.2,
+        6.2,
+        4.7,
+        16.9,
+        15.9,
+        16.9,
+        15.9,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        6.2,
+        17.5
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.9872932434082,
+      "used_gb": 14.725929260253906,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10399627685546875,
+      "memory_percent": 0.10865403351296601,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 7.000000000000001,
+        "memory_used_gb": 1.2783203125,
+        "memory_percent": 4.014475419388475,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:20.905910",
+    "cpu": {
+      "overall_percent": 7.0,
+      "per_core": [
+        26.8,
+        15.2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        8.8,
+        10.3,
+        8.2,
+        6.2,
+        16.9,
+        14.1,
+        10.8,
+        15.6,
+        2.8,
+        4.2,
+        0.0,
+        2.4,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        9.4,
+        23.4
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.98747253417969,
+      "used_gb": 14.725749969482422,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400009155273438,
+      "memory_percent": 0.10865801906184405,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 7.000000000000001,
+        "memory_used_gb": 1.2802734375,
+        "memory_percent": 4.020609071671727,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:23.960443",
+    "cpu": {
+      "overall_percent": 5.3,
+      "per_core": [
+        20.0,
+        18.8,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        17.2,
+        16.9,
+        10.9,
+        12.5,
+        0.0,
+        7.8,
+        9.2,
+        4.7,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        15.4,
+        14.1
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.98815155029297,
+      "used_gb": 14.72507095336914,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400009155273438,
+      "memory_percent": 0.10865801906184405,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 7.000000000000001,
+        "memory_used_gb": 1.2763671875,
+        "memory_percent": 4.0083417671052235,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:27.014798",
+    "cpu": {
+      "overall_percent": 7.1,
+      "per_core": [
+        20.3,
+        35.9,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.6,
+        1.6,
+        14.1,
+        18.2,
+        9.4,
+        13.8,
+        18.8,
+        18.8,
+        10.6,
+        7.8,
+        3.1,
+        3.1,
+        0.0,
+        0.0,
+        21.9,
+        18.8
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.98526000976562,
+      "used_gb": 14.727962493896484,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400009155273438,
+      "memory_percent": 0.10865801906184405,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 6.0,
+        "memory_used_gb": 1.275390625,
+        "memory_percent": 4.005274940963597,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:30.066688",
+    "cpu": {
+      "overall_percent": 7.0,
+      "per_core": [
+        18.8,
+        16.9,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        13.8,
+        7.9,
+        14.1,
+        12.5,
+        6.2,
+        7.8,
+        6.2,
+        7.7,
+        1.5,
+        0.0,
+        0.0,
+        0.0,
+        9.4,
+        10.9
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.98809814453125,
+      "used_gb": 14.72512435913086,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400009155273438,
+      "memory_percent": 0.10865801906184405,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 7.000000000000001,
+        "memory_used_gb": 1.275390625,
+        "memory_percent": 4.005274940963597,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:33.125053",
+    "cpu": {
+      "overall_percent": 6.4,
+      "per_core": [
+        22.2,
+        17.2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.5,
+        0.0,
+        0.0,
+        13.8,
+        7.8,
+        12.5,
+        23.1,
+        4.7,
+        10.9,
+        12.5,
+        7.7,
+        0.0,
+        0.0,
+        0.0,
+        3.0,
+        14.1,
+        17.2
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.99386596679688,
+      "used_gb": 14.719356536865234,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400390625,
+      "memory_percent": 0.10866200461072209,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 7.000000000000001,
+        "memory_used_gb": 1.275390625,
+        "memory_percent": 4.005274940963597,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:36.172049",
+    "cpu": {
+      "overall_percent": 6.8,
+      "per_core": [
+        18.3,
+        18.8,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        10.8,
+        10.9,
+        9.4,
+        18.5,
+        4.6,
+        7.7,
+        9.4,
+        9.1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        13.8,
+        13.8
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.99260711669922,
+      "used_gb": 14.72061538696289,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400390625,
+      "memory_percent": 0.10866200461072209,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 7.000000000000001,
+        "memory_used_gb": 1.275390625,
+        "memory_percent": 4.005274940963597,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:39.227657",
+    "cpu": {
+      "overall_percent": 5.7,
+      "per_core": [
+        27.8,
+        12.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.6,
+        1.6,
+        0.0,
+        14.1,
+        18.5,
+        12.5,
+        14.1,
+        3.1,
+        12.5,
+        7.8,
+        3.2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        9.4,
+        14.1
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 80.99474716186523,
+      "used_gb": 14.718475341796875,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400390625,
+      "memory_percent": 0.10866200461072209,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 8.0,
+        "memory_used_gb": 1.275390625,
+        "memory_percent": 4.005274940963597,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  },
+  {
+    "timestamp": "2025-08-04T09:36:42.265845",
+    "cpu": {
+      "overall_percent": 6.1,
+      "per_core": [
+        21.1,
+        15.6,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        10.9,
+        14.1,
+        12.3,
+        15.4,
+        7.7,
+        12.3,
+        10.8,
+        1.6,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        9.2,
+        13.8
+      ],
+      "peak_percent": 7.3
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 81.00343704223633,
+      "used_gb": 14.709785461425781,
+      "percent": 15.4
+    },
+    "process": {
+      "cpu_percent": 0.0,
+      "memory_gb": 0.10400390625,
+      "memory_percent": 0.10866200461072209,
+      "num_threads": 79
+    },
+    "gpu": {
+      "gpu_0": {
+        "utilization_percent": 8.0,
+        "memory_used_gb": 1.275390625,
+        "memory_percent": 4.005274940963597,
+        "temperature_c": 47.0
+      }
+    },
+    "jax": {
+      "current_device": "TFRT_CPU_0",
+      "device_count": 1,
+      "backend": "cpu"
+    }
+  }
+]

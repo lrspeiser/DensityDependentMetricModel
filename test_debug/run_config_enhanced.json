@@ -1,6 +1,6 @@
 {
   "raw_command": "run_dynesty.py --xi gr --output_dir test_debug --nlive_init 100 --maxcall 10000 --num_threads 1 --include_disk_thin --fit_disk_thin --monitor_interval_s 5 --debug",
-  "timestamp": "2025-08-04T09:27:25.032737",
+  "timestamp": "2025-08-04T09:47:59.248442",
   "explicitly_provided_flags": [
     "debug",
     "fit_disk_thin",

@@ -1116,7 +1116,7 @@ class ConvergenceTracker:
 
         # Stuck detection
         if self.stuck_counter > 3:
-            lines.append(f"\n❗ SAMPLING APPEARS STUCK (count: {self.stuck_counter})")
+            lines.append(f"\n*** SAMPLING APPEARS STUCK (count: {self.stuck_counter})")
             lines.append("   Consider: wider priors, different sampler settings, or curriculum learning")
 
         return "\n".join(lines)
@@ -1262,7 +1262,7 @@ def enhanced_monitor_sampler_progress(
 
         # Add health assessment
         health = get_run_health_assessment(sampler, elapsed_time, logger)
-        logger.info(f"\n🏥 RUN HEALTH: {health['status']}")
+        logger.info(f"\n*** RUN HEALTH: {health['status']}")
         logger.info(f"   {health['message']}")
         logger.info(f"   -> {health['recommendation']}")
         logger.info("="*80)
@@ -1304,11 +1304,11 @@ def enhanced_monitor_sampler_progress(
         
         logger.info(f"\n{phase_emoji} RUN PHASE: {run_phase}")
         logger.info(f"   Normal for this phase: {'Yes' if run_phase != 'CONVERGING' else 'Nearly complete'}")
-        logger.info(f"⏱️  Elapsed: {elapsed_str} |  Samples: {n_samples:,} | 🎲 Calls: {ncall_total:,} | 📈 Eff: {eff:.2f}%")
+        logger.info(f"*** Elapsed: {elapsed_str} |  Samples: {n_samples:,} | *** Calls: {ncall_total:,} | *** Eff: {eff:.2f}%")
 
         if gp_surrogate is not None and GP_AVAILABLE:
             gp_stats = gp_surrogate.get_statistics()
-            logger.info(f"🤖 GP Surrogate: {gp_stats['n_real_calls']:,} real, "
+            logger.info(f"*** GP Surrogate: {gp_stats['n_real_calls']:,} real, "
                         f"{gp_stats['n_surrogate_calls']:,} surrogate (speedup: {gp_stats['speedup_factor']:.1f}x)")
 
         # Track improvement rate
@@ -1324,7 +1324,7 @@ def enhanced_monitor_sampler_progress(
                 logz_improvement = recent_history[-1][1] - recent_history[0][1]
                 improvement_rate = logz_improvement / time_span if time_span > 0 else 0
                 
-                logger.info(f"\n📈 IMPROVEMENT METRICS:")
+                logger.info(f"\n*** IMPROVEMENT METRICS:")
                 logger.info(f"   Log(Z) improvement rate: {improvement_rate:+.1f} per second")
                 logger.info(f"   Status: {'IMPROVING RAPIDLY OK' if improvement_rate > 100 else 'IMPROVING STEADILY OK' if improvement_rate > 0 else 'PLATEAUING WARNING'}")
         else:
@@ -2453,7 +2453,7 @@ def get_param_labels_and_bounds(ARGS):
     logger.info(f"   rho_c_fixed provided via CLI: {rho_c_fixed_via_cli}")
 
     if ARGS.xi == 'enhanced':
-        logger.info("🔧 Enhanced model - setting sensible exploration bounds")
+        logger.info("*** Enhanced model - setting sensible exploration bounds")
         # Let A vary widely to find what works
         config_to_use['A']['default_fixed'] = 3.0  # Starting guess
         config_to_use['A']['low'] = 2.0            # Allow small enhancement
@@ -2461,11 +2461,11 @@ def get_param_labels_and_bounds(ARGS):
         
         # *** CRITICAL FIX: Only modify rho_c bounds if NOT fixed via CLI ***
         if not rho_c_fixed_via_cli and not getattr(ARGS, 'rho_c_fixed', None):
-            logger.info("   🔧 No --rho_c_fixed provided, setting default enhanced bounds")
+            logger.info("   *** No --rho_c_fixed provided, setting default enhanced bounds")
             config_to_use['rho_c_solar_kpc3']['low'] = 1e13   # Minimum for Cassini
             config_to_use['rho_c_solar_kpc3']['high'] = 1e16  # Maximum reasonable
         else:
-            logger.info(f"   🔒 --rho_c_fixed={getattr(ARGS, 'rho_c_fixed', None)} provided, keeping original bounds")
+            logger.info(f"   *** --rho_c_fixed={getattr(ARGS, 'rho_c_fixed', None)} provided, keeping original bounds")
             logger.info(f"      Original bounds: [{config_to_use['rho_c_solar_kpc3']['low']:.1e}, {config_to_use['rho_c_solar_kpc3']['high']:.1e}]")
         
         # Let n_exp explore
@@ -2483,7 +2483,7 @@ def get_param_labels_and_bounds(ARGS):
 
     # === NEW: TIGHTEN PRIORS BASED ON GR BASELINE IF REQUESTED ===
     if ARGS.use_gr_baseline_priors:
-        logger.info("🔒 Applying tighter priors based on GR baseline results.")
+        logger.info("*** Applying tighter priors based on GR baseline results.")
         gr_baseline_results = {
             'M_disk_thin_solar': {'value': 70.82e9, 'uncertainty': 10.88e9},
             'R_d_thin_kpc': {'value': 3.06, 'uncertainty': 0.18},
@@ -2546,7 +2546,7 @@ def get_param_labels_and_bounds(ARGS):
                             'low': max(PHYSICAL_BOUNDS[param]['min'], val - delta),
                             'high': min(PHYSICAL_BOUNDS[param]['max'], val + delta)
                         }
-                        logger.info(f"🔒 Tightened bounds for {param}: [{bounds_modified[param]['low']:.2e}, {bounds_modified[param]['high']:.2e}]")
+                        logger.info(f"*** Tightened bounds for {param}: [{bounds_modified[param]['low']:.2e}, {bounds_modified[param]['high']:.2e}]")
 
         except Exception as e:
             logger.warning(f"WARNING Could not load previous_best: {e}")
@@ -2584,7 +2584,7 @@ def get_param_labels_and_bounds(ARGS):
         cli_flag_underscores = f"--{fixed_arg_name}"
         if cli_flag_dashes in sys.argv or cli_flag_underscores in sys.argv:
             is_fitted = False
-            logger.info(f"   🔒 CLI override detected - forcing {p_name} to be FIXED")
+            logger.info(f"   *** CLI override detected - forcing {p_name} to be FIXED")
             
         if p_name == 'rho_c_solar_kpc3':
             logger.info(f"\nDETAILED RHO_C ANALYSIS:")
@@ -2810,11 +2810,11 @@ class GPSurrogateModel:
         self.n_surrogate_calls = 0
         self.gp_trained = False
 
-        logger.info(f"🤖 GP Surrogate initialized for {self.ndim}D parameter space")
+        logger.info(f"*** GP Surrogate initialized for {self.ndim}D parameter space")
 
     def generate_initial_training_data(self, physics_function, args_obj):
         """Generate initial training data using Latin Hypercube sampling"""
-        logger.info(f"🎲 Generating {self.n_initial} initial training points...")
+        logger.info(f"*** Generating {self.n_initial} initial training points...")
 
         # Latin Hypercube sampling for better coverage
         sampler = qmc.LatinHypercube(d=self.ndim)
@@ -2911,7 +2911,7 @@ class GPSurrogateModel:
 
             # Retrain periodically
             if len(self.X_train) % 50 == 0:
-                logger.info(f"🔄 Retraining GP with {len(self.X_train)} points")
+                logger.info(f"*** Retraining GP with {len(self.X_train)} points")
                 self._train_gp()
 
             return y_real, y_std[0]
@@ -3097,7 +3097,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax
     - Physical validation between stages
     - Adaptive resource allocation
     """
-    logger.info("🎓 Starting CURRICULUM LEARNING approach")
+    logger.info("*** Starting CURRICULUM LEARNING approach")
 
     all_results = {}
     cumulative_params = {}
@@ -3143,7 +3143,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax
 
     for i, stage in enumerate(curriculum):
         logger.info(f"\n{'='*80}")
-        logger.info(f"📚 {stage['name']}")
+        logger.info(f"*** {stage['name']}")
         logger.info(f"{'='*80}")
         logger.info(f"Settings: nlive={stage.get('nlive')}, dlogz={stage.get('dlogz')}, "
                    f"maxcall={stage.get('maxcall'):,} ({stage.get('maxcall')/args.maxcall*100:.0f}% of total)")
@@ -3234,7 +3234,7 @@ def run_curriculum_learning(args, gaia_data_dict, logger, R_data_jax, v_data_jax
                 if logger:
                     logger.warning("WARNING  Some parameters outside physical bounds. Check configuration.")
 
-    logger.info(f"\n🎉 Curriculum learning complete!")
+            logger.info(f"\n*** Curriculum learning complete!")
 
     # Summary
     total_calls_used = sum(stage.get('maxcall', 0) for stage in curriculum[:len(all_results)])
@@ -3383,7 +3383,7 @@ def run_comprehensive_gpu_test(args, R_data_jax, v_data_jax, sigma_data_jax, log
         xi_func = XI_FUNCTION_MAP.get(args.xi, XI_FUNCTION_MAP['power'])
         xi_val = xi_func(rho, params.get('rho_c_solar_kpc3', 1e13), 
                          params.get('n_exp', 1.5), params.get('A', 1.0))
-        logger.info(f"  OK ξ at R_sun = {float(xi_val[0]):.3f}")
+        logger.info(f"  OK xi at R_sun = {float(xi_val[0]):.3f}")
         
         logger.info("  Testing full velocity model...")
         v_total = v_total_kms(R_test, params, xi_type=args.xi)
@@ -3458,7 +3458,7 @@ def run_comprehensive_gpu_test(args, R_data_jax, v_data_jax, sigma_data_jax, log
         logger.info(f"{symbol} {test_name}: {result}")
     
     if all_tests_passed:
-        logger.info("\n🎉 ALL TESTS PASSED! Ready to start sampling.")
+        logger.info("\n*** ALL TESTS PASSED! Ready to start sampling.")
     else:
         logger.error("\nFAIL SOME TESTS FAILED! Check the log for details.")
         logger.error("Sampling may fail or give incorrect results.")
@@ -3798,7 +3798,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 
         # Add new regional info:
         if len(test_blob) >= 5:
-            logger.info(f"   📍 REGIONAL BREAKDOWN:")
+            logger.info(f"   *** REGIONAL BREAKDOWN:")
             logger.info(f"      Inner (R<8):       {test_blob[2]:.1f} km/s")
             logger.info(f"      Transition (8-12): {test_blob[3]:.1f} km/s") 
             logger.info(f"      Outer (R>12):      {test_blob[4]:.1f} km/s")
