@@ -40,7 +40,11 @@ os.environ['JAX_TRACEBACK_FILTERING'] = 'off'  # Show full traceback for errors
 os.environ['JAX_DEBUG_NANS'] = '1'  # Check for NaN/Inf
 os.environ['JAX_LOG_COMPILES'] = '0'  # Disable compilation logging (was '1')
 os.environ['JAX_ENABLE_CHECKS'] = '1'  # Enable runtime checks
-os.environ['JAX_METAL_USE_MPS'] = '1'  # Use Metal Performance Shaders
+# Enable Metal backend only on macOS; on other systems (e.g., NVIDIA CUDA) leave unset so that JAX can default to the GPU backend if available
+if sys.platform == "darwin":
+    os.environ['JAX_METAL_USE_MPS'] = '1'  # Use Metal Performance Shaders
+else:
+    os.environ.pop('JAX_METAL_USE_MPS', None)
 os.environ['VECLIB_MAXIMUM_THREADS'] = '3'  # Limit BLAS threads
 os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
 os.environ['JAX_DISABLE_MOST_FALLBACKS'] = '1'
@@ -48,7 +52,9 @@ os.environ['JAX_DISABLE_JIT_COMPILE_WARNINGS'] = '1'  # NEW: Disable JIT warning
 
 # Configure JAX settings
 jax.config.update("jax_enable_x64", False)  # Metal doesn't support float64
-jax.config.update("jax_platform_name", "METAL")  # Force Metal platform
+# Do not force a specific backend here; JAX will select GPU (CUDA) automatically if available.
+# If you need to force a backend, uncomment and set to "gpu" or "cpu" as appropriate.
+# jax.config.update("jax_platform_name", "gpu")
 jax.config.update("jax_log_compiles", False)  # Disable compilation logging (was True)
 
 # Configure Python logging to suppress JAX compilation messages
@@ -373,20 +379,78 @@ def save_run_metadata(args, output_dir):
 DEBUG_COUNTER_MAX = 100  # Maximum debug messages to prevent log spam
 debug_counter = 0
 
-prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
-samples = prior_data['samples']
-weights = prior_data['weights']
+# Try to load previous best parameters, but don't fail if file doesn't exist
+try:
+    # First try the original path
+    prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
+    samples = prior_data['samples']
+    weights = prior_data['weights']
 
-param_names = [
-    'rho_c_solar_kpc3', 'n_exp',
-    'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
-    'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
-    'M_bulge_solar', 'a_bulge_kpc',
-    'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
-]
+    param_names = [
+        'rho_c_solar_kpc3', 'n_exp',
+        'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+        'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+        'M_bulge_solar', 'a_bulge_kpc',
+        'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+    ]
 
-median_vals = np.average(samples, weights=weights, axis=0)
-previous_best = dict(zip(param_names, median_vals))
+    median_vals = np.average(samples, weights=weights, axis=0)
+    previous_best = dict(zip(param_names, median_vals))
+    print("*** Loaded previous best parameters from chains_truly_data_driven/")
+except FileNotFoundError:
+    # Try alternative paths
+    alternative_paths = [
+        "tier1_best_fit.npz",
+        "quick_test/dynesty_mw_grav_color_Bf_DTf_DKf_Gf_samples.npz",
+        "test_grav_color_debug/dynesty_mw_grav_color_Bf_DTf_DKf_Gf_samples.npz",
+        "test_grav_color_stronger/dynesty_mw_grav_color_Bf_DTf_DKf_Gf_samples.npz"
+    ]
+    
+    previous_best = None
+    for path in alternative_paths:
+        try:
+            prior_data = np.load(path)
+            if 'samples' in prior_data and 'weights' in prior_data:
+                samples = prior_data['samples']
+                weights = prior_data['weights']
+                
+                # Use param_names from file if available, otherwise use default
+                if 'param_names' in prior_data:
+                    param_names = prior_data['param_names'].tolist()
+                else:
+                    param_names = [
+                        'rho_c_solar_kpc3', 'n_exp',
+                        'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+                        'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+                        'M_bulge_solar', 'a_bulge_kpc',
+                        'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+                    ]
+                
+                median_vals = np.average(samples, weights=weights, axis=0)
+                previous_best = dict(zip(param_names, median_vals))
+                print(f"*** Loaded previous best parameters from {path}")
+                break
+        except Exception as e:
+            continue
+    
+    if previous_best is None:
+        print("*** No previous best parameters found. Will use default values.")
+        # Set default values based on PHYSICAL_BOUNDS typical values
+        previous_best = {
+            'rho_c_solar_kpc3': 5e8,
+            'n_exp': 2.7,
+            'M_disk_thin_solar': 4.0e10,
+            'R_d_thin_kpc': 2.6,
+            'h_z_thin_kpc': 0.3,
+            'M_disk_thick_solar': 1.5e10,
+            'R_d_thick_kpc': 4.5,
+            'h_z_thick_kpc': 0.9,
+            'M_bulge_solar': 1.2e10,
+            'a_bulge_kpc': 0.7,
+            'M_gas_solar': 3.0e10,
+            'R_d_gas_kpc': 7.0,
+            'h_z_gas_kpc': 0.15
+        }
 
 
 # ============================================================================
@@ -473,24 +537,44 @@ EXPECTED_V_AT_SOLAR = (100, 1500)   # TEMPORARILY RELAXED for initial exploratio
 
 def load_previous_best_params():
     """Load previous best parameters if available."""
-    try:
-        prior_data = np.load("chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz")
-        samples = prior_data['samples']
-        weights = prior_data['weights']
-
-        param_names = [
-            'rho_c_solar_kpc3', 'n_exp',
-            'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
-            'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
-            'M_bulge_solar', 'a_bulge_kpc',
-            'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
-        ]
-
-        median_vals = np.average(samples, weights=weights, axis=0)
-        return dict(zip(param_names, median_vals))
-    except Exception as e:
-        logger.warning(f"Could not load previous results: {e}")
-        return None
+    # Try multiple paths for previous results
+    alternative_paths = [
+        "chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz",
+        "tier1_best_fit.npz",
+        "quick_test/dynesty_mw_grav_color_Bf_DTf_DKf_Gf_samples.npz",
+        "test_grav_color_debug/dynesty_mw_grav_color_Bf_DTf_DKf_Gf_samples.npz",
+        "test_grav_color_stronger/dynesty_mw_grav_color_Bf_DTf_DKf_Gf_samples.npz"
+    ]
+    
+    for path in alternative_paths:
+        try:
+            prior_data = np.load(path)
+            if 'samples' in prior_data and 'weights' in prior_data:
+                samples = prior_data['samples']
+                weights = prior_data['weights']
+                
+                # Use param_names from file if available, otherwise use default
+                if 'param_names' in prior_data:
+                    param_names = prior_data['param_names'].tolist()
+                else:
+                    param_names = [
+                        'rho_c_solar_kpc3', 'n_exp',
+                        'M_disk_thin_solar', 'R_d_thin_kpc', 'h_z_thin_kpc',
+                        'M_disk_thick_solar', 'R_d_thick_kpc', 'h_z_thick_kpc',
+                        'M_bulge_solar', 'a_bulge_kpc',
+                        'M_gas_solar', 'R_d_gas_kpc', 'h_z_gas_kpc'
+                    ]
+                
+                median_vals = np.average(samples, weights=weights, axis=0)
+                result = dict(zip(param_names, median_vals))
+                print(f"*** Loaded previous best parameters from {path}")
+                return result
+        except Exception as e:
+            continue
+    
+    # If no file found, return None
+    print("*** No previous best parameters found.")
+    return None
 
 
 # ============================================================================
@@ -989,7 +1073,7 @@ class ConvergenceTracker:
                 lines.append("⚠️  Log(Z) barely changed in last 10 min")
                 self.stuck_counter += 1
             else:
-                lines.append(f"✓ Log(Z) changed by {logz_change_10min:+.3f} in last 10 min")
+                lines.append(f"* Log(Z) changed by {logz_change_10min:+.3f} in last 10 min")
                 self.stuck_counter = max(0, self.stuck_counter - 1)
 
         if logz_30min_ago is not None:
@@ -1007,7 +1091,7 @@ class ConvergenceTracker:
             elif recent_eff < 2.0:
                 lines.append(f"⚠️  Low efficiency: {recent_eff:.2f}%")
             else:
-                lines.append(f"✓ Efficiency stable: {recent_eff:.2f}%")
+                lines.append(f"* Efficiency stable: {recent_eff:.2f}%")
 
         # Health warnings
         if self.health_warnings:
@@ -1159,7 +1243,7 @@ def enhanced_monitor_sampler_progress(
 
         # At the start of enhanced_monitor_sampler_progress
         logger.info("="*80)
-        logger.info(f"🔍 DYNESTY PROGRESS - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"*** DYNESTY PROGRESS - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
         # Add health assessment
         health = get_run_health_assessment(sampler, elapsed_time, logger)
@@ -1183,7 +1267,7 @@ def enhanced_monitor_sampler_progress(
             phase_emoji = "🚀"
         elif elapsed_time < 300:  # First 5 minutes
             run_phase = "EARLY EXPLORATION"
-            phase_emoji = "🔍"
+            phase_emoji = "***"
         elif dlogz > 1.0:
             run_phase = "ACTIVE EXPLORATION"
             phase_emoji = "🎯"
@@ -1327,7 +1411,7 @@ def enhanced_monitor_sampler_progress(
             mad = np.median(np.abs(values - median_val))
             formatted_val = format_parameter_value_enhanced(median_val, param_name)
             formatted_mad = format_parameter_value_enhanced(mad, param_name)
-            status = "✓"
+            status = "*"
             if param_name in MW_MULTI_COMP_PARAM_CONFIG:
                 config = MW_MULTI_COMP_PARAM_CONFIG[param_name]
                 if median_val < config['low'] * 1.1:
@@ -1344,7 +1428,7 @@ def enhanced_monitor_sampler_progress(
                     logger.info(f"{p_info['name']:<25} {p_info['current_val']:.3e}")
 
         # Physical plausibility check
-        logger.info(f"\n🔍 PHYSICAL PLAUSIBILITY CHECK:")
+        logger.info(f"\n*** PHYSICAL PLAUSIBILITY CHECK:")
         logger.info("─" * 60)
         is_valid, reason, *_ = check_physical_plausibility(current_params, fitted_param_names, args_obj)
         if is_valid:
@@ -1854,7 +1938,7 @@ def log_likelihood_dynesty(
     try:
         params = {k: float(v) if isinstance(v, (int, float, str)) else v for k, v in params.items()}
     except (ValueError, TypeError) as e:
-        return -np.inf, [np.inf, np.inf]
+        return -np.inf, [np.inf, np.inf, np.inf, np.inf, np.inf]
 
     # 2. Physical plausibility check
     all_param_names_for_check = [p['name'] for p in all_param_info_list]
@@ -1873,9 +1957,9 @@ def log_likelihood_dynesty(
     try:
         v_model = v_total_kms(R_data_jax, params, xi_type=xi_type)
         if not jnp.all(jnp.isfinite(v_model)):
-            return -np.inf, [np.inf, np.inf]
+            return -np.inf, [np.inf, np.inf, np.inf, np.inf, np.inf]
     except Exception:
-        return -np.inf, [np.inf, np.inf]
+        return -np.inf, [np.inf, np.inf, np.inf, np.inf, np.inf]
 
     # Base likelihood
     # REGIONAL BREAKDOWN FOR GRAVITY REGIMES
@@ -1948,7 +2032,7 @@ def log_likelihood_dynesty(
                     stats['penalty_totals']['cassini'] += penalty
                     stats['worst_penalties']['cassini'] = min(stats['worst_penalties']['cassini'], penalty)
             except Exception:
-                return -np.inf, [np.inf, np.inf]
+                return -np.inf, [np.inf, np.inf, np.inf, np.inf, np.inf]
         else:
             # Log once that Cassini is disabled
             if not hasattr(log_likelihood_dynesty, '_cassini_disabled_logged'):
@@ -2253,13 +2337,13 @@ def check_cassini_compatibility(params, xi_type):
         
         # Classify the result
         if deviation < cassini_precision:
-            status = "PASS ✓"
+            status = "PASS *"
         elif deviation < 2 * cassini_precision:
             status = "MARGINAL"
         elif deviation < 10 * cassini_precision:
             status = "POOR"
         else:
-            status = "FAIL ✗"
+            status = "FAIL *"
             
         diagnostic = (f"ξ_Saturn = {xi_saturn:.8f} | |ξ-1| = {deviation:.2e} | "
                      f"Target < {cassini_precision:.1e} | Status: {status}")
@@ -2341,7 +2425,7 @@ def get_param_labels_and_bounds(ARGS):
     logger.info("Configuring parameters for multi-component Milky Way model")
 
     # === ADD RHO_C DEBUG SECTION HERE ===
-    logger.info("\n🔍 RHO_C DEBUG - COMMAND LINE ANALYSIS:")
+    logger.info("\n*** RHO_C DEBUG - COMMAND LINE ANALYSIS:")
     logger.info(f"   --rho_c_fixed from args: {getattr(ARGS, 'rho_c_fixed', 'NOT SET')}")
     logger.info(f"   --fit_xi_params from args: {getattr(ARGS, 'fit_xi_params', 'NOT SET')}")
     logger.info(f"   Xi model: {ARGS.xi}")
@@ -2505,7 +2589,7 @@ def get_param_labels_and_bounds(ARGS):
             current_val_guess = 0.5 * (p_details['low'] + p_details['high'])
 
         if p_name == 'rho_c_solar_kpc3':
-            logger.info(f"\n🔍 DEBUG rho_c_solar_kpc3:")
+            logger.info(f"\n*** DEBUG rho_c_solar_kpc3:")
             logger.info(f"   is_fitted: {is_fitted}")
             logger.info(f"   cli_override will be: {getattr(ARGS, p_details['fixed_val_from_arg'], 'NOT FOUND')}")
             logger.info(f"   p_details['fixed_val_from_arg']: {p_details['fixed_val_from_arg']}")
@@ -2599,7 +2683,7 @@ def get_param_labels_and_bounds(ARGS):
         prior_type = "Log-uniform" if p['log_prior'] else "Uniform"
         logger.info(f"  {p['name']:<25} | Prior: {prior_type} | Range: [{p['low']:.2e}, {p['high']:.2e}]")
 
-    logger.info("\n🔍 INITIAL PARAMETER VALUES CHECK:")
+    logger.info("\n*** INITIAL PARAMETER VALUES CHECK:")
     param_dict = {p['name']: p['current_val'] for p in param_info_list}
     
     # Check disk parameters
@@ -2917,7 +3001,7 @@ def test_likelihood_at_typical_params(args, gaia_data):
             if not p_info['is_fitted']:
                 logger.info(f"  {p_info['name']}: {p_info['current_val']:.3e}")
                 
-    logger.info("\n🔍 DETAILED PARAMETER CHECK:")
+            logger.info("\n*** DETAILED PARAMETER CHECK:")
 
     # Build full parameter dict for debugging
     full_params = dict(zip(fitted_p_names, test_params))
@@ -3534,7 +3618,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     # non-JAX operations), just do a test evaluation to ensure everything works
     
     logger.info("\n" + "="*60)
-    logger.info("🔥 Starting warm-up test...")
+    logger.info("*** Starting warm-up test...")
     logger.info(f"   Xi type: {args.xi}")
     logger.info(f"   Components: thin={args.include_disk_thin}, thick={args.include_disk_thick}, "
             f"bulge={args.include_bulge}, gas={args.include_gas}")
@@ -3551,7 +3635,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
     logger.info(f"   - n_exp: {test_params.get('n_exp', 'NOT SET')}")
     logger.info(f"   - A: {test_params.get('A', 'NOT SET')}")
     
-    logger.info("\n   🔍 DEBUGGING ENHANCED MODEL:")
+    logger.info("\n   *** DEBUGGING ENHANCED MODEL:")
     logger.info(f"   - xi_type: {args.xi}")
     logger.info(f"   - fit_xi_params: {args.fit_xi_params}")
     logger.info(f"   - A_fixed from args: {args.A_fixed}")
@@ -3574,7 +3658,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         test_R = jnp.array([8.0])  # Solar radius
         logger.info(f"   Test radius: R = {float(test_R[0]):.1f} kpc")
         
-        logger.info("\n   🔍 FULL PARAMETER SET FOR WARM-UP:")
+        logger.info("\n   *** FULL PARAMETER SET FOR WARM-UP:")
         for key, value in sorted(test_params.items()):
             if isinstance(value, (int, float)):
                 logger.info(f"      {key}: {value:.3e}")
@@ -3588,14 +3672,14 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             test_params[f'include_{comp}'] = getattr(args, f'include_{comp}', False)
         
         v_newton = v_baryon_total_newtonian_kms(test_R, test_params)
-        logger.info(f"   ✓ Newtonian velocity: {float(v_newton[0]):.1f} km/s")
+        logger.info(f"   * Newtonian velocity: {float(v_newton[0]):.1f} km/s")
         
         if v_newton[0] < 10 or v_newton[0] > 500:
             logger.warning(f"   ⚠️ Newtonian velocity seems unrealistic!")
         
         # Test 3: Density
         rho = rho_baryon_total_midplane_solar_kpc3(test_R, test_params)
-        logger.info(f"   ✓ Density: {float(rho[0]):.2e} M☉/kpc³")
+        logger.info(f"   * Density: {float(rho[0]):.2e} M_sun/kpc^3")
         
         if rho[0] < 1e3 or rho[0] > 1e12:
             logger.warning(f"   ⚠️ Density seems unrealistic for solar neighborhood!")
@@ -3636,10 +3720,10 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         
         # Actually calculate xi
         xi_val = xi_func(rho, rho_c, n_exp, A_val)
-        logger.info(f"   ✓ Calculated xi: {float(xi_val[0]):.3f}")
+        logger.info(f"   * Calculated xi: {float(xi_val[0]):.3f}")
         rho_saturn = 2.3e21
         xi_saturn = xi_func(rho_saturn, rho_c, n_exp, A_val)
-        logger.info(f"\n   🪐 CASSINI TEST:")
+        logger.info(f"\n   *** CASSINI TEST:")
         logger.info(f"   - Saturn density: {rho_saturn:.1e}")
         logger.info(f"   - xi at Saturn: {float(xi_saturn[0]):.6f}")
         logger.info(f"   - |xi - 1|: {abs(float(xi_saturn[0]) - 1.0):.2e}")
@@ -3648,7 +3732,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         
         # Test 5: Modified velocity
         v_modified = float(v_newton[0]) * np.sqrt(float(xi_val[0]))
-        logger.info(f"   ✓ Modified velocity: {v_modified:.1f} km/s")
+        logger.info(f"   * Modified velocity: {v_modified:.1f} km/s")
         
         if v_modified > 1000:
             logger.warning(f"   ⚠️ Modified velocity is unrealistically high!")
@@ -3668,7 +3752,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
         )
         
         # ADD THIS DEBUG CODE BEFORE CALLING LIKELIHOOD:
-        logger.info("\n   🔍 DEBUG: About to call log_likelihood_dynesty with:")
+        logger.info("\n   *** DEBUG: About to call log_likelihood_dynesty with:")
         logger.info(f"      Number of fitted params: {len(p0_guess)}")
         logger.info(f"      Fitted param names: {fitted_names}")
         logger.info(f"      Initial values: {p0_guess}")
@@ -3709,7 +3793,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             else:
                 logger.info(f"      → Balanced performance across regions")
         else:
-            logger.error(f"❌ Likelihood is {test_logL}")
+            logger.error(f"*** Likelihood is {test_logL}")
             
     except Exception as e:
         logger.error(f"❌ Likelihood calculation crashed: {e}")
@@ -3737,10 +3821,10 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 
     # Specifically check n_exp
     if 'n_exp' in fitted_names:
-        logger.info(f"\n✓ n_exp IS being fitted")
+        logger.info(f"\n* n_exp IS being fitted")
     else:
         n_exp_val = next((p['current_val'] for p in args.all_param_info_list if p['name'] == 'n_exp'), None)
-        logger.info(f"\n✗ n_exp is FIXED at: {n_exp_val}")
+        logger.info(f"\n* n_exp is FIXED at: {n_exp_val}")
     logger.info("="*60 + "\n")
 
     # -----------------------------------------------------------------------
@@ -3831,7 +3915,7 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             logl_args=logl_args,
             blob=True
         )
-        logger.info("✅ Dynesty sampler initialized successfully.")
+        logger.info("*** Dynesty sampler initialized successfully.")
 
         # Store configuration in sampler for checkpointing
         sampler._run_config = {
@@ -5002,7 +5086,7 @@ def main_dynesty():
     ai_g.add_argument('--gp_uncertainty_threshold', type=float, default=0.1, help="GP uncertainty threshold")
     ai_g.add_argument('--validate_data', action='store_true', default=True, help="Validate loaded data quality")
     parser.add_argument('--use_previous_best', action='store_true', default=False, help="Initialize from previous best-fit")
-    parser.add_argument('--previous_results_file', type=str, default="chains_truly_data_driven/dynesty_mw_power_Bf_DTf_DKf_Gf_samples.npz", help="Path to previous results")
+    parser.add_argument('--previous_results_file', type=str, default="tier1_best_fit.npz", help="Path to previous results")
     parser.add_argument('--tighten_bounds_factor', type=float, default=0.1, help="Factor for tightening bounds")
     parser.add_argument('--disable_dashboard', action='store_true', default=False, help="Disable dashboard monitoring")
     ai_g.add_argument('--fix_gamma', type=float, default=None, help="Fix gamma exponent")
