@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
 run_dynesty_cupy.py - CuPy-optimized dynamic nested sampling for the Density-Metric model.
+
+Complete version with:
+- Real Gaia data loading
+- Progress monitoring and JSON export
+- Periodic analysis during sampling
+- Resource monitoring
+- Enhanced parameter bounds
+- Post-processing integration
 """
 
 import logging
@@ -10,8 +18,11 @@ import argparse
 from pathlib import Path
 import pickle
 import json
-import threading, time
+import threading
+import time
 from multiprocessing import Pool, freeze_support
+from datetime import datetime
+import pandas as pd
 
 # CuPy imports for GPU acceleration
 import cupy as cp
@@ -23,6 +34,18 @@ try:
     RESOURCE_MONITOR_AVAILABLE = True
 except ImportError:
     RESOURCE_MONITOR_AVAILABLE = False
+    print("WARNING: resource_monitor not available - hardware monitoring disabled")
+
+# Data I/O imports with fallback
+try:
+    from data_io import load_all_sky_gaia_slices, process_gaia_data
+    DATA_IO_AVAILABLE = True
+except ImportError:
+    DATA_IO_AVAILABLE = False
+    print("WARNING: data_io module not available - will use synthetic data fallback")
+
+# Constants from original
+BASELINE_LOGZ_GR = -1490897.5250096943  # From GR-only with no dark matter
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -42,9 +65,425 @@ def get_or_create_logger():
 def check_physical_plausibility(theta_values, param_names):
     """Check if parameters are physically plausible."""
     for i, name in enumerate(param_names):
-        if 'mass' in name.lower() and theta_values[i] < 0: return False
-        if 'radius' in name.lower() and theta_values[i] <= 0: return False
+        if 'mass' in name.lower() and theta_values[i] < 0: 
+            return False
+        if 'radius' in name.lower() and theta_values[i] <= 0: 
+            return False
+        if 'M_' in name and 'solar' in name and theta_values[i] <= 0:
+            return False
+        if ('R_d' in name or 'h_z' in name or 'a_bulge' in name) and theta_values[i] <= 0:
+            return False
     return True
+
+def make_json_serializable(obj):
+    """
+    Convert NumPy types to Python native types for JSON serialization.
+    Recursively handles dicts, lists, tuples, arrays, and NumPy scalars.
+    """
+    if isinstance(obj, (np.integer, int)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, float)):
+        return float(obj)
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    elif isinstance(obj, (np.str_, str)):
+        return str(obj)
+    elif isinstance(obj, (np.bytes_, bytes)):
+        return obj.decode('utf-8')
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {make_json_serializable(k): make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [make_json_serializable(v) for v in obj]
+    else:
+        return obj
+
+def interpret_jeffreys_scale(dlogz):
+    """
+    Interpret the Jeffreys scale for model comparison.
+    
+    Parameters
+    ----------
+    dlogz : float
+        Difference in log evidence (logZ_model - logZ_baseline)
+        
+    Returns
+    -------
+    str
+        Interpretation string based on Jeffreys scale
+        
+    Notes
+    -----
+    Jeffreys scale interpretation:
+    - |dlogZ| < 1: Inconclusive
+    - 1 <= |dlogZ| < 2.5: Weak evidence
+    - 2.5 <= |dlogZ| < 5: Moderate evidence  
+    - 5 <= |dlogZ| < 10: Strong evidence
+    - |dlogZ| >= 10: Decisive evidence
+    """
+    abs_val = abs(dlogz)
+    if abs_val < 1:
+        return "Inconclusive"
+    elif abs_val < 2.5:
+        return "Weak evidence"
+    elif abs_val < 5:
+        return "Moderate evidence"
+    elif abs_val < 10:
+        return "Strong evidence"
+    else:
+        return "Decisive evidence"
+
+def get_progress_aware_interpretation(delta_logz_vs_gr, phase, improvement_rate):
+    """
+    Get a nuanced interpretation that considers the run is still in progress.
+    
+    Parameters
+    ----------
+    delta_logz_vs_gr : float
+        Current log(Z) difference vs GR baseline
+    phase : str
+        Current sampling phase
+    improvement_rate : float
+        Rate of log(Z) improvement per second
+        
+    Returns
+    -------
+    str
+        Context-aware interpretation
+    """
+    # Get the basic Jeffreys interpretation
+    basic_interp = interpret_jeffreys_scale(delta_logz_vs_gr)
+    
+    # If we're in early phases, always caveat
+    if phase in ["initialization", "early_exploration"]:
+        return f"{basic_interp} (very early - results will change)"
+    
+    # If we're improving rapidly, note that
+    if improvement_rate > 10:  # Improving by >10 log units per second
+        if delta_logz_vs_gr < 0:
+            return f"Currently {basic_interp} favoring GR (but improving rapidly)"
+        else:
+            return f"{basic_interp} favoring DDMM (and improving)"
+    
+    # If we're in active exploration and currently worse than GR
+    if phase == "active_exploration" and delta_logz_vs_gr < 0:
+        if abs(delta_logz_vs_gr) > 10:
+            return "Currently strongly disfavors DDMM (still exploring)"
+        else:
+            return f"{basic_interp} (still exploring parameter space)"
+    
+    # If we're refining
+    if phase == "refinement":
+        return f"{basic_interp} (refining parameters)"
+    
+    # If converged, give the straight interpretation
+    if phase == "converged":
+        return basic_interp
+    
+    # Default: add context that we're still running
+    return f"{basic_interp} (sampling in progress)"
+
+# ============================================================================
+# PROGRESS MONITORING FUNCTIONS
+# ============================================================================
+
+def save_progress_json(sampler, fitted_names, args, start_time, logger):
+    """Save current progress to JSON file that updates every minute."""
+    try:
+        res = getattr(sampler, "results", None)
+        if res is None:
+            return
+        
+        # Use a unique filename to avoid conflicts
+        progress_file = Path(args.output_dir) / "dynesty_progress.json"
+        
+        # Get current stats
+        current_time = time.time()
+        elapsed = current_time - start_time
+        n_samples = len(res.samples) if hasattr(res, 'samples') else 0
+        n_calls = np.sum(res.ncall) if hasattr(res, 'ncall') else 0
+        
+        # Get logZ and dlogZ
+        current_logz = -np.inf
+        dlogz = np.nan
+        if hasattr(res, 'logz') and len(res.logz) > 0:
+            current_logz = float(res.logz[-1])
+            if len(res.logz) >= 2:
+                dlogz = float(res.logz[-1] - res.logz[-2])
+        
+        # Add phase determination
+        if n_samples < 100:
+            phase = "initialization"
+            expected_behavior = "Random exploration, very poor fits expected"
+        elif elapsed < 300:
+            phase = "early_exploration"
+            expected_behavior = "Rapid improvement expected, still finding good regions"
+        elif dlogz > 1.0:
+            phase = "active_exploration"
+            expected_behavior = "Steady improvement, model learning parameter space"
+        elif dlogz > 0.1:
+            phase = "refinement"
+            expected_behavior = "Slow improvement, fine-tuning parameters"
+        else:
+            phase = "converged"
+            expected_behavior = "Model converged, results reliable"
+        
+        # Calculate improvement metrics
+        improvement_metrics = {}
+        if hasattr(sampler, '_logz_checkpoint'):
+            minutes_ago = 5
+            if elapsed > minutes_ago * 60:
+                improvement_metrics['logz_improvement_5min'] = current_logz - sampler._logz_checkpoint
+                improvement_metrics['improvement_rate'] = (current_logz - sampler._logz_checkpoint) / (minutes_ago * 60)
+        else:
+            sampler._logz_checkpoint = current_logz
+        
+        # GR baseline comparison
+        delta_logz_vs_gr = current_logz - BASELINE_LOGZ_GR if np.isfinite(current_logz) else np.nan
+        gr_diff_percent = (np.exp(delta_logz_vs_gr) - 1) * 100 if np.isfinite(delta_logz_vs_gr) else np.nan
+        
+        # Get current parameter estimates
+        param_estimates = {}
+        if hasattr(res, 'samples') and len(res.samples) > 0:
+            recent_samples = res.samples[-min(1000, len(res.samples)):]
+            for i, name in enumerate(fitted_names):
+                param_estimates[name] = {
+                    'median': float(np.median(recent_samples[:, i])),
+                    'std': float(np.std(recent_samples[:, i]))
+                }
+        
+        # Create progress_data with ALL fields
+        progress_data = {
+            'source': 'dynesty_sampler',
+            'timestamp': datetime.now().isoformat(),
+            'elapsed_hours': elapsed / 3600,
+            'phase': phase,
+            'phase_description': expected_behavior,
+            'is_normal': phase != 'converged',
+            'is_improving': improvement_metrics.get('improvement_rate', 0) > 0,
+            'convergence_status': 'converged' if phase == 'converged' else 'in_progress',
+            'health_status': 'NORMAL' if improvement_metrics.get('improvement_rate', 0) > 0 or phase == 'initialization' else 'CHECK',
+            'n_samples': n_samples,
+            'n_calls': n_calls,
+            'efficiency_percent': 100.0 * n_samples / n_calls if n_calls > 0 else 0,
+            'current_logz': current_logz,
+            'improvement_metrics': improvement_metrics,
+            'dlogz': dlogz,
+            'target_dlogz': getattr(args, 'dlogz_target', 0.01),
+            'dlogz_ratio': dlogz / getattr(args, 'dlogz_target', 0.01) if np.isfinite(dlogz) and getattr(args, 'dlogz_target', 0.01) > 0 else np.nan,
+            'gr_baseline_logz': BASELINE_LOGZ_GR,
+            'delta_logz_vs_gr': delta_logz_vs_gr,
+            'gr_diff_percent': gr_diff_percent,
+            'jeffreys_interpretation': get_progress_aware_interpretation(
+                            delta_logz_vs_gr, 
+                            phase, 
+                            improvement_metrics.get('improvement_rate', 0)
+                        ) if np.isfinite(delta_logz_vs_gr) else "Unknown",      
+            'heartbeat': {
+                'timestamp': datetime.now().isoformat(),
+                'samples_since_last': n_samples - getattr(save_progress_json, '_last_n_samples', 0),
+                'time_since_last': elapsed - getattr(save_progress_json, '_last_time', 0),
+                'is_stuck': n_samples == getattr(save_progress_json, '_last_n_samples', 0)
+            },
+            'parameter_estimates': param_estimates,
+            'xi_type': args.xi,
+            'run_id': getattr(args, 'run_id', 'cupy_run')
+        }
+        
+        save_progress_json._last_n_samples = n_samples
+        save_progress_json._last_time = elapsed
+
+        # Save with atomic write to prevent corruption
+        temp_file = progress_file.with_suffix('.tmp')
+        with open(temp_file, 'w') as f:
+            json.dump(make_json_serializable(progress_data), f, indent=2)
+        
+        # Atomic rename
+        temp_file.replace(progress_file)
+        
+        # Also save a timestamped backup every 10 minutes
+        if not hasattr(save_progress_json, '_last_backup') or (current_time - save_progress_json._last_backup) > 600:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = Path(args.output_dir) / f"progress_backup_{timestamp}.json"
+            import shutil
+            shutil.copy2(progress_file, backup_file)
+            save_progress_json._last_backup = current_time
+            logger.debug(f"Progress backup saved to {backup_file}")
+            
+    except Exception as e:
+        logger.debug(f"Failed to save progress.json: {e}")
+
+def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
+    """
+    Run the analyzer on current results without interrupting sampling.
+    
+    Parameters
+    ----------
+    output_dir : Path
+        Directory containing results
+    xi_type : str
+        Xi function type
+    logger : logging.Logger
+        Logger instance
+    suppress_plots : bool
+        If True, only generate summary stats, skip plots for speed
+    """
+    try:
+        # Look for the latest checkpoint file
+        npz_files = list(Path(output_dir).glob(f"*{xi_type}*_samples.npz"))
+        checkpoint_files = list(Path(output_dir).glob(f"dynesty_checkpoint_{xi_type}_latest.npz"))
+        
+        analysis_file = None
+        if checkpoint_files:
+            analysis_file = checkpoint_files[0]
+        elif npz_files:
+            # Sort by modification time and get the latest
+            analysis_file = max(npz_files, key=lambda f: f.stat().st_mtime)
+        
+        if not analysis_file or not analysis_file.exists():
+            logger.debug("No results file found for periodic analysis")
+            return
+        
+        # Import analyzer (do it here to avoid circular imports)
+        try:
+            from analyze_results import DynestyAnalyzer
+        except ImportError:
+            logger.warning("analyze_results.py not found - skipping periodic analysis")
+            return
+        
+        # Create timestamped analysis subdirectory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        analysis_subdir = Path(output_dir) / "periodic_analyses" / f"analysis_{timestamp}"
+        analysis_subdir.mkdir(parents=True, exist_ok=True)
+        
+        # Run analyzer
+        logger.info(f"\n Running periodic analysis on {analysis_file.name}")
+        analyzer = DynestyAnalyzer(str(analysis_file), str(analysis_subdir))
+        
+        # Get stats and save summary
+        stats_dict = analyzer.get_parameter_stats()
+        
+        # Save text summary
+        summary_file = analysis_subdir / "summary.txt"
+        with open(summary_file, 'w') as f:
+            # Redirect print output to file
+            import sys
+            old_stdout = sys.stdout
+            sys.stdout = f
+            
+            analyzer.print_summary(stats_dict)
+            analyzer.check_physical_plausibility()
+            
+            sys.stdout = old_stdout
+        
+        # Save JSON summary
+        try:
+            from analyze_results import export_summary
+            json_summary = export_summary(analyzer, stats_dict)
+            json_file = analysis_subdir / "summary.json"
+            with open(json_file, 'w') as f:
+                json.dump(make_json_serializable(json_summary), f, indent=2)
+        except ImportError:
+            # If export_summary doesn't exist, create a basic summary
+            basic_summary = {
+                'timestamp': timestamp,
+                'parameter_stats': stats_dict,
+                'logz': analyzer.logz[-1] if analyzer.logz is not None else None
+            }
+            json_file = analysis_subdir / "summary.json"
+            with open(json_file, 'w') as f:
+                json.dump(make_json_serializable(basic_summary), f, indent=2)
+        
+        # Generate plots if not suppressed
+        if not suppress_plots:
+            try:
+                analyzer.plot_corner(save=True)
+                analyzer.plot_rotation_curve(save=True)
+                analyzer.plot_xi_profile(save=True)
+            except Exception as plot_e:
+                logger.warning(f"Plot generation failed: {plot_e}")
+        
+        # Also save a "latest" symlink for easy access
+        latest_link = Path(output_dir) / "periodic_analyses" / "latest"
+        if latest_link.exists():
+            latest_link.unlink()
+        try:
+            latest_link.symlink_to(analysis_subdir.name)
+        except OSError:
+            # Symlinks might not work on all systems, just skip
+            pass
+        
+        logger.info(f"OK Periodic analysis saved to {analysis_subdir}")
+        
+        # Log key results
+        if 'M_disk_thin_solar' in stats_dict:
+            logger.info(f"   Current M_thin: {stats_dict['M_disk_thin_solar']['median']:.2e} M_sun")
+        if hasattr(analyzer, 'logz') and analyzer.logz is not None:
+            logger.info(f"   Current log(Z): {analyzer.logz[-1]:.2f}")
+        
+    except Exception as e:
+        logger.warning(f"Periodic analysis failed (non-critical): {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+
+def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
+    """Save current sampling state to NPZ file."""
+    try:
+        res = getattr(sampler, "results", None)
+        
+        if res is None:
+            logger.warning("WARNING No sampler.results found — skipping .npz snapshot")
+            return False
+            
+        if not hasattr(res, "samples") or res.samples is None or len(res.samples) == 0:
+            logger.warning("WARNING Dynesty results has no samples yet — skipping .npz snapshot")
+            return False
+            
+        # Build timestamp for unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Include xi_type in filename
+        xi_type = getattr(sampler, '_xi_type', 'power')
+        npz_path = Path(output_dir) / f"dynesty_checkpoint_{xi_type}_{timestamp}.npz"
+        
+        # Also save to a fixed filename that overwrites (for easy resumption)
+        npz_latest = Path(output_dir) / f"dynesty_checkpoint_{xi_type}_latest.npz"
+        
+        # Calculate weights if possible
+        weights = None
+        if hasattr(res, 'logwt') and hasattr(res, 'logz') and len(res.logz) > 0:
+            weights = np.exp(res.logwt - res.logz[-1])
+        
+        # Save the checkpoint with metadata
+        save_data = {
+            'samples': res.samples,
+            'logz': getattr(res, "logz", np.array([])),
+            'logzerr': getattr(res, "logzerr", np.array([])),
+            'logl': getattr(res, "logl", np.array([])),
+            'logwt': getattr(res, "logwt", np.array([])),
+            'blob': getattr(res, "blob", None),
+            'param_names': fitted_names,
+            'weights': weights,
+            'n_calls': getattr(res, "ncall", None),
+            'timestamp': timestamp,
+            'n_samples': len(res.samples),
+            'xi_type': xi_type
+        }
+        
+        # Save with timestamp
+        np.savez(npz_path, **save_data)
+        logger.info(f"OK Saved .npz checkpoint to: {npz_path}")
+        
+        # Save latest version (overwrites)
+        np.savez(npz_latest, **save_data)
+        logger.debug(f"OK Updated latest checkpoint: {npz_latest}")
+        
+        return True
+        
+    except Exception as e:
+        logger.warning(f"WARNING Failed to save .npz checkpoint: {e}")
+        return False
 
 # ============================================================================
 # CORE LIKELIHOOD AND PRIOR FUNCTIONS (PROCESS-SAFE)
@@ -89,7 +528,7 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
         
         return logl
     except Exception as e:
-        if log_likelihood_dynesty_cupy.call_count <= 3:
+        if hasattr(log_likelihood_dynesty_cupy, 'call_count') and log_likelihood_dynesty_cupy.call_count <= 3:
             print(f"LIKELIHOOD ERROR #{log_likelihood_dynesty_cupy.call_count}: {e}")
         return -np.inf
 
@@ -107,25 +546,206 @@ def prior_transform_dynesty_cupy(u, param_names, bounds_low, bounds_high, use_lo
 # DATA AND PARAMETER SETUP
 # ============================================================================
 
-def load_gaia_data():
-    """Load or generate data, returning NumPy arrays."""
-    R_data = np.linspace(1.0, 20.0, 1000)
-    v_data = 200 + 50 * np.exp(-R_data / 8.0)
-    sigma_data = 10.0 * np.ones_like(R_data)
+def load_and_prepare_gaia_data(args):
+    """
+    Load and prepare real Gaia data (ported from original run_dynesty.py)
+    Returns data compatible with CuPy arrays
+    """
+    logger = get_or_create_logger()
+    
+    if not DATA_IO_AVAILABLE:
+        logger.warning("data_io module not available, using synthetic data fallback")
+        R_data_np = np.linspace(1.0, 20.0, 1000)
+        v_data_np = 200 + 50 * np.exp(-R_data_np / 8.0)
+        sigma_data_np = 10.0 * np.ones_like(R_data_np)
+        
+        # Convert to CuPy arrays
+        R_data = to_cupy_array(R_data_np.astype(np.float32))
+        v_data = to_cupy_array(v_data_np.astype(np.float32))
+        sigma_data = to_cupy_array(sigma_data_np.astype(np.float32))
+        
+        logger.info(f"Using synthetic data: {len(R_data)} data points")
+        return R_data, v_data, sigma_data
+    
+    logger.info("\n" + "="*60)
+    logger.info("GAIA DATA LOADING & PROCESSING")
+    logger.info("="*60)
+    
+    gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
+    df_all_sky = None
+
+    if not gaia_cache_file.exists() or getattr(args, 'force_new_query_gaia', False) or getattr(args, 'force_reprocess_raw', False):
+        if getattr(args, 'force_new_query_gaia', False):
+            logger.info("Force flag enabled: Bypassing all caches to query Gaia from scratch.")
+        elif getattr(args, 'force_reprocess_raw', False):
+            logger.info("Force flag enabled: Bypassing merged cache to re-process raw slice files.")
+        else:
+            logger.info(f"Merged cache file not found at '{gaia_cache_file}'.")
+
+        # Fallback 1: Try to merge raw slice files
+        raw_dir = Path("gaia_sky_slices")
+        raw_files = sorted(raw_dir.glob("raw_L*.csv"))
+        logger.info(f"Searching for raw data in: '{raw_dir.resolve()}'")
+
+        if raw_files and not getattr(args, 'force_new_query_gaia', False):
+            logger.info(f"Found {len(raw_files)} raw Gaia slice files. Attempting to merge...")
+            dfs = []
+            for f in raw_files:
+                try:
+                    df_slice = pd.read_csv(f)
+                    dfs.append(df_slice)
+                    logger.info(f"  OK Successfully loaded {f.name} with {len(df_slice)} rows.")
+                except Exception as e:
+                    logger.warning(f"  WARNING Failed to load or parse {f.name}: {e}")
+
+            if not dfs:
+                logger.error("FAIL All raw Gaia slice files failed to load. Cannot proceed.")
+                sys.exit(1)
+
+            logger.info("Concatenating all loaded slices into a single DataFrame...")
+            df_all_sky = pd.concat(dfs, ignore_index=True)
+            logger.info(f"  OK Merged DataFrame created with {len(df_all_sky)} total rows.")
+            
+            try:
+                logger.info(f"Attempting to cache the merged data to: {gaia_cache_file}")
+                gaia_cache_file.parent.mkdir(parents=True, exist_ok=True)
+                df_all_sky.to_csv(gaia_cache_file, index=False)
+                logger.info(f"  Cached merged Gaia data successfully.")
+            except Exception as e:
+                logger.warning(f"  WARNING Failed to write cache file: {e}")
+
+        else:
+            # Fallback 2: Query from scratch
+            logger.info("No suitable raw files found or new query forced. Querying Gaia from scratch...")
+            try:
+                df_all_sky = load_all_sky_gaia_slices(
+                    lon_bin_width=30,
+                    stars_per_bin=12000,
+                    output_dir="gaia_sky_slices",
+                    force_query=True,
+                    max_distance_kpc=30.0
+                )
+                logger.info("  OK Gaia query completed.")
+            except Exception as e:
+                logger.error(f"FAIL Gaia query failed: {e}")
+                logger.info("Falling back to synthetic data...")
+                return load_and_prepare_gaia_data_synthetic()
+            
+    else:
+        logger.info(f"OK Found existing merged cache file. Loading data from: {gaia_cache_file}")
+        try:
+            df_all_sky = pd.read_csv(gaia_cache_file)
+            logger.info(f"  OK Loaded {len(df_all_sky)} stars from cache.")
+        except Exception as e:
+            logger.error(f"FAIL Failed to load cached Gaia data: {e}")
+            logger.error("   Try running with --force_reprocess_raw to rebuild the cache from slices.")
+            logger.info("Falling back to synthetic data...")
+            return load_and_prepare_gaia_data_synthetic()
+
+    logger.info("\n--- Processing Raw Gaia Data into Physical Units ---")
+    try:
+        df_all_sky = process_gaia_data(df_all_sky)
+    except Exception as e:
+        logger.error(f"FAIL Failed to process Gaia data: {e}")
+        logger.info("Falling back to synthetic data...")
+        return load_and_prepare_gaia_data_synthetic()
+
+    # --- Data Validation Step ---
+    logger.info("\n--- Validating loaded Gaia DataFrame ---")
+    if df_all_sky is None or df_all_sky.empty:
+        logger.error("FAIL DataFrame is empty after loading attempts. Cannot proceed.")
+        logger.info("Falling back to synthetic data...")
+        return load_and_prepare_gaia_data_synthetic()
+
+    logger.info(f"DataFrame shape: {df_all_sky.shape}")
+    logger.info(f"Columns: {df_all_sky.columns.tolist()}")
+
+    required_cols = ["R_kpc", "v_obs", "sigma_v"]
+    missing_cols = [col for col in required_cols if col not in df_all_sky.columns]
+    if missing_cols:
+        logger.error(f"FAIL Gaia data is missing required columns: {missing_cols}")
+        logger.info("Falling back to synthetic data...")
+        return load_and_prepare_gaia_data_synthetic()
+    
+    logger.info(f"Checking for non-finite values in critical columns...")
+    for col in required_cols:
+        n_bad = np.sum(~np.isfinite(df_all_sky[col]))
+        if n_bad > 0:
+            logger.warning(f"  WARNING Found {n_bad} NaN/inf values in column '{col}'. These will be filtered.")
+            df_all_sky.dropna(subset=[col], inplace=True)
+    logger.info(f"DataFrame shape after cleaning non-finite values: {df_all_sky.shape}")
+    logger.info("Validation of DataFrame contents complete.")
+    
+    # --- Convert to CuPy arrays ---
+    logger.info("\n--- Converting data to CuPy arrays for GPU ---")
+    try:
+        R_data_np = df_all_sky["R_kpc"].values.astype(np.float32)
+        v_data_np = df_all_sky["v_obs"].values.astype(np.float32)
+        sigma_data_np = df_all_sky["sigma_v"].values.astype(np.float32)
+        logger.info(f"NumPy arrays created with dtype={R_data_np.dtype}.")
+
+        # Convert to CuPy arrays
+        R_data = to_cupy_array(R_data_np)
+        v_data = to_cupy_array(v_data_np)
+        sigma_data = to_cupy_array(sigma_data_np)
+
+        logger.info(f"OK Successfully transferred {len(R_data)} stars to CuPy")
+        logger.info("="*60 + "\n")
+        
+        return R_data, v_data, sigma_data
+        
+    except Exception as e:
+        logger.error(f"FAIL An error occurred during conversion to CuPy arrays: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        logger.info("Falling back to synthetic data...")
+        return load_and_prepare_gaia_data_synthetic()
+
+def load_and_prepare_gaia_data_synthetic():
+    """Fallback synthetic data generation."""
+    logger = get_or_create_logger()
+    logger.info("Generating synthetic data...")
+    
+    R_data_np = np.linspace(1.0, 20.0, 1000)
+    v_data_np = 200 + 50 * np.exp(-R_data_np / 8.0)
+    sigma_data_np = 10.0 * np.ones_like(R_data_np)
+    
+    # Convert to CuPy arrays
+    R_data = to_cupy_array(R_data_np.astype(np.float32))
+    v_data = to_cupy_array(v_data_np.astype(np.float32))
+    sigma_data = to_cupy_array(sigma_data_np.astype(np.float32))
+    
+    logger.info(f"OK Generated {len(R_data)} synthetic data points")
     return R_data, v_data, sigma_data
 
 def setup_parameter_bounds(xi_type):
-    """Setup parameter bounds, returning NumPy arrays."""
+    """Setup parameter bounds, returning NumPy arrays - Enhanced version."""
     if xi_type == 'gr':
         param_names = ['M_disk_solar', 'R_d_kpc']
-        bounds_low = np.array([1e9, 0.1])
-        bounds_high = np.array([1e12, 10.0])
+        bounds_low = np.array([1e10, 1.0])    # More realistic bounds
+        bounds_high = np.array([5e11, 8.0])
         use_log_prior = np.array([True, False])
+    elif xi_type == 'enhanced':
+        param_names = ['M_disk_solar', 'R_d_kpc', 'rho_c_solar_kpc3', 'n_exp', 'A']
+        bounds_low = np.array([1e10, 1.0, 1e13, 0.5, 2.0])
+        bounds_high = np.array([5e11, 8.0, 1e16, 3.0, 10.0])
+        use_log_prior = np.array([True, False, True, False, False])
+    elif xi_type == 'power':
+        param_names = ['M_disk_solar', 'R_d_kpc', 'rho_c_solar_kpc3', 'n_exp']
+        bounds_low = np.array([1e10, 1.0, 1e13, 0.5])
+        bounds_high = np.array([5e11, 8.0, 1e16, 3.0])
+        use_log_prior = np.array([True, False, True, False])
+    elif xi_type == 'grav_color':
+        param_names = ['M_disk_solar', 'R_d_kpc', 'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g']
+        bounds_low = np.array([1e10, 1.0, 1e12, 2.0, 6.0])
+        bounds_high = np.array([5e11, 8.0, 1e15, 3.5, 10.0])
+        use_log_prior = np.array([True, False, True, False, False])
     else: # Fallback
         param_names = ['M_disk_solar', 'R_d_kpc']
-        bounds_low = np.array([1e9, 0.1])
-        bounds_high = np.array([1e12, 10.0])
+        bounds_low = np.array([1e10, 1.0])
+        bounds_high = np.array([5e11, 8.0])
         use_log_prior = np.array([True, False])
+    
     return param_names, bounds_low, bounds_high, use_log_prior
 
 # ============================================================================
@@ -133,41 +753,115 @@ def setup_parameter_bounds(xi_type):
 # ============================================================================
 
 def main_cupy():
-    """Main function for the dynesty run."""
+    """Main function for the dynesty run with real Gaia data."""
     logger = get_or_create_logger()
     logger.info("Starting CuPy-optimized dynesty run...")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--xi', type=str, default='gr')
-    parser.add_argument('--output_dir', type=str, default='cupy_results')
-    parser.add_argument('--nlive', type=int, default=500)
-    parser.add_argument('--maxcall', type=int, default=200000)
-    parser.add_argument('--num_threads', type=int, default=4)
-    parser.add_argument('--checkpoint_every', type=int, default=900, help='Seconds between automatic checkpoints')
+    parser = argparse.ArgumentParser(description="CuPy-optimized dynesty for DDMM",
+                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    
+    # Core options
+    parser.add_argument('--xi', type=str, default='gr', 
+                       choices=['gr', 'power', 'enhanced', 'grav_color'],
+                       help='Xi function type')
+    parser.add_argument('--output_dir', type=str, default='cupy_results',
+                       help='Output directory')
+    parser.add_argument('--nlive', type=int, default=500,
+                       help='Number of live points')
+    parser.add_argument('--maxcall', type=int, default=200000,
+                       help='Maximum likelihood calls')
+    parser.add_argument('--num_threads', type=int, default=4,
+                       help='Number of threads')
+    parser.add_argument('--dlogz_target', type=float, default=0.01,
+                       help='Target dlogz for convergence')
+    parser.add_argument('--checkpoint_every', type=int, default=900,
+                       help='Seconds between automatic checkpoints')
+    
+    # Data loading options
+    parser.add_argument('--force_new_query_gaia', action='store_true', default=False,
+                       help="Force new Gaia query")
+    parser.add_argument('--force_reprocess_raw', action='store_true', default=False,
+                       help="Force reprocessing of raw Gaia data")
+    parser.add_argument('--max_sample_gaia', type=int, default=50000,
+                       help="Maximum number of Gaia stars to use")
+    
+    # Progress monitoring options
+    parser.add_argument('--periodic_analysis', action='store_true', default=False,
+                       help='Run analysis periodically during sampling')
+    parser.add_argument('--analysis_interval_min', type=int, default=30,
+                       help='Interval between analyses in minutes')
+    parser.add_argument('--analysis_with_plots', action='store_true', default=False,
+                       help='Generate plots during periodic analysis')
+    
     # Post-processing flags
-    parser.add_argument('--run_analysis', action='store_true', help='Run analyze_results.py on the final .npz')
-    parser.add_argument('--run_validation', action='store_true', help='Run validate_ddmm.py on the final .npz')
-    parser.add_argument('--run_plots', action='store_true', help='Run generate_paper_figures.py for quick plots')
+    parser.add_argument('--run_analysis', action='store_true',
+                       help='Run analyze_results.py on the final .npz')
+    parser.add_argument('--run_validation', action='store_true',
+                       help='Run validate_ddmm.py on the final .npz')
+    parser.add_argument('--run_plots', action='store_true',
+                       help='Run generate_paper_figures.py for quick plots')
+    
+    # Sampler options
+    parser.add_argument('--sample_method', type=str, default='rslice',
+                       choices=['rwalk', 'rslice', 'hslice'],
+                       help='Sampling method')
+    parser.add_argument('--bound_method', type=str, default='multi',
+                       choices=['none', 'single', 'multi', 'balls', 'cubes'],
+                       help='Bounding method')
+    
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
     logger.info(f"Output directory: {output_dir}")
 
-    # --- Setup Data and Parameters (as NumPy) ---
-    R_data, v_data, sigma_data = load_gaia_data()
+    # Set run_id for tracking
+    args.run_id = f"cupy_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # --- Load REAL Gaia Data ---
+    logger.info("Loading Gaia data...")
+    try:
+        R_data, v_data, sigma_data = load_and_prepare_gaia_data(args)
+        logger.info(f"Successfully loaded {len(R_data)} Gaia stars")
+        
+        # Limit data size if requested
+        if args.max_sample_gaia and len(R_data) > args.max_sample_gaia:
+            # Convert to numpy for indexing, then back to cupy
+            R_np = to_numpy_array(R_data)
+            v_np = to_numpy_array(v_data)
+            sigma_np = to_numpy_array(sigma_data)
+            
+            indices = np.random.choice(len(R_np), args.max_sample_gaia, replace=False)
+            
+            R_data = to_cupy_array(R_np[indices])
+            v_data = to_cupy_array(v_np[indices])
+            sigma_data = to_cupy_array(sigma_np[indices])
+            
+            logger.info(f"Randomly sampled {args.max_sample_gaia} stars from dataset")
+            
+    except Exception as e:
+        logger.error(f"Critical failure in data loading: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        sys.exit(1)
+
+    # --- Setup Data and Parameters ---
     param_names, bounds_low, bounds_high, use_log_prior = setup_parameter_bounds(args.xi)
     logger.info(f"Fitting {len(param_names)} parameters: {param_names}")
-
-    # --- Prepare arguments for parallel execution ---
-    logl_args = (param_names, args, R_data, v_data, sigma_data)
-    ptform_args = (param_names, bounds_low, bounds_high, use_log_prior)
+    logger.info(f"Parameter bounds:")
+    for i, name in enumerate(param_names):
+        prior_type = "log-uniform" if use_log_prior[i] else "uniform"
+        logger.info(f"  {name}: [{bounds_low[i]:.2e}, {bounds_high[i]:.2e}] ({prior_type})")
 
     # --- Resource Monitoring ---
     resource_monitor = None
     if RESOURCE_MONITOR_AVAILABLE:
-        resource_monitor = ResourceMonitor(output_dir)
-        resource_monitor.start_monitoring()
+        try:
+            resource_monitor = ResourceMonitor(output_dir)
+            resource_monitor.start_monitoring()
+            logger.info("Resource monitoring started")
+        except Exception as e:
+            logger.warning(f"Failed to start resource monitoring: {e}")
 
     try:
         logger.info("STEP 1: Importing dynesty...")
@@ -177,11 +871,10 @@ def main_cupy():
         logger.info(f"STEP 2: Creating multiprocessing pool with {args.num_threads} threads...")
         with Pool(processes=args.num_threads) as pool:
             logger.info("STEP 3: Creating DynamicNestedSampler...")
-            logger.info(f"  - ndim: {len(param_names)}")
-            logger.info(f"  - nlive: {args.nlive}")
-            logger.info(f"  - queue_size: {args.num_threads}")
-            logger.info(f"  - logl_args length: {len(logl_args)}")
-            logger.info(f"  - ptform_args length: {len(ptform_args)}")
+            
+            # Prepare arguments for parallel execution
+            logl_args = (param_names, args, R_data, v_data, sigma_data)
+            ptform_args = (param_names, bounds_low, bounds_high, use_log_prior)
             
             sampler = dynesty.DynamicNestedSampler(
                 log_likelihood_dynesty_cupy,
@@ -191,30 +884,72 @@ def main_cupy():
                 ptform_args=ptform_args,
                 pool=pool,
                 queue_size=args.num_threads,
-                nlive=args.nlive
+                nlive=args.nlive,
+                sample=args.sample_method,
+                bound=args.bound_method
             )
+            
+            # Store xi_type for checkpointing
+            sampler._xi_type = args.xi
+            
             logger.info("✓ DynamicNestedSampler created successfully")
-            logger.info("STEP 4: Setting up checkpoint thread...")
+            
+            # --- Setup Progress Monitoring ---
+            logger.info("STEP 4: Setting up progress monitoring...")
             stop_event = threading.Event()
+            start_time = time.time()
+            last_progress_json = time.time()
+            last_analysis_time = time.time()
+            PROGRESS_JSON_INTERVAL = 60  # Save progress.json every minute
+            ANALYSIS_INTERVAL = args.analysis_interval_min * 60 if hasattr(args, 'analysis_interval_min') else 1800
+            
             def _checkpoint_worker():
+                nonlocal last_progress_json, last_analysis_time
                 while not stop_event.wait(args.checkpoint_every):
                     try:
+                        # Save dynesty checkpoint
                         with open(output_dir / "dynesty_checkpoint.pkl", "wb") as cf:
                             pickle.dump(sampler.results, cf)
                         logger.info("✓ Checkpoint saved.")
+                        
+                        # Save progress JSON
+                        current_time = time.time()
+                        if current_time - last_progress_json > PROGRESS_JSON_INTERVAL:
+                            save_progress_json(sampler, param_names, args, start_time, logger)
+                            last_progress_json = current_time
+                        
+                        # Run periodic analysis
+                        if args.periodic_analysis and current_time - last_analysis_time > ANALYSIS_INTERVAL:
+                            # First, ensure we have a recent checkpoint
+                            save_npz_checkpoint(sampler, param_names, args.output_dir, logger)
+                            
+                            # Run analysis in a separate thread
+                            analysis_thread = threading.Thread(
+                                target=run_periodic_analysis,
+                                args=(args.output_dir, args.xi, logger, not args.analysis_with_plots),
+                                daemon=True
+                            )
+                            analysis_thread.start()
+                            last_analysis_time = current_time
+                            
                     except Exception as e:
-                        logger.warning(f"✗ Checkpoint save failed: {e}")
+                        logger.warning(f"✗ Checkpoint/monitoring failed: {e}")
+                        
             chk_thread = threading.Thread(target=_checkpoint_worker, daemon=True)
             chk_thread.start()
-            logger.info("✓ Checkpoint thread started")
+            logger.info("✓ Progress monitoring thread started")
 
             logger.info("STEP 5: Starting nested sampling...")
             logger.info(f"  - maxcall: {args.maxcall}")
-            logger.info(f"  - print_progress: True")
+            logger.info(f"  - dlogz_target: {args.dlogz_target}")
             logger.info("  - Calling sampler.run_nested()...")
             
             try:
-                sampler.run_nested(maxcall=args.maxcall, print_progress=True)
+                sampler.run_nested(
+                    maxcall=args.maxcall, 
+                    print_progress=True,
+                    dlogz_init=args.dlogz_target
+                )
                 logger.info("✓ sampler.run_nested() completed successfully")
             except Exception as e:
                 logger.error(f"✗ sampler.run_nested() failed: {e}")
@@ -222,9 +957,12 @@ def main_cupy():
                 logger.error(f"Error args: {e.args}")
                 raise
             
+            # Stop monitoring threads
+            stop_event.set()
+            chk_thread.join(timeout=2)
+            
             logger.info("STEP 6: Saving progress tracking...")
             try:
-                # Helper function to convert numpy types to JSON-serializable
                 def to_json_serializable(obj):
                     if hasattr(obj, 'tolist'):
                         return obj.tolist()
@@ -250,15 +988,9 @@ def main_cupy():
             except Exception as e:
                 logger.error(f"✗ Failed to save progress: {e}")
                 raise
-
-            # Stop checkpoint thread after sampling completes
-            stop_event.set()
-            chk_thread.join(timeout=2)
         
         logger.info("STEP 7: Saving final results...")
         results = sampler.results
-        logger.info(f"  - Results type: {type(results)}")
-        logger.info(f"  - Available attributes: {dir(results)}")
         
         try:
             with open(output_dir / "results.pkl", "wb") as f:
@@ -267,77 +999,124 @@ def main_cupy():
         except Exception as e:
             logger.error(f"✗ Failed to save results.pkl: {e}")
             raise
+            
         logger.info("STEP 8: Saving posterior samples...")
         try:
-            # Extract weights (not always present as an attribute)
-            if 'weights' in results:
-                weights_arr = results['weights']
-                logger.info("  - Using results['weights']")
-            elif hasattr(results, 'weights'):
+            # Extract weights
+            if hasattr(results, 'weights'):
                 weights_arr = results.weights
                 logger.info("  - Using results.weights")
-            else:
+            elif hasattr(results, 'logwt') and hasattr(results, 'logz'):
                 # Compute importance weights from logwt and final evidence
-                weights_arr = np.exp(results['logwt'] - results['logz'][-1])
+                weights_arr = np.exp(results.logwt - results.logz[-1])
                 logger.info("  - Computed weights from logwt")
+            else:
+                # Uniform weights as fallback
+                weights_arr = np.ones(len(results.samples)) / len(results.samples)
+                logger.info("  - Using uniform weights (fallback)")
             
             logger.info(f"  - Weights shape: {weights_arr.shape}")
-            logger.info(f"  - Samples shape: {results['samples'].shape}")
-            logger.info(f"  - LogL shape: {results['logl'].shape}")
+            logger.info(f"  - Samples shape: {results.samples.shape}")
+            logger.info(f"  - LogL shape: {results.logl.shape}")
             
+            # Save with metadata for analyzer compatibility
             np.savez(
                 output_dir / "posterior_samples.npz",
-                samples=results['samples'],
-                logl=results['logl'],
+                samples=results.samples,
+                logl=results.logl,
                 weights=weights_arr,
-                logz=results['logz'][-1],
-                dlogz=(results['dlogz'][-1] if 'dlogz' in results else (
-                    results.logzerr[-1] if hasattr(results, 'logzerr') else np.nan
-                ))
+                logz=results.logz[-1],
+                dlogz=(results.logzerr[-1] if hasattr(results, 'logzerr') else np.nan),
+                param_names=np.array(param_names),  # CRITICAL: Add parameter names
+                xi_type=args.xi,  # Add metadata for analysis
+                n_samples=len(results.samples),
+                timestamp=time.time()
             )
             logger.info("✓ Saved posterior_samples.npz")
         except Exception as e:
             logger.error(f"✗ Failed to save posterior_samples.npz: {e}")
             raise
+            
         logger.info(f"Sampling completed! LogZ = {results.logz[-1]:.2f}")
 
-        # Optional post-processing ------------------------------------------------
+        # Model comparison summary
+        delta_logz_vs_gr = results.logz[-1] - BASELINE_LOGZ_GR
+        interpretation = interpret_jeffreys_scale(delta_logz_vs_gr)
+        logger.info(f"\n*** MODEL COMPARISON SUMMARY ***")
+        logger.info(f"GR Baseline LogZ: {BASELINE_LOGZ_GR:.2f}")
+        logger.info(f"This Run LogZ:    {results.logz[-1]:.2f}")
+        logger.info(f"Δ LogZ:           {delta_logz_vs_gr:+.2f}")
+        logger.info(f"Interpretation:   {interpretation}")
+        if delta_logz_vs_gr > 0:
+            logger.info("*** DDMM model is preferred over GR ***")
+        else:
+            logger.info("*** GR model is preferred over DDMM ***")
+
+        # === ENHANCED POST-PROCESSING ===
         posterior_npz = output_dir / "posterior_samples.npz"
+        
         if args.run_analysis:
             try:
                 import analyze_results as ar
-                # Fix: analyze_results.main() doesn't take arguments
-                import sys
                 original_argv = sys.argv
                 sys.argv = ['analyze_results.py', str(posterior_npz)]
                 ar.main()
                 sys.argv = original_argv
-                logger.info("analyze_results.py finished.")
+                logger.info("✓ analyze_results.py finished.")
             except Exception as e:
-                logger.error(f"analyze_results.py failed: {e}")
+                logger.error(f"✗ analyze_results.py failed: {e}")
+                
         if args.run_validation:
             try:
                 import validate_ddmm as vd
                 vd.main([str(posterior_npz)])
-                logger.info("validate_ddmm.py finished.")
+                logger.info("✓ validate_ddmm.py finished.")
             except Exception as e:
-                logger.error(f"validate_ddmm.py failed: {e}")
+                logger.error(f"✗ validate_ddmm.py failed: {e}")
+                
         if args.run_plots:
             try:
-                import sys
                 sys.path.append("Older Files")
                 import generate_paper_figures as gpf
-                # Execute the main block directly
                 exec(open("Older Files/generate_paper_figures.py").read())
-                logger.info("generate_paper_figures.py finished.")
+                logger.info("✓ generate_paper_figures.py finished.")
             except Exception as e:
-                logger.error(f"generate_paper_figures.py failed: {e}")
+                logger.error(f"✗ generate_paper_figures.py failed: {e}")
 
+        # Final summary
+        logger.info("\n*** RUN COMPLETED SUCCESSFULLY ***")
+        logger.info(f"Results saved in: {output_dir}")
+        logger.info(f"Key files:")
+        logger.info(f"  - posterior_samples.npz: Main results for analysis")
+        logger.info(f"  - results.pkl: Full dynesty results object")
+        logger.info(f"  - dynesty_progress.json: Progress tracking")
+        if args.periodic_analysis:
+            logger.info(f"  - periodic_analyses/: Intermediate analysis results")
+
+    except KeyboardInterrupt:
+        logger.warning("Run interrupted by user (Ctrl+C)")
+        # Try to save partial results
+        try:
+            if 'sampler' in locals() and hasattr(sampler, 'results'):
+                partial_file = output_dir / "interrupted_results.npz"
+                np.savez(partial_file, 
+                        samples=sampler.results.samples,
+                        logz=sampler.results.logz,
+                        param_names=param_names)
+                logger.info(f"Saved partial results to {partial_file}")
+        except Exception as save_e:
+            logger.error(f"Failed to save partial results: {save_e}")
+        
     except Exception as e:
         logger.error(f"FATAL: Sampling failed: {e}", exc_info=True)
+        
     finally:
         if resource_monitor:
-            resource_monitor.stop_monitoring()
+            try:
+                resource_monitor.stop_monitoring()
+                logger.info("Resource monitoring stopped")
+            except Exception as e:
+                logger.warning(f"Failed to stop resource monitoring: {e}")
 
 if __name__ == "__main__":
     freeze_support()
