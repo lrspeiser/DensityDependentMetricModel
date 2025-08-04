@@ -1297,7 +1297,7 @@ def enhanced_monitor_sampler_progress(
             phase_emoji = ""
         elif dlogz > 0.1:
             run_phase = "REFINEMENT"
-            phase_emoji = "🔧"
+            phase_emoji = "***"
         else:
             run_phase = "CONVERGING"
             phase_emoji = "OK"
@@ -4678,7 +4678,7 @@ def analyze_model_vs_gr(enhanced_results, gr_baseline_file, args, gaia_data):
         plt.tight_layout()
         plot_file = Path(args.output_dir) / 'model_comparison.png'
         plt.savefig(plot_file, dpi=150)
-        logger.info(f"\n📈 Saved comparison plot to: {plot_file}")
+        logger.info(f"\n*** Saved comparison plot to: {plot_file}")
         
         # Print summary statistics
         logger.info(f"\n RESIDUAL STATISTICS:")
@@ -4686,7 +4686,7 @@ def analyze_model_vs_gr(enhanced_results, gr_baseline_file, args, gaia_data):
         logger.info(f"   Enhanced RMS error: {np.sqrt(np.mean(residuals_enhanced**2)):.1f} km/s")
         
         # Radial breakdown
-        logger.info(f"\n📍 PERFORMANCE BY RADIUS:")
+        logger.info(f"\n*** PERFORMANCE BY RADIUS:")
         logger.info(f"   {'Radius':<12} {'GR Error':<12} {'Enhanced Error':<12} {'Improvement':<12}")
         logger.info("   " + "-"*48)
         
@@ -4720,7 +4720,7 @@ def run_multi_chain_analysis(args):
     
     for i, seed in enumerate(args.chain_seeds):
         logger.info(f"\n{'='*80}")
-        logger.info(f"🎲 CHAIN {i+1}/{len(args.chain_seeds)} with seed={seed}")
+        logger.info(f"*** CHAIN {i+1}/{len(args.chain_seeds)} with seed={seed}")
         logger.info(f"{'='*80}")
         
         # Create chain-specific output directory
