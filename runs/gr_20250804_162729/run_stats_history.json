@@ -1,0 +1,21 @@
+[
+  {
+    "timestamp": "2025-08-04T16:42:30.041104",
+    "elapsed_seconds": 900.0208597183228,
+    "elapsed_hours": 0.25000579436620074,
+    "iterations": 6354,
+    "ncall": 45730,
+    "efficiency_percent": 0,
+    "final_logz": -4940100619.470257,
+    "final_logzerr": NaN,
+    "calls_per_second": 50.80993346566657,
+    "iterations_per_second": 7.059836370890999,
+    "run_id": "cupy_20250804_162729",
+    "xi_type": "gr",
+    "nlive": 2000,
+    "maxcall": 1500000,
+    "dlogz_target": 0.01,
+    "sample_method": "rslice",
+    "bound_method": "multi"
+  }
+]

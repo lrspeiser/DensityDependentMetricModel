@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-08-04T16:47:55.938980",
+  "elapsed_seconds": 900.0504810810089,
+  "elapsed_hours": 0.2500140225225025,
+  "iterations": 17025,
+  "ncall": 143315,
+  "efficiency_percent": 0,
+  "final_logz": -4796788236.615001,
+  "final_logzerr": NaN,
+  "calls_per_second": 159.22995766623112,
+  "iterations_per_second": 18.915605688640998,
+  "run_id": "cupy_20250804_163255",
+  "xi_type": "gr",
+  "nlive": 5000,
+  "maxcall": 10000000,
+  "dlogz_target": 0.001,
+  "sample_method": "rwalk",
+  "bound_method": "multi"
+}
