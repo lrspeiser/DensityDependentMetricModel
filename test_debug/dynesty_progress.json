@@ -1,43 +1,46 @@
 {
   "source": "dynesty_sampler",
-  "timestamp": "2025-08-04T09:26:44.541491",
-  "elapsed_hours": 0.01668820454014672,
-  "phase": "early_exploration",
-  "phase_description": "Rapid improvement expected, still finding good regions",
+  "timestamp": "2025-08-04T09:53:02.236942",
+  "elapsed_hours": 0.08364696615272098,
+  "phase": "active_exploration",
+  "phase_description": "Steady improvement, model learning parameter space",
   "is_normal": 1,
-  "is_improving": 0,
+  "is_improving": 1,
   "convergence_status": "in_progress",
-  "health_status": "CHECK",
-  "n_samples": 323,
-  "n_calls": 4099,
-  "efficiency_percent": 7.8799707245669675,
-  "current_logz": -22188203.205421414,
-  "improvement_metrics": {},
-  "dlogz": 29777.990049667656,
+  "health_status": "NORMAL",
+  "n_samples": 595,
+  "n_calls": 10122,
+  "efficiency_percent": 5.878284923928078,
+  "current_logz": -17722432.92682865,
+  "improvement_metrics": {
+    "logz_improvement_5min": 4426624.139288131,
+    "improvement_rate": 14755.413797627103
+  },
+  "dlogz": 92794.0,
   "target_dlogz": 0.01,
-  "dlogz_ratio": 2977799.0049667656,
+  "dlogz_ratio": 9279400.0,
   "gr_baseline_logz": -1490897.5250096943,
-  "delta_logz_vs_gr": -20697305.68041172,
+  "delta_logz_vs_gr": -16231535.401818955,
   "gr_diff_percent": -100.0,
-  "jeffreys_interpretation": "Decisive evidence (very early - results will change)",
+  "jeffreys_interpretation": "Currently Decisive evidence favoring GR (but improving rapidly)",
   "heartbeat": {
-    "timestamp": "2025-08-04T09:26:44.541505",
-    "samples_since_last": 323,
-    "time_since_last": 60.0775363445282,
-    "is_stuck": 0
+    "timestamp": "2025-08-04T09:53:02.236978",
+    "samples_since_last": 0,
+    "time_since_last": 60.18479585647583,
+    "is_stuck": 1
   },
   "parameter_estimates": {
     "M_disk_thin_solar": {
-      "median": 42600711591.32964,
-      "std": 8467076809.739831
+      "median": 46357385492.37431,
+      "std": 6740641319.708509
     },
     "R_d_thin_kpc": {
-      "median": 3.008598217764388,
-      "std": 0.6999978917336381
+      "median": 2.4384521839861706,
+      "std": 0.705230887122601
     },
     "h_z_thin_kpc": {
-      "median": 0.3278067330586535,
-      "std": 0.09788317076120112
+      "median": 0.3264712471428054,
+      "std": 0.0997409330930172
     }
   },
   "xi_type": "gr",

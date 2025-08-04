@@ -1,29 +1,29 @@
 {
-  "timestamp": "2025-08-04T09:48:21.380022",
-  "elapsed_time": 0.0056294090218014185,
-  "n_samples": 204,
-  "n_calls": 1107,
-  "efficiency": 18.428184281842817,
-  "logz": -25969090.02133204,
-  "logz_err": 0.28284676194072983,
+  "timestamp": "2025-08-04T09:53:11.912522",
+  "elapsed_time": 0.08633176306883494,
+  "n_samples": 595,
+  "n_calls": 10122,
+  "efficiency": 5.878284923928078,
+  "logz": -17722432.92682865,
+  "logz_err": 2.755159699983478,
   "dlogz": 0.0,
   "current_nlive": 0,
   "parameter_estimates": {
-    "M_disk_thin_solar": 39175930895.43208,
-    "R_d_thin_kpc": 3.498692732773439,
-    "h_z_thin_kpc": 0.3348833827973236
+    "M_disk_thin_solar": 46357385492.37431,
+    "R_d_thin_kpc": 2.4384521839861706,
+    "h_z_thin_kpc": 0.3264712471428054
   },
   "parameter_uncertainties": {
-    "M_disk_thin_solar": 9037294811.176956,
-    "R_d_thin_kpc": 0.7361331701488755,
-    "h_z_thin_kpc": 0.09419230073533746
+    "M_disk_thin_solar": 6740641319.708509,
+    "R_d_thin_kpc": 0.705230887122601,
+    "h_z_thin_kpc": 0.0997409330930172
   },
   "convergence_status": {
     "converged": true,
     "near_convergence": true,
     "dlogz": 0.0,
     "efficiency_ok": true,
-    "stuck": false
+    "stuck": true
   },
   "health_warnings": [],
   "estimated_completion": null
