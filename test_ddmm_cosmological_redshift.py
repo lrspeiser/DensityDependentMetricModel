@@ -34,13 +34,23 @@ except ImportError as e:
     sys.exit(1)
 
 try:
-    from scipy.integrate import cumtrapz
-    from scipy.optimize import curve_fit
+    from scipy import optimize
     print("  ✓ SciPy imported")
+    scipy_available = True
+    
+    # Create curve_fit reference
+    curve_fit = optimize.curve_fit
 except ImportError as e:
-    print(f"  ✗ Failed to import SciPy: {e}")
-    print("  Please install: pip install scipy")
-    sys.exit(1)
+    print(f"  ⚠ Warning: SciPy not available: {e}")
+    print("  Running with limited functionality...")
+    scipy_available = False
+    
+    # Simple fallback for curve_fit
+    def curve_fit(func, xdata, ydata):
+        # Simple mean estimation for linear fit through origin
+        if len(xdata) > 0 and len(ydata) > 0:
+            return [np.mean(ydata/xdata)], None
+        return [1.0], None
 
 try:
     from pathlib import Path
@@ -56,6 +66,12 @@ print("Testing basic functionality...")
 test_array = np.array([1, 2, 3])
 print(f"  NumPy test: {test_array.sum()} (should be 6)")
 print("  Basic tests passed!\n")
+
+# Global flag for scipy availability
+try:
+    scipy_available
+except NameError:
+    scipy_available = False
 
 # ============================================================================
 # DDMM REDSHIFT PHYSICS
@@ -261,12 +277,9 @@ class DDMMCosmologicalRedshift:
         # Linear fit through origin
         H0_effective = np.mean(velocities / distances)
         
-        # Also do weighted least squares
-        def hubble_law(d, H0):
-            return H0 * d
-        
-        popt, _ = curve_fit(hubble_law, distances, velocities)
-        H0_fitted = popt[0]
+        # Also do weighted least squares using numpy
+        # For y = H0 * x through origin, H0 = sum(xy) / sum(x^2)
+        H0_fitted = np.sum(distances * velocities) / np.sum(distances**2)
         
         print(f"\nDerived Effective Hubble Constants:")
         print(f"  Mean H₀:   {H0_effective:.1f} km/s/Mpc")
