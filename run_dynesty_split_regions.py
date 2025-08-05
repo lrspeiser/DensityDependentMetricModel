@@ -35,11 +35,11 @@ from multiprocessing import freeze_support
 sys.path.append('.')
 
 try:
-    from data_io import load_gaia
+    from load_existing_gaia import load_existing_gaia_data
     DATA_IO_AVAILABLE = True
 except ImportError:
     DATA_IO_AVAILABLE = False
-    print("Warning: data_io not available")
+    print("Warning: load_existing_gaia not available")
 
 try:
     from density_metric_cupy import v_total_kms_cupy, v_baryon_comprehensive_kms_cupy, volume_density_comprehensive_solar_kpc3_cupy
@@ -159,6 +159,15 @@ class RegionSplitter:
         logger.info(f"  Velocity range: {v_obs.min():.1f} - {v_obs.max():.1f} km/s")
         logger.info(f"  Mean velocity: {v_obs.mean():.1f} ± {v_obs.std():.1f} km/s")
         logger.info(f"  Median velocity: {np.median(v_obs):.1f} km/s")
+        
+        # Print detailed radial bin breakdown
+        logger.info(f"  DETAILED RADIAL BINS:")
+        for i in range(16):  # 0-1, 1-2, ..., 15-16 kpc
+            bin_mask = (R_kpc >= i) & (R_kpc < i + 1)
+            n_stars = np.sum(bin_mask)
+            if n_stars > 0:
+                v_bin = v_obs[bin_mask]
+                logger.info(f"    {i:2d}-{i+1:2d} kpc: {n_stars:6d} stars, v_med={np.median(v_bin):6.1f} km/s, v_mean={v_bin.mean():6.1f} km/s")
 
 def setup_parameter_bounds(xi_type):
     """Setup parameter bounds for the split-region analysis."""
@@ -322,14 +331,12 @@ def run_region_analysis(region_data, region_name, xi_type, nlive=1000, maxcall=5
         ptform_args=(param_names, bounds_low, bounds_high, use_log_prior),
         nlive=nlive,
         bound='multi',
-        sample='rslice',
-        ncores=num_threads
+        sample='rslice'
     )
     
     # Run sampling
     sampler.run_nested(
-        maxcall=maxcall,
-        dlogz_target=0.01
+        maxcall=maxcall
     )
     
     # Get results
@@ -439,9 +446,9 @@ def main():
     """Main function for split-region analysis."""
     parser = argparse.ArgumentParser(description='Split-region dynesty analysis for Milky Way rotation curve')
     parser.add_argument('--xi', type=str, default='gr', choices=['gr', 'power', 'enhanced', 'grav_color'],
-                       help='Xi function type')
-    parser.add_argument('--transition_radius', type=float, default=12.0,
-                       help='Transition radius between inner and outer regions (kpc)')
+                        help='Xi function type')
+    parser.add_argument('--transition_radius', type=float, default=8.0,
+                        help='Transition radius between inner and outer regions (kpc)')
     parser.add_argument('--nlive', type=int, default=1000,
                        help='Number of live points per region')
     parser.add_argument('--maxcall', type=int, default=500000,
@@ -466,8 +473,8 @@ def main():
         logger.error("data_io not available")
         return
     
-    logger.info("Loading Gaia data...")
-    gaia_data = load_gaia(sample_max=args.max_sample_gaia)
+    logger.info("Loading existing Gaia data...")
+    gaia_data = load_existing_gaia_data(sample_max=args.max_sample_gaia)
     
     if gaia_data is None:
         logger.error("Failed to load Gaia data")

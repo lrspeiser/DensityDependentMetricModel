@@ -1,7 +1,7 @@
 {
   "source": "dynesty_sampler",
-  "timestamp": "2025-08-04T17:57:30.210705",
-  "elapsed_hours": 1.5000569432311588,
+  "timestamp": "2025-08-04T17:12:30.113590",
+  "elapsed_hours": 0.7500299504068163,
   "phase": "active_exploration",
   "phase_description": "Steady improvement, model learning parameter space",
   "is_normal": 1,
@@ -24,9 +24,9 @@
   "gr_diff_percent": -100.0,
   "jeffreys_interpretation": "Currently strongly disfavors DDMM (still exploring)",
   "heartbeat": {
-    "timestamp": "2025-08-04T17:57:30.210718",
+    "timestamp": "2025-08-04T17:12:30.113602",
     "samples_since_last": 0,
-    "time_since_last": 900.0235788822174,
+    "time_since_last": 900.0342984199524,
     "is_stuck": 1
   },
   "parameter_estimates": {
