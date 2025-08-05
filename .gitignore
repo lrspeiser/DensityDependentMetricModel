@@ -169,3 +169,24 @@ chains_dynesty*/
 *.parquet
 !gaia_sky_slices/*.csv
 !gaia_sky_slices/*.parquet
+
+# -------------------------------------------------------------------
+# 🆕 Runtime and Monitoring Files (Machine-Specific)
+# -------------------------------------------------------------------
+# Resource usage monitoring (large, machine-specific)
+resource_usage.json
+hardware_info.json
+run_stats.json
+run_stats_history.json
+
+# Dynesty checkpoints and intermediate files (can be regenerated)
+dynesty_checkpoint*.npz
+dynesty_checkpoint*.pkl
+*.npz
+!tier1_best_fit.npz
+
+# Periodic analysis outputs (can be regenerated)
+periodic_analyses/
+
+# CLI command logs (machine-specific)
+cli_command.txt
