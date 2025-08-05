@@ -152,12 +152,14 @@ class DDMMCosmologicalRedshift:
         """
         Direct DDMM redshift formula from your paper.
         
-        1 + z = [(ρ_obs + ρ_c)/(ρ_emit + ρ_c)]^(α/2)
+        1 + z = [(ρ_emit + ρ_c)/(ρ_obs + ρ_c)]^(α/2)
         where α = A * n
+        
+        Light is redshifted when going from high to low density.
         """
         alpha = self.A * self.n
-        z_plus_1 = ((rho_observer + self.rho_c) / 
-                    (rho_emitter + self.rho_c))**(alpha/2)
+        z_plus_1 = ((rho_emitter + self.rho_c) / 
+                    (rho_observer + self.rho_c))**(alpha/2)
         return z_plus_1 - 1
     
     def gravitational_redshift_path_integral(self, distance_Mpc, n_steps=1000):
@@ -165,7 +167,9 @@ class DDMMCosmologicalRedshift:
         Calculate redshift via path integral through density field.
         
         From your paper:
-        ln(1 + z) = (α/2) ∫ (1/(ρ + ρ_c)) · (dρ/ds) ds
+        ln(1 + z) = -(α/2) ∫ (1/(ρ + ρ_c)) · (dρ/ds) ds
+        
+        Note: negative sign because density decreases along path
         """
         # Create path from observer to source
         r_path = np.linspace(0, distance_Mpc, n_steps)
@@ -174,7 +178,7 @@ class DDMMCosmologicalRedshift:
         # Get density along path
         rho_path = np.array([self.density_profile_cosmological(r) for r in r_path])
         
-        # Calculate density gradient
+        # Calculate density gradient (will be negative as density decreases)
         drho_dr = np.gradient(rho_path, dr)
         
         # Integrand
@@ -184,8 +188,13 @@ class DDMMCosmologicalRedshift:
         # Numerical integration
         integral = np.trapezoid(integrand, r_path)
         
-        # Calculate redshift
-        ln_1_plus_z = (alpha / 2) * integral
+        # Calculate redshift (note the negative sign)
+        ln_1_plus_z = -(alpha / 2) * integral
+        
+        # Ensure we don't get negative redshift
+        if ln_1_plus_z < 0:
+            return 0.0  # No blueshift
+        
         return np.exp(ln_1_plus_z) - 1
     
     def metric_redshift_accumulated(self, distance_Mpc, n_steps=1000):
@@ -211,11 +220,14 @@ class DDMMCosmologicalRedshift:
             xi_next = self.xi_function(rho_next)
             
             # Frequency shift from metric change
-            freq_ratio *= np.sqrt(xi_next / xi_current)
+            # As we go from high to low density, xi decreases, frequency decreases (redshift)
+            freq_ratio *= np.sqrt(xi_current / xi_next)
         
         # Redshift: z = (λ_obs/λ_emit) - 1 = (ν_emit/ν_obs) - 1
         z = (1.0 / freq_ratio) - 1
-        return z
+        
+        # Ensure no negative redshift
+        return max(z, 0.0)
     
     def hubble_diagram_ddmm(self, z_array):
         """
@@ -406,13 +418,14 @@ def plot_hubble_comparison(ddmm_model):
     ax.set_title('DDMM Redshift vs Distance', fontsize=14)
     ax.legend()
     ax.set_xscale('log')
-    # Only set log scale if we have positive values
-    if np.all(np.array(redshifts_path) > 0):
+    # Only use log scale if all values are positive
+    if all(z > 0 for z in redshifts_path + redshifts_direct):
         ax.set_yscale('log')
         ax.set_ylim(0.0001, 10)
     else:
-        # Use linear scale if values aren't all positive
-        ax.set_ylim(min(redshifts_path + redshifts_direct), max(redshifts_path + redshifts_direct) * 1.1)
+        # Use linear scale
+        max_z = max(redshifts_path + redshifts_direct)
+        ax.set_ylim(0, max_z * 1.1)
     ax.grid(True, alpha=0.3)
     ax.set_xlim(0.001, 1000)
     
