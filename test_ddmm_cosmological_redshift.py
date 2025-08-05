@@ -133,20 +133,21 @@ class DDMMCosmologicalRedshift:
         - Cosmic voids: ~10^4 M_☉/kpc³
         - Intergalactic medium: ~10^2 M_☉/kpc³
         """
-        # Average cosmic density today
-        rho_cosmic = 2.775e11 * (0.7)**2 * 0.3 / 1e9  # M_☉/kpc³
+        # Scale the densities to work with your rho_c value
+        # Your rho_c = 6.83e15, so we need higher densities
         
-        # Add structure: denser near observer (in galaxy)
         if r_Mpc < 0.001:  # Within galaxy (< 1 kpc)
-            return 1e8  # Galactic density
+            return 1e17  # Much higher galactic density
         elif r_Mpc < 1:  # Local group
-            return 1e6 * np.exp(-r_Mpc/0.5)
+            return 1e16 * np.exp(-r_Mpc/0.5)
         elif r_Mpc < 10:  # Nearby clusters
-            return 1e4 * np.exp(-r_Mpc/5)
-        else:  # Cosmic average
-            # Density decreases with distance in static universe
-            return rho_cosmic * (1 + r_Mpc/100)**(-1)
-    
+            return 1e15 * np.exp(-r_Mpc/5)
+        elif r_Mpc < 100:  # Cosmic web
+            return 1e14 * np.exp(-r_Mpc/50)
+        else:  # Cosmic average/voids
+            # Density decreases with distance
+            return 1e13 * (1 + r_Mpc/1000)**(-1)
+
     def gravitational_redshift_direct(self, rho_observer, rho_emitter):
         """
         Direct DDMM redshift formula from your paper.
@@ -181,7 +182,7 @@ class DDMMCosmologicalRedshift:
         integrand = drho_dr / (rho_path + self.rho_c)
         
         # Numerical integration
-        integral = np.trapz(integrand, r_path)
+        integral = np.trapezoid(integrand, r_path)
         
         # Calculate redshift
         ln_1_plus_z = (alpha / 2) * integral
@@ -352,6 +353,13 @@ def plot_hubble_comparison(ddmm_model):
     ax.set_title('Hubble Diagram: DDMM vs Standard Cosmology', fontsize=14)
     ax.legend()
     ax.grid(True, alpha=0.3)
+
+    if np.all(z_sn > 0):
+        ax.set_xscale('log')
+        ax.set_xlim(0.01, 1)
+    else:
+        ax.set_xlim(min(z_sn)*0.9, max(z_sn)*1.1)
+
     ax.set_xscale('log')
     ax.set_xlim(0.01, 1)
     
@@ -398,10 +406,15 @@ def plot_hubble_comparison(ddmm_model):
     ax.set_title('DDMM Redshift vs Distance', fontsize=14)
     ax.legend()
     ax.set_xscale('log')
-    ax.set_yscale('log')
+    # Only set log scale if we have positive values
+    if np.all(np.array(redshifts_path) > 0):
+        ax.set_yscale('log')
+        ax.set_ylim(0.0001, 10)
+    else:
+        # Use linear scale if values aren't all positive
+        ax.set_ylim(min(redshifts_path + redshifts_direct), max(redshifts_path + redshifts_direct) * 1.1)
     ax.grid(True, alpha=0.3)
     ax.set_xlim(0.001, 1000)
-    ax.set_ylim(0.0001, 10)
     
     # 4. Effective Hubble Parameter
     ax = axes[1, 1]
