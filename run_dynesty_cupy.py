@@ -542,17 +542,26 @@ def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
         # Build timestamp for unique filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Include xi_type in filename
-        xi_type = getattr(sampler, '_xi_type', 'power')
+        # Include xi_type in filename - use the actual xi_type from args
+        xi_type = getattr(sampler, '_xi_type', 'gr')  # Default to 'gr' if not set
         npz_path = Path(output_dir) / f"dynesty_checkpoint_{xi_type}_{timestamp}.npz"
         
         # Also save to a fixed filename that overwrites (for easy resumption)
         npz_latest = Path(output_dir) / f"dynesty_checkpoint_{xi_type}_latest.npz"
         
-        # Calculate weights if possible
+        # Calculate weights if possible - make it more robust
         weights = None
-        if hasattr(res, 'logwt') and hasattr(res, 'logz') and len(res.logz) > 0:
-            weights = np.exp(res.logwt - res.logz[-1])
+        try:
+            if hasattr(res, 'logwt') and hasattr(res, 'logz') and len(res.logz) > 0:
+                if res.logwt is not None and res.logz is not None:
+                    weights = np.exp(res.logwt - res.logz[-1])
+                    # Check for invalid weights
+                    if weights is not None and np.any(np.isnan(weights)):
+                        logger.warning("WARNING: NaN values in weights, setting to None")
+                        weights = None
+        except Exception as e:
+            logger.warning(f"WARNING: Failed to calculate weights: {e}")
+            weights = None
         
         # Save the checkpoint with metadata
         save_data = {
@@ -1330,10 +1339,16 @@ def main_cupy():
             logger.error(f"✗ Failed to save results.pkl: {e}")
             raise
             
-        logger.info("STEP 8: Saving posterior samples...")
+        logger.info("STEP 8: Saving final checkpoint and posterior samples...")
         try:
-            # Extract weights
+            # Save final checkpoint with correct xi_type
+            save_npz_checkpoint(sampler, param_names, output_dir, logger)
+            
+            # Extract weights - make it more robust
             weights_arr = get_dynesty_weights(results)
+            if weights_arr is None:
+                logger.warning("  - WARNING: weights_arr is None, creating uniform weights")
+                weights_arr = np.ones(len(results.samples)) / len(results.samples)
             logger.info("  - Using results.weights")
             
             logger.info(f"  - Weights shape: {weights_arr.shape}")
@@ -1359,6 +1374,17 @@ def main_cupy():
             raise
             
         logger.info(f"Sampling completed! LogZ = {results.logz[-1]:.2f}")
+
+        # Save run summary
+        try:
+            save_run_summary(
+                output_dir / "run_summary.json",
+                results, param_names, bounds_low, bounds_high, args, 
+                status="success"
+            )
+            logger.info("✓ Saved run_summary.json")
+        except Exception as e:
+            logger.error(f"✗ Failed to save run_summary.json: {e}")
 
         # Model comparison summary
         delta_logz_vs_gr = results.logz[-1] - BASELINE_LOGZ_GR
@@ -1414,9 +1440,6 @@ def main_cupy():
         if args.periodic_analysis:
             logger.info(f"  - periodic_analyses/: Intermediate analysis results")
 
-        # Save run summary
-        save_run_summary(str(output_dir / "run_summary.json"), results, param_names, bounds_low, bounds_high, args, status="success")
-
     except KeyboardInterrupt:
         logger.warning("Run interrupted by user (Ctrl+C)")
         # Try to save partial results
@@ -1434,7 +1457,20 @@ def main_cupy():
     except Exception as e:
         logger.error(f"FATAL: Sampling failed: {e}", exc_info=True)
         # Save run summary with failure status
-        save_run_summary(str(output_dir / "run_summary.json"), None, [], [], [], None, status="failed", error_msg=str(e))
+        try:
+            save_run_summary(
+                output_dir / "run_summary.json", 
+                getattr(sampler, 'results', None) if 'sampler' in locals() else None,
+                param_names if 'param_names' in locals() else [],
+                bounds_low if 'bounds_low' in locals() else [],
+                bounds_high if 'bounds_high' in locals() else [],
+                args if 'args' in locals() else None,
+                status="failed", 
+                error_msg=str(e)
+            )
+            logger.info("✓ Saved failure summary to run_summary.json")
+        except Exception as save_e:
+            logger.error(f"Failed to save failure summary: {save_e}")
         
     finally:
         if resource_monitor:

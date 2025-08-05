@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-08-05T08:10:05.683738",
+  "cli_command": "run_dynesty_cupy.py --xi enhanced --nlive 5000 --maxcall 20000000 --num_threads 16 --dlogz_target 0.001 --sample_method rslice --bound_method multi --periodic_analysis --analysis_with_plots",
+  "status": "failed",
+  "error_msg": "'NoneType' object has no attribute 'shape'",
+  "nlive": null,
+  "maxcall": null,
+  "num_threads": null,
+  "param_names": [],
+  "bounds_low": [],
+  "bounds_high": [],
+  "best_fit": null,
+  "logz": null,
+  "logl": null,
+  "rmse": null,
+  "ncall": null,
+  "notes": []
+}

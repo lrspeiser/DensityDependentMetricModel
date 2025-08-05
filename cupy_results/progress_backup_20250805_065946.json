@@ -1,0 +1,92 @@
+{
+  "source": "dynesty_sampler",
+  "timestamp": "2025-08-05T06:59:46.261036",
+  "elapsed_hours": 11.012533558077282,
+  "phase": "converged",
+  "phase_description": "Model converged, results reliable",
+  "is_normal": 0,
+  "is_improving": 1,
+  "convergence_status": "converged",
+  "health_status": "NORMAL",
+  "n_samples": 209673,
+  "n_calls": 17932354,
+  "efficiency_percent": 1.1692441494295729,
+  "current_logz": -519164.73094435834,
+  "improvement_metrics": {
+    "logz_improvement_5min": 2346342.789289653,
+    "improvement_rate": 7821.14263096551
+  },
+  "dlogz": 0.014688321622088552,
+  "target_dlogz": 0.001,
+  "dlogz_ratio": 14.688321622088552,
+  "gr_baseline_logz": -1490897.5250096943,
+  "delta_logz_vs_gr": 971732.794065336,
+  "gr_diff_percent": Infinity,
+  "jeffreys_interpretation": "Decisive evidence favoring DDMM (and improving)",
+  "heartbeat": {
+    "timestamp": "2025-08-05T06:59:46.261054",
+    "samples_since_last": 9507,
+    "time_since_last": 1803.618008852005,
+    "is_stuck": 0
+  },
+  "parameter_estimates": {
+    "M_thin_disk_solar": {
+      "median": 10057824370.043062,
+      "std": 82509348.73125267
+    },
+    "R_thin_disk_kpc": {
+      "median": 3.9934421494979104,
+      "std": 0.007733674902832236
+    },
+    "hz_thin_disk_kpc": {
+      "median": 0.39194484342490316,
+      "std": 0.008781931202636728
+    },
+    "M_thick_disk_solar": {
+      "median": 823505796.6678488,
+      "std": 423500202.7200065
+    },
+    "R_thick_disk_kpc": {
+      "median": 4.863766707272419,
+      "std": 0.168750748737306
+    },
+    "hz_thick_disk_kpc": {
+      "median": 0.8246061407623575,
+      "std": 0.11379059577270784
+    },
+    "M_bulge_solar": {
+      "median": 526466005.4592205,
+      "std": 28392850.58855169
+    },
+    "R_bulge_kpc": {
+      "median": 1.9142637527991857,
+      "std": 0.10825537356414179
+    },
+    "M_gas_solar": {
+      "median": 9902095502.564022,
+      "std": 115099181.7069883
+    },
+    "R_gas_kpc": {
+      "median": 9.724283938500125,
+      "std": 0.2364479676600942
+    },
+    "hz_gas_kpc": {
+      "median": 0.10276233484967542,
+      "std": 0.003370565573000969
+    },
+    "rho_c_solar_kpc3": {
+      "median": 9153293293468460.0,
+      "std": 916762261058080.8
+    },
+    "n_exp": {
+      "median": 1.238214797287999,
+      "std": 0.0019525195988068249
+    },
+    "A": {
+      "median": 5.909482378174712,
+      "std": 2.263601038643573
+    }
+  },
+  "xi_type": "enhanced",
+  "run_id": "cupy_20250804_195900"
+}
