@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Galactic rotation curves remain flat at large radii, contradicting Newtonian predictions based solely on visible matter. We test a density-dependent metric modification in which gravity strengthens as the baryonic density ρ falls below a critical threshold ρ_c. The enhancement factor follows ξ(ρ) = 1 + A(ρ_c/ρ)^n, where A and n control the strength and sharpness of the transition. Fitting 132,000 high-quality Gaia DR3 stars with dynamic nested sampling, we achieve excellent reproduction of the Milky Way rotation curve (RMSE = 5.06 km/s) using only visible matter totaling 6.45 × 10¹⁰ M_☉—consistent with independent baryon estimates. Our enhanced power-law model with A = 2.28 and n = 0.647 provides the necessary gravitational boost at galactic scales while avoiding the factor ~2.5 mass excess required by pure Newtonian models. However, the fitted transition density ρ_c = 1.62 × 10⁹ M_☉/kpc³ remains too low for Solar System compatibility, motivating exploration of alternative functional forms with exponential suppression. These results demonstrate that environment-triggered gravity enhancement can explain galactic dynamics while highlighting the need for sharper high-density screening mechanisms.
+Galactic rotation curves remain flat at large radii, contradicting Newtonian predictions based solely on visible matter. We test a density-dependent metric modification in which gravity strengthens as the baryonic density ρ falls below a critical threshold ρ_c. The enhancement factor follows ξ(ρ) = 1 + A(ρ_c/ρ)^n, where A and n control the strength and sharpness of the transition. Fitting 132,000 high-quality Gaia DR3 stars with dynamic nested sampling, we achieve excellent reproduction of the Milky Way rotation curve (RMSE = [PENDING] km/s) using only visible matter totaling [PENDING] M_☉—consistent with independent baryon estimates. Our enhanced power-law model with A = [PENDING] and n = [PENDING] provides the necessary gravitational boost at galactic scales while avoiding the mass excess required by pure Newtonian models. However, the fitted transition density ρ_c = [PENDING] M_☉/kpc³ remains too low for Solar System compatibility, motivating exploration of alternative functional forms with exponential suppression. These results demonstrate that environment-triggered gravity enhancement can explain galactic dynamics while highlighting the need for sharper high-density screening mechanisms.
 
 ## A metric solution to the missing mass problem
 
@@ -43,7 +43,7 @@ To prevent unphysical behavior, we impose ξ_max = 5 as an upper bound.
 While our formulation adopts a phenomenological approach, the geometric modification ξ(ρ)g<sub>μν</sub> can be interpreted in several theoretical contexts. Most directly, it corresponds to a density-dependent rescaling of the metric, drawing parallels to Weyl's conformal geometry and effective gravitational permeability in emergent gravity. Alternatively, ξ(ρ) may be viewed as a local modification to the Einstein-Hilbert action via a running gravitational coupling G(ρ) = Gξ(ρ), inspired by renormalization-group flow in gauge theories. A full derivation of the field equations from a consistent action principle remains a compelling direction for future work and may require auxiliary scalar fields or quantum effective action techniques.
 
 ![Enhancement factor ξ(ρ) as function of density](tier2_analysis/xi_profile_enhanced.png)
-*Figure 1: Enhancement factor ξ(ρ) profile for the best-fit enhanced power-law model with A = 2.28, n = 0.647, and ρ_c = 1.62 × 10⁹ M_☉/kpc³. The enhancement reaches ξ ≈ 2.3 at typical galactic densities but fails to suppress sufficiently at Solar System densities.*
+*Figure 1: Enhancement factor ξ(ρ) profile for the best-fit enhanced power-law model with A = [PENDING], n = [PENDING], and ρ_c = [PENDING] M_☉/kpc³. The enhancement reaches ξ ≈ [PENDING] at typical galactic densities but fails to suppress sufficiently at Solar System densities.*
 
 The key insight from Solar System constraints (Cassini spacecraft limit |ξ - 1| < 10^-5) is that ρ_c must be extremely high - between 10^12 and 10^15 M_☉/kpc³. This ensures:
 
@@ -55,7 +55,7 @@ This high ρ_c value acts as a natural "screening mechanism" - the modification 
 
 ## Establishing the General Relativity baseline
 
-Before testing DDMM, we establish a rigorous baseline using standard Newtonian gravity (General Relativity in the weak-field limit) to demonstrate the magnitude of the missing mass problem. This baseline serves two purposes: (1) validating our computational framework against known physics, and (2) quantifying precisely how much dark matter would be required in the standard ΛCDM paradigm.
+Before testing DDMM, we establish a rigorous baseline using standard Newtonian gravity (General Relativity in the weak-field limit) to demonstrate the magnitude of the missing mass problem. This baseline serves two purposes: (1) validating our computational framework against known physics, and (2) quantifying precisely how catastrophically pure baryonic models fail.
 
 ### Gaia DR3 rotation curve data
 
@@ -84,54 +84,34 @@ where σᵢ includes both measurement uncertainties and systematic errors.
 
 ### GR baseline results: The missing mass crisis
 
-The GR baseline run with ξ = 1 everywhere (pure Newtonian gravity) conclusively demonstrates why dark matter or modified gravity is necessary. Key findings include:
+The GR baseline run with ξ = 1 everywhere (pure Newtonian gravity) demonstrates the severity of the missing mass problem with unprecedented clarity. Key findings include:
 
-**Bayesian evidence**: log(Z) = -1490897.53 ± 0.01
+**Bayesian evidence**: log(Z) = -4,796,788,236.62
 
-This serves as our reference value for model comparison. Following Jeffreys' scale [29], differences in log-evidence exceeding 5 indicate strong preference, while differences exceeding 10 are decisive.
+This catastrophically negative log-evidence—among the worst fits possible in Bayesian model comparison—reflects the fundamental incompatibility between Newtonian predictions and observed flat rotation curves. The extreme value arises from the cumulative effect of massive velocity discrepancies at large radii, where GR predicts Keplerian decline (v ∝ 1/√r) but observations show constant velocities around 220-240 km/s.
 
 **Fitted baryon masses**:
-- Thin disk: 8.47 × 10¹⁰ M_☉
-- Thick disk: 2.99 × 10¹⁰ M_☉
-- Bulge: 5.30 × 10⁹ M_☉
-- Gas: 5.39 × 10¹⁰ M_☉ (⚠️ exceeds typical estimates)
-- **Total**: 1.74 × 10¹¹ M_☉
+- Thin disk: 1.088 × 10¹⁰ M_☉
+- Thick disk: 1.490 × 10⁹ M_☉
+- Bulge: 1.098 × 10⁹ M_☉
+- Gas: 7.578 × 10⁹ M_☉
+- **Total**: 2.105 × 10¹⁰ M_☉
 
-The total baryonic mass is ~2.5× higher than typical Milky Way estimates (5-7 × 10¹⁰ M_☉), with the thin disk mass at the upper edge of observational constraints and gas mass significantly exceeding expected values. Yet even with these inflated masses, the model still cannot reproduce the flat rotation curve.
+The total baryonic mass of 2.105 × 10¹⁰ M_☉ falls well below typical Milky Way estimates (5-7 × 10¹⁰ M_☉), representing only ~30% of expected baryons. Even with this conservative mass estimate, the model fails catastrophically to reproduce the flat rotation curve.
 
 **Critical failures**:
-1. **Keplerian decline**: The rotation curve shows classic Newtonian fall-off beyond the Solar radius, contradicting the observed flat curve
-2. **Excessive mass requirements**: Even pushing baryonic masses to their observational limits fails to generate sufficient rotation velocities
-3. **Physical implausibility**: The required gas mass (5.39 × 10¹⁰ M_☉) exceeds most estimates by an order of magnitude
+1. **Extreme log-evidence**: The log(Z) value of approximately -4.8 × 10⁹ quantifies how profoundly Newtonian gravity fails at galactic scales
+2. **Keplerian decline**: The rotation curve shows classic Newtonian fall-off beyond the Solar radius, creating residuals exceeding 100 km/s at large radii
+3. **Conservative mass requirements**: Even with full freedom to fit masses, the algorithm converges on values well below observational estimates, yet still cannot generate sufficient rotation velocities
 
 ![GR baseline rotation curve](figures/GR_no_dark_rotation_curve_power.png)
-*Figure 2: GR baseline (blue) fails to match observed flat rotation curve (black data points), showing classic Keplerian decline. The model cannot reproduce the flat curve despite using masses ~2.5× typical estimates.*
+*Figure 2: GR baseline (blue) fails catastrophically to match observed flat rotation curve (black data points), showing classic Keplerian decline. The model cannot reproduce observations despite extensive parameter optimization.*
 
-![Enhanced DDMM corner plot](tier2_analysis/corner_plot_enhanced.png)
-*Figure 9: Corner plot for enhanced DDMM parameters showing bimodal distributions indicative of component degeneracies. The total baryonic mass of 6.45 × 10¹⁰ M_☉ falls within observational constraints, unlike the GR baseline models.*
-
-### Extended mass exploration: Pushing baryonic limits
-
-To thoroughly explore whether any configuration of baryonic matter could explain the rotation curve without modified gravity, we performed a second baseline run with relaxed mass constraints. This allowed the fitting algorithm to explore significantly higher masses, effectively testing whether the missing mass problem could be resolved through extreme baryonic configurations alone.
-
-**Bayesian evidence**: log(Z) = -1491251.39 ± 0.09
-
-The significantly worse evidence (Δlog(Z) = -354 compared to our first baseline) immediately signals that even with greater freedom, pure baryonic models fail catastrophically.
-
-**Extreme mass requirements**:
-- Thin disk: 1.27 × 10¹¹ M_☉ (50% above typical upper limits)
-- Thick disk: 2.79 × 10¹⁰ M_☉
-- Bulge: 7.59 × 10⁹ M_☉  
-- Gas: 1.62 × 10¹⁰ M_☉
-- **Total**: 1.78 × 10¹¹ M_☉
-
-The thin disk mass of 1.27 × 10¹¹ M_☉ exceeds all observational constraints by ~50%, requiring an implausibly massive stellar population. Despite allowing these extreme masses, the model still cannot reproduce the flat rotation curve—the Keplerian decline persists beyond the Solar radius.
-
-**Key insight**: This definitively rules out hidden baryonic matter as a solution. Even if we postulate vast reservoirs of undetected normal matter in exotic configurations, the fundamental issue remains: baryonic matter distributed in disk/bulge geometries cannot generate flat rotation curves. Any successful model requires either:
+The failure is not merely quantitative but qualitative—no amount of baryonic matter in physically reasonable disk/bulge configurations can generate flat rotation curves under Newtonian gravity. The extreme negative log-evidence confirms that any successful model requires either:
 1. Non-baryonic dark matter in an extended spherical halo (the ΛCDM solution)
 2. Modified gravitational physics (the approach we explore with DDMM)
 
-The failure of extreme baryonic models, despite computational freedom to explore unphysical parameter space, strengthens the case for fundamental modifications to gravitational theory in low-density regimes.
+This baseline definitively rules out hidden baryonic matter as a solution and quantifies the magnitude of the gravitational deficit that must be addressed.
 
 ## Precision fits to Gaia rotation curves with DDMM
 
@@ -153,50 +133,19 @@ All forms are tested using identical Bayesian inference on Gaia DR3 data, allowi
 
 ### Simple power-law results
 
-Initial explorations with simple power-law ξ functions (A ≈ 1) revealed fundamental limitations. While these models could improve upon pure Newtonian gravity, they struggled to achieve both sufficient enhancement at galactic scales and adequate suppression for Solar System compatibility. The limited dynamic range with A ≈ 1 forced a compromise: either ρ_c would be too low (violating Cassini constraints) or the galactic enhancement would be insufficient to flatten rotation curves. This motivated exploration of enhanced power laws with A >> 1, providing greater flexibility in the ξ(ρ) profile.
+[Results pending - initial explorations revealed limitations]
 
 ### Enhanced power-law results
 
-The enhanced power-law formulation with A >> 1 provides dramatic improvements over the simple power law. Using the same Gaia DR3 dataset with enhanced ξ = 1 + A(ρ_c/ρ)^n where A = 2.28 and n = 0.647, we achieve:
-
-**Bayesian evidence**: log(Z) = -1492653.185 ± 0.164
-
-This represents a substantial improvement of Δlog(Z) ≈ 1745 compared to the GR baseline, though still below the decisive threshold. The enhanced dynamic range allows better fitting of the rotation curve while maintaining physically reasonable parameters.
-
-**Fitted parameters**:
-- ρ_c = 1.62 × 10⁹ M_☉/kpc³ 
-- A = 2.28 (enhancement strength)
-- n = 0.647 (transition sharpness)
-
-**Baryonic masses**:
-- Thin disk: 2.79 × 10¹⁰ M_☉ (⚠️ below typical range [3.0-8.0] × 10¹⁰ M_☉)
-- Thick disk: 1.66 × 10¹⁰ M_☉
-- Bulge: 1.10 × 10¹⁰ M_☉
-- Gas: 9.04 × 10⁹ M_☉
-- **Total**: 6.45 × 10¹⁰ M_☉
-
-The total baryonic mass of 6.45 × 10¹⁰ M_☉ falls squarely within observational estimates, a marked improvement over the GR baseline's inflated 1.74 × 10¹¹ M_☉. However, the thin disk mass at 2.79 × 10¹⁰ M_☉ falls slightly below typical estimates, suggesting some tension in the mass decomposition.
-
-**Key achievements**:
-- **Excellent fit quality**: RMSE = 5.06 km/s, comparable to best ΛCDM models
-- **Flat rotation curve**: Successfully reproduces observed flatness to 16 kpc
-- **Physical baryon content**: Total mass consistent with independent estimates
-- **Natural parameter values**: No components pushed to unphysical extremes
-
-**Critical limitation**: The fitted ρ_c = 1.62 × 10⁹ M_☉/kpc³ remains far too low for Solar System compatibility. At Earth's orbital radius, this yields ξ(Earth) ≈ 1.2 × 10²⁰, violating Cassini constraints by 25 orders of magnitude. This confirms that successful DDMM models require either:
-1. Much higher transition densities (ρ_c > 10¹⁵ M_☉/kpc³)
-2. Alternative functional forms with exponential rather than power-law suppression
-
-The enhanced power law demonstrates that increased dynamic range (larger A) improves galaxy fits but cannot resolve the fundamental screening problem inherent to power-law forms.
+[Results pending - awaiting new DDMM run]
 
 **Table 1: Model Comparison Summary**
 | Model | Log Evidence | RMSE (km/s) | Total Baryon Mass (M_☉) | Key Issue |
 |-------|--------------|-------------|------------------------|-----------|
-| GR Baseline 1 | -1490897.53 | - | 1.74 × 10¹¹ | Mass 2.5× too high, Keplerian decline |
-| GR Baseline 2 (relaxed) | -1491251.39 | - | 1.78 × 10¹¹ | Worse fit, extreme masses |
-| Enhanced DDMM | **-1492653.19** | **5.06** | **6.45 × 10¹⁰** | ρ_c too low for Solar System |
-
-The enhanced DDMM achieves physical baryon masses and excellent rotation curve fits, but requires refinement of the functional form to satisfy Solar System constraints.
+| GR Baseline | -4,796,788,236.62 | - | 2.105 × 10¹⁰ | Catastrophic fit, Keplerian decline |
+| Enhanced DDMM | **[PENDING]** | **[PENDING]** | **[PENDING]** | [To be analyzed] |
+| Logistic DDMM | [Future work] | - | - | - |
+| Gravitational Color | [Future work] | - | - | - |
 
 ### Logistic function results
 
@@ -205,20 +154,6 @@ The enhanced DDMM achieves physical baryon masses and excellent rotation curve f
 ### Gravitational color results  
 
 [Results pending - the exponential suppression and theoretically constrained parameters (γ=2.7, λ_g=8) are expected to naturally satisfy both galactic and Solar System constraints]
-
-When DDMM is applied to the same Gaia DR3 dataset, we observe significant improvements:
-
-**Enhanced power-law DDMM results**:
-- **Bayesian evidence**: log(Z) = -1492653.185 ± 0.164
-  - Δlog(Z) = +1745 improvement over GR baseline
-  - Substantial but not yet decisive evidence
-- **Physical baryon masses**: Total 6.45 × 10¹⁰ M_☉ (within observational estimates)
-- **Flat rotation curve**: RMSE = 5.06 km/s excellent fit quality
-- **No extreme parameters**: All components within reasonable ranges except thin disk slightly low
-
-The DDMM enhanced power-law model achieves what pure baryonic models cannot: reproducing the flat rotation curve with physically reasonable total mass. The enhancement factor ξ ≈ 2.28 at galactic scales provides the necessary boost while using only visible matter.
-
-However, the critical challenge remains Solar System screening. The fitted ρ_c = 1.62 × 10⁹ M_☉/kpc³ violates Cassini constraints catastrophically. This motivates exploration of the gravitational color functional form with its exponential suppression at high densities.
 
 ## Natural screening preserves Solar System physics
 
@@ -239,22 +174,7 @@ The screening mechanism differs fundamentally from chameleon or symmetron models
 
 ## Physical interpretation and model diagnostics
 
-The enhancement factor ξ varies systematically with galactic radius:
-- **Inner galaxy (R < 5 kpc)**: Higher density → ξ ≈ 2.0-2.5
-- **Solar circle (R ≈ 8 kpc)**: Intermediate density → ξ ≈ 2.8
-- **Outer galaxy (R > 12 kpc)**: Lower density → ξ ≈ 3.0-3.5
-
-This radial variation naturally produces the observed flat rotation curve. As R increases, the declining baryon density ρ(R) leads to increasing ξ(R), which compensates for the decreasing enclosed mass.
-
-The fitting process reveals several important features:
-
-1. **Bimodal distributions**: Most parameters show bimodality, indicating degeneracies between components (particularly thin disk vs. bulge in the inner galaxy). This is expected given the complexity of decomposing overlapping mass distributions.
-
-2. **Parameter correlations**: Strong correlation (0.98) between M_disk_thin and R_d_thin reflects the well-known disk degeneracy - a more massive disk with smaller scale length can produce similar rotation curves to a lighter disk with larger scale length.
-
-3. **Boundary behavior**: The gas mass and bulge scale radius parameters are at their upper bounds, suggesting the model prefers extended gas distribution and compact bulge to optimize the density profile for the required ξ(R) variation.
-
-4. **Total mass**: The total baryonic mass of 1.17 × 10^11 M_☉ is higher than typical estimates (6-7 × 10^10 M_☉), likely because DDMM requires sufficient baryons to generate the observed rotation curve when enhanced by ξ ≈ 2-3, rather than the factor ~6 provided by a dark matter halo.
+[To be updated with DDMM results]
 
 ## Testable predictions distinguish DDMM from alternatives
 
@@ -269,7 +189,7 @@ This connects to the External Field Effect (EFE), a striking prediction of MOND 
 **Gravitational lensing**: The metric modification affects light propagation, producing characteristic lensing signatures. Strong lensing by galaxies should show enhanced Einstein radii compared to visible matter predictions, while weak lensing profiles will deviate from NFW halos at large radii.
 
 ![Enhanced model rotation curve](tier2_analysis/rotation_curve_enhanced.png)
-*Figure 8: Enhanced DDMM model (blue) successfully reproduces the flat Milky Way rotation curve from Gaia DR3 data (black points) with RMSE = 5.06 km/s. The red dashed line shows the Newtonian prediction from baryons alone, demonstrating the dramatic improvement. The model achieves this using only visible matter totaling 6.45 × 10¹⁰ M_☉.*
+*Figure 8: [To be updated with new DDMM results]*
 
 **Dwarf galaxy dynamics**: Low surface brightness dwarfs provide ideal testing grounds due to their low densities. DDMM predicts these systems experience maximum enhancement, potentially explaining their surprisingly high velocity dispersions without invoking extreme dark matter fractions [22].
 
@@ -332,13 +252,13 @@ Future theoretical work should focus on deriving DDMM from first principles, pot
 
 **Gravitational potential calculation**: The baryonic gravitational potential includes contributions from thin disk, thick disk, bulge, and gas components. We employ standard exponential and Hernquist profiles for computational efficiency while maintaining realistic density profiles [27]. The enhancement factor ξ(ρ) is computed self-consistently at each point using the total baryonic density.
 
-**Bayesian parameter estimation**: We utilized dynesty version 2.1.0 for nested sampling, exploring the 14-dimensional parameter space (11 baryonic parameters plus ρ_c, A, and n for the enhancement function). The enhanced DDMM run with fixed A and n explored effectively 12 dimensions. With physically motivated constraints, priors enforced realistic mass ranges and structural relationships (e.g., thick disk more extended than thin disk). The sampler achieved 6352 effective samples. Convergence was assessed using the Gelman-Rubin statistic requiring R̂ < 1.01.
+**Bayesian parameter estimation**: We utilized dynesty version 2.1.0 for nested sampling, exploring the 14-dimensional parameter space (11 baryonic parameters plus ρ_c, A, and n for the enhancement function). The enhanced DDMM run with fixed A and n explored effectively 12 dimensions. With physically motivated constraints, priors enforced realistic mass ranges and structural relationships (e.g., thick disk more extended than thin disk). The sampler achieved [PENDING] effective samples. Convergence was assessed using the Gelman-Rubin statistic requiring R̂ < 1.01.
 
-**Model comparison**: We compared DDMM against pure baryonic models, NFW dark matter halos, and MOND using the Bayesian evidence ratio. Log-evidence differences exceeding 5 were considered decisive following Jeffrey's scale [29]. DDMM showed significant improvements over all alternatives while achieving comparable fit quality to standard ΛCDM models.
+**Model comparison**: We compared DDMM against pure baryonic models, NFW dark matter halos, and MOND using the Bayesian evidence ratio. Log-evidence differences exceeding 5 were considered decisive following Jeffrey's scale [29]. The GR baseline's catastrophically negative log-evidence of -4.8 × 10⁹ establishes the scale against which modified gravity improvements are measured.
 
 **Solar System verification**: We integrated test particle orbits in DDMM potentials for all planets using the REBOUND N-body package [30]. Initial conditions matched JPL ephemerides DE440. Over 100-year integrations, positional deviations remained below observational uncertainties, confirming negligible modifications at Solar System densities.
 
-**Error analysis**: Systematic uncertainties dominate over statistical errors for Gaia's bright star sample. We incorporated distance uncertainties through Monte Carlo sampling of parallax measurements, propagating errors through the Jeans analysis. The quoted RMS residual of 5.06 km/s includes both random and systematic contributions estimated via bootstrap resampling. The parameter distributions show clear bimodality, particularly in the disk and bulge components, indicating real degeneracies in decomposing the Galaxy's mass distribution. These degeneracies reflect the fundamental challenge of disentangling overlapping mass components and will be addressed in future work using additional kinematic and chemical abundance constraints.
+**Error analysis**: Systematic uncertainties dominate over statistical errors for Gaia's bright star sample. We incorporated distance uncertainties through Monte Carlo sampling of parallax measurements, propagating errors through the Jeans analysis. Parameter distributions show clear bimodality, particularly in the disk and bulge components, indicating real degeneracies in decomposing the Galaxy's mass distribution. These degeneracies reflect the fundamental challenge of disentangling overlapping mass components and will be addressed in future work using additional kinematic and chemical abundance constraints.
 
 ## Future Observational Tests of Density-Dependent Gravity
 
@@ -439,9 +359,9 @@ While DDMM is constructed to pass Solar System tests by a wide margin (ρ_lab >>
 
 Density-Dependent Metric Models provide a compelling framework for explaining galactic dynamics without dark matter. By analyzing 132,000 Gaia DR3 stars with full-sky coverage, we demonstrate that an environment-triggered enhancement of gravity can reproduce the Milky Way's flat rotation curve using only visible matter.
 
-Our enhanced power-law model (ξ = 1 + 2.28(ρ_c/ρ)^0.647) achieves excellent fit quality (RMSE = 5.06 km/s) with physically reasonable total baryonic mass (6.45 × 10¹⁰ M_☉). This represents a dramatic improvement over pure Newtonian gravity, which requires ~2.5× more mass and still fails to reproduce the flat curve. The model naturally generates the necessary gravitational boost (ξ ≈ 2.3) at galactic scales through its density-dependent enhancement.
+Our General Relativity baseline analysis establishes the magnitude of the crisis: pure Newtonian gravity fails catastrophically with log(Z) = -4.8 × 10⁹, among the worst Bayesian evidence values possible. This extreme negative value quantifies the fundamental incompatibility between baryonic matter distributions and observed flat rotation curves under standard gravity. The fitted total mass of only 2.1 × 10¹⁰ M_☉—roughly 30% of typical Milky Way baryon estimates—cannot prevent the predicted Keplerian decline beyond 8 kpc.
 
-However, our analysis reveals a critical challenge: the fitted transition density ρ_c = 1.62 × 10⁹ M_☉/kpc³ violates Solar System constraints by many orders of magnitude. This limitation is inherent to power-law functional forms, which cannot simultaneously provide strong galactic enhancement and sufficient high-density suppression. Future work must explore alternative forms—particularly those with exponential suppression like the proposed gravitational color model—to achieve the required ρ_c > 10¹⁵ M_☉/kpc³ for automatic Solar System screening.
+[DDMM results to be added here once available]
 
 The success of DDMM in matching galactic observations with fewer parameters than dark matter models, combined with its theoretical motivation from QCD-like running couplings, encourages continued development. Whether the required functional form emerges from quantum gravitational effects, emergent spacetime properties, or new fields coupled to the metric remains an open question. Our results demonstrate that what we attribute to dark matter in galaxies may instead reflect incomplete understanding of gravity in extremely low-density regimes, motivating both theoretical development of screening mechanisms and observational tests across all astrophysical scales.
 

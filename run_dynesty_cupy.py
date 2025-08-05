@@ -1009,6 +1009,50 @@ def setup_parameter_bounds(xi_type):
     
     return param_names, bounds_low, bounds_high, use_log_prior
 
+import json
+from datetime import datetime
+import sys
+
+def get_dynesty_weights(results):
+    if hasattr(results, 'weights'):
+        return results.weights
+    elif isinstance(results, dict) and 'weights' in results:
+        return results['weights']
+    else:
+        return None
+
+def save_run_summary(filename, results, param_names, bounds_low, bounds_high, args, status, error_msg=None):
+    summary = {
+        "timestamp": datetime.now().isoformat(),
+        "cli_command": " ".join(sys.argv) if 'sys' in globals() else None,
+        "status": status,
+        "error_msg": error_msg,
+        "nlive": getattr(args, 'nlive', None),
+        "maxcall": getattr(args, 'maxcall', None),
+        "num_threads": getattr(args, 'num_threads', None),
+        "param_names": param_names,
+        "bounds_low": bounds_low.tolist() if hasattr(bounds_low, 'tolist') else bounds_low,
+        "bounds_high": bounds_high.tolist() if hasattr(bounds_high, 'tolist') else bounds_high,
+        "best_fit": None,
+        "logz": None,
+        "logl": None,
+        "rmse": None,
+        "ncall": None,
+        "notes": []
+    }
+    if results is not None:
+        try:
+            summary["logz"] = getattr(results, 'logz', None)
+            summary["logl"] = getattr(results, 'logl', None)
+            summary["ncall"] = getattr(results, 'ncall', None)
+            if hasattr(results, 'samples') and hasattr(results, 'logl'):
+                idx = np.argmax(results.logl)
+                summary["best_fit"] = results.samples[idx].tolist()
+        except Exception as e:
+            summary["notes"].append(f"Error extracting results: {str(e)}")
+    with open(filename, "w") as f:
+        json.dump(summary, f, indent=2)
+
 # ============================================================================
 # MAIN EXECUTION
 # ============================================================================
@@ -1289,17 +1333,8 @@ def main_cupy():
         logger.info("STEP 8: Saving posterior samples...")
         try:
             # Extract weights
-            if hasattr(results, 'weights'):
-                weights_arr = results.weights
-                logger.info("  - Using results.weights")
-            elif hasattr(results, 'logwt') and hasattr(results, 'logz'):
-                # Compute importance weights from logwt and final evidence
-                weights_arr = np.exp(results.logwt - results.logz[-1])
-                logger.info("  - Computed weights from logwt")
-            else:
-                # Uniform weights as fallback
-                weights_arr = np.ones(len(results.samples)) / len(results.samples)
-                logger.info("  - Using uniform weights (fallback)")
+            weights_arr = get_dynesty_weights(results)
+            logger.info("  - Using results.weights")
             
             logger.info(f"  - Weights shape: {weights_arr.shape}")
             logger.info(f"  - Samples shape: {results.samples.shape}")
@@ -1379,6 +1414,9 @@ def main_cupy():
         if args.periodic_analysis:
             logger.info(f"  - periodic_analyses/: Intermediate analysis results")
 
+        # Save run summary
+        save_run_summary(str(output_dir / "run_summary.json"), results, param_names, bounds_low, bounds_high, args, status="success")
+
     except KeyboardInterrupt:
         logger.warning("Run interrupted by user (Ctrl+C)")
         # Try to save partial results
@@ -1395,6 +1433,8 @@ def main_cupy():
         
     except Exception as e:
         logger.error(f"FATAL: Sampling failed: {e}", exc_info=True)
+        # Save run summary with failure status
+        save_run_summary(str(output_dir / "run_summary.json"), None, [], [], [], None, status="failed", error_msg=str(e))
         
     finally:
         if resource_monitor:

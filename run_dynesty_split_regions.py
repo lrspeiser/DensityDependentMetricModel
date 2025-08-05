@@ -55,6 +55,50 @@ except ImportError:
     DYNESTY_AVAILABLE = False
     print("Warning: dynesty not available")
 
+import json
+from datetime import datetime
+import sys
+
+def get_dynesty_weights(results):
+    if hasattr(results, 'weights'):
+        return results.weights
+    elif isinstance(results, dict) and 'weights' in results:
+        return results['weights']
+    else:
+        return None
+
+def save_run_summary(filename, results, param_names, bounds_low, bounds_high, args, status, error_msg=None):
+    summary = {
+        "timestamp": datetime.now().isoformat(),
+        "cli_command": " ".join(sys.argv) if 'sys' in globals() else None,
+        "status": status,
+        "error_msg": error_msg,
+        "nlive": getattr(args, 'nlive', None),
+        "maxcall": getattr(args, 'maxcall', None),
+        "num_threads": getattr(args, 'num_threads', None),
+        "param_names": param_names,
+        "bounds_low": bounds_low.tolist() if hasattr(bounds_low, 'tolist') else bounds_low,
+        "bounds_high": bounds_high.tolist() if hasattr(bounds_high, 'tolist') else bounds_high,
+        "best_fit": None,
+        "logz": None,
+        "logl": None,
+        "rmse": None,
+        "ncall": None,
+        "notes": []
+    }
+    if results is not None:
+        try:
+            summary["logz"] = getattr(results, 'logz', None)
+            summary["logl"] = getattr(results, 'logl', None)
+            summary["ncall"] = getattr(results, 'ncall', None)
+            if hasattr(results, 'samples') and hasattr(results, 'logl'):
+                idx = np.argmax(results.logl)
+                summary["best_fit"] = results.samples[idx].tolist()
+        except Exception as e:
+            summary["notes"].append(f"Error extracting results: {str(e)}")
+    with open(filename, "w") as f:
+        json.dump(summary, f, indent=2)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -311,75 +355,68 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
 def run_region_analysis(region_data, region_name, xi_type, nlive=1000, maxcall=500000, num_threads=4):
     """Run dynesty analysis on a specific region."""
     logger.info(f"Starting {region_name} region analysis with {xi_type} model...")
-    
-    # Setup parameter bounds
-    param_names, bounds_low, bounds_high, use_log_prior = setup_parameter_bounds(xi_type)
-    
-    # Create args object
-    class Args:
-        def __init__(self, xi):
-            self.xi = xi
-    
-    args = Args(xi_type)
-    
-    # Setup dynesty sampler
-    sampler = dynesty.DynamicNestedSampler(
-        log_likelihood_dynesty_cupy,
-        prior_transform_dynesty_cupy,
-        ndim=len(param_names),
-        logl_args=(param_names, args, region_data['R_kpc'], region_data['v_obs'], region_data['sigma_v']),
-        ptform_args=(param_names, bounds_low, bounds_high, use_log_prior),
-        nlive=nlive,
-        bound='multi',
-        sample='rslice'
-    )
-    
-    # Run sampling
-    sampler.run_nested(
-        maxcall=maxcall
-    )
-    
-    # Get results
-    results = sampler.results
-    
-    # Save results
-    output_dir = Path(f"split_region_results/{region_name.lower()}_{xi_type}")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save posterior samples
-    np.savez(
-        output_dir / "posterior_samples.npz",
-        samples=results.samples,
-        weights=results.weights,
-        logz=results.logz,
-        logzerr=results.logzerr,
-        param_names=param_names
-    )
-    
-    # Save progress
-    progress_data = {
-        'region': region_name,
-        'xi_type': xi_type,
-        'n_samples': len(results.samples),
-        'logz': float(results.logz),
-        'logzerr': float(results.logzerr),
-        'efficiency': float(getattr(results, 'efficiency', 0.0)),
-        'ncall': int(results.ncall),
-        'param_names': param_names.tolist(),
-        'transition_radius': region_data.get('transition_radius', None)
-    }
-    
-    with open(output_dir / "progress.json", 'w') as f:
-        json.dump(progress_data, f, indent=2)
-    
-    logger.info(f"{region_name} region analysis complete. LogZ: {results.logz:.2f} ± {results.logzerr:.2f}")
-    
-    return {
-        'region': region_name,
-        'results': results,
-        'param_names': param_names,
-        'output_dir': output_dir
-    }
+    try:
+        # Setup parameter bounds
+        param_names, bounds_low, bounds_high, use_log_prior = setup_parameter_bounds(xi_type)
+        class Args:
+            def __init__(self, xi):
+                self.xi = xi
+        args = Args(xi_type)
+        sampler = dynesty.DynamicNestedSampler(
+            log_likelihood_dynesty_cupy,
+            prior_transform_dynesty_cupy,
+            ndim=len(param_names),
+            logl_args=(param_names, args, region_data['R_kpc'], region_data['v_obs'], region_data['sigma_v']),
+            ptform_args=(param_names, bounds_low, bounds_high, use_log_prior),
+            nlive=nlive,
+            bound='multi',
+            sample='rslice'
+        )
+        sampler.run_nested(
+            maxcall=maxcall
+        )
+        results = sampler.results
+        output_dir = Path(f"split_region_results/{region_name.lower()}_{xi_type}")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        # Save posterior samples
+        np.savez(
+            output_dir / "posterior_samples.npz",
+            samples=results.samples,
+            weights=get_dynesty_weights(results),
+            logz=results.logz,
+            logzerr=results.logzerr,
+            param_names=param_names
+        )
+        # Save progress
+        progress_data = {
+            'region': region_name,
+            'xi_type': xi_type,
+            'n_samples': len(results.samples),
+            'logz': float(results.logz),
+            'logzerr': float(results.logzerr),
+            'efficiency': float(getattr(results, 'efficiency', 0.0)),
+            'ncall': int(results.ncall),
+            'param_names': param_names.tolist(),
+            'transition_radius': region_data.get('transition_radius', None)
+        }
+        with open(output_dir / "progress.json", 'w') as f:
+            json.dump(progress_data, f, indent=2)
+        # Save run summary
+        save_run_summary(str(output_dir / "run_summary.json"), results, param_names, bounds_low, bounds_high, args, status="success")
+        logger.info(f"{region_name} region analysis complete. LogZ: {results.logz:.2f}  [1m [32m [0m  b1 {results.logzerr:.2f}")
+        return {
+            'region': region_name,
+            'results': results,
+            'param_names': param_names,
+            'output_dir': output_dir
+        }
+    except Exception as e:
+        # Save run summary with failure status
+        output_dir = Path(f"split_region_results/{region_name.lower()}_{xi_type}")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        save_run_summary(str(output_dir / "run_summary.json"), None, [], [], [], None, status="failed", error_msg=str(e))
+        logger.error(f"{region_name} region analysis failed: {e}")
+        raise
 
 def analyze_region_comparison(inner_results, outer_results, transition_radius):
     """Analyze and compare results between inner and outer regions."""
