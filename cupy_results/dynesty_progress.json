@@ -1,90 +1,90 @@
 {
   "source": "dynesty_sampler",
-  "timestamp": "2025-08-05T15:39:15.338506",
-  "elapsed_hours": 3.7541156557533477,
+  "timestamp": "2025-08-05T16:09:19.994856",
+  "elapsed_hours": 4.255402232673433,
   "phase": "converged",
   "phase_description": "Model converged, results reliable",
   "is_normal": 0,
   "is_improving": 1,
   "convergence_status": "converged",
   "health_status": "NORMAL",
-  "n_samples": 183071,
-  "n_calls": 6144010,
-  "efficiency_percent": 2.9796663742409275,
-  "current_logz": -526375.5335236697,
+  "n_samples": 209101,
+  "n_calls": 7030288,
+  "efficiency_percent": 2.9742878243394864,
+  "current_logz": -526359.046191816,
   "improvement_metrics": {
-    "logz_improvement_5min": 26129.776944635087,
-    "improvement_rate": 87.09925648211696
+    "logz_improvement_5min": 26146.2642764888,
+    "improvement_rate": 87.15421425496267
   },
-  "dlogz": 0.0006817564135417342,
+  "dlogz": 8.925376459956169e-05,
   "target_dlogz": 0.1,
-  "dlogz_ratio": 0.006817564135417342,
+  "dlogz_ratio": 0.0008925376459956169,
   "gr_baseline_logz": -1490897.5250096943,
-  "delta_logz_vs_gr": 964521.9914860246,
+  "delta_logz_vs_gr": 964538.4788178783,
   "gr_diff_percent": Infinity,
   "jeffreys_interpretation": "Decisive evidence favoring DDMM (and improving)",
   "heartbeat": {
-    "timestamp": "2025-08-05T15:39:15.338525",
-    "samples_since_last": 12620,
-    "time_since_last": 901.393718957901,
+    "timestamp": "2025-08-05T16:09:19.994878",
+    "samples_since_last": 13183,
+    "time_since_last": 902.6439702510834,
     "is_stuck": 0
   },
   "parameter_estimates": {
     "M_thin_disk_solar": {
-      "median": 10010831821.338272,
-      "std": 10962926.245754056
+      "median": 10004233946.635365,
+      "std": 5028895.973883133
     },
     "R_thin_disk_kpc": {
-      "median": 3.9992775667840474,
-      "std": 0.0007885055943708526
+      "median": 3.99956887354319,
+      "std": 0.00044475333035603267
     },
     "hz_thin_disk_kpc": {
-      "median": 0.3988338471553029,
-      "std": 0.001202060987289808
+      "median": 0.39920698332968474,
+      "std": 0.0009338528346324867
     },
     "M_thick_disk_solar": {
-      "median": 594019673.9896158,
-      "std": 89326920.49680169
+      "median": 560345740.4826219,
+      "std": 55424202.11696371
     },
     "R_thick_disk_kpc": {
-      "median": 4.980593972618079,
-      "std": 0.025455800449637703
+      "median": 4.984816692958763,
+      "std": 0.017650128980391238
     },
     "hz_thick_disk_kpc": {
-      "median": 0.9210889839838053,
-      "std": 0.0727394932054379
+      "median": 0.9205426447860996,
+      "std": 0.0604581152340604
     },
     "M_bulge_solar": {
-      "median": 503500907.4931975,
-      "std": 2465740.4130597566
+      "median": 501867576.21676654,
+      "std": 1466259.6314145462
     },
     "R_bulge_kpc": {
-      "median": 1.9873082397376458,
-      "std": 0.01292706363679991
+      "median": 1.9914203961135581,
+      "std": 0.010311747352047524
     },
     "M_gas_solar": {
-      "median": 9987134602.311186,
-      "std": 12637349.961203726
+      "median": 9993825934.870152,
+      "std": 6737670.212019903
     },
     "R_gas_kpc": {
-      "median": 9.958627001569845,
-      "std": 0.03808987886770953
+      "median": 9.969105652518273,
+      "std": 0.02718454977706521
     },
     "hz_gas_kpc": {
-      "median": 0.10032025848274442,
-      "std": 0.0003631309403139349
+      "median": 0.10019834463475409,
+      "std": 0.0002237126868249844
     },
     "rho_c_solar_kpc3": {
-      "median": 9886917812714566.0,
-      "std": 124788083191994.34
+      "median": 9941358982255596.0,
+      "std": 66489335307810.95
     },
     "n_exp": {
-      "median": 1.2350488650309568,
-      "std": 0.0003058609876170774
+      "median": 1.2347723474926788,
+      "std": 0.00019232538541118842
     },
     "A": {
-      "median": 6.4730216176430275,
-      "std": 2.1420472540653477
+      "median": 5.47071090198661,
+      "std": 2.260847784505383
     }
   },
   "xi_type": "enhanced",

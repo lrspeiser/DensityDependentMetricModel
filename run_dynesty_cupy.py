@@ -1051,14 +1051,19 @@ def save_run_summary(filename, results, param_names, bounds_low, bounds_high, ar
     }
     if results is not None:
         try:
-            summary["logz"] = getattr(results, 'logz', None)
-            summary["logl"] = getattr(results, 'logl', None)
-            summary["ncall"] = getattr(results, 'ncall', None)
+            # Convert numpy arrays/scalars to JSON-serializable types
+            summary["logz"] = make_json_serializable(getattr(results, 'logz', None))
+            summary["logl"] = make_json_serializable(getattr(results, 'logl', None))
+            summary["ncall"] = make_json_serializable(getattr(results, 'ncall', None))
             if hasattr(results, 'samples') and hasattr(results, 'logl'):
                 idx = np.argmax(results.logl)
                 summary["best_fit"] = results.samples[idx].tolist()
         except Exception as e:
             summary["notes"].append(f"Error extracting results: {str(e)}")
+    
+    # Apply make_json_serializable to the entire summary before saving
+    summary = make_json_serializable(summary)
+    
     with open(filename, "w") as f:
         json.dump(summary, f, indent=2)
 
