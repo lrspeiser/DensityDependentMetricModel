@@ -13,6 +13,8 @@ from scipy.special import kv as scipy_kv
 import numpy as np  # Kept for CPU-specific tasks like data loading and plotting
 from scipy.special import i0 as scipy_i0, i1 as scipy_i1, kv as scipy_kv
 import logging
+# Import void-safe gravitational color function
+from .xi_gravitational_color_void_safe import xi_gravitational_color_void_safe
 
 # Define GPU-incompatible functions to fallback to CPU
 def BesselK0(x): return scipy_kv(0, x)
@@ -603,6 +605,22 @@ def xi_deur_wrapper(rho, rho_c, n_exp, A, r_kpc, params, **_):
     deur_model = DeurGravity(geometry='disk')
 
     # The Deur model calculates xi directly from radius (r_kpc) and the mass
+n
+def xi_gravitational_color_void_safe_wrapper(rho, rho_c, n_exp, A=8.0, **_):
+    """
+    Wrapper for void-safe gravitational color confinement model.
+    
+    This wrapper makes xi_gravitational_color_void_safe compatible with the
+    standard interface used by XI_FUNCTION_MAP.
+    
+    Parameters:
+    - rho: density array
+    - rho_c: critical density 
+    - n_exp: power index (mapped to gamma parameter)
+    - A: enhancement strength (mapped to lambda_g parameter)
+    """
+    return xi_gravitational_color_void_safe(rho, rho_c, n_exp, A)
+
     # distribution (params), so it ignores the other standard arguments.
     xi = deur_model.enhancement_factor(r_kpc, params)
 
@@ -619,7 +637,8 @@ XI_FUNCTION_MAP = {
     'grav_color': xi_grav_color_standard_interface,
     'gaussian': xi_gaussian_wrapper,
     'mass_threshold': xi_mass_threshold,
-    'deur': xi_deur_wrapper
+    'deur': xi_deur_wrapper,
+    'grav_color_void_safe': xi_gravitational_color_void_safe_wrapper,
 }
 
 # ============================================================================

@@ -288,6 +288,31 @@ def xi_gaussian_enhancement_cupy(rho, rho_peak, sigma_log, lambda_max):
     return 1.0 + (lambda_max - 1.0) * gaussian
 
 @cp.fuse()
+def xi_gravitational_color_void_safe_cupy(rho, rho_c, gamma, lambda_g):
+    """
+    Void-safe gravitational color confinement model - CuPy optimized.
+    
+    This function ensures xi -> 1 as rho -> 0 to prevent unphysical
+    behavior in intergalactic voids.
+    """
+    rho_safe = cp.maximum(rho, 1e-40)
+    rho_c_safe = cp.maximum(rho_c, 1e-40)
+    
+    ratio = rho_safe / rho_c_safe
+    ratio_gamma = cp.power(ratio, gamma)
+    
+    # Rational function: approaches 1 at high density, 0 at low density
+    rational_factor = ratio_gamma / (1.0 + ratio_gamma)
+    
+    # Exponential suppression
+    exp_factor = cp.exp(-ratio_gamma)
+    
+    # Combined enhancement - approaches 1 in voids
+    xi = 1.0 + lambda_g * rational_factor * exp_factor
+    
+    # Ensure xi >= 1 everywhere
+    return cp.maximum(xi, 1.0)
+
 def xi_mond_like_cupy(rho, rho_c, n):
     """MOND-like xi function - CuPy optimized."""
     rho_safe = cp.maximum(rho, 1e-10)
@@ -729,6 +754,10 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         gamma = p.get('gamma_exp', 2.7)
         lambda_g = p.get('lambda_g', 8.0)
         xi = xi_gravitational_color_cupy(rho_total, rho_c, gamma, lambda_g)
+    elif xi_type == 'grav_color_void_safe':
+        gamma = p.get('gamma_exp', 2.7)
+        lambda_g = p.get('lambda_g', 8.0)
+        xi = xi_gravitational_color_void_safe_cupy(rho_total, rho_c, gamma, lambda_g)
     elif xi_type == 'gaussian':
         rho_peak = p.get('rho_peak_solar_kpc3', 1e8)
         sigma_log = p.get('sigma_log', 1.0)

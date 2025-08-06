@@ -5077,7 +5077,7 @@ def main_dynesty():
     # Core run options
     parser.add_argument('--resume', action='store_true', default=False, help="Resume from checkpoint")
     parser.add_argument('--debug', action='store_true', default=False, help="Enable verbose debug logging")
-    parser.add_argument('--xi', type=str, default='power', choices=['power', 'logistic', 'enhanced', 'grav_color', 'mass_threshold', 'gr', 'deur'], help="Choice of xi(ρ) function")
+    parser.add_argument('--xi', type=str, default='power', choices=['power', 'logistic', 'enhanced', 'grav_color', 'grav_color_void_safe', 'mass_threshold', 'gr', 'deur'], help="Choice of xi(ρ) function")
     parser.add_argument('--max_sample_gaia', type=int, default=10000, help="Maximum number of Gaia stars to use")
     parser.add_argument('--output_dir', type=str, default="chains_dynesty", help="Output directory for results")
     parser.add_argument('--R_d_thin_high', type=float, default=None, help="Override upper prior bound for R_d_thin_kpc")

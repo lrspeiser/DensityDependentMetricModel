@@ -11,8 +11,12 @@ Complete version with:
 - Post-processing integration
 """
 
-import logging
+# Add parent directory to path for imports
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import logging
 import numpy as np
 import argparse
 from pathlib import Path
@@ -26,7 +30,7 @@ import pandas as pd
 
 # CuPy imports for GPU acceleration
 import cupy as cp
-from density_metric_cupy import v_total_kms_cupy, to_cupy_array, to_numpy_array
+from core.density_metric_cupy import v_total_kms_cupy, to_cupy_array, to_numpy_array
 
 # Resource monitoring
 try:
@@ -38,7 +42,7 @@ except ImportError:
 
 # Data I/O imports with fallback
 try:
-    from data_io import load_all_sky_gaia_slices, process_gaia_data
+    from core.data_io import load_all_sky_gaia_slices, process_gaia_data
     DATA_IO_AVAILABLE = True
 except ImportError:
     DATA_IO_AVAILABLE = False
@@ -467,7 +471,6 @@ def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
         summary_file = analysis_subdir / "summary.txt"
         with open(summary_file, 'w') as f:
             # Redirect print output to file
-            import sys
             old_stdout = sys.stdout
             sys.stdout = f
             
@@ -658,7 +661,7 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
                 # Get solar neighborhood density (approximate)
                 if 'M_thin_disk_solar' in params:
                     # Calculate density at Sun's position using galaxy model
-                    from density_metric_cupy import volume_density_comprehensive_solar_kpc3_cupy
+                    from core.density_metric_cupy import volume_density_comprehensive_solar_kpc3_cupy
                     rho_sun = volume_density_comprehensive_solar_kpc3_cupy(R_sun_kpc, params)
                 else:
                     # Fallback: typical solar neighborhood density
@@ -798,7 +801,7 @@ def load_and_prepare_gaia_data(args):
     logger.info("GAIA DATA LOADING & PROCESSING")
     logger.info("="*60)
     
-    gaia_cache_file = Path("gaia_sky_slices") / "all_sky_gaia.csv"
+    gaia_cache_file = Path("external_data/gaia_sky_slices") / "all_sky_gaia.csv"
     df_all_sky = None
 
     if not gaia_cache_file.exists() or getattr(args, 'force_new_query_gaia', False) or getattr(args, 'force_reprocess_raw', False):
@@ -810,7 +813,7 @@ def load_and_prepare_gaia_data(args):
             logger.info(f"Merged cache file not found at '{gaia_cache_file}'.")
 
         # Fallback 1: Try to merge raw slice files
-        raw_dir = Path("gaia_sky_slices")
+        raw_dir = Path("external_data/gaia_sky_slices")
         raw_files = sorted(raw_dir.glob("raw_L*.csv"))
         logger.info(f"Searching for raw data in: '{raw_dir.resolve()}'")
 
@@ -848,7 +851,7 @@ def load_and_prepare_gaia_data(args):
                 df_all_sky = load_all_sky_gaia_slices(
                     lon_bin_width=30,
                     stars_per_bin=12000,
-                    output_dir="gaia_sky_slices",
+                    output_dir="external_data/gaia_sky_slices",
                     force_query=True,
                     max_distance_kpc=30.0
                 )
@@ -1258,7 +1261,6 @@ def setup_parameter_bounds(xi_type):
 
 import json
 from datetime import datetime
-import sys
 
 def get_dynesty_weights(results):
     if hasattr(results, 'weights'):
@@ -1319,7 +1321,7 @@ def main_cupy():
     
     # Core options
     parser.add_argument('--xi', type=str, default='gr', 
-                       choices=['gr', 'power', 'enhanced', 'grav_color', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh'],
+                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh'],
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory')
@@ -1375,7 +1377,6 @@ def main_cupy():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Store the original CLI command
-    import sys
     cli_command = " ".join(sys.argv)
     cli_file = output_dir / "cli_command.txt"
     with open(cli_file, 'w') as f:
