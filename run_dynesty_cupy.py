@@ -949,6 +949,7 @@ def setup_parameter_bounds(xi_type):
     """Setup parameter bounds, returning NumPy arrays - Enhanced version."""
     if xi_type == 'gr':
         # Full baryonic model for GR baseline (academically complete)
+        # UNCHANGED - keeping exactly as it worked for you
         param_names = [
             'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
             'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
@@ -979,158 +980,9 @@ def setup_parameter_bounds(xi_type):
             True, False, False   # Gas
         ])
     
-    elif xi_type == 'sigmoid':
-        # Sigmoid saturation model
-        param_names = [
-            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
-            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
-            'M_bulge_solar', 'R_bulge_kpc',
-            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
-            'rho_c_solar_kpc3', 'n_exp', 'A'
-        ]
-        bounds_low = np.array([
-            1e10, 2.0, 0.2,      # Thin disk
-            1e9, 3.0, 0.6,       # Thick disk
-            1e9, 0.5,            # Bulge
-            1e9, 5.0, 0.1,       # Gas
-            1e12, 0.5, 1.0       # Sigmoid parameters
-        ])
-        bounds_high = np.array([
-            1e11, 4.0, 0.4,      # Thin disk
-            1e10, 5.0, 1.0,      # Thick disk
-            1e10, 2.0,           # Bulge
-            1e10, 10.0, 0.3,     # Gas
-            1e15, 3.0, 10.0      # Sigmoid parameters
-        ])
-        use_log_prior = np.array([
-            True, False, False,  # Thin disk
-            True, False, False,  # Thick disk
-            True, False,         # Bulge
-            True, False, False,  # Gas
-            True, False, False   # Sigmoid
-        ])
-    
-    elif xi_type == 'spacetime_grain':
-        # Quantum spacetime granularity model
-        param_names = [
-            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
-            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
-            'M_bulge_solar', 'R_bulge_kpc',
-            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
-            'grain_size_kpc', 'rho_compress', 'A_grain'
-        ]
-        
-        bounds_low = np.array([
-            1e10, 2.0, 0.2,      # Thin disk
-            1e9, 3.0, 0.6,       # Thick disk
-            1e9, 0.5,            # Bulge
-            1e9, 5.0, 0.1,       # Gas
-            5.0, 1e3, 2.0        # Grain: size, compression density, enhancement
-        ])
-        
-        bounds_high = np.array([
-            1e11, 4.0, 0.4,      # Thin disk
-            1e10, 5.0, 1.0,      # Thick disk
-            1e10, 2.0,           # Bulge
-            1e10, 10.0, 0.3,     # Gas
-            20.0, 1e7, 15.0      # Grain parameters
-        ])
-        
-        use_log_prior = np.array([
-            True, False, False,  # Thin disk
-            True, False, False,  # Thick disk
-            True, False,         # Bulge
-            True, False, False,  # Gas
-            False, True, False   # Grain (linear for size, log for density, linear for A)
-        ])
-    
-    elif xi_type == 'broken':
-        param_names = [
-            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
-            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
-            'M_bulge_solar', 'R_bulge_kpc',
-            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
-            'rho_break_solar_kpc3', 'n_low', 'n_high', 'A'
-        ]
-        bounds_low = np.array([
-            1e10, 2.0, 0.2,      # Thin disk
-            1e9, 3.0, 0.6,       # Thick disk
-            1e9, 0.5,            # Bulge
-            1e9, 5.0, 0.1,       # Gas
-            1e3, 0.5, 0.1, 1.0   # Broken power law params
-        ])
-        bounds_high = np.array([
-            1e11, 4.0, 0.4,      # Thin disk
-            1e10, 5.0, 1.0,      # Thick disk
-            1e10, 2.0,           # Bulge
-            1e10, 10.0, 0.3,     # Gas
-            1e7, 3.0, 2.0, 20.0  # Broken power law params
-        ])
-        use_log_prior = np.array([
-            True, False, False,  # Thin disk
-            True, False, False,  # Thick disk
-            True, False,         # Bulge
-            True, False, False,  # Gas
-            True, False, False, False  # Broken power
-        ])
-
-    elif xi_type == 'peak':
-        # FIXED: Better bounds for peak density
-        param_names = [
-            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
-            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
-            'M_bulge_solar', 'R_bulge_kpc',
-            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
-            'rho_peak_solar_kpc3', 'width_log', 'A'
-        ]
-        bounds_low = np.array([
-            1e10, 2.0, 0.2,      # Thin disk
-            1e9, 3.0, 0.6,       # Thick disk
-            1e9, 0.5,            # Bulge
-            1e9, 5.0, 0.1,       # Gas
-            1e2, 0.3, 1.0        # CHANGED: rho_peak from 10 to 100
-        ])
-        bounds_high = np.array([
-            1e11, 4.0, 0.4,      # Thin disk
-            1e10, 5.0, 1.0,      # Thick disk
-            1e10, 2.0,           # Bulge
-            1e10, 10.0, 0.3,     # Gas
-            1e7, 5.0, 20.0       # CHANGED: rho_peak to 1e7, wider width, larger A
-        ])
-    
-    elif xi_type == 'yukawa':
-        # Yukawa screening model
-        param_names = [
-            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
-            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
-            'M_bulge_solar', 'R_bulge_kpc',
-            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
-            'rho_c_solar_kpc3', 'lambda_screen_kpc', 'A'
-        ]
-        bounds_low = np.array([
-            1e10, 2.0, 0.2,      # Thin disk
-            1e9, 3.0, 0.6,       # Thick disk
-            1e9, 0.5,            # Bulge
-            1e9, 5.0, 0.1,       # Gas
-            1e12, 5.0, 1.0       # Yukawa parameters
-        ])
-        bounds_high = np.array([
-            1e11, 4.0, 0.4,      # Thin disk
-            1e10, 5.0, 1.0,      # Thick disk
-            1e10, 2.0,           # Bulge
-            1e10, 10.0, 0.3,     # Gas
-            1e15, 50.0, 10.0     # Yukawa parameters
-        ])
-        use_log_prior = np.array([
-            True, False, False,  # Thin disk
-            True, False, False,  # Thick disk
-            True, False,         # Bulge
-            True, False, False,  # Gas
-            True, False, False   # Yukawa
-        ])
-    
     elif xi_type == 'enhanced':
         # Enhanced model with all baryonic components + modified gravity
+        # UNCHANGED - keeping exactly as it worked for you
         param_names = [
             'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
             'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
@@ -1162,9 +1014,10 @@ def setup_parameter_bounds(xi_type):
             True, False, False,  # Gas
             True, False, False   # Modified gravity
         ])
-        
+    
     elif xi_type == 'power':
         # Power law model with all baryonic components
+        # UNCHANGED - keeping similar to enhanced
         param_names = [
             'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
             'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
@@ -1196,9 +1049,10 @@ def setup_parameter_bounds(xi_type):
             True, False, False,  # Gas
             True, False          # Modified gravity
         ])
-        
+    
     elif xi_type == 'grav_color':
         # Gravitational color model with all baryonic components
+        # UNCHANGED - keeping similar to enhanced
         param_names = [
             'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
             'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
@@ -1229,6 +1083,169 @@ def setup_parameter_bounds(xi_type):
             True, False,         # Bulge
             True, False, False,  # Gas
             True, False, False   # Modified gravity
+        ])
+    
+    elif xi_type == 'sigmoid':
+        # Sigmoid saturation model
+        # FIXED: Better xi parameters for sigmoid
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'n_exp', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e4, 0.5, 0.5        # FIXED: rho_c much lower for sigmoid
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e8, 3.0, 5.0        # FIXED: reasonable range for sigmoid
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Sigmoid
+        ])
+    
+    elif xi_type == 'peak':
+        # Peak enhancement model
+        # FIXED: Added use_log_prior and adjusted bounds
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_peak_solar_kpc3', 'width_log', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e2, 0.3, 0.5        # Peak: density, width, amplitude
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e7, 3.0, 5.0        # Peak parameters
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Peak - ADDED THIS
+        ])
+    
+    elif xi_type == 'broken':
+        # Broken power law model
+        # FIXED: Adjusted A parameter bounds
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_break_solar_kpc3', 'n_low', 'n_high', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e3, 0.5, 0.1, 0.5   # FIXED: Lower A to prevent extreme velocities
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e7, 2.0, 1.0, 5.0   # FIXED: Reasonable A range
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False, False  # Broken power
+        ])
+    
+    elif xi_type == 'yukawa':
+        # Yukawa screening model
+        # FIXED: Adjusted for more reasonable enhancement
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'lambda_screen_kpc', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e5, 5.0, 0.5        # FIXED: Lower rho_c and A
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e10, 50.0, 5.0      # FIXED: More reasonable range
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Yukawa
+        ])
+    
+    elif xi_type == 'spacetime_grain':
+        # Quantum spacetime granularity model
+        # Keep as is - this is a new experimental model
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'grain_size_kpc', 'rho_compress', 'A_grain'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            5.0, 1e3, 0.5        # FIXED: Lower A_grain
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            20.0, 1e7, 5.0       # FIXED: More reasonable A_grain
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            False, True, False   # Grain (linear for size, log for density, linear for A)
         ])
         
     else: # Fallback to simple model

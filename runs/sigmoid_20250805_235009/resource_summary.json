@@ -1,0 +1,58 @@
+{
+  "monitoring_duration_seconds": 1608.239604,
+  "samples_collected": 526,
+  "cpu": {
+    "mean_percent": 69.07338403041825,
+    "max_percent": 81.6,
+    "min_percent": 32.9,
+    "std_percent": 8.656476001310573
+  },
+  "memory": {
+    "mean_percent": 27.392585551330804,
+    "max_percent": 27.8,
+    "min_percent": 24.0,
+    "std_percent": 0.28082267672112543
+  },
+  "process_memory": {
+    "mean_gb": 0.2917388654933683,
+    "max_gb": 0.30097198486328125,
+    "min_gb": 0.28368377685546875,
+    "std_gb": 0.0025349419729307075
+  },
+  "gpu": {
+    "mean_utilization_percent": 79.31939163498099,
+    "max_utilization_percent": 82.0,
+    "mean_memory_percent": 32.523557131181214,
+    "max_memory_percent": 32.92851228263869
+  },
+  "hardware_info": {
+    "cpu": {
+      "cores": 24,
+      "physical_cores": 24,
+      "frequency": {
+        "current": 3700.0,
+        "min": 0.0,
+        "max": 3700.0
+      },
+      "architecture": "win32"
+    },
+    "memory": {
+      "total_gb": 95.71322250366211,
+      "available_gb": 74.52966690063477
+    },
+    "gpu": {
+      "gpu_0": {
+        "name": "NVIDIA GeForce RTX 5090",
+        "memory_total_gb": 31.8427734375,
+        "memory_free_gb": 29.6806640625,
+        "type": "nvidia"
+      }
+    },
+    "jax": {}
+  },
+  "utilization_assessment": {
+    "cpu": "GOOD - Moderate CPU utilization",
+    "memory": "LOW - Memory underutilized",
+    "gpu": "EXCELLENT - High GPU utilization"
+  }
+}
