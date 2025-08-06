@@ -12,39 +12,72 @@ This script:
 4. Tests multiple void scenarios to explain Hubble constant
 """
 
-print("Starting DDMM Cosmological Redshift Test with Void Models...")
-print("Importing required libraries...")
-
 import sys
 import traceback
+import logging
+from datetime import datetime
+
+# Set up logging immediately
+log_filename = f"ddmm_cosmology_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_filename),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+logger = logging.getLogger(__name__)
+logger.info("="*70)
+logger.info("Starting DDMM Cosmological Redshift Test with Void Models")
+logger.info(f"Log file: {log_filename}")
+logger.info("="*70)
+
+# Flush output to ensure it's visible
+sys.stdout.flush()
+
+logger.info("Importing required libraries...")
 
 try:
     import numpy as np
-    print("  ✓ NumPy imported")
+    logger.info("  ✓ NumPy imported successfully")
+    logger.debug(f"    NumPy version: {np.__version__}")
 except ImportError as e:
-    print(f"  ✗ Failed to import NumPy: {e}")
+    logger.error(f"  ✗ Failed to import NumPy: {e}")
+    sys.exit(1)
+except Exception as e:
+    logger.error(f"  ✗ Unexpected error importing NumPy: {e}")
+    traceback.print_exc()
     sys.exit(1)
 
 try:
     import matplotlib
     matplotlib.use('Agg')  # Use non-interactive backend first
     import matplotlib.pyplot as plt
-    print("  ✓ Matplotlib imported")
+    logger.info("  ✓ Matplotlib imported successfully")
+    logger.debug(f"    Matplotlib version: {matplotlib.__version__}")
+    logger.debug(f"    Backend: {matplotlib.get_backend()}")
 except ImportError as e:
-    print(f"  ✗ Failed to import Matplotlib: {e}")
-    print("  Please install: pip install matplotlib")
+    logger.error(f"  ✗ Failed to import Matplotlib: {e}")
+    logger.error("  Please install: pip install matplotlib")
+    sys.exit(1)
+except Exception as e:
+    logger.error(f"  ✗ Unexpected error importing Matplotlib: {e}")
+    traceback.print_exc()
     sys.exit(1)
 
 try:
     from scipy import optimize
-    print("  ✓ SciPy imported")
+    logger.info("  ✓ SciPy imported successfully")
+    logger.debug(f"    SciPy version: {scipy.__version__}")
     scipy_available = True
     
     # Create curve_fit reference
     curve_fit = optimize.curve_fit
 except ImportError as e:
-    print(f"  ⚠ Warning: SciPy not available: {e}")
-    print("  Running with limited functionality...")
+    logger.warning(f"  ⚠ Warning: SciPy not available: {e}")
+    logger.warning("  Running with limited functionality...")
     scipy_available = False
     
     # Simple fallback for curve_fit
@@ -53,15 +86,31 @@ except ImportError as e:
         if len(xdata) > 0 and len(ydata) > 0:
             return [np.mean(ydata/xdata)], None
         return [1.0], None
+except Exception as e:
+    logger.error(f"  ✗ Unexpected error with SciPy: {e}")
+    scipy_available = False
+    
+    def curve_fit(func, xdata, ydata):
+        if len(xdata) > 0 and len(ydata) > 0:
+            return [np.mean(ydata/xdata)], None
+        return [1.0], None
 
 try:
     from pathlib import Path
-    print("  ✓ Pathlib imported")
+    logger.info("  ✓ Pathlib imported successfully")
 except ImportError as e:
-    print(f"  ✗ Failed to import Pathlib: {e}")
+    logger.error(f"  ✗ Failed to import Pathlib: {e}")
+    sys.exit(1)
+except Exception as e:
+    logger.error(f"  ✗ Unexpected error importing Pathlib: {e}")
+    traceback.print_exc()
     sys.exit(1)
 
-print("All libraries imported successfully!\n")
+logger.info("All libraries imported successfully!")
+logger.info("")
+
+# Flush again
+sys.stdout.flush()
 
 # ============================================================================
 # LOAD YOUR ACTUAL FITTED PARAMETERS FROM DYNESTY RUN
@@ -71,6 +120,8 @@ def load_ddmm_parameters():
     """
     Load parameters from your dynesty checkpoint file.
     """
+    logger.info("Loading DDMM parameters...")
+    
     # Try to find your checkpoint file
     checkpoint_paths = [
         "runs/enhanced_20250805_115400/dynesty_checkpoint_enhanced_latest.npz",
@@ -80,18 +131,23 @@ def load_ddmm_parameters():
     
     loaded_params = None
     
+    logger.debug(f"Searching for checkpoint files in {len(checkpoint_paths)} locations...")
+    
     for checkpoint_path in checkpoint_paths:
+        logger.debug(f"Checking: {checkpoint_path}")
         if Path(checkpoint_path).exists():
-            print(f"Loading DDMM parameters from: {checkpoint_path}")
+            logger.info(f"Found checkpoint file: {checkpoint_path}")
             try:
                 data = np.load(checkpoint_path)
-                print(f"  Keys in file: {list(data.keys())}")
+                logger.debug(f"  Keys in file: {list(data.keys())}")
                 
                 # Try different possible keys for parameters
                 if 'median_params' in data:
+                    logger.debug("  Using 'median_params' from checkpoint")
                     params = data['median_params']
                     param_names = data['param_names'] if 'param_names' in data else []
                 elif 'samples' in data and 'param_names' in data:
+                    logger.debug("  Calculating median from 'samples'")
                     # Use median of samples
                     samples = data['samples']
                     param_names = data['param_names']
@@ -100,8 +156,9 @@ def load_ddmm_parameters():
                     # Also get percentiles for uncertainty
                     params_16 = np.percentile(samples, 16, axis=0)
                     params_84 = np.percentile(samples, 84, axis=0)
+                    logger.debug(f"  Samples shape: {samples.shape}")
                 else:
-                    print("  Warning: Could not find parameter data in file")
+                    logger.warning("  Could not find parameter data in file")
                     continue
                 
                 # Create parameter dictionary
@@ -111,17 +168,21 @@ def load_ddmm_parameters():
                     if 'samples' in data:
                         loaded_params[f"{name}_16"] = params_16[i]
                         loaded_params[f"{name}_84"] = params_84[i]
-                    print(f"    {name}: {params[i]:.3e}")
+                    logger.debug(f"    {name}: {params[i]:.3e}")
                 
-                print(f"  Successfully loaded {len(loaded_params)} parameters")
+                logger.info(f"  Successfully loaded {len(loaded_params)} parameters")
                 break
                 
             except Exception as e:
-                print(f"  Error loading {checkpoint_path}: {e}")
+                logger.error(f"  Error loading {checkpoint_path}: {e}")
+                logger.debug(f"  Full traceback: {traceback.format_exc()}")
                 continue
+        else:
+            logger.debug(f"  File does not exist: {checkpoint_path}")
     
     # Extract DDMM-specific parameters or use defaults
     if loaded_params:
+        logger.info("Using loaded parameters from checkpoint")
         YOUR_FITTED_PARAMS = {
             'A': loaded_params.get('A', 5.615),
             'n_exp': loaded_params.get('n_exp', 1.235),
@@ -144,7 +205,7 @@ def load_ddmm_parameters():
         }
     else:
         # Fallback to your specific run values
-        print("Could not load checkpoint file, using hard-coded values from your run:")
+        logger.warning("Could not load checkpoint file, using hard-coded values from your run")
         YOUR_FITTED_PARAMS = {
             'A': 5.615,
             'n_exp': 1.235,
@@ -168,18 +229,35 @@ def load_ddmm_parameters():
     return YOUR_FITTED_PARAMS
 
 # Load the parameters
-YOUR_FITTED_PARAMS = load_ddmm_parameters()
+logger.info("="*70)
+logger.info("LOADING DDMM PARAMETERS")
+logger.info("="*70)
 
-print("\nUsing DDMM parameters from your dynesty run:")
-print(f"  A = {YOUR_FITTED_PARAMS['A']:.3f} [{YOUR_FITTED_PARAMS['A_min']:.3f}, {YOUR_FITTED_PARAMS['A_max']:.3f}]")
-print(f"  n = {YOUR_FITTED_PARAMS['n_exp']:.3f}")
-print(f"  ρ_c = {YOUR_FITTED_PARAMS['rho_c_solar_kpc3']:.3e} M_☉/kpc³")
-print(f"\nGalaxy model parameters:")
-print(f"  Total baryonic mass: {(YOUR_FITTED_PARAMS['M_thin_disk_solar'] + YOUR_FITTED_PARAMS['M_thick_disk_solar'] + YOUR_FITTED_PARAMS['M_bulge_solar'] + YOUR_FITTED_PARAMS['M_gas_solar']):.3e} M_☉")
-print(f"  Thin disk: M={YOUR_FITTED_PARAMS['M_thin_disk_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_thin_disk_kpc']:.1f} kpc")
-print(f"  Thick disk: M={YOUR_FITTED_PARAMS['M_thick_disk_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_thick_disk_kpc']:.1f} kpc")
-print(f"  Bulge: M={YOUR_FITTED_PARAMS['M_bulge_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_bulge_kpc']:.1f} kpc")
-print(f"  Gas: M={YOUR_FITTED_PARAMS['M_gas_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_gas_kpc']:.1f} kpc\n")
+try:
+    YOUR_FITTED_PARAMS = load_ddmm_parameters()
+    
+    logger.info("")
+    logger.info("Using DDMM parameters from your dynesty run:")
+    logger.info(f"  A = {YOUR_FITTED_PARAMS['A']:.3f} [{YOUR_FITTED_PARAMS['A_min']:.3f}, {YOUR_FITTED_PARAMS['A_max']:.3f}]")
+    logger.info(f"  n = {YOUR_FITTED_PARAMS['n_exp']:.3f}")
+    logger.info(f"  ρ_c = {YOUR_FITTED_PARAMS['rho_c_solar_kpc3']:.3e} M_☉/kpc³")
+    logger.info("")
+    logger.info("Galaxy model parameters:")
+    total_mass = (YOUR_FITTED_PARAMS['M_thin_disk_solar'] + 
+                  YOUR_FITTED_PARAMS['M_thick_disk_solar'] + 
+                  YOUR_FITTED_PARAMS['M_bulge_solar'] + 
+                  YOUR_FITTED_PARAMS['M_gas_solar'])
+    logger.info(f"  Total baryonic mass: {total_mass:.3e} M_☉")
+    logger.info(f"  Thin disk: M={YOUR_FITTED_PARAMS['M_thin_disk_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_thin_disk_kpc']:.1f} kpc")
+    logger.info(f"  Thick disk: M={YOUR_FITTED_PARAMS['M_thick_disk_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_thick_disk_kpc']:.1f} kpc")
+    logger.info(f"  Bulge: M={YOUR_FITTED_PARAMS['M_bulge_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_bulge_kpc']:.1f} kpc")
+    logger.info(f"  Gas: M={YOUR_FITTED_PARAMS['M_gas_solar']:.2e} M_☉, R={YOUR_FITTED_PARAMS['R_gas_kpc']:.1f} kpc")
+    logger.info("")
+    
+except Exception as e:
+    logger.error(f"Failed to load DDMM parameters: {e}")
+    logger.error(f"Full traceback:\n{traceback.format_exc()}")
+    sys.exit(1)
 
 # ============================================================================
 # VOID MODELS FOR COSMOLOGY
@@ -211,11 +289,11 @@ class CosmicVoidModels:
         # Minimum density in voids (never exactly zero!)
         self.rho_void_min = self.rho_cosmic_mean * void_contrast
         
-        print(f"Void Model initialized:")
-        print(f"  Void contrast: {void_contrast} (ρ_void/ρ_mean)")
-        print(f"  Void radius: {void_radius_Mpc} Mpc")
-        print(f"  Mean cosmic density: {self.rho_cosmic_mean:.2e} M_☉/kpc³")
-        print(f"  Minimum void density: {self.rho_void_min:.2e} M_☉/kpc³")
+        logger.debug(f"Void Model initialized:")
+        logger.debug(f"  Void contrast: {void_contrast} (ρ_void/ρ_mean)")
+        logger.debug(f"  Void radius: {void_radius_Mpc} Mpc")
+        logger.debug(f"  Mean cosmic density: {self.rho_cosmic_mean:.2e} M_☉/kpc³")
+        logger.debug(f"  Minimum void density: {self.rho_void_min:.2e} M_☉/kpc³")
     
     def void_profile_exponential(self, r_from_center_Mpc):
         """Exponential void profile - smooth transition."""
@@ -745,33 +823,79 @@ def run_comprehensive_void_test():
 
 if __name__ == "__main__":
     print("\n" + "="*70)
-    print("EXECUTING MAIN TEST WITH YOUR FITTED PARAMETERS")
+    print("EXECUTING MAIN TEST WITH YOUR DDMM DYNESTY RUN")
     print("="*70)
     
     try:
-        # Check if user wants to load different parameters
+        # Check if user provides a specific checkpoint file
         if len(sys.argv) > 1:
-            npz_file = sys.argv[1]
-            print(f"Loading parameters from: {npz_file}")
+            checkpoint_file = sys.argv[1]
+            print(f"Attempting to load checkpoint from: {checkpoint_file}")
             
-            if Path(npz_file).exists():
-                data = np.load(npz_file)
-                if 'median_params' in data:
-                    params = data['median_params']
-                    param_names = data['param_names'] if 'param_names' in data else []
+            if Path(checkpoint_file).exists():
+                try:
+                    data = np.load(checkpoint_file)
+                    print(f"  File loaded. Keys: {list(data.keys())}")
                     
-                    # Update YOUR_FITTED_PARAMS
-                    for i, name in enumerate(param_names):
-                        if 'A' in name:
-                            YOUR_FITTED_PARAMS['A'] = params[i]
-                        elif 'n_exp' in name:
-                            YOUR_FITTED_PARAMS['n_exp'] = params[i]
-                        elif 'rho_c' in name:
-                            YOUR_FITTED_PARAMS['rho_c_solar_kpc3'] = params[i]
+                    # Try to extract parameters
+                    if 'median_params' in data and 'param_names' in data:
+                        params = data['median_params']
+                        param_names = list(data['param_names'])
+                        
+                        # Update YOUR_FITTED_PARAMS with loaded values
+                        param_dict = {name: params[i] for i, name in enumerate(param_names)}
+                        
+                        if 'A' in param_dict:
+                            YOUR_FITTED_PARAMS['A'] = param_dict['A']
+                        if 'n_exp' in param_dict:
+                            YOUR_FITTED_PARAMS['n_exp'] = param_dict['n_exp']
+                        if 'rho_c_solar_kpc3' in param_dict:
+                            YOUR_FITTED_PARAMS['rho_c_solar_kpc3'] = param_dict['rho_c_solar_kpc3']
+                        
+                        print(f"  Updated parameters from checkpoint:")
+                        print(f"    A = {YOUR_FITTED_PARAMS['A']:.3f}")
+                        print(f"    n = {YOUR_FITTED_PARAMS['n_exp']:.3f}")
+                        print(f"    ρ_c = {YOUR_FITTED_PARAMS['rho_c_solar_kpc3']:.3e}")
                     
-                    print("Parameters updated from file")
+                    elif 'samples' in data and 'param_names' in data:
+                        # Calculate from samples
+                        samples = data['samples']
+                        param_names = list(data['param_names'])
+                        
+                        # Get median and percentiles
+                        median_params = np.median(samples, axis=0)
+                        params_16 = np.percentile(samples, 16, axis=0)
+                        params_84 = np.percentile(samples, 84, axis=0)
+                        
+                        # Update parameters
+                        for i, name in enumerate(param_names):
+                            if name == 'A':
+                                YOUR_FITTED_PARAMS['A'] = median_params[i]
+                                YOUR_FITTED_PARAMS['A_min'] = params_16[i]
+                                YOUR_FITTED_PARAMS['A_max'] = params_84[i]
+                            elif name == 'n_exp':
+                                YOUR_FITTED_PARAMS['n_exp'] = median_params[i]
+                            elif name == 'rho_c_solar_kpc3':
+                                YOUR_FITTED_PARAMS['rho_c_solar_kpc3'] = median_params[i]
+                        
+                        print(f"  Calculated parameters from samples:")
+                        print(f"    A = {YOUR_FITTED_PARAMS['A']:.3f} [{YOUR_FITTED_PARAMS['A_min']:.3f}, {YOUR_FITTED_PARAMS['A_max']:.3f}]")
+                        print(f"    n = {YOUR_FITTED_PARAMS['n_exp']:.3f}")
+                        print(f"    ρ_c = {YOUR_FITTED_PARAMS['rho_c_solar_kpc3']:.3e}")
+                    
+                except Exception as e:
+                    print(f"  Warning: Could not load checkpoint: {e}")
+                    print("  Using default loaded parameters")
+            else:
+                print(f"  File not found: {checkpoint_file}")
+                print("  Using default loaded parameters")
+        else:
+            print("No checkpoint file specified.")
+            print("Looking for checkpoint in default locations...")
+            print("To use a specific checkpoint, run:")
+            print("  python test_ddmm_cosmological_redshift_with_voids.py <checkpoint_file.npz>")
         
-        # Run the comprehensive test
+        # Run the comprehensive test with loaded parameters
         ddmm_model, results = run_comprehensive_void_test()
         
         print("\n" + "="*70)
@@ -779,6 +903,10 @@ if __name__ == "__main__":
         print("="*70)
         print("\nThe DDMM model with cosmic voids can potentially explain")
         print("cosmological redshift without requiring universal expansion!")
+        print(f"\nUsed parameters:")
+        print(f"  A = {YOUR_FITTED_PARAMS['A']:.3f}")
+        print(f"  n = {YOUR_FITTED_PARAMS['n_exp']:.3f}")  
+        print(f"  ρ_c = {YOUR_FITTED_PARAMS['rho_c_solar_kpc3']:.3e} M_☉/kpc³")
         
     except Exception as e:
         print(f"\nERROR: Test failed with exception:")

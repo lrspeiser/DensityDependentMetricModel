@@ -298,6 +298,68 @@ def xi_mond_like_cupy(rho, rho_c, n):
     xi = 1.0 + (ratio**(-n/2.0)) / (1.0 + ratio**(-n/2.0))
     return cp.maximum(xi, 1.0)
 
+    @cp.fuse()
+    def xi_sigmoid_saturation_cupy(rho, rho_c, A, n_exp):
+        """Sigmoid saturation - enhancement caps at A+1, never goes to infinity."""
+        rho_safe = cp.maximum(rho, 1e-10)
+        rho_c_safe = cp.maximum(rho_c, 1e-10)
+        
+        # Prevent infinity with small offset
+        x = rho_c_safe / (rho_safe + rho_c_safe/100)
+        xi = 1.0 + A * cp.tanh(x**n_exp)
+        return cp.maximum(xi, 1.0)
+
+    @cp.fuse()
+    def xi_peak_enhancement_cupy(rho, rho_peak, width, A):
+        """
+        Peak enhancement - maximum effect at intermediate densities (void boundaries).
+        Enhancement PEAKS at rho_peak then falls off in both directions.
+        """
+        rho_safe = cp.maximum(rho, 1e-10)
+        rho_peak_safe = cp.maximum(rho_peak, 1e-10)
+        
+        # Log-space Gaussian peak
+        log_rho = cp.log10(rho_safe)
+        log_peak = cp.log10(rho_peak_safe)
+        
+        xi = 1.0 + A * cp.exp(-(log_rho - log_peak)**2 / (2*width**2))
+        return cp.maximum(xi, 1.0)
+
+    @cp.fuse()
+    def xi_yukawa_screening_cupy(rho, r, rho_c, A, lambda_screen):
+        """
+        Yukawa-like screening - enhancement decreases exponentially with distance.
+        Note: Requires radial distance r as additional input.
+        """
+        rho_safe = cp.maximum(rho, 1e-10)
+        rho_c_safe = cp.maximum(rho_c, 1e-10)
+        r_safe = cp.maximum(r, 0.1)  # Avoid issues at r=0
+        
+        # Density factor
+        rho_factor = cp.sqrt(rho_c_safe / (rho_safe + rho_c_safe/100))
+        
+        # Distance screening (exponential cutoff)
+        distance_factor = cp.exp(-r_safe / lambda_screen)
+        
+        xi = 1.0 + A * rho_factor * distance_factor
+        return cp.maximum(xi, 1.0)
+
+    @cp.fuse()
+    def xi_transition_based_cupy(rho, rho_prev, A, width):
+        """
+        Transition-based enhancement - strongest where density CHANGES rapidly.
+        Requires density at previous radius for gradient calculation.
+        """
+        rho_safe = cp.maximum(rho, 1e-10)
+        rho_prev_safe = cp.maximum(rho_prev, 1e-10)
+        
+        # Calculate relative density change
+        delta_log_rho = cp.abs(cp.log10(rho_safe) - cp.log10(rho_prev_safe))
+        
+        # Enhancement peaks for large density gradients
+        xi = 1.0 + A * cp.exp(-delta_log_rho**2 / (2*width**2))
+        return cp.maximum(xi, 1.0)
+
 # ============================================================================
 # MAIN VELOCITY FUNCTION - CuPy Optimized
 # ============================================================================
@@ -530,11 +592,32 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
     elif xi_type == 'gr':
         # Standard GR - no enhancement
         xi = cp.ones_like(rho_total)
+    elif xi_type == 'sigmoid':
+        n_exp = p.get('n_exp', 2.0)
+        A = p.get('A', 5.0)
+        xi = xi_sigmoid_saturation_cupy(rho_total, rho_c, A, n_exp)
+    elif xi_type == 'peak':
+        rho_peak = p.get('rho_peak_solar_kpc3', 100.0)  # Peak at void boundaries
+        width = p.get('width_log', 1.5)
+        A = p.get('A', 5.0)
+        xi = xi_peak_enhancement_cupy(rho_total, rho_peak, width, A)
+    elif xi_type == 'yukawa':
+        A = p.get('A', 5.0)
+        lambda_screen = p.get('lambda_screen_kpc', 10.0)
+        xi = xi_yukawa_screening_cupy(rho_total, R_kpc_arr, rho_c, A, lambda_screen)
+    elif xi_type == 'transition':
+        # For transition model, calculate density at slightly different radius
+        R_prev = cp.maximum(R_kpc_arr - 0.1, 0.1)  # 0.1 kpc step
+        rho_prev = volume_density_comprehensive_solar_kpc3_cupy(R_prev, p)
+        A = p.get('A', 5.0)
+        width = p.get('width_gradient', 1.0)
+        xi = xi_transition_based_cupy(rho_total, rho_prev, A, width)
     else:
         # Default to power law
         n_exp = p.get('n_exp', 2.0)
         A = p.get('A_xi', 1.0)
         xi = xi_power_law_cupy(rho_total, rho_c, n_exp, A)
+
     
     # Apply xi enhancement to velocity
     v_total_sq = v_baryon_sq * xi

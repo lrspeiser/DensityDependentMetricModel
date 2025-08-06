@@ -907,7 +907,100 @@ def setup_parameter_bounds(xi_type):
             True, False,         # Bulge
             True, False, False   # Gas
         ])
-        
+    
+    elif xi_type == 'sigmoid':
+        # Sigmoid saturation model
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'n_exp', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e12, 0.5, 1.0       # Sigmoid parameters
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e15, 3.0, 10.0      # Sigmoid parameters
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Sigmoid
+        ])
+    
+    elif xi_type == 'peak':
+        # Peak enhancement model (your favorite)
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_peak_solar_kpc3', 'width_log', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            10.0, 0.5, 1.0       # Peak at void boundaries (~100 M_☉/kpc³)
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e4, 3.0, 10.0       # Peak parameters
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Peak
+        ])
+    
+    elif xi_type == 'yukawa':
+        # Yukawa screening model
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'lambda_screen_kpc', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e12, 5.0, 1.0       # Yukawa parameters
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e15, 50.0, 10.0     # Yukawa parameters
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Yukawa
+        ])
+    
     elif xi_type == 'enhanced':
         # Enhanced model with all baryonic components + modified gravity
         param_names = [
@@ -1081,7 +1174,7 @@ def main_cupy():
     
     # Core options
     parser.add_argument('--xi', type=str, default='gr', 
-                       choices=['gr', 'power', 'enhanced', 'grav_color'],
+                       choices=['gr', 'power', 'enhanced', 'grav_color', 'sigmoid', 'peak', 'yukawa', 'transition'],
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory')
