@@ -648,6 +648,77 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
                 if bulge_mass > thin_mass * 0.5:
                     log_prior_penalty -= 5.0   # ~e^-5 penalty for very massive bulge
         
+        # ============== ADD CASSINI CONSTRAINT CHECK ==============
+        # Check Cassini constraint for spacetime_grain and other DDMM models
+        if args.xi in ['spacetime_grain', 'peak', 'sigmoid', 'hybrid', 'broken', 'yukawa']:
+            try:
+                # Calculate xi at Solar System location (8.5 kpc)
+                R_sun_kpc = cp.array([8.5])
+                
+                # Get solar neighborhood density (approximate)
+                if 'M_thin_disk_solar' in params:
+                    # Calculate density at Sun's position using galaxy model
+                    from density_metric_cupy import volume_density_comprehensive_solar_kpc3_cupy
+                    rho_sun = volume_density_comprehensive_solar_kpc3_cupy(R_sun_kpc, params)
+                else:
+                    # Fallback: typical solar neighborhood density
+                    rho_sun = cp.array([1e6])  # M_☉/kpc³
+                
+                # Calculate xi at Sun's position
+                v_sun_newton = v_total_kms_cupy(R_sun_kpc, params, xi_type='gr')  # Newtonian baseline
+                v_sun_model = v_total_kms_cupy(R_sun_kpc, params, xi_type=args.xi)  # With enhancement
+                
+                # Xi is ratio of velocities squared
+                if cp.all(v_sun_newton > 0):
+                    xi_sun = (v_sun_model / v_sun_newton)**2
+                else:
+                    xi_sun = cp.array([1.0])
+                
+                # Cassini constraint: |γ - 1| < 2.3 × 10^-5
+                # For DDMM: γ - 1 ≈ ξ - 1
+                gamma_minus_one = float(xi_sun[0] - 1.0)
+                cassini_limit = 2.3e-5
+                
+                if abs(gamma_minus_one) > cassini_limit:
+                    # Soft penalty that scales with violation
+                    violation_ratio = abs(gamma_minus_one) / cassini_limit
+                    
+                    # Penalty increases with violation
+                    # Small violations: small penalty
+                    # Large violations: large penalty
+                    cassini_penalty = -100 * (violation_ratio - 1)**2 if violation_ratio > 1 else 0
+                    
+                    log_prior_penalty += cassini_penalty
+                    
+                    if log_likelihood_dynesty_cupy.call_count <= 10:
+                        print(f"  Cassini violation: γ-1 = {gamma_minus_one:.2e} "
+                              f"(limit: {cassini_limit:.2e}, penalty: {cassini_penalty:.1f})")
+                
+                # Additional check for spacetime_grain: ensure grain boundaries align
+                if args.xi == 'spacetime_grain' and 'grain_size_kpc' in params:
+                    grain_size = params['grain_size_kpc']
+                    
+                    # Penalize if Sun (8.5 kpc) is too close to a grain boundary
+                    # We want Sun to be safely inside a grain, not at boundary
+                    distance_to_boundary = min(
+                        8.5 % grain_size,
+                        grain_size - (8.5 % grain_size)
+                    )
+                    
+                    if distance_to_boundary < 1.0:  # Within 1 kpc of boundary
+                        boundary_penalty = -50 * (1.0 - distance_to_boundary)**2
+                        log_prior_penalty += boundary_penalty
+                        
+                        if log_likelihood_dynesty_cupy.call_count <= 10:
+                            print(f"  Grain boundary too close to Sun: {distance_to_boundary:.2f} kpc "
+                                  f"(penalty: {boundary_penalty:.1f})")
+                
+            except Exception as cassini_e:
+                # Don't fail the whole likelihood, just skip Cassini check
+                if log_likelihood_dynesty_cupy.call_count <= 3:
+                    print(f"  Warning: Cassini check failed: {cassini_e}")
+        # ============== END CASSINI CONSTRAINT CHECK ==============
+        
         # Apply the soft prior penalty
         logl += log_prior_penalty
 
@@ -939,8 +1010,72 @@ def setup_parameter_bounds(xi_type):
             True, False, False   # Sigmoid
         ])
     
+    elif xi_type == 'spacetime_grain':
+        # Quantum spacetime granularity model
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'grain_size_kpc', 'rho_compress', 'A_grain'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            5.0, 1e3, 2.0        # Grain: size, compression density, enhancement
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            20.0, 1e7, 15.0      # Grain parameters
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            False, True, False   # Grain (linear for size, log for density, linear for A)
+        ])
+    
+    elif xi_type == 'broken':
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_break_solar_kpc3', 'n_low', 'n_high', 'A'
+        ]
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e3, 0.5, 0.1, 1.0   # Broken power law params
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e7, 3.0, 2.0, 20.0  # Broken power law params
+        ])
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False, False  # Broken power
+        ])
+
     elif xi_type == 'peak':
-        # Peak enhancement model (your favorite)
+        # FIXED: Better bounds for peak density
         param_names = [
             'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
             'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
@@ -953,21 +1088,14 @@ def setup_parameter_bounds(xi_type):
             1e9, 3.0, 0.6,       # Thick disk
             1e9, 0.5,            # Bulge
             1e9, 5.0, 0.1,       # Gas
-            10.0, 0.5, 1.0       # Peak at void boundaries (~100 M_☉/kpc³)
+            1e2, 0.3, 1.0        # CHANGED: rho_peak from 10 to 100
         ])
         bounds_high = np.array([
             1e11, 4.0, 0.4,      # Thin disk
             1e10, 5.0, 1.0,      # Thick disk
             1e10, 2.0,           # Bulge
             1e10, 10.0, 0.3,     # Gas
-            1e4, 3.0, 10.0       # Peak parameters
-        ])
-        use_log_prior = np.array([
-            True, False, False,  # Thin disk
-            True, False, False,  # Thick disk
-            True, False,         # Bulge
-            True, False, False,  # Gas
-            True, False, False   # Peak
+            1e7, 5.0, 20.0       # CHANGED: rho_peak to 1e7, wider width, larger A
         ])
     
     elif xi_type == 'yukawa':
@@ -1174,7 +1302,7 @@ def main_cupy():
     
     # Core options
     parser.add_argument('--xi', type=str, default='gr', 
-                       choices=['gr', 'power', 'enhanced', 'grav_color', 'sigmoid', 'peak', 'yukawa', 'transition'],
+                       choices=['gr', 'power', 'enhanced', 'grav_color', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh'],
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory')
