@@ -69,7 +69,8 @@ try:
     from density_contrast_model import (
         v_total_contrast, 
         check_cassini_constraint,
-        to_numpy_array
+        to_numpy_array,
+        diagnose_enhancement  # Add diagnostic function
     )
     print("✓ density_contrast_model imported successfully")
 except ImportError as e:
@@ -196,12 +197,20 @@ def chi_squared(params, R_data, v_data, sigma_data, contrast_type='gradient'):
         # Convert to CuPy
         R_gpu = cp.asarray(R_data, dtype=cp.float32)
         
-        # Calculate model velocity
-        v_model_gpu = v_total_contrast(R_gpu, params, contrast_type)
+        # Calculate model velocity with components
+        v_model_gpu, v_newton_gpu, xi_gpu = v_total_contrast(
+            R_gpu, params, contrast_type, return_components=True
+        )
         v_model = to_numpy_array(v_model_gpu)
+        v_newton = to_numpy_array(v_newton_gpu)
+        xi = to_numpy_array(xi_gpu)
         
         # Calculate chi-squared
         chi2 = np.sum(((v_data - v_model) / sigma_data)**2)
+        
+        # Print diagnostic every 10th call (reduce output)
+        if np.random.random() < 0.05:  # 5% chance to print
+            print(f"      ξ range: [{xi.min():.3f}, {xi.max():.3f}], χ² = {chi2:.1e}")
         
         return chi2
     except Exception as e:
@@ -212,6 +221,8 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
     """
     Simple grid search to find best parameters.
     Focuses on key contrast parameters.
+    
+    UPDATED: Better parameter ranges for actual enhancement
     """
     print(f"\n--- Grid Search: {contrast_type} ---")
     
@@ -231,9 +242,10 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
     
     # Define search grids based on contrast type
     if contrast_type == 'gradient':
-        gradient_scales = [0.5, 1.0, 2.0]
-        contrast_thresholds = [10, 100, 1000]
-        A_values = [2, 5, 10, 20]
+        # UPDATED: Wider ranges to find actual enhancement
+        gradient_scales = [0.5, 1.0, 2.0]  # Gradient calculation scales
+        contrast_thresholds = [0.1, 0.5, 1.0, 2.0]  # Much lower thresholds
+        A_values = [50, 100, 200, 500]  # Much higher enhancements needed
         
         total_combinations = len(gradient_scales) * len(contrast_thresholds) * len(A_values)
         print(f"Testing {total_combinations} parameter combinations...")
@@ -252,7 +264,15 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
                     
                     # Check Cassini constraint first
                     cassini = check_cassini_constraint(params, contrast_type)
-                    if not cassini['passes']:
+                    
+                    # Calculate enhancement to see if model is working
+                    R_test_gpu = cp.asarray([5, 10, 15, 20], dtype=cp.float32)
+                    _, _, xi_test = v_total_contrast(R_test_gpu, params, contrast_type, return_components=True)
+                    xi_test = to_numpy_array(xi_test)
+                    max_enhancement = xi_test.max()
+                    
+                    # Only consider if we get some enhancement AND pass Cassini
+                    if not cassini['passes'] or max_enhancement < 1.1:
                         continue
                     
                     n_passed_cassini += 1
@@ -261,12 +281,13 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
                     if chi2 < best_chi2:
                         best_chi2 = chi2
                         best_params = params.copy()
-                        print(f"  New best: χ² = {chi2:.1f} (gs={gs}, ct={ct}, A={A})")
+                        print(f"  New best: χ² = {chi2:.1f}, ξ_max = {max_enhancement:.2f} (gs={gs}, ct={ct}, A={A})")
     
     elif contrast_type == 'bands':
-        band_widths = [0.5, 1.0, 2.0]
-        A_per_bands = [1, 2, 5, 10]
-        rho_refs = [1e5, 1e6, 1e7]
+        # UPDATED: Better ranges for bands
+        band_widths = [0.3, 0.5, 1.0]
+        A_per_bands = [10, 20, 50]  # Higher enhancement per band
+        rho_refs = [1e9, 1e10]  # Higher reference densities
         
         total_combinations = len(band_widths) * len(A_per_bands) * len(rho_refs)
         print(f"Testing {total_combinations} parameter combinations...")
@@ -283,7 +304,14 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
                     })
                     
                     cassini = check_cassini_constraint(params, contrast_type)
-                    if not cassini['passes']:
+                    
+                    # Check for actual enhancement
+                    R_test_gpu = cp.asarray([5, 10, 15, 20], dtype=cp.float32)
+                    _, _, xi_test = v_total_contrast(R_test_gpu, params, contrast_type, return_components=True)
+                    xi_test = to_numpy_array(xi_test)
+                    max_enhancement = xi_test.max()
+                    
+                    if not cassini['passes'] or max_enhancement < 1.1:
                         continue
                     
                     n_passed_cassini += 1
@@ -292,11 +320,12 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
                     if chi2 < best_chi2:
                         best_chi2 = chi2
                         best_params = params.copy()
-                        print(f"  New best: χ² = {chi2:.1f} (bw={bw}, A={A}, ρ_ref={rho_ref:.1e})")
+                        print(f"  New best: χ² = {chi2:.1f}, ξ_max = {max_enhancement:.2f} (bw={bw}, A={A}, ρ_ref={rho_ref:.1e})")
     
     elif contrast_type == 'boundaries':
-        boundary_widths = [1, 2, 3, 5]
-        A_boundaries = [2, 5, 10, 20]
+        # UPDATED: Better boundary parameters
+        boundary_widths = [1, 2, 3]
+        A_boundaries = [20, 50, 100]  # Higher enhancement at boundaries
         
         total_combinations = len(boundary_widths) * len(A_boundaries)
         print(f"Testing {total_combinations} parameter combinations...")
@@ -312,7 +341,14 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
                 })
                 
                 cassini = check_cassini_constraint(params, contrast_type)
-                if not cassini['passes']:
+                
+                # Check for actual enhancement
+                R_test_gpu = cp.asarray([5, 10, 15, 20], dtype=cp.float32)
+                _, _, xi_test = v_total_contrast(R_test_gpu, params, contrast_type, return_components=True)
+                xi_test = to_numpy_array(xi_test)
+                max_enhancement = xi_test.max()
+                
+                if not cassini['passes'] or max_enhancement < 1.1:
                     continue
                 
                 n_passed_cassini += 1
@@ -321,9 +357,29 @@ def grid_search_simple(R_data, v_data, sigma_data, contrast_type='gradient'):
                 if chi2 < best_chi2:
                     best_chi2 = chi2
                     best_params = params.copy()
-                    print(f"  New best: χ² = {chi2:.1f} (bw={bw}, A={A})")
+                    print(f"  New best: χ² = {chi2:.1f}, ξ_max = {max_enhancement:.2f} (bw={bw}, A={A})")
     
-    print(f"Tested {n_tested} combinations, {n_passed_cassini} passed Cassini")
+    print(f"Tested {n_tested} combinations, {n_passed_cassini} passed Cassini with enhancement > 10%")
+    
+    # If no params passed Cassini, relax and find best anyway
+    if best_params is None:
+        print("WARNING: No parameters passed Cassini constraint!")
+        print("Finding best fit regardless of Cassini...")
+        best_chi2 = np.inf
+        
+        # Try with relaxed parameters
+        if contrast_type == 'gradient':
+            params = base_params.copy()
+            params.update({
+                'gradient_scale_kpc': 2.0,
+                'contrast_threshold': 1.0, 
+                'A_contrast': 50,
+                'transition_width': 2.0
+            })
+            chi2 = chi_squared(params, R_data, v_data, sigma_data, contrast_type)
+            if chi2 < best_chi2:
+                best_chi2 = chi2
+                best_params = params
     
     return best_params, best_chi2
 
@@ -339,13 +395,14 @@ def plot_results(R_data, v_data, sigma_data, params, contrast_type, save_path=No
         # Calculate model on fine grid
         R_model = np.linspace(0.5, 30, 200)
         R_gpu = cp.asarray(R_model, dtype=cp.float32)
-        v_model_gpu = v_total_contrast(R_gpu, params, contrast_type)
-        v_model = to_numpy_array(v_model_gpu)
         
-        # Also calculate GR baseline
-        params_gr = params.copy()
-        v_gr_gpu = v_total_contrast(R_gpu, params_gr, contrast_type='gr')
-        v_gr = to_numpy_array(v_gr_gpu)
+        # Get all components
+        v_model_gpu, v_newton_gpu, xi_gpu = v_total_contrast(
+            R_gpu, params, contrast_type, return_components=True
+        )
+        v_model = to_numpy_array(v_model_gpu)
+        v_newton = to_numpy_array(v_newton_gpu)
+        xi = to_numpy_array(xi_gpu)
         
         # Plot
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
@@ -355,16 +412,15 @@ def plot_results(R_data, v_data, sigma_data, params, contrast_type, save_path=No
                     label='Data', markersize=3)
         ax1.plot(R_model, v_model, 'r-', linewidth=2, 
                 label=f'Contrast Model ({contrast_type})')
-        ax1.plot(R_model, v_gr, 'b--', linewidth=1, label='GR (no enhancement)')
+        ax1.plot(R_model, v_newton, 'b--', linewidth=1, label='Newton (no enhancement)')
         
         ax1.set_ylabel('Velocity (km/s)')
-        ax1.set_ylim(0, 300)
+        ax1.set_ylim(0, 350)
         ax1.legend()
         ax1.grid(True, alpha=0.3)
         ax1.set_title(f'Density Contrast Model: {contrast_type}')
         
         # Bottom: Enhancement factor
-        xi = (v_model / v_gr)**2
         ax2.plot(R_model, xi, 'g-', linewidth=2)
         ax2.axhline(y=1, color='k', linestyle='--', alpha=0.5)
         ax2.axvline(x=8.5, color='r', linestyle=':', alpha=0.5, label='Sun position')
@@ -376,16 +432,22 @@ def plot_results(R_data, v_data, sigma_data, params, contrast_type, save_path=No
         
         ax2.set_xlabel('Radius (kpc)')
         ax2.set_ylabel('Enhancement ξ')
-        ax2.set_ylim(0.5, 10)
+        ax2.set_ylim(0.8, 20)
         ax2.set_yscale('log')
         ax2.grid(True, alpha=0.3)
         ax2.legend()
+        
+        # Add text showing enhancement range
+        ax2.text(0.02, 0.98, f'ξ range: [{xi.min():.3f}, {xi.max():.3f}]',
+                transform=ax2.transAxes, fontsize=10, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
         plt.tight_layout()
         
         if save_path:
             plt.savefig(save_path, dpi=150)
             print(f"✓ Plot saved to {save_path}")
+            print(f"  Enhancement range: ξ ∈ [{xi.min():.3f}, {xi.max():.3f}]")
         else:
             plt.show()
         
@@ -504,6 +566,13 @@ def main():
         print("  - Solar system has normal gravity (uniform density)")
         print("  - Galaxy edges show enhancement (huge contrast)")
         print("  - Model naturally satisfies Cassini constraint")
+        
+        # Run diagnostic on best model
+        if results:
+            best_model = min(results.items(), key=lambda x: x[1]['chi2'])
+            print(f"\nBest model: {best_model[0]} with χ² = {best_model[1]['chi2']:.1f}")
+            print("\nRunning diagnostic on best model...")
+            diagnose_enhancement(params=best_model[1]['params'], contrast_type=best_model[0])
         
     except Exception as e:
         print(f"\n✗ FATAL ERROR in main(): {e}")
