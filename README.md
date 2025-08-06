@@ -414,98 +414,23 @@ The enhanced DDMM run required 3,733,367 likelihood evaluations over 2.5 hours, 
 
 The complete analysis pipeline, including data preparation and post-processing scripts, is available at [repository URL to be added upon publication].
 
-## Future Observational Tests of Density-Dependent Gravity
+## Future Observational Tests
 
-To establish Density-Dependent Metric Models (DDMM) as a complete alternative to dark matter, the theory must confront the full range of gravitational phenomena—beyond galactic rotation curves and supernovae. Below we outline the most critical future tests, including the mathematical adjustments required to apply DDMM and the expected observational signatures.
+To establish DDMM as a complete alternative to dark matter, the theory must confront gravitational phenomena beyond galactic rotation curves. Critical tests include:
 
-### 1. Gravitational Lensing
+**Gravitational lensing**: DDMM predicts enhanced deflection angles proportional to ξ(ρ), producing stronger lensing than expected from visible matter alone. Euclid and Roman Space Telescope observations will test whether Einstein radii and weak lensing profiles match DDMM predictions without requiring dark halos.
 
-Because DDMM modifies the metric directly, the deflection angle of light depends on the density-dependent enhancement factor:
-\[
-\delta\phi = \int \nabla_\perp \left[ \xi(\rho(s)) \Phi_{\text{baryon}}(s) \right] ds
-\]
-This predicts **stronger deflection** in low-density regions, even without dark matter. Upcoming strong lensing surveys (e.g., Euclid, Roman) can measure whether **Einstein radii exceed visible mass expectations**, and weak lensing surveys can compare shear profiles to baryonic maps.
+**Galaxy cluster dynamics**: The Bullet Cluster and similar merging systems provide crucial tests. DDMM must reproduce the observed offset between X-ray gas and lensing peaks using only baryonic matter with density-dependent enhancement.
 
-**Required data**:
-- Baryon mass maps (from stars + gas)
-- Strong lens images (Einstein rings, arcs)
-- Weak lensing shear profiles around galaxies and clusters
+**Cosmic Microwave Background**: Modified gravitational potentials affect acoustic oscillations through ∇²Φ = 4πGρ·ξ(ρ). Integration into Boltzmann codes will test whether DDMM reproduces CMB power spectra and baryon acoustic oscillation scales.
 
-**DDMM success criteria**:
-- Enhanced lensing without invoking dark halos
-- Consistent mass-to-light ratio across environments
+**Structure formation**: N-body simulations with ξ(ρ)-modified gravity can test whether DDMM correctly predicts large-scale structure growth, void statistics, and the evolution of fσ₈(z) without dark matter.
 
-### 2. Cluster Collisions (e.g., Bullet Cluster)
+**Satellite galaxy planes**: The thin, coherent planes of satellite galaxies around the Milky Way and Andromeda challenge ΛCDM but may emerge naturally from DDMM's environment-dependent tidal fields.
 
-In DDMM, lensing follows ξ(ρ)g<sub>μν</sub>, while baryons interact hydrodynamically. In merging clusters, we must simulate:
-- **Baryonic gas** (slowed by collision)
-- **Lensing potential** (tracing density-enhanced gravitational field)
+**Precision tests**: Gravitational redshift measurements in clusters and time delays in lensed quasars provide independent constraints on ξ(ρ) at intermediate densities between galaxies and the Solar System.
 
-The test is whether lensing and X-ray maps can be explained with baryons and DDMM-enhanced gravity alone.
-
-**Required modeling**:
-- N-body + hydrodynamic merger simulations in DDMM
-- Realistic ξ(ρ) field evolution
-
-**DDMM success criteria**:
-- Reproduction of lensing–X-ray offset
-- No need for additional non-baryonic collisionless mass
-
-### 3. Cosmic Microwave Background (CMB)
-
-DDMM alters gravitational potential wells in the early universe, modifying acoustic oscillations and the Integrated Sachs–Wolfe effect. The key change is to the Poisson equation:
-\[
-\nabla^2 \Phi = 4\pi G \rho \cdot \xi(\rho)
-\]
-This must be integrated into Boltzmann solvers (e.g., CLASS, CAMB) to produce modified power spectra.
-
-**Required data**:
-- Planck TT, TE, EE spectra
-- BAO position measurements
-
-**DDMM success criteria**:
-- Accurate reproduction of CMB peak positions and amplitudes
-- BAO scale consistent with late-time light propagation in DDMM
-
-### 4. Gravitational Redshift and Time Delays
-
-DDMM predicts modified time delays in lensing systems and gravitational redshifts in large-scale structure:
-\[
-\Delta t = \int \sqrt{\xi(\rho(s)) g_{00}(s)} \, ds
-\]
-This can be tested using **lensed quasar time delays** and **gravitational redshift in galaxy clusters**.
-
-**DDMM success criteria**:
-- Time delay measurements match DDMM prediction using only baryonic matter
-- Cluster gravitational redshift signals remain consistent without dark halos
-
-### 5. Structure Formation and Cosmic Voids
-
-N-body simulations using the modified equation of motion:
-\[
-\ddot{\vec{x}} = - \xi(\rho) \nabla \Phi_{\text{baryon}}
-\]
-can test whether DDMM correctly reproduces:
-- Large-scale structure (LSS) power spectra
-- Void statistics (size, shape, density)
-- Growth rate fσ₈(z)
-
-**DDMM success criteria**:
-- Structure growth matches observed z-dependence
-- No suppression of LSS in low-density regions
-- Correct galaxy clustering statistics
-
-### 6. Satellite Galaxy Planes
-
-DDMM's environment-dependent gravity may explain **thin satellite planes** by altering orbital coherence in the presence of a radially varying ξ(ρ). This requires modeling:
-- Tidal fields in anisotropic ξ(ρ) metric
-- Precession of satellites over time
-
-**DDMM success criteria**:
-- Stable, flattened orbital configurations emerge naturally
-- Orbital poles of satellites cluster more tightly than in ΛCDM
-
-### 7. Laboratory Tests
+These observations will decisively test whether DDMM's density-dependent enhancement can explain all gravitational phenomena currently attributed to dark matter, or whether additional physics is required.
 
 While DDMM is constructed to pass Solar System tests by a wide margin (ρ_lab >> ρ_c), continued laboratory experiments provide crucial constraints. Recent tests have confirmed Newton's inverse-square law down to 52 μm scales [37], and any density-dependent theory must conform to these limits. Future atom interferometry experiments and tests in ultra-high vacuum could probe even smaller deviations, though DDMM's high ρ_c likely puts any laboratory effects far below detectability.
 
