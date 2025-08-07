@@ -190,3 +190,8 @@ periodic_analyses/
 
 # CLI command logs (machine-specific)
 cli_command.txt
+
+# Exclude local run artifacts and large files
+runs/
+*.npz
+*.pkl
