@@ -1476,7 +1476,7 @@ def main_cupy():
     
     # Core options
     parser.add_argument('--xi', type=str, default='gr', 
-                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'hybrid_safe', 'smooth_transition', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh', 'elastic_strain', 'tension_field', 'hookean'],
+                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'hybrid_safe', 'smooth_transition', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh', 'elastic_strain', 'tension_field', 'hookean', 'balanced_screening'],
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory')
