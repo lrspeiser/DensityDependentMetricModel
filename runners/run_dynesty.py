@@ -2779,6 +2779,286 @@ def make_json_serializable(obj):
     else:
         return obj
 
+# ===============================
+# TUNING SNAPSHOT HELPERS (CPU)
+# ===============================
+PERCENTILES = (16, 50, 84)
+
+def get_dynesty_weights(results):
+    if hasattr(results, 'weights') and results.weights is not None:
+        return results.weights
+    if hasattr(results, 'logwt') and hasattr(results, 'logz') and results.logwt is not None and getattr(results, 'logz', None) is not None:
+        try:
+            return np.exp(results.logwt - results.logz[-1])
+        except Exception:
+            return None
+    return None
+
+
+def _weighted_percentiles(values, weights, percentiles):
+    values = np.asarray(values)
+    weights = np.asarray(weights)
+    if values.size == 0:
+        return {f"p{int(p)}": np.nan for p in percentiles}
+    sorter = np.argsort(values)
+    v = values[sorter]
+    w = weights[sorter] if weights is not None else np.ones_like(v)
+    w_sum = np.sum(w)
+    if w_sum <= 0 or not np.isfinite(w_sum):
+        w = np.ones_like(v) / max(1, len(v))
+        w_sum = 1.0
+    cdf = np.cumsum(w) / w_sum
+    out = {}
+    for p in percentiles:
+        idx = np.searchsorted(cdf, p/100.0, side='left')
+        idx = np.clip(idx, 0, len(v)-1)
+        out[f"p{int(p)}"] = float(v[idx])
+    return out
+
+
+def _weighted_mean_std(x, w):
+    x = np.asarray(x)
+    if w is None:
+        return float(np.mean(x)), float(np.std(x))
+    w = np.asarray(w)
+    w_sum = np.sum(w)
+    if x.size == 0 or w_sum <= 0 or not np.isfinite(w_sum):
+        return np.nan, np.nan
+    w_norm = w / w_sum
+    mu = float(np.sum(x * w_norm))
+    var = float(np.sum((x - mu)**2 * w_norm))
+    return mu, np.sqrt(var)
+
+
+def _top_pcs(samples, weights, k_max=3):
+    try:
+        if samples is None or len(samples) == 0:
+            return []
+        W = np.asarray(weights) if weights is not None else np.ones(samples.shape[0])
+        if np.sum(W) <= 0 or not np.isfinite(np.sum(W)):
+            W = np.ones(samples.shape[0]) / max(1, samples.shape[0])
+        X = np.asarray(samples)
+        mu = np.average(X, axis=0, weights=W)
+        Xc = X - mu
+        cov = (Xc.T * W) @ Xc
+        cov = 0.5 * (cov + cov.T)
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        order = np.argsort(eigvals)[::-1]
+        eigvals = eigvals[order]
+        eigvecs = eigvecs[:, order]
+        pcs = []
+        for i in range(min(k_max, len(eigvals))):
+            pcs.append({
+                "eigval": float(max(eigvals[i], 0.0)),
+                "eigvec": [float(np.round(x, 6)) for x in eigvecs[:, i].tolist()]
+            })
+        return pcs
+    except Exception:
+        return []
+
+
+def _suggest_bounds_from_stats(stats_map, expansion_factor=1.5):
+    per_param = {}
+    for name, stats in stats_map.items():
+        p16 = stats.get('p16', np.nan)
+        p50 = stats.get('p50', np.nan)
+        p84 = stats.get('p84', np.nan)
+        if not all(np.isfinite([p16, p50, p84])):
+            continue
+        low = p50 - expansion_factor * (p50 - p16)
+        high = p50 + expansion_factor * (p84 - p50)
+        per_param[name] = [float(low), float(high)]
+    return {
+        "expansion_factor": float(expansion_factor),
+        "method": "p16_p84_expand",
+        "per_param": per_param
+    }
+
+
+def _seed_live_points(samples, weights, K=128, decimals=6):
+    if samples is None or len(samples) == 0:
+        return {"K": 0, "decimals": decimals, "sample_from": "posterior_recent_weighted", "points": []}
+    n = samples.shape[0]
+    K = int(min(K, 256, n))
+    W = np.asarray(weights) if weights is not None else np.ones(n)
+    if np.sum(W) <= 0 or not np.isfinite(np.sum(W)):
+        W = np.ones(n) / max(1, n)
+    else:
+        W = W / np.sum(W)
+    try:
+        idxs = np.random.choice(n, size=K, replace=False if K <= n else True, p=W)
+    except Exception:
+        idxs = np.random.choice(n, size=K, replace=False)
+    pts = np.round(samples[idxs], decimals=decimals).tolist()
+    return {"K": K, "decimals": decimals, "sample_from": "posterior_recent_weighted", "points": pts}
+
+
+def _compute_anisotropy_ratio(pcs):
+    if not pcs:
+        return 1.0
+    vals = [pc.get("eigval", 0.0) for pc in pcs]
+    if not vals or max(vals) <= 0:
+        return 1.0
+    vmin = max(min(vals), 1e-30)
+    return float(max(vals) / vmin)
+
+
+def save_tuning_snapshot(sampler, param_names, args, start_time, run_dir, logger):
+    try:
+        res = getattr(sampler, 'results', None)
+        if res is None:
+            return False
+        Path(run_dir).mkdir(parents=True, exist_ok=True)
+        now_iso = datetime.utcnow().isoformat() + 'Z'
+        n_params = len(param_names)
+        # Basic arrays with hasattr guards
+        samples = getattr(res, 'samples', None)
+        logl = getattr(res, 'logl', None)
+        logz = getattr(res, 'logz', None)
+        logzerr = getattr(res, 'logzerr', None)
+        ncall = getattr(res, 'ncall', None)
+        weights = get_dynesty_weights(res)
+        # Derive counts and performance
+        n_samples = int(len(samples)) if samples is not None else 0
+        total_calls = int(np.sum(ncall)) if isinstance(ncall, np.ndarray) else (int(ncall) if ncall is not None else 0)
+        n_iter = int(len(logz)) if isinstance(logz, (list, np.ndarray)) else (0 if logz is None else 1)
+        eff_percent = float(100.0 * n_samples / total_calls) if total_calls > 0 else 0.0
+        wall_time_sec = float(max(0.0, time.time() - start_time))
+        calls_per_sec = float(total_calls / wall_time_sec) if wall_time_sec > 0 else 0.0
+        # Convergence
+        logz_last = float(logz[-1]) if hasattr(res, 'logz') and logz is not None and len(logz) > 0 else float('nan')
+        if logzerr is not None and len(logzerr) > 0:
+            logzerr_last = float(logzerr[-1])
+        else:
+            logzerr_last = float(abs(logz[-1] - logz[-2])) if logz is not None and len(logz) > 1 else float('nan')
+        dlogz_current = float(logzerr_last) if np.isfinite(logzerr_last) else (float(abs(logz[-1] - logz[-2])) if logz is not None and len(logz) > 1 else float('nan'))
+        if logz is not None and len(logz) > 1:
+            recent = np.diff(np.array(logz)[-11:]) if len(logz) > 10 else np.diff(np.array(logz))
+            dlogz_avg_10 = float(np.mean(np.abs(recent))) if recent.size > 0 else float('nan')
+        else:
+            dlogz_avg_10 = float('nan')
+        target_dlogz = float(getattr(args, 'dlogz_target', 0.01) or 0.01)
+        # Best fit
+        if samples is not None and logl is not None and len(logl) > 0:
+            idx_best = int(np.argmax(logl))
+            best_params = [float(np.round(x, 6)) for x in samples[idx_best].tolist()]
+            best_logl = float(logl[idx_best])
+        else:
+            idx_best = -1
+            best_params = []
+            best_logl = float('nan')
+        # chi2 optional if available in blob
+        chi2 = None
+        chi2_reduced = None
+        try:
+            blob = getattr(res, 'blob', None)
+            if blob is not None and samples is not None and len(blob) == n_samples:
+                if isinstance(blob[0], dict):
+                    if 'chi2' in blob[0]:
+                        chi2 = float(blob[idx_best].get('chi2'))
+                    if 'chi2_reduced' in blob[0]:
+                        chi2_reduced = float(blob[idx_best].get('chi2_reduced'))
+        except Exception:
+            pass
+        # Posterior stats per parameter
+        post_stats = {}
+        if samples is not None and n_samples > 0:
+            W = np.asarray(weights) if weights is not None else np.ones(n_samples)
+            if np.sum(W) <= 0 or not np.isfinite(np.sum(W)):
+                W = np.ones(n_samples)
+            for j, name in enumerate(param_names):
+                vals = samples[:, j]
+                pct = _weighted_percentiles(vals, W, PERCENTILES)
+                _, std = _weighted_mean_std(vals, W)
+                post_stats[name] = {"p16": float(pct.get('p16', np.nan)),
+                                    "p50": float(pct.get('p50', np.nan)),
+                                    "p84": float(pct.get('p84', np.nan)),
+                                    "std": float(std) if np.isfinite(std) else float('nan')}
+        # Bounds suggestion
+        suggested_bounds = _suggest_bounds_from_stats(post_stats, expansion_factor=1.5)
+        # PCA
+        pcs = _top_pcs(samples, weights if weights is not None else np.ones(n_samples), k_max=3)
+        # Seed live points
+        seed = _seed_live_points(samples, weights if weights is not None else np.ones(n_samples), K=128, decimals=6)
+        # Sampler tuning
+        anisotropy_ratio = _compute_anisotropy_ratio(pcs)
+        base = max(50, int(2.0 * n_params * np.log(n_params + 3)))
+        scale = 1.0
+        if anisotropy_ratio > 3:
+            scale *= 1.5
+        if eff_percent < 5:
+            scale *= 1.5
+        suggested_nlive = int(base * scale)
+        suggested_sample = 'rwalk' if anisotropy_ratio > 3 else 'auto'
+        suggested_bound = 'multi' if anisotropy_ratio > 2 else 'balls'
+        eff_percent_recent = eff_percent
+        # latest checkpoint discovery (best-effort)
+        latest_npz = None
+        try:
+            latest_path = None
+            for p in Path(args.output_dir).glob(f"dynesty_checkpoint_*_latest.npz"):
+                latest_path = p
+                break
+            latest_npz = str(latest_path) if latest_path else None
+        except Exception:
+            latest_npz = None
+        latest_checkpoint = None
+        if latest_npz:
+            latest_checkpoint = {"npz": latest_npz, "progress_json": str(Path(args.output_dir) / "dynesty_progress.json")}
+        # Assemble JSON
+        snapshot = {
+            "metadata": {
+                "run_id": getattr(args, 'run_id', RUN_ID or str(Path(args.output_dir).name)),
+                "xi_type": getattr(args, 'xi', 'gr'),
+                "timestamp_utc": now_iso,
+                "n_params": int(n_params),
+                "param_names": list(param_names),
+                "sampler": "dynesty_cpu",
+                "latest_checkpoint": latest_checkpoint
+            },
+            "performance": {
+                "n_samples": int(n_samples),
+                "n_calls": int(total_calls),
+                "n_iter": int(n_iter),
+                "eff_percent": float(eff_percent),
+                "calls_per_sec": float(calls_per_sec),
+                "wall_time_sec": float(wall_time_sec)
+            },
+            "convergence": {
+                "logz": float(logz_last) if np.isfinite(logz_last) else float('nan'),
+                "logzerr": float(logzerr_last) if np.isfinite(logzerr_last) else float('nan'),
+                "dlogz_current": float(dlogz_current) if np.isfinite(dlogz_current) else float('nan'),
+                "dlogz_avg_10": float(dlogz_avg_10) if np.isfinite(dlogz_avg_10) else float('nan'),
+                "target_dlogz": float(target_dlogz)
+            },
+            "best_fit": {
+                "idx": int(idx_best),
+                "params": best_params,
+                "best_logl": float(best_logl),
+                **({"chi2": float(chi2)} if chi2 is not None else {}),
+                **({"chi2_reduced": float(chi2_reduced)} if chi2_reduced is not None else {})
+            },
+            "posterior_stats": post_stats,
+            "suggested_bounds": suggested_bounds,
+            "top_pcs": pcs,
+            "seed_live_points": seed,
+            "sampler_tuning": {
+                "suggested_nlive": int(suggested_nlive),
+                "suggested_sample": suggested_sample,
+                "suggested_bound": suggested_bound,
+                "anisotropy_ratio": float(anisotropy_ratio),
+                "eff_percent_recent": float(eff_percent_recent)
+            }
+        }
+        out_path = Path(run_dir) / "tuning_snapshot.json"
+        with open(out_path, 'w') as f:
+            json.dump(make_json_serializable(snapshot), f, indent=2)
+        logger.debug(f"✓ tuning_snapshot.json updated at {out_path}")
+        return True
+    except Exception as e:
+        logger.debug(f"Failed to write tuning_snapshot.json: {e}")
+        return False
+
 
 # ============================================================================
 # Gaussian Process Surrogate Model (unchanged but included for completeness)
@@ -4080,6 +4360,12 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
 
             # SINGLE LOOP - FIXED VERSION
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
+                # Periodic tuning snapshot to runs/<run_id>/tuning_snapshot.json
+                try:
+                    run_dir = Path("runs") / str(getattr(args, 'run_id', RUN_ID or 'unknown'))
+                    save_tuning_snapshot(sampler, fitted_names, args, run_start_time, run_dir, logger)
+                except Exception as _e:
+                    logger.debug(f"tuning_snapshot (init) failed: {_e}")
                 init_counter += 1
                 if init_counter % 100 == 0:
                     logger.debug(f"[DEBUG] Init sample {init_counter} at {time.strftime('%H:%M:%S')}")
@@ -4181,6 +4467,12 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             logger.info("Starting dynamic sampling with sampler.sample_batch()...")
             for _ in sampler.sample_batch(dlogz=args.dlogz_target, maxcall=args.maxcall):
                 batch_counter += 1
+                # Periodic tuning snapshot to runs/<run_id>/tuning_snapshot.json
+                try:
+                    run_dir = Path("runs") / str(getattr(args, 'run_id', RUN_ID or 'unknown'))
+                    save_tuning_snapshot(sampler, fitted_names, args, run_start_time, run_dir, logger)
+                except Exception as _e:
+                    logger.debug(f"tuning_snapshot (batch) failed: {_e}")
                 if batch_counter % 100 == 0:
                     print(f"[DEBUG] Batch {batch_counter} at {time.strftime('%H:%M:%S')}", flush=True)
                 
