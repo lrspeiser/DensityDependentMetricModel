@@ -121,20 +121,20 @@ def v_newton_kms_cupy(R_kpc, M_disk_solar_main, R_d_kpc_main,
     
     # Disk contribution
     v_disk_sq = cp.where(R_d_kpc_main_arr > 1e-9, 
-                         (4.302e-6 * M_disk_solar_main_arr / R_kpc_arr) * 
+                         (4.302e-3 * M_disk_solar_main_arr / R_kpc_arr) * 
                          (1.0 - cp.exp(-R_kpc_arr / R_d_kpc_main_arr) * 
                           (1.0 + R_kpc_arr / R_d_kpc_main_arr)), 0.0)
     
     # Bulge contribution
     v_bulge_sq = 0.0
     if bool(include_bulge_opt) and float(M_bulge_solar_opt) > 1e-9 and float(R_b_kpc_opt) > 1e-9:
-        v_bulge_sq = (4.302e-6 * M_bulge_solar_opt_arr / R_kpc_arr) * \
+        v_bulge_sq = (4.302e-3 * M_bulge_solar_opt_arr / R_kpc_arr) * \
                      (R_kpc_arr / (R_kpc_arr + R_b_kpc_opt_arr))**2
     
     # Gas contribution
     v_gas_sq = 0.0
     if bool(include_gas_opt) and float(M_gas_solar_opt) > 1e-9 and float(R_gas_kpc_opt) > 1e-9:
-        v_gas_sq = (4.302e-6 * M_gas_solar_opt_arr / R_kpc_arr) * \
+        v_gas_sq = (4.302e-3 * M_gas_solar_opt_arr / R_kpc_arr) * \
                    (1.0 - cp.exp(-R_kpc_arr / R_gas_kpc_opt_arr) * 
                     (1.0 + R_kpc_arr / R_gas_kpc_opt_arr))
     
@@ -202,7 +202,7 @@ def v_circ_hernquist_bulge_kms_cupy(R_kpc, M_bulge_solar, a_bulge_kpc):
     a_bulge_kpc_arr = cp.asarray(a_bulge_kpc, dtype=DEFAULT_DTYPE)
     
     R_safe = cp.maximum(R_kpc_arr, 1e-9)
-    v_sq = (4.302e-6 * M_bulge_solar_arr / R_safe) * (R_safe / (R_safe + a_bulge_kpc_arr))**2
+    v_sq = (4.302e-3 * M_bulge_solar_arr / R_safe) * (R_safe / (R_safe + a_bulge_kpc_arr))**2
     return cp.sqrt(cp.maximum(v_sq, 0.0))
 
 @cp.fuse()
@@ -220,7 +220,7 @@ def v_circ_exponential_disk_approx_kms_cupy(R_kpc, M_disk_solar, R_d_kpc):
                          bessel_i1_cupy(x_safe), bessel_k1_cupy(x_safe)
     
     freeman_term = i0x * k0x - i1x * k1x
-    v_sq = (4.302e-6 * M_disk_solar_arr / R_d_kpc_arr) * (x_safe**2) * freeman_term
+    v_sq = (4.302e-3 * M_disk_solar_arr / R_d_kpc_arr) * (x_safe**2) * freeman_term
     return cp.sqrt(cp.maximum(v_sq, 0.0))
 
 def v_baryon_total_newtonian_kms_cupy(R_kpc, p_baryons):
@@ -288,79 +288,6 @@ def xi_gaussian_enhancement_cupy(rho, rho_peak, sigma_log, lambda_max):
     return 1.0 + (lambda_max - 1.0) * gaussian
 
 @cp.fuse()
-def xi_balanced_screening_cupy(rho, rho_c, R, R_screen=50.0, n_exp=1.0, A_max=2.0):
-    """
-    Balanced screening model with physically reasonable enhancement.
-    
-    This model ensures:
-    1. Cassini constraint satisfaction (xi ~ 1 at solar density)
-    2. Modest enhancement (max 2-3x, not 250x!)
-    3. Deep space safety (xi -> 1 as R -> infinity)
-    4. Realistic rotation curves (200-300 km/s)
-    
-    Parameters:
-    -----------
-    rho : array
-        Local density in M_sun/kpc^3
-    rho_c : float
-        Critical density (typically solar density ~1e8 M_sun/kpc^3)
-    R : array
-        Distance from galactic center in kpc
-    R_screen : float
-        Screening radius beyond which enhancement vanishes (default 50 kpc)
-    n_exp : float
-        Density dependence exponent (default 1.0 for linear)
-    A_max : float
-        Maximum enhancement factor (default 2.0 for 2x max enhancement)
-    
-    Returns:
-    --------
-    xi : array
-        Enhancement factor in range [1, 1+A_max]
-    
-    Physics:
-    --------
-    The enhancement has two components:
-    1. Density factor: (1 - rho/rho_c)^n_exp
-       - At solar density: factor = 0 (no enhancement)
-       - In voids: factor = 1 (full enhancement allowed)
-    
-    2. Distance screening: tanh-based smooth cutoff
-       - Full enhancement for R < R_screen/2
-       - Smooth decay for R > R_screen/2
-       - Nearly zero for R > 2*R_screen
-    
-    This ensures gravity enhancement only occurs in the transition zone
-    between high-density regions and deep space, preventing unphysical
-    behavior while explaining galaxy rotation curves.
-    """
-    
-    # Normalized density ratio (capped at 1 to prevent negative enhancement)
-    rho_ratio = cp.minimum(rho / (rho_c + 1e-10), 1.0)
-    
-    # Density enhancement factor
-    # High density (rho/rho_c ~ 1): factor ~ 0 (satisfies Cassini)
-    # Low density (rho/rho_c ~ 0): factor ~ 1 (allows enhancement)
-    density_factor = (1.0 - rho_ratio)**n_exp
-    
-    # Distance screening with smooth transition
-    # Uses hyperbolic tangent for smooth cutoff
-    screening_factor = 0.5 * (1.0 + cp.tanh((R_screen - R) / (0.3 * R_screen)))
-    
-    # Combined enhancement (limited to A_max)
-    enhancement = A_max * density_factor * screening_factor
-    
-    # Final xi value
-    xi = 1.0 + enhancement
-    
-    # Safety constraints
-    xi = cp.maximum(xi, 1.0)  # Never less than 1
-    xi = cp.minimum(xi, 1.0 + A_max)  # Never more than 1 + A_max
-    xi = cp.where(cp.isfinite(xi), xi, 1.0)  # Replace NaN/Inf with 1
-    
-    return xi
-
-
 def xi_gravitational_color_void_safe_cupy(rho, rho_c, gamma, lambda_g):
     """
     Void-safe gravitational color confinement model - CuPy optimized.
@@ -368,199 +295,23 @@ def xi_gravitational_color_void_safe_cupy(rho, rho_c, gamma, lambda_g):
     This function ensures xi -> 1 as rho -> 0 to prevent unphysical
     behavior in intergalactic voids.
     """
-    # More robust numerical handling
-    rho_safe = cp.maximum(rho, 1e-30)
-    rho_c_safe = cp.maximum(rho_c, 1e-30)
+    rho_safe = cp.maximum(rho, 1e-40)
+    rho_c_safe = cp.maximum(rho_c, 1e-40)
     
     ratio = rho_safe / rho_c_safe
-    
-    # Limit ratio_gamma to prevent numerical overflow
-    ratio_gamma = cp.minimum(cp.power(ratio, gamma), 50.0)  # exp(-50) is safely small
+    ratio_gamma = cp.power(ratio, gamma)
     
     # Rational function: approaches 1 at high density, 0 at low density
     rational_factor = ratio_gamma / (1.0 + ratio_gamma)
     
-    # Exponential suppression with numerical safety
+    # Exponential suppression
     exp_factor = cp.exp(-ratio_gamma)
     
     # Combined enhancement - approaches 1 in voids
     xi = 1.0 + lambda_g * rational_factor * exp_factor
     
-    # Ensure xi >= 1 everywhere and finite
-    xi = cp.maximum(xi, 1.0)
-    xi = cp.where(cp.isfinite(xi), xi, 1.0)  # Replace non-finite with 1
-    
-    return xi
-
-
-def xi_hybrid_safe_cupy(rho, rho_c, n_exp, A):
-    """
-    Hybrid xi function that smoothly transitions between regimes.
-    
-    - Low density (voids): xi -> 1 (no enhancement)
-    - Intermediate density: Power law enhancement
-    - High density (solar system): xi -> 1 (screening)
-    """
-    # Ensure numerical safety
-    rho_safe = cp.maximum(rho, 1e-30)
-    rho_c_safe = cp.maximum(rho_c, 1e-30)
-    
-    # Density ratio
-    ratio = rho_safe / rho_c_safe
-    
-    # Power law component (stable and well-tested)
-    xi_power = 1.0 + A * cp.power(rho_c_safe / rho_safe, n_exp)
-    
-    # Screening at high density
-    screening_factor = 1.0 / (1.0 + cp.power(ratio, 2.0))
-    
-    # Void suppression
-    void_factor = ratio / (1.0 + ratio)
-    
-    # Combine all factors
-    xi = 1.0 + (xi_power - 1.0) * screening_factor * void_factor
-    
-    # Ensure xi >= 1 and finite
-    xi = cp.maximum(xi, 1.0)
-    xi = cp.where(cp.isfinite(xi), xi, 1.0)
-    
-    return xi
-
-def xi_smooth_transition_cupy(rho, rho_c, n_exp, A):
-    """
-    Smooth transition model using Gaussian profile in log-space.
-    """
-    # Ensure numerical safety
-    rho_safe = cp.maximum(rho, 1e-30)
-    rho_c_safe = cp.maximum(rho_c, 1e-30)
-    
-    # Log-space ratio for smooth transitions
-    log_ratio = cp.log10(rho_safe / rho_c_safe)
-    
-    # Gaussian enhancement profile
-    enhancement_profile = cp.exp(-0.5 * log_ratio**2)
-    
-    # Final enhancement
-    xi = 1.0 + A * enhancement_profile
-    
-    # Ensure xi >= 1 and finite
-    xi = cp.maximum(xi, 1.0)
-    xi = cp.where(cp.isfinite(xi), xi, 1.0)
-    
-    return xi
-
-
-# ============================================================================
-# RUBBER BAND GRAVITY MODELS - Elastic field theory implementations
-# ============================================================================
-
-def xi_elastic_strain_cupy(rho, rho_c, params):
-    """
-    Gravity enhancement based on elastic strain of gravitational field.
-    Like a rubber band: unstrained in high density, strained in low density.
-    """
-    # Extract parameters with defaults
-    L0 = params.get('relaxation_scale', 1.0)  # kpc
-    strain_critical = params.get('strain_critical', 10.0)
-    k_elastic = params.get('k_elastic', 0.5)
-    rho_solar = params.get('rho_solar', 1e9)
-    
-    # Ensure numerical safety
-    rho_safe = cp.maximum(rho, 1e-30)
-    
-    # Calculate strain = how much field is stretched
-    density_ratio = rho_solar / rho_safe
-    strain = cp.log10(cp.maximum(density_ratio, 1.0)) / L0
-    
-    # Elastic response with breaking point
-    xi = cp.where(
-        strain < strain_critical,
-        1.0 + k_elastic * strain * (1.0 - strain/strain_critical),
-        1.0 + k_elastic * cp.exp(-(strain - strain_critical))  # Decays after snap
-    )
-    
-    # Ensure xi >= 1 and finite
-    xi = cp.maximum(xi, 1.0)
-    xi = cp.where(cp.isfinite(xi), xi, 1.0)
-    
-    return xi
-
-def xi_tension_field_cupy(rho, R_kpc, params):
-    """
-    Gravitational field develops tension when stretched across voids.
-    Tension creates additional inward pull, like stretched rubber.
-    """
-    # Parameters with defaults
-    rho_relax = params.get('rho_relaxation', 1e8)
-    tension_max = params.get('tension_max', 5.0)
-    R_snap = params.get('R_snap', 25.0)
-    
-    # Ensure numerical safety
-    rho_safe = cp.maximum(rho, 1e-30)
-    R_kpc_safe = cp.maximum(R_kpc, 0.1)
-    
-    # Calculate field tension based on density deficit
-    deficit = cp.maximum(0, cp.log10(rho_relax) - cp.log10(rho_safe))
-    
-    # Tension builds up with deficit but peaks then drops
-    tension = deficit * cp.exp(-deficit / 3.0)
-    
-    # Spatial modulation - field can only stretch so far
-    stretch = cp.tanh(R_kpc_safe / 10.0)  # Gradually allows stretching
-    snap = cp.exp(-cp.maximum(0, R_kpc_safe - R_snap)**2 / 25)  # Snaps beyond R_snap
-    
-    # Total enhancement
-    xi = 1.0 + tension_max * tension * stretch * snap
-    
-    # Cassini suppression at Solar position
-    R_sun = 8.5
-    sun_suppress = cp.exp(-((R_kpc_safe - R_sun)/1.0)**2)
-    xi = 1.0 + (xi - 1.0) * (1.0 - 0.99 * sun_suppress)
-    
-    # Ensure xi >= 1 and finite
-    xi = cp.maximum(xi, 1.0)
-    xi = cp.where(cp.isfinite(xi), xi, 1.0)
-    
-    return xi
-
-def xi_hookean_potential_cupy(rho, R_kpc, params):
-    """
-    Gravity gains elastic potential energy when stretched.
-    Based on Hooke's law: F = -kx becomes g_eff = g_newton * (1 + elastic_term)
-    """
-    # Parameters with defaults
-    k_spacetime = params.get('k_spacetime', 0.1)
-    rho_eq = params.get('rho_equilibrium', 1e9)
-    stress_break = params.get('stress_break', 100.0)
-    
-    # Ensure numerical safety
-    rho_safe = cp.maximum(rho, 1e-30)
-    R_kpc_safe = cp.maximum(R_kpc, 0.1)
-    
-    # Calculate displacement from equilibrium
-    displacement = cp.maximum(0, cp.log10(rho_eq) - cp.log10(rho_safe))
-    
-    # Calculate stress
-    stress = k_spacetime * displacement
-    elastic_term = k_spacetime * displacement**2 / (1.0 + displacement/10.0)
-    
-    # Apply breaking/snapping
-    xi = cp.where(
-        stress < stress_break,
-        1.0 + elastic_term,
-        1.0 + elastic_term * cp.exp(-(stress - stress_break)/20.0)
-    )
-    
-    # Cassini suppression at Solar position
-    R_sun = 8.5
-    sun_suppress = cp.exp(-((R_kpc_safe - R_sun)/1.0)**2)
-    xi = 1.0 + (xi - 1.0) * (1.0 - 0.99 * sun_suppress)
-    
-    # Ensure xi >= 1 and finite
-    xi = cp.maximum(xi, 1.0)
-    xi = cp.where(cp.isfinite(xi), xi, 1.0)
-    
-    return xi
+    # Ensure xi >= 1 everywhere
+    return cp.maximum(xi, 1.0)
 
 def xi_mond_like_cupy(rho, rho_c, n):
     """MOND-like xi function - CuPy optimized."""
@@ -717,7 +468,7 @@ def xi_spacetime_grain_cupy(R_kpc, M_enclosed, grain_size_kpc=10.0, boundary_wid
     # This is crucial for Cassini constraint!
     
     # Smooth transition at boundaries
-    xi = cp.ones(R_safe.shape, dtype=R_safe.dtype)
+    xi = cp.ones_like(R_safe)
     
     # Only enhance at grain boundaries (around 10, 20, 30 kpc etc)
     for n in range(1, 5):  # First few grain boundaries
@@ -826,14 +577,14 @@ def v_baryon_comprehensive_kms_cupy(R_kpc, p):
     
     # 1. Thin disk contribution (exponential disk)
     if float(M_thin_disk) > 1e-9 and float(R_thin_disk) > 1e-9:
-        v_thin_disk_sq = (4.302e-6 * M_thin_disk_arr / R_kpc_arr) * \
+        v_thin_disk_sq = (4.302e-3 * M_thin_disk_arr / R_kpc_arr) * \
                         (1.0 - cp.exp(-R_kpc_arr / R_thin_disk_arr) * 
                          (1.0 + R_kpc_arr / R_thin_disk_arr))
         v_total_sq += v_thin_disk_sq
     
     # 2. Thick disk contribution (exponential disk)
     if float(M_thick_disk) > 1e-9 and float(R_thick_disk) > 1e-9:
-        v_thick_disk_sq = (4.302e-6 * M_thick_disk_arr / R_kpc_arr) * \
+        v_thick_disk_sq = (4.302e-3 * M_thick_disk_arr / R_kpc_arr) * \
                          (1.0 - cp.exp(-R_kpc_arr / R_thick_disk_arr) * 
                           (1.0 + R_kpc_arr / R_thick_disk_arr))
         v_total_sq += v_thick_disk_sq
@@ -841,13 +592,13 @@ def v_baryon_comprehensive_kms_cupy(R_kpc, p):
     # 3. Bulge contribution (Hernquist profile)
     if float(M_bulge) > 1e-9 and float(R_bulge) > 1e-9:
         R_safe = cp.maximum(R_kpc_arr, 1e-9)
-        v_bulge_sq = (4.302e-6 * M_bulge_arr / R_safe) * \
+        v_bulge_sq = (4.302e-3 * M_bulge_arr / R_safe) * \
                      (R_safe / (R_safe + R_bulge_arr))**2
         v_total_sq += v_bulge_sq
     
     # 4. Gas contribution (exponential disk)
     if float(M_gas) > 1e-9 and float(R_gas) > 1e-9:
-        v_gas_sq = (4.302e-6 * M_gas_arr / R_kpc_arr) * \
+        v_gas_sq = (4.302e-3 * M_gas_arr / R_kpc_arr) * \
                    (1.0 - cp.exp(-R_kpc_arr / R_gas_arr) * 
                     (1.0 + R_kpc_arr / R_gas_arr))
         v_total_sq += v_gas_sq
@@ -985,21 +736,11 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         )
     
     # Calculate xi enhancement factor
-    # CRITICAL: rho_c should be near solar density for Cassini constraint
-    # Typical solar density is ~1e7 to 1e8 M_sun/kpc^3
-    rho_c = p.get('rho_c_solar_kpc3', 7e7)  # Default to typical solar density
-    
-    # Safe radius to avoid division by zero
-    R_safe = cp.maximum(R_kpc_arr, 1e-9)
+    rho_c = p.get('rho_c_solar_kpc3', 1e8)
     
     if xi_type == 'power':
         n_exp = p.get('n_exp', 2.0)
         A = p.get('A_xi', 1.0)
-        xi = xi_power_law_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'enhanced':
-        # Enhanced is power law with fitted amplitude
-        n_exp = p.get('n_exp', 2.0)
-        A = p.get('A', 5.0)  # Use 'A' not 'A_xi' for enhanced
         xi = xi_power_law_cupy(rho_total, rho_c, n_exp, A)
     elif xi_type == 'logistic':
         n_exp = p.get('n_exp', 2.0)
@@ -1017,44 +758,6 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         gamma = p.get('gamma_exp', 2.7)
         lambda_g = p.get('lambda_g', 8.0)
         xi = xi_gravitational_color_void_safe_cupy(rho_total, rho_c, gamma, lambda_g)
-    elif xi_type == 'balanced_screening':
-        R_screen = p.get('R_screen', 50.0)
-        n_exp = p.get('n_exp', 1.0)
-        A_max = p.get('A_max', 2.0)
-        xi = xi_balanced_screening_cupy(rho_total, rho_c, R_safe, R_screen, n_exp, A_max)
-    elif xi_type == 'hybrid_safe':
-        n_exp = p.get('n_exp', 1.5)
-        A = p.get('A_xi', 5.0)
-        xi = xi_hybrid_safe_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'smooth_transition':
-        n_exp = p.get('n_exp', 1.5)  
-        A = p.get('A_xi', 5.0)
-        xi = xi_smooth_transition_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'elastic_strain':
-        # Elastic strain model parameters
-        elastic_params = {
-            'relaxation_scale': p.get('relaxation_scale', 1.0),
-            'strain_critical': p.get('strain_critical', 10.0),
-            'k_elastic': p.get('k_elastic', 0.5),
-            'rho_solar': rho_c
-        }
-        xi = xi_elastic_strain_cupy(rho_total, rho_c, elastic_params)
-    elif xi_type == 'tension_field':
-        # Tension field model parameters
-        tension_params = {
-            'rho_relaxation': p.get('rho_relaxation', 1e8),
-            'tension_max': p.get('tension_max', 5.0),
-            'R_snap': p.get('R_snap', 25.0)
-        }
-        xi = xi_tension_field_cupy(rho_total, R_kpc_arr, tension_params)
-    elif xi_type == 'hookean':
-        # Hookean potential model parameters
-        hookean_params = {
-            'k_spacetime': p.get('k_spacetime', 0.1),
-            'rho_equilibrium': p.get('rho_equilibrium', 1e9),
-            'stress_break': p.get('stress_break', 100.0)
-        }
-        xi = xi_hookean_potential_cupy(rho_total, R_kpc_arr, hookean_params)
     elif xi_type == 'gaussian':
         rho_peak = p.get('rho_peak_solar_kpc3', 1e8)
         sigma_log = p.get('sigma_log', 1.0)
@@ -1065,7 +768,7 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         xi = xi_mond_like_cupy(rho_total, rho_c, n)
     elif xi_type == 'gr':
         # Standard GR - no enhancement
-        xi = cp.ones(rho_total.shape, dtype=rho_total.dtype)
+        xi = cp.ones_like(rho_total)
     elif xi_type == 'sigmoid':
         n_exp = p.get('n_exp', 2.0)
         A = p.get('A', 5.0)
