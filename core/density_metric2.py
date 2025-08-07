@@ -13,7 +13,7 @@ from scipy.special import kv as scipy_kv
 import numpy as np  # Kept for CPU-specific tasks like data loading and plotting
 from scipy.special import i0 as scipy_i0, i1 as scipy_i1, kv as scipy_kv
 import logging
-# Import void-safe gravitational color function
+# Import void-safe gravitational color function (JAX implementation)
 from .xi_gravitational_color_void_safe import xi_gravitational_color_void_safe
 
 # Define GPU-incompatible functions to fallback to CPU
@@ -402,12 +402,17 @@ def xi_exponential(rho, rho_c, n_exp, A=1.0):
 
 @jax.jit
 def xi_gravitational_color(rho, rho_c, gamma, lambda_g):
-    """JAX-compiled: Gravitational color confinement model."""
+    """JAX-compiled: Gravitational color confinement model (exponential screening).
+    Returns 1 + lambda_g * exp(-(rho/rho_c)^gamma), capped to [1, 1+lambda_g].
+    """
     rho_arr = jnp.atleast_1d(rho)
-    ratio = rho_arr / rho_c
+    rho_c_safe = jnp.maximum(rho_c, 1e-30)
+    ratio = jnp.maximum(rho_arr, 0.0) / rho_c_safe
     exp_arg = -jnp.power(ratio, gamma)
     result = 1.0 + lambda_g * jnp.exp(exp_arg)
-    return jnp.where(rho_c <= 1e-9, jnp.ones_like(rho_arr), result)
+    # Enforce caps and numerical safety
+    result = jnp.clip(result, 1.0, 1.0 + lambda_g)
+    return jnp.where(rho_c <= 1e-30, jnp.ones_like(rho_arr), result)
 
 @jax.jit
 def xi_gaussian_enhancement(rho, rho_peak, sigma_log, lambda_max):
@@ -600,31 +605,23 @@ def xi_deur_wrapper(rho, rho_c, n_exp, A, r_kpc, params, **_):
     """
     Wrapper for the DeurGravity model to make it compatible with the
     v_total_kms function and XI_FUNCTION_MAP.
+    Ignores density-based args and computes xi(r) from enclosed mass.
     """
-    # Instantiate the model. 'disk' geometry is appropriate for this project.
     deur_model = DeurGravity(geometry='disk')
+    # Ensure r_kpc is provided
+    if r_kpc is None:
+        return jnp.ones_like(jnp.atleast_1d(rho))
+    xi = deur_model.enhancement_factor(jnp.atleast_1d(r_kpc), params)
+    # Cap to [1, 3]
+    xi = jnp.clip(xi, 1.0, 3.0)
+    return xi
 
-    # The Deur model calculates xi directly from radius (r_kpc) and the mass
-n
 def xi_gravitational_color_void_safe_wrapper(rho, rho_c, n_exp, A=8.0, **_):
     """
     Wrapper for void-safe gravitational color confinement model.
-    
-    This wrapper makes xi_gravitational_color_void_safe compatible with the
-    standard interface used by XI_FUNCTION_MAP.
-    
-    Parameters:
-    - rho: density array
-    - rho_c: critical density 
-    - n_exp: power index (mapped to gamma parameter)
-    - A: enhancement strength (mapped to lambda_g parameter)
+    Maps n_exp->gamma and A->lambda_g.
     """
     return xi_gravitational_color_void_safe(rho, rho_c, n_exp, A)
-
-    # distribution (params), so it ignores the other standard arguments.
-    xi = deur_model.enhancement_factor(r_kpc, params)
-
-    return xi
 
 
 XI_FUNCTION_MAP = {

@@ -350,9 +350,18 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
         else:
             sampler._logz_checkpoint = current_logz
         
-        # GR baseline comparison
+        # GR baseline comparison (avoid overflow in exp for huge deltas)
         delta_logz_vs_gr = current_logz - BASELINE_LOGZ_GR if np.isfinite(current_logz) else np.nan
-        gr_diff_percent = (np.exp(delta_logz_vs_gr) - 1) * 100 if np.isfinite(delta_logz_vs_gr) else np.nan
+        if np.isfinite(delta_logz_vs_gr):
+            # Clip to safe exp range; report inf if still huge
+            delta_safe = np.clip(delta_logz_vs_gr, -700.0, 700.0)
+            gr_diff_val = np.exp(delta_safe) - 1.0
+            gr_diff_percent = gr_diff_val * 100.0
+            # If we clipped, annotate by setting a flag in improvement_metrics
+            if 'improvement_metrics' in locals():
+                improvement_metrics['gr_diff_clipped'] = bool(delta_logz_vs_gr != delta_safe)
+        else:
+            gr_diff_percent = np.nan
         
         # Get current parameter estimates
         param_estimates = {}
@@ -1405,7 +1414,39 @@ def setup_parameter_bounds(xi_type):
             True, False, False,  # Gas
             False, True, False   # Grain (linear for size, log for density, linear for A)
         ])
-        
+    
+    elif xi_type == 'tidal_band':
+        # Tidal band-pass model parameters
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'gamma_exp', 'lambda_max', 'T0', 'sigma_lnT', 'wmin'
+        ]
+        # Bounds: log for masses and rho_c, linear for the rest
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,
+            1e9, 3.0, 0.6,
+            1e9, 0.5,
+            1e9, 5.0, 0.1,
+            1e15, 2.0, 2.0, 1e0, 0.2, 0.0
+        ])
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,
+            1e10, 5.0, 1.0,
+            1e10, 2.0,
+            1e10, 10.0, 0.3,
+            1e17, 4.0, 5.0, 1e4, 1.5, 0.05
+        ])
+        use_log_prior = np.array([
+            True, False, False,
+            True, False, False,
+            True, False,
+            True, False, False,
+            True, False, False, True, False, False
+        ])
+    
     else: # Fallback to simple model
         param_names = ['M_disk_solar', 'R_d_kpc']
         bounds_low = np.array([1e10, 1.0])
@@ -1475,8 +1516,8 @@ def main_cupy():
                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     # Core options
-    parser.add_argument('--xi', type=str, default='gr', 
-                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'hybrid_safe', 'smooth_transition', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh', 'elastic_strain', 'tension_field', 'hookean', 'balanced_screening'],
+    parser.add_argument('--xi', type=str, default='tidal_band', 
+                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'tidal_band', 'hybrid_safe', 'smooth_transition', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh', 'elastic_strain', 'tension_field', 'hookean', 'balanced_screening'],
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory')
@@ -1548,6 +1589,9 @@ def main_cupy():
     
     logger.info(f"Output directory: {output_dir}")
     logger.info(f"CLI command saved to: {cli_file}")
+
+    # Ensure all components write to the same output directory
+    args.output_dir = str(output_dir)
 
     # Set run_id for tracking
     args.run_id = f"cupy_{timestamp}"

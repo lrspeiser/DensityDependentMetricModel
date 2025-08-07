@@ -268,14 +268,14 @@ def xi_exponential_cupy(rho, rho_c, n_exp, A=1.0):
 
 @cp.fuse()
 def xi_gravitational_color_cupy(rho, rho_c, gamma, lambda_g):
-    """Gravitational color xi function - CuPy optimized."""
-    rho_safe = cp.maximum(rho, 1e-10)
-    rho_c_safe = cp.maximum(rho_c, 1e-10)
+    """Gravitational color xi function - CuPy optimized (exponential screening)."""
+    rho_safe = cp.maximum(rho, 1e-30)
+    rho_c_safe = cp.maximum(rho_c, 1e-30)
     ratio = rho_safe / rho_c_safe
-    
-    # Gravitational color formula
-    xi = 1.0 + lambda_g * (ratio**gamma) / (1.0 + ratio**gamma)
-    return cp.maximum(xi, 1.0)  # Ensure xi >= 1
+    xi = 1.0 + lambda_g * cp.exp(-cp.power(ratio, gamma))
+    # Cap to [1, 1+lambda_g]
+    xi = cp.clip(xi, 1.0, 1.0 + lambda_g)
+    return xi
 
 @cp.fuse()
 def xi_gaussian_enhancement_cupy(rho, rho_peak, sigma_log, lambda_max):
@@ -783,6 +783,47 @@ def xi_transition_based_cupy(rho, rho_prev, A, width):
     return cp.maximum(xi, 1.0)
 
 # ============================================================================
+# TIDAL BAND-PASS XI (CuPy)
+# ============================================================================
+
+@cp.fuse()
+def xi_tidal_bandpass_cupy(rho, T, rho_c, gamma, lambda_max, T0, sigma_lnT, wmin):
+    """
+    Band-pass enhancement in tidal norm T with density screening and void floor.
+    Inputs:
+      rho: local baryonic density (M_sun/kpc^3)
+      T: tidal proxy ~ v_baryon^2 / R^2 (in (km/s)^2/kpc^2)
+      rho_c: critical density for Solar System screening
+      gamma: density sharpness for screening
+      lambda_max: maximum enhancement amplitude
+      T0: tidal scale where enhancement peaks
+      sigma_lnT: log-width of the tidal window (natural log)
+      wmin: residual floor in voids (0 to 0.05 typical)
+    Returns xi in [1, 1+lambda_max].
+    """
+    # Safety floors
+    rho_safe = cp.maximum(rho, 1e-30)
+    rho_c_safe = cp.maximum(rho_c, 1e-30)
+    T_safe = cp.maximum(T, 1e-30)
+    T0_safe = cp.maximum(T0, 1e-30)
+    sigma_safe = cp.maximum(sigma_lnT, 1e-6)
+    wmin_clamped = cp.clip(wmin, 0.0, 0.2)
+
+    # Density switch S_rho = 1 / (1 + (rho/rho_c)^gamma)
+    ratio_rho = rho_safe / rho_c_safe
+    S_rho = 1.0 / (1.0 + cp.power(ratio_rho, gamma))
+
+    # Tidal window W(T) = wmin + (1-wmin) * exp(- (ln(T/T0))^2 / (2 sigma^2))
+    ln_ratio = cp.log(T_safe / T0_safe)
+    W_T = wmin_clamped + (1.0 - wmin_clamped) * cp.exp(- (ln_ratio * ln_ratio) / (2.0 * sigma_safe * sigma_safe))
+
+    xi = 1.0 + lambda_max * S_rho * W_T
+    # Cap and ensure finite
+    xi = cp.clip(xi, 1.0, 1.0 + lambda_max)
+    xi = cp.where(cp.isfinite(xi), xi, 1.0)
+    return xi
+
+# ============================================================================
 # MAIN VELOCITY FUNCTION - CuPy Optimized
 # ============================================================================
 
@@ -1017,6 +1058,15 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         gamma = p.get('gamma_exp', 2.7)
         lambda_g = p.get('lambda_g', 8.0)
         xi = xi_gravitational_color_void_safe_cupy(rho_total, rho_c, gamma, lambda_g)
+    elif xi_type == 'tidal_band':
+        # Compute tidal proxy T ~ v_baryon^2 / R^2
+        T = cp.maximum(v_baryon_sq, 0.0) / cp.maximum(R_safe*R_safe, 1e-18)
+        lambda_max = p.get('lambda_max', 3.5)
+        gamma = p.get('gamma_exp', 3.0)
+        T0 = p.get('T0', 100.0)
+        sigma_lnT = p.get('sigma_lnT', 0.6)
+        wmin = p.get('wmin', 0.0)
+        xi = xi_tidal_bandpass_cupy(rho_total, T, rho_c, gamma, lambda_max, T0, sigma_lnT, wmin)
     elif xi_type == 'balanced_screening':
         R_screen = p.get('R_screen', 50.0)
         n_exp = p.get('n_exp', 1.0)
