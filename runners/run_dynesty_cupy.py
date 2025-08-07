@@ -32,6 +32,14 @@ import pandas as pd
 import cupy as cp
 from core.density_metric_cupy import v_total_kms_cupy, to_cupy_array, to_numpy_array
 
+# Import enhanced summary module
+try:
+    from enhanced_summary import create_periodic_summary, create_final_summary
+    ENHANCED_SUMMARY_AVAILABLE = True
+except ImportError:
+    ENHANCED_SUMMARY_AVAILABLE = False
+    print("WARNING: enhanced_summary not available - using basic summaries")
+
 # Resource monitoring
 try:
     from resource_monitor import ResourceMonitor
@@ -1088,6 +1096,83 @@ def setup_parameter_bounds(xi_type):
             True, False, False   # Modified gravity
         ])
     
+    elif xi_type == 'balanced_screening':
+        # Balanced screening model with distance cutoff for deep space safety
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc',
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'R_screen', 'n_exp', 'A_max'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,  # Thin disk
+            1e9, 3.0, 0.6,   # Thick disk
+            1e9, 0.5,        # Bulge
+            1e9, 5.0, 0.1,   # Gas
+            1e7,             # rho_c (FIXED: actual solar density range)
+            30.0,            # R_screen (screening radius in kpc)
+            0.5,             # n_exp (density exponent)
+            1.5              # A_max (maximum enhancement factor)
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,  # Thin disk
+            1e10, 5.0, 1.0,  # Thick disk
+            1e10, 2.0,       # Bulge
+            1e10, 10.0, 0.3, # Gas
+            1e9,             # rho_c (FIXED: actual solar density range)
+            80.0,            # R_screen
+            2.0,             # n_exp
+            3.0              # A_max (allows up to 3x enhancement)
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True,                # rho_c (log prior for wide range)
+            False,               # R_screen (linear)
+            False,               # n_exp (linear)
+            False                # A_max (linear)
+        ])
+    
+    elif xi_type == 'grav_color_void_safe':
+        # Gravitational color model with void safety - same params as grav_color
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'rho_c_solar_kpc3', 'gamma_exp', 'lambda_g'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            1e12, 2.0, 6.0       # Modified gravity parameters
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            1e15, 3.5, 10.0      # Modified gravity parameters
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            True, False, False   # Modified gravity
+        ])
+    
     elif xi_type == 'sigmoid':
         # Sigmoid saturation model
         # FIXED: Better xi parameters for sigmoid
@@ -1216,6 +1301,76 @@ def setup_parameter_bounds(xi_type):
             True, False, False   # Yukawa
         ])
     
+    elif xi_type == 'elastic_strain':
+        # Elastic strain model - gravity enhancement based on field strain
+        # FIXED: Much smaller k_elastic to avoid violating Cassini bound
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'relaxation_scale', 'strain_critical', 'k_elastic'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            0.5, 5.0, 0.0001     # FIXED: Much smaller k_elastic minimum
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            5.0, 20.0, 0.01      # FIXED: Much smaller k_elastic maximum
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            False, False, False  # Elastic (all linear)
+        ])
+        
+    elif xi_type == 'hookean':
+        # Hookean potential model - elastic spacetime with Hooke's law
+        # FIXED: Much smaller k_spacetime to avoid violating Cassini bound
+        param_names = [
+            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
+            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
+            'M_bulge_solar', 'R_bulge_kpc',
+            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
+            'k_spacetime', 'rho_equilibrium', 'stress_break'
+        ]
+        
+        bounds_low = np.array([
+            1e10, 2.0, 0.2,      # Thin disk
+            1e9, 3.0, 0.6,       # Thick disk
+            1e9, 0.5,            # Bulge
+            1e9, 5.0, 0.1,       # Gas
+            0.00001, 1e8, 10.0   # FIXED: Much smaller k_spacetime, higher rho_equilibrium
+        ])
+        
+        bounds_high = np.array([
+            1e11, 4.0, 0.4,      # Thin disk
+            1e10, 5.0, 1.0,      # Thick disk
+            1e10, 2.0,           # Bulge
+            1e10, 10.0, 0.3,     # Gas
+            0.001, 1e10, 1000.0  # FIXED: Much smaller k_spacetime maximum
+        ])
+        
+        use_log_prior = np.array([
+            True, False, False,  # Thin disk
+            True, False, False,  # Thick disk
+            True, False,         # Bulge
+            True, False, False,  # Gas
+            False, True, False   # Hookean (log for rho_equilibrium)
+        ])
+        
     elif xi_type == 'spacetime_grain':
         # Quantum spacetime granularity model
         # Keep as is - this is a new experimental model
@@ -1321,7 +1476,7 @@ def main_cupy():
     
     # Core options
     parser.add_argument('--xi', type=str, default='gr', 
-                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh'],
+                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'hybrid_safe', 'smooth_transition', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh', 'elastic_strain', 'tension_field', 'hookean'],
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory')
@@ -1351,6 +1506,12 @@ def main_cupy():
                        help='Interval between analyses in minutes')
     parser.add_argument('--analysis_with_plots', action='store_true', default=False,
                        help='Generate plots during periodic analysis')
+    
+    # Resume and enhanced summary options
+    parser.add_argument('--resume', action='store_true', 
+                       help='Resume from checkpoint if available')
+    parser.add_argument('--summary_interval', type=int, default=60, 
+                       help='Interval for enhanced summary output in seconds')
     
     # Post-processing flags
     parser.add_argument('--run_analysis', action='store_true',
@@ -1441,7 +1602,42 @@ def main_cupy():
         import dynesty
         logger.info(f"✓ Dynesty imported successfully (version: {dynesty.__version__})")
         
-        logger.info(f"STEP 2: Creating multiprocessing pool with {args.num_threads} threads...")
+        # Check for existing checkpoint if resume is requested
+        checkpoint_file = output_dir / "dynesty_checkpoint.pkl"
+        resume_results = None
+        
+        if args.resume and checkpoint_file.exists():
+            logger.info(f"\n*** RESUME MODE ACTIVATED ***")
+            logger.info(f"Loading checkpoint: {checkpoint_file}")
+            try:
+                with open(checkpoint_file, 'rb') as f:
+                    resume_results = pickle.load(f)
+                logger.info(f"✓ Checkpoint loaded successfully!")
+                logger.info(f"  Samples: {len(resume_results.samples)}")
+                logger.info(f"  Current LogZ: {resume_results.logz[-1]:.2f}")
+                logger.info(f"  Iterations: {len(resume_results.logz)}")
+                
+                # Generate initial summary for resumed run
+                if ENHANCED_SUMMARY_AVAILABLE:
+                    logger.info("\nGenerating summary of checkpoint state...")
+                    from enhanced_summary import DynestyRunSummary
+                    summarizer = DynestyRunSummary(output_dir)
+                    summary = {
+                        "convergence_metrics": summarizer._get_convergence_metrics(resume_results),
+                        "evidence_metrics": summarizer._get_evidence_metrics(resume_results),
+                        "quality_assessment": summarizer._assess_quality(resume_results)
+                    }
+                    logger.info(f"  Convergence status: {summary['quality_assessment']['status']}")
+                    logger.info(f"  Current dLogZ: {summary['convergence_metrics'].get('dlogz_current', 'N/A'):.4f}")
+                    
+            except Exception as e:
+                logger.error(f"✗ Failed to load checkpoint: {e}")
+                logger.warning("Will start fresh run instead")
+                resume_results = None
+        elif args.resume:
+            logger.info("Resume requested but no checkpoint found - starting fresh")
+        
+        logger.info(f"\nSTEP 2: Creating multiprocessing pool with {args.num_threads} threads...")
         with Pool(processes=args.num_threads) as pool:
             logger.info("STEP 3: Creating DynamicNestedSampler...")
             
@@ -1449,18 +1645,40 @@ def main_cupy():
             logl_args = (param_names, args, R_data, v_data, sigma_data)
             ptform_args = (param_names, bounds_low, bounds_high, use_log_prior)
             
-            sampler = dynesty.DynamicNestedSampler(
-                log_likelihood_dynesty_cupy,
-                prior_transform_dynesty_cupy,
-                ndim=len(param_names),
-                logl_args=logl_args,
-                ptform_args=ptform_args,
-                pool=pool,
-                queue_size=args.num_threads,
-                nlive=args.nlive,
-                sample=args.sample_method,
-                bound=args.bound_method
-            )
+            if resume_results is not None:
+                # Create sampler with resume capability
+                logger.info("  Creating sampler in RESUME mode...")
+                sampler = dynesty.DynamicNestedSampler(
+                    log_likelihood_dynesty_cupy,
+                    prior_transform_dynesty_cupy,
+                    ndim=len(param_names),
+                    logl_args=logl_args,
+                    ptform_args=ptform_args,
+                    pool=pool,
+                    queue_size=args.num_threads,
+                    nlive=args.nlive,
+                    sample=args.sample_method,
+                    bound=args.bound_method,
+                    save_samples=False  # We'll handle saving ourselves
+                )
+                # Restore the saved state
+                sampler.saved_run = resume_results
+                sampler.results = resume_results
+                logger.info("✓ Sampler initialized with checkpoint state")
+            else:
+                # Normal sampler creation
+                sampler = dynesty.DynamicNestedSampler(
+                    log_likelihood_dynesty_cupy,
+                    prior_transform_dynesty_cupy,
+                    ndim=len(param_names),
+                    logl_args=logl_args,
+                    ptform_args=ptform_args,
+                    pool=pool,
+                    queue_size=args.num_threads,
+                    nlive=args.nlive,
+                    sample=args.sample_method,
+                    bound=args.bound_method
+                )
             
             # Store xi_type for checkpointing
             sampler._xi_type = args.xi
@@ -1479,6 +1697,7 @@ def main_cupy():
             def _checkpoint_worker():
                 nonlocal last_progress_json, last_analysis_time
                 last_run_stats = time.time()
+                last_summary_time = time.time()
                 RUN_STATS_INTERVAL = 60  # Save run stats every 60 seconds
                 
                 while not stop_event.wait(args.checkpoint_every):
@@ -1500,6 +1719,13 @@ def main_cupy():
                         if current_time - last_progress_json > PROGRESS_JSON_INTERVAL:
                             save_progress_json(sampler, param_names, args, start_time, logger)
                             last_progress_json = current_time
+                        
+                        # Enhanced summary output
+                        if ENHANCED_SUMMARY_AVAILABLE and current_time - last_summary_time > args.summary_interval:
+                            logger.info("\n" + "="*80)
+                            logger.info("ENHANCED SUMMARY UPDATE")
+                            create_periodic_summary(sampler, param_names, args, start_time)
+                            last_summary_time = current_time
                         
                         # Run periodic analysis
                         if args.periodic_analysis and current_time - last_analysis_time > ANALYSIS_INTERVAL:
@@ -1630,18 +1856,29 @@ def main_cupy():
         except Exception as e:
             logger.error(f"✗ Failed to save run_summary.json: {e}")
 
-        # Model comparison summary
-        delta_logz_vs_gr = results.logz[-1] - BASELINE_LOGZ_GR
-        interpretation = interpret_jeffreys_scale(delta_logz_vs_gr)
-        logger.info(f"\n*** MODEL COMPARISON SUMMARY ***")
-        logger.info(f"GR Baseline LogZ: {BASELINE_LOGZ_GR:.2f}")
-        logger.info(f"This Run LogZ:    {results.logz[-1]:.2f}")
-        logger.info(f"Δ LogZ:           {delta_logz_vs_gr:+.2f}")
-        logger.info(f"Interpretation:   {interpretation}")
-        if delta_logz_vs_gr > 0:
-            logger.info("*** DDMM model is preferred over GR ***")
+        # Generate enhanced final summary
+        if ENHANCED_SUMMARY_AVAILABLE:
+            logger.info("\n" + "="*80)
+            logger.info("GENERATING FINAL ENHANCED SUMMARY")
+            logger.info("="*80)
+            final_summary, console_output = create_final_summary(
+                sampler, param_names, args, start_time, status="completed"
+            )
+            logger.info("✓ Enhanced summary saved to run_summary_enhanced.json")
+            logger.info("✓ Console summary saved to run_summary_console.txt")
         else:
-            logger.info("*** GR model is preferred over DDMM ***")
+            # Fallback to basic summary
+            delta_logz_vs_gr = results.logz[-1] - BASELINE_LOGZ_GR
+            interpretation = interpret_jeffreys_scale(delta_logz_vs_gr)
+            logger.info(f"\n*** MODEL COMPARISON SUMMARY ***")
+            logger.info(f"GR Baseline LogZ: {BASELINE_LOGZ_GR:.2f}")
+            logger.info(f"This Run LogZ:    {results.logz[-1]:.2f}")
+            logger.info(f"Δ LogZ:           {delta_logz_vs_gr:+.2f}")
+            logger.info(f"Interpretation:   {interpretation}")
+            if delta_logz_vs_gr > 0:
+                logger.info("*** DDMM model is preferred over GR ***")
+            else:
+                logger.info("*** GR model is preferred over DDMM ***")
 
         # === ENHANCED POST-PROCESSING ===
         posterior_npz = output_dir / "posterior_samples.npz"
