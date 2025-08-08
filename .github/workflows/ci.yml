@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - paper/tidal-band-primary-README
+      - 'paper/**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  build-and-artifacts:
+    name: Build and Publish Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies (best-effort)
+        run: |
+          set -euxo pipefail
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt || true
+          fi
+          if [ -f pyproject.toml ]; then
+            python -m pip install --upgrade pip
+            pip install . || true
+          fi
+          if [ -f utils/pyproject.toml ]; then
+            python -m pip install --upgrade pip
+            pip install ./utils || true
+          fi
+
+      - name: Lightweight verification
+        run: |
+          python -V
+          echo "Repo tree:" && ls -la
+
+      - name: Discover PNG and JSON artifacts
+        id: discover
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifact_manifest
+          # Collect common locations for results
+          echo "results/**/*.png" >> artifact_manifest/paths.txt
+          echo "results/**/*.json" >> artifact_manifest/paths.txt
+          echo "**/figures/**/*.png" >> artifact_manifest/paths.txt
+          echo "**/outputs/**/*.json" >> artifact_manifest/paths.txt
+          echo "**/artifacts/**/*.json" >> artifact_manifest/paths.txt
+          echo "**/artifacts/**/*.png" >> artifact_manifest/paths.txt
+
+      - name: Upload PNG artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: png-artifacts
+          path: |
+            results/**/*.png
+            **/figures/**/*.png
+            **/artifacts/**/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload JSON artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: json-artifacts
+          path: |
+            results/**/*.json
+            **/outputs/**/*.json
+            **/artifacts/**/*.json
+          if-no-files-found: warn
+          retention-days: 14
