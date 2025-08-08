@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
 import numpy as np
+from typing import Dict, Any, List, Tuple
 import argparse
 from pathlib import Path
 import pickle
@@ -62,6 +63,315 @@ BASELINE_LOGZ_GR = -1490897.5250096943  # From GR-only with no dark matter
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+# Lightweight NumPy utilities to avoid importing heavier analysis modules
+PCTS = (0.16, 0.50, 0.84)
+
+def _recent_slice(n_total: int, n_recent: int) -> slice:
+    start = max(0, n_total - n_recent)
+    return slice(start, n_total)
+
+
+def _get_weights(results, slc: slice) -> np.ndarray:
+    # Prefer posterior weights if available; else uniform.
+    w = None
+    if hasattr(results, "weights") and results.weights is not None:
+        w = results.weights[slc]
+    elif hasattr(results, "logwt") and results.logwt is not None:
+        lw = results.logwt[slc]
+        lw = lw - np.max(lw)  # stabilize
+        w = np.exp(lw)
+    else:
+        w = np.ones(results.samples[slc].shape[0], dtype=np.float64)
+    w = np.clip(w, 0.0, np.inf)
+    s = w.sum()
+    return w / s if s > 0 else np.ones_like(w) / len(w)
+
+
+def _weighted_quantiles(x: np.ndarray, w: np.ndarray, qs: Tuple[float, ...]) -> np.ndarray:
+    # x: (N,) values; w: (N,) non-negative normalized weights
+    idx = np.argsort(x, kind="mergesort")  # stable
+    xs = x[idx]
+    ws = w[idx]
+    cdf = np.cumsum(ws)
+    cdf /= cdf[-1] if cdf[-1] > 0 else 1.0
+    return np.interp(qs, cdf, xs)
+
+
+def _weighted_mean_std(X: np.ndarray, w: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    mu = np.average(X, axis=0, weights=w)
+    Xm = X - mu
+    var = np.average(Xm * Xm, axis=0, weights=w)
+    return mu, np.sqrt(np.maximum(var, 0.0))
+
+
+def _weighted_cov(X: np.ndarray, w: np.ndarray) -> np.ndarray:
+    # X (N, D); w normalized
+    mu = np.average(X, axis=0, weights=w)
+    Xm = X - mu
+    WX = Xm * w[:, None]
+    cov = WX.T @ Xm
+    denom = w.sum()
+    return cov / denom if denom > 0 else np.zeros((X.shape[1], X.shape[1]), dtype=np.float64)
+
+
+def _top_k_pcs_from_cov(cov: np.ndarray, k: int = 3) -> List[Tuple[float, np.ndarray]]:
+    # eigh returns ascending eigenvalues
+    evals, evecs = np.linalg.eigh(cov)
+    order = np.argsort(evals)[::-1]
+    evals = evals[order]
+    evecs = evecs[:, order]
+    m = min(k, cov.shape[0])
+    return [(float(evals[i]), evecs[:, i].copy()) for i in range(m)]
+
+
+def _round_list(arr: np.ndarray, decimals: int = 6) -> List[float]:
+    return [round(float(v), decimals) for v in np.asarray(arr).ravel().tolist()]
+
+
+def _sample_seed_points(X: np.ndarray, w: np.ndarray, K: int = 256, decimals: int = 6) -> List[List[float]]:
+    N = X.shape[0]
+    K_eff = min(K, N)
+    # Sample with replacement to respect weights if N < K
+    idx = np.random.choice(N, size=K_eff, replace=(N < K_eff), p=w)
+    pts = X[idx]
+    return [ _round_list(p, decimals) for p in pts ]
+
+
+def _suggest_bounds(p16: np.ndarray, p84: np.ndarray, expand: float = 1.5) -> np.ndarray:
+    width = np.maximum(p84 - p16, 1e-12)
+    low = p16 - expand * width
+    high = p84 + expand * width
+    return np.stack([low, high], axis=1)
+
+
+def _find_best_fit(logl: np.ndarray) -> int:
+    return int(np.nanargmax(logl)) if logl.size else -1
+
+
+def _build_tuning_snapshot(
+    sampler,
+    run_id: str,
+    run_dir: str,
+    param_names: List[str],
+    xi_type: str,
+    target_dlogz: float,
+    n_recent: int = 10000,
+    seed_K: int = 256,
+    expand: float = 1.5,
+    decimals: int = 6,
+    prev_logz_hist: List[Tuple[float, float]] = None,  # [(ts, logz)]
+    start_time: float = None
+) -> Dict[str, Any]:
+    res = sampler.results
+    now = time.time()
+    nsamp = res.samples.shape[0]
+    slc = _recent_slice(nsamp, n_recent)
+    X = np.asarray(res.samples[slc], dtype=np.float64)
+    logl = np.asarray(res.logl[slc], dtype=np.float64)
+    w = _get_weights(res, slc)
+
+    # Per-parameter stats
+    D = X.shape[1]
+    p16 = np.empty(D); p50 = np.empty(D); p84 = np.empty(D)
+    for j in range(D):
+        q = _weighted_quantiles(X[:, j], w, PCTS)
+        p16[j], p50[j], p84[j] = q[0], q[1], q[2]
+    mu, std = _weighted_mean_std(X, w)
+
+    # PCs
+    cov = _weighted_cov(X, w)
+    pcs = _top_k_pcs_from_cov(cov, k=3)
+    anisotropy_ratio = float(max(1.0, (pcs[0][0] / max(pcs[-1][0], 1e-12))) if pcs else 1.0)
+
+    # Bounds suggestion
+    sb = _suggest_bounds(p16, p84, expand=expand)
+
+    # Best fit
+    best_idx_local = _find_best_fit(logl)
+    best_idx_global = slc.start + best_idx_local if best_idx_local >= 0 else -1
+    best_params = res.samples[best_idx_global] if best_idx_global >= 0 else None
+    best_logl = float(res.logl[best_idx_global]) if best_idx_global >= 0 else None
+
+    # Performance and convergence
+    n_calls = int(getattr(res, "ncall", 0))  # dynesty tracks total likelihood calls
+    n_iter = int(getattr(res, "niter", nsamp))
+    eff_percent = float(100.0 * nsamp / max(1, n_calls))
+    wall_time_sec = float(now - (start_time or now))
+    calls_per_sec = float(n_calls / wall_time_sec) if wall_time_sec > 0 else None
+    logz = float(getattr(res, "logz", np.nan))
+    logzerr = float(getattr(res, "logzerr", np.nan))
+    # dlogz_current and avg over recent history
+    dlogz_current = logzerr if np.isfinite(logzerr) else None
+    dlogz_avg_10 = None
+    if prev_logz_hist:
+        vals = [v for (_, v) in prev_logz_hist[-10:]]
+        if len(vals) >= 2:
+            diffs = np.abs(np.diff(vals))
+            dlogz_avg_10 = float(np.mean(diffs))
+
+    # Seed points
+    seeds = _sample_seed_points(X, w, K=seed_K, decimals=decimals)
+
+    # Optional blob-derived chi2
+    chi2 = chi2_red = None
+    if hasattr(res, "blob") and res.blob is not None:
+        try:
+            b = res.blob[best_idx_global]
+            if isinstance(b, dict):
+                chi2 = float(b.get("chi2")) if "chi2" in b else None
+                chi2_red = float(b.get("chi2_reduced")) if "chi2_reduced" in b else None
+        except Exception:
+            pass
+
+    snapshot = {
+        "metadata": {
+            "run_id": run_id,
+            "xi_type": xi_type,
+            "timestamp_utc": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            "n_params": int(D),
+            "param_names": list(param_names),
+            "sampler": "dynesty_cupy"
+        },
+        "performance": {
+            "n_samples": int(nsamp),
+            "n_calls": int(n_calls),
+            "n_iter": int(n_iter),
+            "eff_percent": round(eff_percent, 2),
+            "calls_per_sec": round(calls_per_sec, 2) if calls_per_sec is not None else None,
+            "wall_time_sec": round(wall_time_sec, 1)
+        },
+        "convergence": {
+            "logz": logz,
+            "logzerr": logzerr,
+            "dlogz_current": dlogz_current,
+            "dlogz_avg_10": dlogz_avg_10,
+            "target_dlogz": float(target_dlogz)
+        },
+        "best_fit": {
+            "idx": int(best_idx_global),
+            "params": _round_list(best_params, decimals) if best_params is not None else None,
+            "best_logl": best_logl,
+            "chi2": chi2,
+            "chi2_reduced": chi2_red
+        },
+        "posterior_stats": {
+            name: {
+                "p16": float(p16[i]), "p50": float(p50[i]), "p84": float(p84[i]), "std": float(std[i])
+            } for i, name in enumerate(param_names)
+        },
+        "suggested_bounds": {
+            "expansion_factor": float(expand),
+            "method": "p16_p84_expand",
+            "bounds": { name: _round_list(sb[i], decimals) for i, name in enumerate(param_names) }
+        },
+        "top_pcs": [
+            {"eigval": float(ev), "eigvec": _round_list(vec, decimals)} for (ev, vec) in pcs
+        ],
+        "seed_live_points": {
+            "K": int(len(seeds)),
+            "decimals": int(decimals),
+            "sample_from": "posterior_recent_weighted",
+            "points": seeds
+        },
+        "sampler_tuning": _make_tuning_suggestions(
+            D=D, eff_percent=eff_percent, anisotropy_ratio=anisotropy_ratio, current_nlive=getattr(sampler, "nlive", None)
+        )
+    }
+    # Opportunistically include latest checkpoint paths (no heavy IO)
+    try:
+        snapshot["metadata"]["latest_checkpoint"] = _find_latest_checkpoint_paths(run_dir)
+    except Exception:
+        pass
+    return snapshot
+
+
+def _make_tuning_suggestions(D: int, eff_percent: float, anisotropy_ratio: float, current_nlive: int = None) -> Dict[str, Any]:
+    # Heuristics: upweight nlive if efficiency low or anisotropy high
+    base = max(400, 50 * D)  # floor
+    ani_factor = min(3.0, max(1.0, np.sqrt(anisotropy_ratio)))
+    eff_factor = 1.0 if eff_percent >= 1.0 else min(3.0, 1.0 + (1.0 - eff_percent) / 100.0 * 2.0)
+    suggested_nlive = int(round(base * ani_factor * eff_factor))
+    # Bound/sample hints
+    sample_method = "auto" if anisotropy_ratio < 10 else "rslice"
+    bound_method = "multi" if anisotropy_ratio < 5 else "balls"
+    return {
+        "suggested_nlive": suggested_nlive if current_nlive is None else max(current_nlive, suggested_nlive),
+        "suggested_sample": sample_method,
+        "suggested_bound": bound_method,
+        "anisotropy_ratio": round(float(anisotropy_ratio), 3),
+        "eff_percent_recent": round(float(eff_percent), 2)
+    }
+
+
+def _find_latest_checkpoint_paths(run_dir: str) -> Dict[str, str]:
+    import os, glob
+    npzs = sorted(glob.glob(os.path.join(run_dir, "checkpoints", "checkpoint_*.npz")))
+    latest_npz = npzs[-1] if npzs else None
+    progress_json = os.path.join(run_dir, "progress.json")
+    return {"npz": latest_npz, "progress_json": progress_json}
+
+
+def _enrich_from_npz_if_available(run_dir: str, snapshot: Dict[str, Any]) -> None:
+    try:
+        latest = snapshot.get("metadata", {}).get("latest_checkpoint", {}).get("npz")
+        if not latest:
+            return
+        with np.load(latest, allow_pickle=False) as npz:
+            if "param_names" in npz.files and not snapshot["metadata"].get("param_names"):
+                snapshot["metadata"]["param_names"] = npz["param_names"].tolist()
+            if "xi_type" in npz.files and not snapshot["metadata"].get("xi_type"):
+                snapshot["metadata"]["xi_type"] = str(npz["xi_type"])
+            if "data_checksum" in npz.files:
+                snapshot["metadata"]["data_checksum"] = str(npz["data_checksum"])
+    except Exception:
+        # Skip silently on any IO or parsing error
+        pass
+
+
+def _write_json_atomic(path: str, obj: Dict[str, Any]) -> int:
+    """Atomically write JSON to path and return size in bytes (compact)."""
+    import tempfile, shutil
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix=p.name + ".", dir=str(p.parent))
+    os.close(tmp_fd)
+    try:
+        with open(tmp_name, "w", encoding="utf-8") as f:
+            # Use compact separators to minimize file size
+            json.dump(make_json_serializable(obj), f, separators=(",", ":"), ensure_ascii=False)
+        # Atomic replace
+        Path(tmp_name).replace(p)
+        try:
+            return int(p.stat().st_size)
+        except Exception:
+            return 0
+    finally:
+        try:
+            if os.path.exists(tmp_name):
+                os.remove(tmp_name)
+        except Exception:
+            pass
+
+
+def _rotate_backup_if_due(path: str, run_dir: str, last_backup_ts: float, backup_interval_sec: int = 1800) -> float:
+    """Rotate a timestamped backup of the file if due. Returns updated last_backup_ts."""
+    import shutil
+    now = time.time()
+    if (now - last_backup_ts) < float(backup_interval_sec):
+        return last_backup_ts
+    try:
+        p = Path(path)
+        if p.exists():
+            ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            backup_name = p.with_name(f"{p.stem}.{ts}{p.suffix}")
+            shutil.copy2(p, backup_name)
+            return now
+    except Exception:
+        # Ignore backup errors; do not crash worker
+        return last_backup_ts
+    return last_backup_ts
+
 
 def get_or_create_logger():
     """Get or create logger instance."""
@@ -1503,6 +1813,278 @@ def save_run_summary(filename, results, param_names, bounds_low, bounds_high, ar
     with open(filename, "w") as f:
         json.dump(summary, f, indent=2)
 
+# ===============================
+# TUNING SNAPSHOT (every ~5 min)
+# ===============================
+
+def _weighted_percentiles(values, weights, percentiles):
+    values = np.asarray(values)
+    weights = np.asarray(weights)
+    if values.size == 0:
+        return {f"p{int(p)}": np.nan for p in percentiles}
+    sorter = np.argsort(values)
+    v = values[sorter]
+    w = weights[sorter]
+    w_sum = np.sum(w)
+    if w_sum <= 0 or not np.isfinite(w_sum):
+        w = np.ones_like(v) / len(v)
+        w_sum = 1.0
+    cdf = np.cumsum(w) / w_sum
+    out = {}
+    for p in percentiles:
+        idx = np.searchsorted(cdf, p/100.0, side='left')
+        idx = np.clip(idx, 0, len(v)-1)
+        out[f"p{int(p)}"] = float(v[idx])
+    return out
+
+
+def _weighted_mean_std(x, w):
+    x = np.asarray(x)
+    w = np.asarray(w)
+    w_sum = np.sum(w)
+    if x.size == 0 or w_sum <= 0 or not np.isfinite(w_sum):
+        return np.nan, np.nan
+    w_norm = w / w_sum
+    mu = float(np.sum(x * w_norm))
+    var = float(np.sum((x - mu)**2 * w_norm))
+    return mu, np.sqrt(var)
+
+
+def _top_pcs(samples, weights, k_max=3):
+    try:
+        if samples is None or len(samples) == 0:
+            return []
+        W = np.asarray(weights)
+        if W.size == 0 or not np.isfinite(np.sum(W)) or np.sum(W) <= 0:
+            W = np.ones(samples.shape[0]) / max(1, samples.shape[0])
+        W = W / np.sum(W)
+        X = np.asarray(samples)
+        mu = np.average(X, axis=0, weights=W)
+        Xc = X - mu
+        # Weighted covariance
+        cov = (Xc.T * W) @ Xc
+        # Numerical guard
+        cov = 0.5 * (cov + cov.T)
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        order = np.argsort(eigvals)[::-1]
+        eigvals = eigvals[order]
+        eigvecs = eigvecs[:, order]
+        pcs = []
+        for i in range(min(k_max, len(eigvals))):
+            pcs.append({
+                "eigval": float(max(eigvals[i], 0.0)),
+                "eigvec": [float(np.round(x, 6)) for x in eigvecs[:, i].tolist()]
+            })
+        return pcs
+    except Exception:
+        return []
+
+
+def _suggest_bounds_from_stats(stats_map, expansion_factor=1.5):
+    per_param = {}
+    for name, stats in stats_map.items():
+        p16 = stats.get('p16', np.nan)
+        p50 = stats.get('p50', np.nan)
+        p84 = stats.get('p84', np.nan)
+        if not all(np.isfinite([p16, p50, p84])):
+            continue
+        low = p50 - expansion_factor * (p50 - p16)
+        high = p50 + expansion_factor * (p84 - p50)
+        per_param[name] = [float(low), float(high)]
+    return {
+        "expansion_factor": float(expansion_factor),
+        "method": "p16_p84_expand",
+        "per_param": per_param
+    }
+
+
+def _seed_live_points(samples, weights, K=128, decimals=6):
+    if samples is None or len(samples) == 0:
+        return {"K": 0, "decimals": decimals, "sample_from": "posterior_recent_weighted", "points": []}
+    n = samples.shape[0]
+    K = int(min(K, 256, n))
+    W = np.asarray(weights)
+    if W.size == 0 or not np.isfinite(np.sum(W)) or np.sum(W) <= 0:
+        W = np.ones(n) / n
+    else:
+        W = W / np.sum(W)
+    try:
+        idxs = np.random.choice(n, size=K, replace=False if K <= n else True, p=W)
+    except Exception:
+        idxs = np.random.choice(n, size=K, replace=False)
+    pts = np.round(samples[idxs], decimals=decimals).tolist()
+    return {"K": K, "decimals": decimals, "sample_from": "posterior_recent_weighted", "points": pts}
+
+
+def _compute_anisotropy_ratio(pcs):
+    if not pcs:
+        return 1.0
+    vals = [pc["eigval"] for pc in pcs if pc.get("eigval", 0) is not None]
+    if not vals or max(vals) <= 0:
+        return 1.0
+    vmin = max(min(vals), 1e-30)
+    return float(max(vals) / vmin)
+
+
+def save_tuning_snapshot(sampler, param_names, args, start_time, output_dir, logger):
+    try:
+        res = getattr(sampler, 'results', None)
+        if res is None:
+            return False
+        now_iso = datetime.utcnow().isoformat() + 'Z'
+        n_params = len(param_names)
+        # Basic arrays
+        samples = getattr(res, 'samples', None)
+        logl = getattr(res, 'logl', None)
+        logz = getattr(res, 'logz', None)
+        logzerr = getattr(res, 'logzerr', None)
+        ncall = getattr(res, 'ncall', None)
+        weights = get_dynesty_weights(res)
+        # Derive counts and performance
+        n_samples = int(len(samples)) if samples is not None else 0
+        total_calls = int(np.sum(ncall)) if ncall is not None else 0
+        n_iter = int(len(logz)) if logz is not None else 0
+        eff_percent = float(100.0 * n_samples / total_calls) if total_calls > 0 else 0.0
+        wall_time_sec = float(max(0.0, time.time() - start_time))
+        calls_per_sec = float(total_calls / wall_time_sec) if wall_time_sec > 0 else 0.0
+        # Convergence
+        logz_last = float(logz[-1]) if logz is not None and len(logz) > 0 else float('nan')
+        if logzerr is not None and len(logzerr) > 0:
+            logzerr_last = float(logzerr[-1])
+        else:
+            logzerr_last = float(abs(logz[-1] - logz[-2])) if logz is not None and len(logz) > 1 else float('nan')
+        dlogz_current = float(logzerr_last) if np.isfinite(logzerr_last) else (float(abs(logz[-1] - logz[-2])) if logz is not None and len(logz) > 1 else float('nan'))
+        if logz is not None and len(logz) > 1:
+            recent = np.diff(np.array(logz)[-11:]) if len(logz) > 10 else np.diff(np.array(logz))
+            dlogz_avg_10 = float(np.mean(np.abs(recent))) if recent.size > 0 else float('nan')
+        else:
+            dlogz_avg_10 = float('nan')
+        target_dlogz = float(getattr(args, 'dlogz_target', 0.01) or 0.01)
+        # Best fit
+        if samples is not None and logl is not None and len(logl) > 0:
+            idx_best = int(np.argmax(logl))
+            best_params = [float(np.round(x, 6)) for x in samples[idx_best].tolist()]
+            best_logl = float(logl[idx_best])
+        else:
+            idx_best = -1
+            best_params = []
+            best_logl = float('nan')
+        # chi2 optional if available in blob
+        chi2 = None
+        chi2_reduced = None
+        try:
+            blob = getattr(res, 'blob', None)
+            if blob is not None and len(blob) == n_samples:
+                # Attempt to read chi2 from blob if dict-like per-sample
+                if isinstance(blob[0], dict):
+                    if 'chi2' in blob[0]:
+                        chi2 = float(blob[idx_best].get('chi2'))
+                    if 'chi2_reduced' in blob[0]:
+                        chi2_reduced = float(blob[idx_best].get('chi2_reduced'))
+        except Exception:
+            pass
+        # Posterior stats per parameter
+        post_stats = {}
+        if samples is not None and n_samples > 0:
+            W = np.asarray(weights) if weights is not None else np.ones(n_samples)
+            if np.sum(W) <= 0 or not np.isfinite(np.sum(W)):
+                W = np.ones(n_samples)
+            for j, name in enumerate(param_names):
+                vals = samples[:, j]
+                pct = _weighted_percentiles(vals, W, [16, 50, 84])
+                _, std = _weighted_mean_std(vals, W)
+                post_stats[name] = {"p16": float(pct.get('p16', np.nan)),
+                                    "p50": float(pct.get('p50', np.nan)),
+                                    "p84": float(pct.get('p84', np.nan)),
+                                    "std": float(std) if np.isfinite(std) else float('nan')}
+        # Bounds suggestion
+        suggested_bounds = _suggest_bounds_from_stats(post_stats, expansion_factor=1.5)
+        # PCA
+        pcs = _top_pcs(samples, weights if weights is not None else np.ones(n_samples), k_max=3)
+        # Seed live points
+        seed = _seed_live_points(samples, weights if weights is not None else np.ones(n_samples), K=128, decimals=6)
+        # Sampler tuning
+        anisotropy_ratio = _compute_anisotropy_ratio(pcs)
+        # Heuristic suggested nlive
+        base = max(50, int(2.0 * n_params * np.log(n_params + 3)))
+        scale = 1.0
+        if anisotropy_ratio > 3:
+            scale *= 1.5
+        if eff_percent < 5:
+            scale *= 1.5
+        suggested_nlive = int(base * scale)
+        suggested_sample = 'rwalk' if anisotropy_ratio > 3 else 'auto'
+        suggested_bound = 'multi' if anisotropy_ratio > 2 else 'balls'
+        eff_percent_recent = eff_percent  # fallback
+        # latest checkpoint discovery
+        latest_npz = None
+        try:
+            latest_path = None
+            for p in Path(output_dir).glob(f"dynesty_checkpoint_*_latest.npz"):
+                latest_path = p
+                break
+            latest_npz = str(latest_path) if latest_path else None
+        except Exception:
+            latest_npz = None
+        latest_checkpoint = None
+        if latest_npz:
+            latest_checkpoint = {"npz": latest_npz, "progress_json": str(Path(output_dir) / "dynesty_progress.json")}
+        # Assemble JSON
+        snapshot = {
+            "metadata": {
+                "run_id": getattr(args, 'run_id', str(Path(output_dir).name)),
+                "xi_type": getattr(args, 'xi', 'gr'),
+                "timestamp_utc": now_iso,
+                "n_params": int(n_params),
+                "param_names": list(param_names),
+                "sampler": "dynesty_cupy",
+                "latest_checkpoint": latest_checkpoint
+            },
+            "performance": {
+                "n_samples": int(n_samples),
+                "n_calls": int(total_calls),
+                "n_iter": int(n_iter),
+                "eff_percent": float(eff_percent),
+                "calls_per_sec": float(calls_per_sec),
+                "wall_time_sec": float(wall_time_sec)
+            },
+            "convergence": {
+                "logz": float(logz_last) if np.isfinite(logz_last) else float('nan'),
+                "logzerr": float(logzerr_last) if np.isfinite(logzerr_last) else float('nan'),
+                "dlogz_current": float(dlogz_current) if np.isfinite(dlogz_current) else float('nan'),
+                "dlogz_avg_10": float(dlogz_avg_10) if np.isfinite(dlogz_avg_10) else float('nan'),
+                "target_dlogz": float(target_dlogz)
+            },
+            "best_fit": {
+                "idx": int(idx_best),
+                "params": best_params,
+                "best_logl": float(best_logl),
+                **({"chi2": float(chi2)} if chi2 is not None else {}),
+                **({"chi2_reduced": float(chi2_reduced)} if chi2_reduced is not None else {})
+            },
+            "posterior_stats": post_stats,
+            "suggested_bounds": suggested_bounds,
+            "top_pcs": pcs,
+            "seed_live_points": seed,
+            "sampler_tuning": {
+                "suggested_nlive": int(suggested_nlive),
+                "suggested_sample": suggested_sample,
+                "suggested_bound": suggested_bound,
+                "anisotropy_ratio": float(anisotropy_ratio),
+                "eff_percent_recent": float(eff_percent_recent)
+            }
+        }
+        # Write file (atomic, compact)
+        out_path = Path(output_dir) / "tuning_snapshot.json"
+        # Optional enrichment from latest NPZ (best-effort, non-blocking)
+        _enrich_from_npz_if_available(str(output_dir), snapshot)
+        size = _write_json_atomic(str(out_path), snapshot)
+        logger.debug(f"✓ tuning_snapshot.json updated at {out_path} ({size} bytes)")
+        return True
+    except Exception as e:
+        logger.debug(f"Failed to write tuning_snapshot.json: {e}")
+        return False
+
 # ============================================================================
 # MAIN EXECUTION
 # ============================================================================
@@ -1520,7 +2102,9 @@ def main_cupy():
                        choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'tidal_band', 'hybrid_safe', 'smooth_transition', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh', 'elastic_strain', 'tension_field', 'hookean', 'balanced_screening'],
                        help='Xi function type')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
-                       help='Output directory')
+                       help='Output directory (ignored unless --resume_from is provided)')
+    parser.add_argument('--resume_from', type=str, default=None,
+                       help='Path to an existing run directory to resume. If provided, all output will be written back into this directory.')
     parser.add_argument('--nlive', type=int, default=2000,
                        help='Number of live points')
     parser.add_argument('--maxcall', type=int, default=1500000,
@@ -1572,11 +2156,25 @@ def main_cupy():
     
     args = parser.parse_args()
 
-    # Create unique output directory with timestamp and parameters
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_name = f"{args.xi}_{timestamp}"
-    output_dir = Path(f"runs/{run_name}")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Determine output directory
+    if args.resume_from:
+        # Resume into an existing run directory
+        output_dir = Path(args.resume_from)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        # Try to infer timestamp from folder name; else use current time
+        try:
+            timestamp = output_dir.name.split('_')[-1]
+        except Exception:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        run_name = output_dir.name
+        # Ensure resume flag is set
+        args.resume = True
+    else:
+        # Create unique output directory with timestamp and parameters
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        run_name = f"{args.xi}_{timestamp}"
+        output_dir = Path(f"runs/{run_name}")
+        output_dir.mkdir(parents=True, exist_ok=True)
     
     # Store the original CLI command
     cli_command = " ".join(sys.argv)
@@ -1594,7 +2192,15 @@ def main_cupy():
     args.output_dir = str(output_dir)
 
     # Set run_id for tracking
-    args.run_id = f"cupy_{timestamp}"
+    # If resuming, keep existing run_id if present in a file; else derive from folder name
+    try:
+        if args.resume_from and (output_dir / 'cli_command.txt').exists():
+            # Do not change run_id for resumed runs; use folder-based id
+            args.run_id = f"cupy_{output_dir.name.split('_')[-1]}"
+        else:
+            args.run_id = f"cupy_{timestamp}"
+    except Exception:
+        args.run_id = f"cupy_{timestamp}"
 
     # --- Load REAL Gaia Data ---
     logger.info("Loading Gaia data...")
@@ -1702,8 +2308,7 @@ def main_cupy():
                     queue_size=args.num_threads,
                     nlive=args.nlive,
                     sample=args.sample_method,
-                    bound=args.bound_method,
-                    save_samples=False  # We'll handle saving ourselves
+                    bound=args.bound_method
                 )
                 # Restore the saved state
                 sampler.saved_run = resume_results
@@ -1740,42 +2345,106 @@ def main_cupy():
             
             def _checkpoint_worker():
                 nonlocal last_progress_json, last_analysis_time
+                # Cadence and limits
+                SNAPSHOT_INTERVAL_SEC = 420  # 7 min
+                BACKUP_INTERVAL_SEC = 1800   # 30 min
+                N_RECENT = 10000
+                SEED_K = 256
+                EXPAND = 1.5
+                DECIMALS = 6
+
+                # Tracking
                 last_run_stats = time.time()
                 last_summary_time = time.time()
+                last_checkpoint_ts = 0.0
+                last_snapshot_ts = 0.0
+                last_backup_ts = 0.0
+                prev_logz_hist = []  # list of (timestamp, logz)
+
                 RUN_STATS_INTERVAL = 60  # Save run stats every 60 seconds
-                
-                while not stop_event.wait(args.checkpoint_every):
+
+                D = len(param_names)
+
+                # Responsive loop with small sleep; do not block likelihood thread
+                while not stop_event.is_set():
                     try:
-                        current_time = time.time()
-                        
-                        # Save dynesty checkpoint
-                        with open(output_dir / "dynesty_checkpoint.pkl", "wb") as cf:
-                            pickle.dump(sampler.results, cf)
-                        logger.info("✓ Checkpoint saved.")
-                        
-                        # Save run stats every 60 seconds
-                        if current_time - last_run_stats > RUN_STATS_INTERVAL:
+                        now = time.time()
+
+                        # Periodic dynesty checkpoint to pickle
+                        if now - last_checkpoint_ts >= float(args.checkpoint_every):
+                            try:
+                                with open(output_dir / "dynesty_checkpoint.pkl", "wb") as cf:
+                                    pickle.dump(sampler.results, cf)
+                                logger.info("✓ Checkpoint saved.")
+                                last_checkpoint_ts = now
+                            except Exception as ck_e:
+                                logger.warning(f"Checkpoint save failed: {ck_e}")
+
+                        # Save run stats every RUN_STATS_INTERVAL seconds
+                        if now - last_run_stats >= RUN_STATS_INTERVAL:
                             save_run_stats(sampler, param_names, args, start_time, logger, output_dir)
-                            last_run_stats = current_time
+                            last_run_stats = now
                             logger.debug("✓ Run stats saved.")
-                        
+
                         # Save progress JSON
-                        if current_time - last_progress_json > PROGRESS_JSON_INTERVAL:
+                        if now - last_progress_json >= PROGRESS_JSON_INTERVAL:
                             save_progress_json(sampler, param_names, args, start_time, logger)
-                            last_progress_json = current_time
-                        
+                            last_progress_json = now
+
+                        # Tuning snapshot on fixed cadence
+                        if now - last_snapshot_ts >= SNAPSHOT_INTERVAL_SEC:
+                            try:
+                                res = getattr(sampler, 'results', None)
+                                if res is not None and getattr(res, 'samples', None) is not None:
+                                    ns = res.samples.shape[0]
+                                    if ns >= max(100, D * 10):
+                                        snap = _build_tuning_snapshot(
+                                            sampler=sampler,
+                                            run_id=getattr(args, 'run_id', str(output_dir.name)),
+                                            run_dir=str(output_dir),
+                                            param_names=param_names,
+                                            xi_type=getattr(args, 'xi', 'gr'),
+                                            target_dlogz=getattr(args, 'dlogz_target', 0.01),
+                                            n_recent=N_RECENT,
+                                            seed_K=SEED_K,
+                                            expand=EXPAND,
+                                            decimals=DECIMALS,
+                                            prev_logz_hist=prev_logz_hist,
+                                            start_time=start_time
+                                        )
+                                        # update logz history
+                                        try:
+                                            lv = snap.get("convergence", {}).get("logz")
+                                            if lv is not None and np.isfinite(lv):
+                                                prev_logz_hist.append((now, lv))
+                                                if len(prev_logz_hist) > 20:
+                                                    prev_logz_hist = prev_logz_hist[-20:]
+                                        except Exception:
+                                            pass
+
+                                        path = os.path.join(str(output_dir), "tuning_snapshot.json")
+                                        # Optional enrichment from latest NPZ (best-effort, non-blocking)
+                                        _enrich_from_npz_if_available(str(output_dir), snap)
+                                        size = _write_json_atomic(path, snap)
+                                        last_snapshot_ts = now
+                                        # rotate backup if due
+                                        last_backup_ts = _rotate_backup_if_due(path, str(output_dir), last_backup_ts, backup_interval_sec=BACKUP_INTERVAL_SEC)
+                                        logger.info(f"Wrote tuning_snapshot.json ({size} bytes)")
+                            except Exception as e:
+                                logger.warning(f"tuning snapshot failed: {e}")
+
                         # Enhanced summary output
-                        if ENHANCED_SUMMARY_AVAILABLE and current_time - last_summary_time > args.summary_interval:
+                        if ENHANCED_SUMMARY_AVAILABLE and now - last_summary_time >= float(getattr(args, 'summary_interval', 60)):
                             logger.info("\n" + "="*80)
                             logger.info("ENHANCED SUMMARY UPDATE")
                             create_periodic_summary(sampler, param_names, args, start_time)
-                            last_summary_time = current_time
-                        
+                            last_summary_time = now
+
                         # Run periodic analysis
-                        if args.periodic_analysis and current_time - last_analysis_time > ANALYSIS_INTERVAL:
+                        if args.periodic_analysis and now - last_analysis_time >= ANALYSIS_INTERVAL:
                             # First, ensure we have a recent checkpoint
                             save_npz_checkpoint(sampler, param_names, output_dir, logger)
-                            
+
                             # Run analysis in a separate thread
                             analysis_thread = threading.Thread(
                                 target=run_periodic_analysis,
@@ -1783,11 +2452,14 @@ def main_cupy():
                                 daemon=True
                             )
                             analysis_thread.start()
-                            last_analysis_time = current_time
-                            
+                            last_analysis_time = now
+
                     except Exception as e:
                         logger.warning(f"✗ Checkpoint/monitoring failed: {e}")
-                        
+
+                    # Sleep small interval to keep loop responsive
+                    time.sleep(1.0)
+
             chk_thread = threading.Thread(target=_checkpoint_worker, daemon=True)
             chk_thread.start()
             logger.info("✓ Progress monitoring thread started")
@@ -1842,7 +2514,7 @@ def main_cupy():
                 logger.error(f"✗ Failed to save progress: {e}")
                 raise
         
-        logger.info("STEP 7: Saving final results...")
+            logger.info("STEP 7: Saving final results...")
         results = sampler.results
         
         try:
@@ -1853,6 +2525,12 @@ def main_cupy():
             logger.error(f"✗ Failed to save results.pkl: {e}")
             raise
             
+        # Write a final tuning snapshot
+        try:
+            save_tuning_snapshot(sampler, param_names, args, start_time, output_dir, logger)
+        except Exception:
+            pass
+        
         logger.info("STEP 8: Saving final checkpoint and posterior samples...")
         try:
             # Save final checkpoint with correct xi_type

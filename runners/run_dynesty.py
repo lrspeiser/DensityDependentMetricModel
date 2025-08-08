@@ -25,6 +25,13 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 from monitor_dashboard import DynestyMonitor
+# Atomic JSON snapshot utilities
+try:
+    from utils.atomic_snapshot import _write_json_atomic, _rotate_backup_if_due
+except Exception:
+    # Fallback stubs if import path differs in some environments; runtime will still attempt normal write
+    _write_json_atomic = None
+    _rotate_backup_if_due = None
 import matplotlib
 matplotlib.use("Agg")  # Headless backend for servers / background threads
 import matplotlib.pyplot as plt
@@ -1708,6 +1715,18 @@ def save_npz_checkpoint(sampler, fitted_names, output_dir, logger):
 
 # In run_dynesty.py, modify the save_progress_json function to use a unique filename:
 
+def _round_json(obj, ndigits: int = 6):
+    if isinstance(obj, float):
+        return round(obj, ndigits)
+    if isinstance(obj, list):
+        return [_round_json(v, ndigits) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_round_json(v, ndigits) for v in obj)
+    if isinstance(obj, dict):
+        return {k: _round_json(v, ndigits) for k, v in obj.items()}
+    return obj
+
+
 def save_progress_json(sampler, fitted_names, args, start_time, logger):
     """Save current progress to JSON file that updates every minute."""
     try:
@@ -1814,10 +1833,11 @@ def save_progress_json(sampler, fitted_names, args, start_time, logger):
         save_progress_json._last_n_samples = n_samples
         save_progress_json._last_time = elapsed
 
-        # Save with atomic write to prevent corruption
+        # Save with atomic write to prevent corruption (compact, rounded)
         temp_file = progress_file.with_suffix('.tmp')
+        rounded = _round_json(make_json_serializable(progress_data), ndigits=6)
         with open(temp_file, 'w') as f:
-            json.dump(make_json_serializable(progress_data), f, indent=2)
+            json.dump(rounded, f, separators=(",", ":"))
         
         # Atomic rename
         temp_file.replace(progress_file)
@@ -2903,7 +2923,32 @@ def _compute_anisotropy_ratio(pcs):
     return float(max(vals) / vmin)
 
 
+def _enrich_from_npz_if_available(run_dir: str, snapshot: Dict[str, Any]) -> None:
+    try:
+        latest = snapshot.get("metadata", {}).get("latest_checkpoint", {}).get("npz")
+        if not latest:
+            return
+        with np.load(latest, allow_pickle=False) as npz:
+            if "param_names" in npz.files and not snapshot["metadata"].get("param_names"):
+                snapshot["metadata"]["param_names"] = npz["param_names"].tolist()
+            if "xi_type" in npz.files and not snapshot["metadata"].get("xi_type"):
+                snapshot["metadata"]["xi_type"] = str(npz["xi_type"])
+            if "data_checksum" in npz.files:
+                snapshot["metadata"]["data_checksum"] = str(npz["data_checksum"])
+    except Exception:
+        pass
+
+
 def save_tuning_snapshot(sampler, param_names, args, start_time, run_dir, logger):
+    """Build and write a tuning snapshot robustly.
+
+    - Skips writing until samples >= max(100, 10×D) to avoid noisy early stats.
+    - Replaces NaNs/Infs with None and ensures JSON-serializable values.
+    - Writes atomically and rotates timestamped backups every 30 minutes, pruning to last 4.
+    - Never crashes the worker; logs failures at debug level.
+    - Logs info on successful write with file size and timing.
+    """
+    t0 = time.time()
     try:
         res = getattr(sampler, 'results', None)
         if res is None:
@@ -2920,6 +2965,11 @@ def save_tuning_snapshot(sampler, param_names, args, start_time, run_dir, logger
         weights = get_dynesty_weights(res)
         # Derive counts and performance
         n_samples = int(len(samples)) if samples is not None else 0
+        # Skip early noisy stats until we have enough samples
+        min_needed = max(100, 10 * max(1, n_params))
+        if n_samples < min_needed:
+            logger.debug(f"skip tuning_snapshot: need >= {min_needed} samples, have {n_samples}")
+            return False
         total_calls = int(np.sum(ncall)) if isinstance(ncall, np.ndarray) else (int(ncall) if ncall is not None else 0)
         n_iter = int(len(logz)) if isinstance(logz, (list, np.ndarray)) else (0 if logz is None else 1)
         eff_percent = float(100.0 * n_samples / total_calls) if total_calls > 0 else 0.0
@@ -3051,9 +3101,48 @@ def save_tuning_snapshot(sampler, param_names, args, start_time, run_dir, logger
             }
         }
         out_path = Path(run_dir) / "tuning_snapshot.json"
-        with open(out_path, 'w') as f:
-            json.dump(make_json_serializable(snapshot), f, indent=2)
-        logger.debug(f"✓ tuning_snapshot.json updated at {out_path}")
+        # Optional enrichment from latest NPZ (best-effort, non-blocking)
+        _enrich_from_npz_if_available(str(run_dir), snapshot)
+
+        # Sanitization: replace NaN/Inf and ensure JSON-serializable types
+        import math as _math
+        def _sanitize(o):
+            try:
+                import numpy as _np
+            except Exception:
+                _np = None
+            if isinstance(o, dict):
+                return {str(k): _sanitize(v) for k, v in o.items()}
+            if isinstance(o, (list, tuple)):
+                return [_sanitize(v) for v in o]
+            if _np is not None and isinstance(o, (_np.generic,)):
+                o = o.item()
+            if isinstance(o, float):
+                if _math.isnan(o) or _math.isinf(o):
+                    return None
+                return o
+            if isinstance(o, (int, str, bool)) or o is None:
+                return o
+            return str(o)
+
+        safe_snapshot = _sanitize(snapshot)
+
+        # Atomic write and backup rotation (if utility available)
+        size = None
+        if _write_json_atomic is not None:
+            size = _write_json_atomic(str(out_path), safe_snapshot)
+            # Rotate backups every 30 minutes; keep last 4
+            last_ts = getattr(save_tuning_snapshot, '_last_backup_ts', 0.0)
+            if _rotate_backup_if_due is not None:
+                save_tuning_snapshot._last_backup_ts = _rotate_backup_if_due(str(out_path), str(run_dir), last_ts, 1800)
+        else:
+            # Fallback non-atomic write
+            with open(out_path, 'w', encoding='utf-8') as f:
+                json.dump(safe_snapshot, f, separators=(",", ":"), ensure_ascii=False)
+            size = os.path.getsize(out_path)
+
+        dt_ms = (time.time() - t0) * 1000.0
+        logger.info(f"OK tuning_snapshot.json written to {out_path} ({size} bytes) in {dt_ms:.1f} ms [n={n_samples}, D={n_params}]")
         return True
     except Exception as e:
         logger.debug(f"Failed to write tuning_snapshot.json: {e}")
@@ -4358,12 +4447,19 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             early_check_time = time.time()
             EARLY_CHECK_INTERVAL = 10  # seconds
 
+            # Throttle tuning snapshot cadence to avoid overhead
+            TUNING_SNAPSHOT_INTERVAL = 300  # seconds (~5 minutes)
+            last_tuning_snapshot = 0.0
+
             # SINGLE LOOP - FIXED VERSION
             for _ in sampler.sample_initial(nlive=args.nlive_init, maxcall=args.maxcall, save_samples=True):
                 # Periodic tuning snapshot to runs/<run_id>/tuning_snapshot.json
                 try:
                     run_dir = Path("runs") / str(getattr(args, 'run_id', RUN_ID or 'unknown'))
-                    save_tuning_snapshot(sampler, fitted_names, args, run_start_time, run_dir, logger)
+                    now = time.time()
+                    if now - last_tuning_snapshot >= TUNING_SNAPSHOT_INTERVAL:
+                        if save_tuning_snapshot(sampler, fitted_names, args, run_start_time, run_dir, logger):
+                            last_tuning_snapshot = now
                 except Exception as _e:
                     logger.debug(f"tuning_snapshot (init) failed: {_e}")
                 init_counter += 1
@@ -4467,10 +4563,13 @@ def run_single_dynesty(args, gaia_data_dict, R_data_jax, v_data_jax, sigma_data_
             logger.info("Starting dynamic sampling with sampler.sample_batch()...")
             for _ in sampler.sample_batch(dlogz=args.dlogz_target, maxcall=args.maxcall):
                 batch_counter += 1
-                # Periodic tuning snapshot to runs/<run_id>/tuning_snapshot.json
+                # Periodic tuning snapshot to runs/<run_id>/tuning_snapshot.json (throttled)
                 try:
                     run_dir = Path("runs") / str(getattr(args, 'run_id', RUN_ID or 'unknown'))
-                    save_tuning_snapshot(sampler, fitted_names, args, run_start_time, run_dir, logger)
+                    now = time.time()
+                    if now - last_tuning_snapshot >= TUNING_SNAPSHOT_INTERVAL:
+                        if save_tuning_snapshot(sampler, fitted_names, args, run_start_time, run_dir, logger):
+                            last_tuning_snapshot = now
                 except Exception as _e:
                     logger.debug(f"tuning_snapshot (batch) failed: {_e}")
                 if batch_counter % 100 == 0:

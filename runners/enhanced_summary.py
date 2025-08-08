@@ -21,6 +21,12 @@ class DynestyRunSummary:
     
     def __init__(self, output_dir: Path):
         self.output_dir = Path(output_dir)
+        # Ensure the output directory exists to avoid file-not-found errors
+        try:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # Best-effort: continue; writes may still fail but won't crash caller
+            pass
         self.summary_file = self.output_dir / "run_summary_enhanced.json"
         self.console_summary_file = self.output_dir / "run_summary_console.txt"
         
