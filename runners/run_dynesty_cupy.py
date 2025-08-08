@@ -2203,6 +2203,10 @@ def main_cupy():
     # Resume and enhanced summary options
     parser.add_argument('--resume', action='store_true', 
                        help='Resume from checkpoint if available')
+    parser.add_argument('--resume_from_best', action='store_true',
+                       help='Start fresh run from best parameters of previous run (tighter bounds)')
+    parser.add_argument('--best_param_spread', type=float, default=0.1,
+                       help='Fractional spread around best parameters when using --resume_from_best (default: 0.1 = 10%)')
     parser.add_argument('--summary_interval', type=int, default=60, 
                        help='Interval for enhanced summary output in seconds')
     
@@ -2225,18 +2229,50 @@ def main_cupy():
     args = parser.parse_args()
 
     # Determine output directory
-    if args.resume_from:
-        # Resume into an existing run directory
-        output_dir = Path(args.resume_from)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        # Try to infer timestamp from folder name; else use current time
-        try:
-            timestamp = output_dir.name.split('_')[-1]
-        except Exception:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        run_name = output_dir.name
-        # Ensure resume flag is set
-        args.resume = True
+    if args.resume_from or args.resume_from_best:
+        # Resume from an existing run directory
+        original_dir = Path(args.resume_from)
+        if not original_dir.exists():
+            logger.error(f"Resume directory does not exist: {original_dir}")
+            sys.exit(1)
+            
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        if args.resume_from_best:
+            # Create a new run starting from best parameters
+            run_name = f"{args.xi}_from_best_{timestamp}"
+            output_dir = Path(f"runs/{run_name}")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Store reference to original run
+            with open(output_dir / "resumed_from.txt", 'w') as f:
+                f.write(f"Resumed from best parameters of: {original_dir}\n")
+                f.write(f"Resume type: from_best\n")
+                f.write(f"Parameter spread: {args.best_param_spread}\n")
+                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+        else:
+            # Create a resume subdirectory to preserve original data
+            resume_dirs = list(original_dir.glob("resume_*"))
+            resume_number = len(resume_dirs) + 1
+            output_dir = original_dir / f"resume_{resume_number}_{timestamp}"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Copy the checkpoint file to the new directory
+            original_checkpoint = original_dir / "dynesty_checkpoint.pkl"
+            if original_checkpoint.exists():
+                import shutil
+                shutil.copy2(original_checkpoint, output_dir / "dynesty_checkpoint.pkl")
+                logger.info(f"Copied checkpoint from {original_checkpoint} to {output_dir}")
+            
+            # Store reference to original run
+            with open(output_dir / "resumed_from.txt", 'w') as f:
+                f.write(f"Resumed from: {original_dir}\n")
+                f.write(f"Resume type: continue\n")
+                f.write(f"Resume number: {resume_number}\n")
+                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            
+            # Ensure resume flag is set for continuation
+            args.resume = True
     else:
         # Create unique output directory with timestamp and parameters
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -2299,11 +2335,92 @@ def main_cupy():
 
     # --- Setup Data and Parameters ---
     param_names, bounds_low, bounds_high, use_log_prior = setup_parameter_bounds(args.xi)
-    logger.info(f"Fitting {len(param_names)} parameters: {param_names}")
-    logger.info(f"Parameter bounds:")
-    for i, name in enumerate(param_names):
-        prior_type = "log-uniform" if use_log_prior[i] else "uniform"
-        logger.info(f"  {name}: [{bounds_low[i]:.2e}, {bounds_high[i]:.2e}] ({prior_type})")
+    
+    # If resuming from best, load previous results and adjust bounds
+    if args.resume_from_best:
+        logger.info("\n*** RESUME FROM BEST MODE ***")
+        logger.info(f"Loading best parameters from: {args.resume_from}")
+        
+        try:
+            # Try to load from posterior_samples.npz first
+            prev_results_file = Path(args.resume_from) / "posterior_samples.npz"
+            if not prev_results_file.exists():
+                # Fallback to checkpoint file
+                prev_results_file = Path(args.resume_from) / f"dynesty_checkpoint_{args.xi}_latest.npz"
+            
+            if not prev_results_file.exists():
+                logger.error(f"No results file found in {args.resume_from}")
+                sys.exit(1)
+            
+            # Load previous results
+            prev_data = np.load(prev_results_file)
+            prev_samples = prev_data['samples']
+            prev_logl = prev_data['logl']
+            
+            # Find best parameters
+            best_idx = np.argmax(prev_logl)
+            best_params = prev_samples[best_idx]
+            best_logl = prev_logl[best_idx]
+            
+            logger.info(f"Best log-likelihood from previous run: {best_logl:.2f}")
+            logger.info("Best parameters:")
+            for i, name in enumerate(param_names):
+                logger.info(f"  {name}: {best_params[i]:.6e}")
+            
+            # Adjust bounds around best parameters
+            spread = args.best_param_spread
+            new_bounds_low = np.zeros_like(bounds_low)
+            new_bounds_high = np.zeros_like(bounds_high)
+            
+            for i in range(len(param_names)):
+                if use_log_prior[i]:
+                    # For log-uniform priors, work in log space
+                    log_best = np.log10(best_params[i])
+                    log_spread = spread  # spread in log space
+                    new_bounds_low[i] = 10**(log_best - log_spread)
+                    new_bounds_high[i] = 10**(log_best + log_spread)
+                else:
+                    # For uniform priors, use fractional spread
+                    new_bounds_low[i] = best_params[i] * (1 - spread)
+                    new_bounds_high[i] = best_params[i] * (1 + spread)
+                
+                # Ensure we don't go outside original bounds
+                new_bounds_low[i] = max(new_bounds_low[i], bounds_low[i])
+                new_bounds_high[i] = min(new_bounds_high[i], bounds_high[i])
+            
+            # Update bounds
+            bounds_low = new_bounds_low
+            bounds_high = new_bounds_high
+            
+            logger.info(f"\nNew parameter bounds (±{spread*100:.0f}% around best):")
+            for i, name in enumerate(param_names):
+                prior_type = "log-uniform" if use_log_prior[i] else "uniform"
+                logger.info(f"  {name}: [{bounds_low[i]:.2e}, {bounds_high[i]:.2e}] ({prior_type})")
+            
+            # Save best parameters info
+            best_params_info = {
+                'best_params': best_params.tolist(),
+                'best_logl': float(best_logl),
+                'param_names': param_names,
+                'new_bounds_low': bounds_low.tolist(),
+                'new_bounds_high': bounds_high.tolist(),
+                'spread': spread,
+                'source_file': str(prev_results_file)
+            }
+            with open(output_dir / "best_params_info.json", 'w') as f:
+                json.dump(best_params_info, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Failed to load previous results: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            sys.exit(1)
+    else:
+        logger.info(f"Fitting {len(param_names)} parameters: {param_names}")
+        logger.info(f"Parameter bounds:")
+        for i, name in enumerate(param_names):
+            prior_type = "log-uniform" if use_log_prior[i] else "uniform"
+            logger.info(f"  {name}: [{bounds_low[i]:.2e}, {bounds_high[i]:.2e}] ({prior_type})")
 
     # --- Resource Monitoring ---
     resource_monitor = None
@@ -2403,7 +2520,23 @@ def main_cupy():
                         # Periodic dynesty checkpoint using dynesty's native save/restore
                         if now - last_checkpoint_ts >= float(args.checkpoint_every):
                             try:
-                                sampler.save(str(output_dir / "dynesty_checkpoint.pkl"))
+                                checkpoint_file = output_dir / "dynesty_checkpoint.pkl"
+                                
+                                # Backup existing checkpoint before overwriting
+                                if checkpoint_file.exists():
+                                    backup_name = f"dynesty_checkpoint_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pkl"
+                                    backup_path = output_dir / "checkpoint_backups"
+                                    backup_path.mkdir(exist_ok=True)
+                                    import shutil
+                                    shutil.copy2(checkpoint_file, backup_path / backup_name)
+                                    
+                                    # Keep only last 5 backups to save space
+                                    backups = sorted(backup_path.glob("dynesty_checkpoint_backup_*.pkl"))
+                                    if len(backups) > 5:
+                                        for old_backup in backups[:-5]:
+                                            old_backup.unlink()
+                                
+                                sampler.save(str(checkpoint_file))
                                 logger.info("✓ Checkpoint saved.")
                                 last_checkpoint_ts = now
                             except Exception as ck_e:
