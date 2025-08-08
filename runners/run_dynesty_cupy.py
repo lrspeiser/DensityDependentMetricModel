@@ -98,10 +98,22 @@ def _weighted_quantiles(x: np.ndarray, w: np.ndarray, qs: Tuple[float, ...]) -> 
     return np.interp(qs, cdf, xs)
 
 
-def _weighted_mean_std(X: np.ndarray, w: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    mu = np.average(X, axis=0, weights=w)
+def _weighted_mean_std_2d(X: np.ndarray, w: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    # Robust weighted mean/std for 2D arrays X (N, D) with weights w (N,)
+    X = np.asarray(X)
+    w = np.asarray(w).reshape(-1)
+    if X.ndim != 2:
+        raise ValueError("X must be 2D (N, D)")
+    if w.ndim != 1 or w.shape[0] != X.shape[0]:
+        raise ValueError("w must be 1D with length N matching X.shape[0]")
+    w_sum = float(np.sum(w))
+    if not np.isfinite(w_sum) or w_sum <= 0:
+        w = np.ones(X.shape[0], dtype=float)
+        w_sum = float(X.shape[0])
+    W = (w / w_sum)[:, None]
+    mu = np.sum(W * X, axis=0)
     Xm = X - mu
-    var = np.average(Xm * Xm, axis=0, weights=w)
+    var = np.sum(W * (Xm * Xm), axis=0)
     return mu, np.sqrt(np.maximum(var, 0.0))
 
 
@@ -177,7 +189,7 @@ def _build_tuning_snapshot(
     for j in range(D):
         q = _weighted_quantiles(X[:, j], w, PCTS)
         p16[j], p50[j], p84[j] = q[0], q[1], q[2]
-    mu, std = _weighted_mean_std(X, w)
+    mu, std = _weighted_mean_std_2d(X, w)
 
     # PCs
     cov = _weighted_cov(X, w)
@@ -194,13 +206,43 @@ def _build_tuning_snapshot(
     best_logl = float(res.logl[best_idx_global]) if best_idx_global >= 0 else None
 
     # Performance and convergence
-    n_calls = int(getattr(res, "ncall", 0))  # dynesty tracks total likelihood calls
-    n_iter = int(getattr(res, "niter", nsamp))
+    # ncall may be an array; sum if so
+    ncall_attr = getattr(res, "ncall", 0)
+    try:
+        n_calls = int(np.sum(ncall_attr)) if hasattr(ncall_attr, "__len__") else int(ncall_attr)
+    except Exception:
+        n_calls = 0
+    # niter may be present; otherwise use number of samples/logz entries
+    try:
+        n_iter = int(getattr(res, "niter", len(getattr(res, "logz", []))))
+    except Exception:
+        n_iter = int(nsamp)
     eff_percent = float(100.0 * nsamp / max(1, n_calls))
     wall_time_sec = float(now - (start_time or now))
     calls_per_sec = float(n_calls / wall_time_sec) if wall_time_sec > 0 else None
-    logz = float(getattr(res, "logz", np.nan))
-    logzerr = float(getattr(res, "logzerr", np.nan))
+
+    # Handle logz/logzerr which are typically arrays
+    logz_attr = getattr(res, "logz", None)
+    if isinstance(logz_attr, np.ndarray) and logz_attr.size > 0:
+        logz = float(logz_attr[-1])
+    elif np.isscalar(logz_attr):
+        logz = float(logz_attr)
+    else:
+        logz = float('nan')
+    logzerr_attr = getattr(res, "logzerr", None)
+    if isinstance(logzerr_attr, np.ndarray) and logzerr_attr.size > 0:
+        logzerr = float(logzerr_attr[-1])
+    elif np.isscalar(logzerr_attr):
+        logzerr = float(logzerr_attr)
+    else:
+        # Fallback: derive from last two logz values if available
+        try:
+            if isinstance(logz_attr, np.ndarray) and logz_attr.size > 1:
+                logzerr = float(abs(logz_attr[-1] - logz_attr[-2]))
+            else:
+                logzerr = float('nan')
+        except Exception:
+            logzerr = float('nan')
     # dlogz_current and avg over recent history
     dlogz_current = logzerr if np.isfinite(logzerr) else None
     dlogz_avg_10 = None
@@ -242,9 +284,9 @@ def _build_tuning_snapshot(
             "wall_time_sec": round(wall_time_sec, 1)
         },
         "convergence": {
-            "logz": logz,
-            "logzerr": logzerr,
-            "dlogz_current": dlogz_current,
+            "logz": float(logz) if np.isfinite(logz) else float('nan'),
+            "logzerr": float(logzerr) if np.isfinite(logzerr) else float('nan'),
+            "dlogz_current": float(dlogz_current) if (dlogz_current is not None and np.isfinite(dlogz_current)) else float('nan'),
             "dlogz_avg_10": dlogz_avg_10,
             "target_dlogz": float(target_dlogz)
         },
@@ -1838,16 +1880,19 @@ def _weighted_percentiles(values, weights, percentiles):
     return out
 
 
-def _weighted_mean_std(x, w):
+def _weighted_mean_std_1d(x, w):
+    # Weighted mean/std for 1D arrays
     x = np.asarray(x)
     w = np.asarray(w)
+    if x.ndim != 1:
+        raise ValueError("x must be 1D")
     w_sum = np.sum(w)
     if x.size == 0 or w_sum <= 0 or not np.isfinite(w_sum):
         return np.nan, np.nan
     w_norm = w / w_sum
     mu = float(np.sum(x * w_norm))
     var = float(np.sum((x - mu)**2 * w_norm))
-    return mu, np.sqrt(var)
+    return mu, np.sqrt(max(var, 0.0))
 
 
 def _top_pcs(samples, weights, k_max=3):
@@ -1992,7 +2037,7 @@ def save_tuning_snapshot(sampler, param_names, args, start_time, output_dir, log
             for j, name in enumerate(param_names):
                 vals = samples[:, j]
                 pct = _weighted_percentiles(vals, W, [16, 50, 84])
-                _, std = _weighted_mean_std(vals, W)
+                _, std = _weighted_mean_std_1d(vals, W)
                 post_stats[name] = {"p16": float(pct.get('p16', np.nan)),
                                     "p50": float(pct.get('p50', np.nan)),
                                     "p84": float(pct.get('p84', np.nan)),
@@ -2254,36 +2299,10 @@ def main_cupy():
         
         # Check for existing checkpoint if resume is requested
         checkpoint_file = output_dir / "dynesty_checkpoint.pkl"
-        resume_results = None
         
         if args.resume and checkpoint_file.exists():
             logger.info(f"\n*** RESUME MODE ACTIVATED ***")
-            logger.info(f"Loading checkpoint: {checkpoint_file}")
-            try:
-                with open(checkpoint_file, 'rb') as f:
-                    resume_results = pickle.load(f)
-                logger.info(f"✓ Checkpoint loaded successfully!")
-                logger.info(f"  Samples: {len(resume_results.samples)}")
-                logger.info(f"  Current LogZ: {resume_results.logz[-1]:.2f}")
-                logger.info(f"  Iterations: {len(resume_results.logz)}")
-                
-                # Generate initial summary for resumed run
-                if ENHANCED_SUMMARY_AVAILABLE:
-                    logger.info("\nGenerating summary of checkpoint state...")
-                    from enhanced_summary import DynestyRunSummary
-                    summarizer = DynestyRunSummary(output_dir)
-                    summary = {
-                        "convergence_metrics": summarizer._get_convergence_metrics(resume_results),
-                        "evidence_metrics": summarizer._get_evidence_metrics(resume_results),
-                        "quality_assessment": summarizer._assess_quality(resume_results)
-                    }
-                    logger.info(f"  Convergence status: {summary['quality_assessment']['status']}")
-                    logger.info(f"  Current dLogZ: {summary['convergence_metrics'].get('dlogz_current', 'N/A'):.4f}")
-                    
-            except Exception as e:
-                logger.error(f"✗ Failed to load checkpoint: {e}")
-                logger.warning("Will start fresh run instead")
-                resume_results = None
+            logger.info(f"Checkpoint file detected: {checkpoint_file}")
         elif args.resume:
             logger.info("Resume requested but no checkpoint found - starting fresh")
         
@@ -2295,39 +2314,27 @@ def main_cupy():
             logl_args = (param_names, args, R_data, v_data, sigma_data)
             ptform_args = (param_names, bounds_low, bounds_high, use_log_prior)
             
-            if resume_results is not None:
-                # Create sampler with resume capability
-                logger.info("  Creating sampler in RESUME mode...")
-                sampler = dynesty.DynamicNestedSampler(
-                    log_likelihood_dynesty_cupy,
-                    prior_transform_dynesty_cupy,
-                    ndim=len(param_names),
-                    logl_args=logl_args,
-                    ptform_args=ptform_args,
-                    pool=pool,
-                    queue_size=args.num_threads,
-                    nlive=args.nlive,
-                    sample=args.sample_method,
-                    bound=args.bound_method
-                )
-                # Restore the saved state
-                sampler.saved_run = resume_results
-                sampler.results = resume_results
-                logger.info("✓ Sampler initialized with checkpoint state")
-            else:
-                # Normal sampler creation
-                sampler = dynesty.DynamicNestedSampler(
-                    log_likelihood_dynesty_cupy,
-                    prior_transform_dynesty_cupy,
-                    ndim=len(param_names),
-                    logl_args=logl_args,
-                    ptform_args=ptform_args,
-                    pool=pool,
-                    queue_size=args.num_threads,
-                    nlive=args.nlive,
-                    sample=args.sample_method,
-                    bound=args.bound_method
-                )
+            # Create sampler (same path for both fresh and resume; resume uses restore below)
+            sampler = dynesty.DynamicNestedSampler(
+                log_likelihood_dynesty_cupy,
+                prior_transform_dynesty_cupy,
+                ndim=len(param_names),
+                logl_args=logl_args,
+                ptform_args=ptform_args,
+                pool=pool,
+                queue_size=args.num_threads,
+                nlive=args.nlive,
+                sample=args.sample_method,
+                bound=args.bound_method
+            )
+
+            # If resuming, restore sampler state from checkpoint file using dynesty's native API
+            if args.resume and checkpoint_file.exists():
+                try:
+                    sampler.restore(str(checkpoint_file))
+                    logger.info("✓ Sampler state restored from checkpoint")
+                except Exception as e:
+                    logger.warning(f"⚠ Failed to restore from checkpoint ({e}); continuing fresh")
             
             # Store xi_type for checkpointing
             sampler._xi_type = args.xi
@@ -2370,11 +2377,10 @@ def main_cupy():
                     try:
                         now = time.time()
 
-                        # Periodic dynesty checkpoint to pickle
+                        # Periodic dynesty checkpoint using dynesty's native save/restore
                         if now - last_checkpoint_ts >= float(args.checkpoint_every):
                             try:
-                                with open(output_dir / "dynesty_checkpoint.pkl", "wb") as cf:
-                                    pickle.dump(sampler.results, cf)
+                                sampler.save(str(output_dir / "dynesty_checkpoint.pkl"))
                                 logger.info("✓ Checkpoint saved.")
                                 last_checkpoint_ts = now
                             except Exception as ck_e:
