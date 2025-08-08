@@ -1953,10 +1953,33 @@ def _seed_live_points(samples, weights, K=128, decimals=6):
         W = np.ones(n) / n
     else:
         W = W / np.sum(W)
+    
+    # Count non-zero weights
+    n_nonzero = np.sum(W > 0)
+    
     try:
-        idxs = np.random.choice(n, size=K, replace=False if K <= n else True, p=W)
+        if n_nonzero < K:
+            # If fewer non-zero weights than K, either:
+            # 1) Sample with replacement
+            # 2) Only sample from non-zero indices
+            if n_nonzero > 0:
+                # Option 2: Sample only from non-zero indices
+                nonzero_idx = np.where(W > 0)[0]
+                W_nonzero = W[nonzero_idx]
+                W_nonzero = W_nonzero / np.sum(W_nonzero)  # Re-normalize
+                # Sample with replacement from non-zero indices
+                sampled_nonzero = np.random.choice(len(nonzero_idx), size=K, replace=True, p=W_nonzero)
+                idxs = nonzero_idx[sampled_nonzero]
+            else:
+                # All weights are zero, fall back to uniform sampling
+                idxs = np.random.choice(n, size=K, replace=True)
+        else:
+            # Normal case: enough non-zero weights
+            idxs = np.random.choice(n, size=K, replace=False if K <= n else True, p=W)
     except Exception:
-        idxs = np.random.choice(n, size=K, replace=False)
+        # Fallback to uniform sampling without weights
+        idxs = np.random.choice(n, size=K, replace=True)
+    
     pts = np.round(samples[idxs], decimals=decimals).tolist()
     return {"K": K, "decimals": decimals, "sample_from": "posterior_recent_weighted", "points": pts}
 
