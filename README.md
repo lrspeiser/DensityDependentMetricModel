@@ -59,13 +59,36 @@ Before testing DDMM, we establish a rigorous baseline using standard Newtonian g
 
 ### Gaia DR3 rotation curve data
 
-We utilize the latest Gaia Data Release 3, which provides unprecedented precision in stellar kinematics across the Milky Way [14]. Our sample comprises 132,000 stars selected with stringent quality criteria:
+We utilize the latest Gaia Data Release 3, which provides unprecedented precision in stellar kinematics across the Milky Way [14]. Our sample comprises 144,000 stars selected with stringent quality criteria:
 - Radial velocity uncertainties < 5 km/s
 - Parallax signal-to-noise ratio > 5
 - Galactocentric radii spanning 5-16 kpc
 - Full azimuthal coverage across 11 longitude bins
 
 The data is binned in annuli of width ΔR = 0.5 kpc, with circular velocities computed using the Jeans equation formalism to correct for asymmetric drift effects [26]. This yields a rotation curve with typical uncertainties of 1-3 km/s per bin, providing exquisite constraints on gravitational models.
+
+Star count by Galactocentric radius (1 kpc bins):
+- 0–1 kpc: 0
+- 1–2 kpc: 0
+- 2–3 kpc: 0
+- 3–4 kpc: 4
+- 4–5 kpc: 57
+- 5–6 kpc: 688
+- 6–7 kpc: 7,479
+- 7–8 kpc: 47,742
+- 8–9 kpc: 74,900
+- 9–10 kpc: 10,476
+- 10–11 kpc: 2,137
+- 11–12 kpc: 379
+- 12–13 kpc: 114
+- 13–14 kpc: 21
+- 14–15 kpc: 2
+- 15–16 kpc: 0
+
+Totals and ranges:
+- Total stars: 144,000
+- Radial coverage: 3.7–16.1 kpc (stars outside 0–16 kpc bins are negligible in this sample)
+- Velocity coverage: 0.25–319.25 km/s; mean 213.9 ± 22.7 km/s (1σ)
 
 ### Bayesian inference with dynamic nested sampling
 
@@ -488,7 +511,7 @@ While DDMM is constructed to pass Solar System tests by a wide margin (ρ_lab >>
 
 ## Conclusions
 
-Density-Dependent Metric Models provide a compelling framework for explaining galactic dynamics without dark matter. By analyzing 132,000 Gaia DR3 stars with full-sky coverage, we demonstrate that an environment-triggered enhancement of gravity can reproduce the Milky Way's flat rotation curve using only visible matter.
+Density-Dependent Metric Models provide a compelling framework for explaining galactic dynamics without dark matter. By analyzing 144,000 Gaia DR3 stars with full-sky coverage, we demonstrate that an environment-triggered enhancement of gravity can reproduce the Milky Way's flat rotation curve using only visible matter.
 
 Our General Relativity baseline analysis establishes the magnitude of the crisis: pure Newtonian gravity fails catastrophically with log(Z) = -4.8 × 10⁹, among the worst Bayesian evidence values possible. This extreme negative value quantifies the fundamental incompatibility between baryonic matter distributions and observed flat rotation curves under standard gravity. The fitted total mass of only 2.1 × 10¹⁰ M_☉—roughly 30% of typical Milky Way baryon estimates—cannot prevent the predicted Keplerian decline beyond 8 kpc.
 
