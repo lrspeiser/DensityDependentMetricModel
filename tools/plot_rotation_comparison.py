@@ -3,22 +3,32 @@
 Plot Milky Way rotation curve comparison:
 - Binned Gaia observed median speeds vs radius
 - GR (baryon-only) prediction
-- DDMM prediction using the 'tidal_band' xi model (with reasonable defaults)
+- DDMM prediction using the 'tidal_band' xi model
 
-Usage:
+Usage examples:
+  # Use default, reasonable parameters (no run dirs required)
   python tools/plot_rotation_comparison.py
+
+  # Use fitted parameters from your runs (recommended)
+  python tools/plot_rotation_comparison.py \
+    --gr_run runs/gr_matched \
+    --er_run runs/er_tidal_band
 
 Outputs:
   images/rotation_comparison_tidal_band.png
 
 Notes:
-- You do NOT need sampling results to generate this figure. We use sensible default
-  parameters for both the baryon model and the tidal_band xi(ρ) function. You can
-  later update the parameter guesses with best-fit values to refine the curve.
+- If --gr_run/--er_run are provided and contain posterior_samples.npz (or
+  post_analysis/params_summary.csv), the plotted curves will use the weighted
+  median (p50) of each parameter from those runs.
+- Otherwise, sensible defaults are used.
 """
 import os
 import sys
 from pathlib import Path
+import argparse
+import csv
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -30,7 +40,7 @@ for p in [REPO_ROOT, REPO_ROOT / "core", REPO_ROOT / "runners"]:
     if sp not in sys.path:
         sys.path.insert(0, sp)
 
-from typing import Tuple, Callable, Dict, Any
+from typing import Tuple, Callable, Dict, Any, Optional
 
 # Try to import CPU model (density_metric2) first; fallback to CuPy model (core.density_metric_cupy)
 # We will provide compatibility wrappers so the rest of the script uses v_total_kms and v_baryon_total_newtonian_kms
@@ -154,7 +164,6 @@ def bin_by_radius(R_kpc: np.ndarray, v_obs: np.ndarray, bins: np.ndarray) -> Tup
             v_hi[i-1] = np.percentile(vv, 84)
     return R_centers, v_med, v_lo, v_hi
 
-
 def default_baryon_params() -> dict:
     """Reasonable Milky Way-like defaults (adjust to your preferred baseline)."""
     return {
@@ -176,7 +185,6 @@ def default_baryon_params() -> dict:
         'include_gas': True,
     }
 
-
 def default_tidal_band_params() -> dict:
     """Starting guess for tidal_band xi(ρ) parameters. Tune as needed."""
     return {
@@ -188,14 +196,113 @@ def default_tidal_band_params() -> dict:
         'wmin': 0.01,              # minimum band weight
     }
 
-
 def build_param_dict(baryon_params: dict, xi_params: dict) -> dict:
     p = dict(baryon_params)
     p.update(xi_params)
     return p
 
 
+def _weighted_quantiles_from_npz(npz_path: Path) -> Optional[Dict[str, float]]:
+    try:
+        data = np.load(str(npz_path))
+        names = None
+        if "names" in data:
+            names = [str(n) for n in data["names"]]
+        samples = None
+        for key in ("samples", "posterior_samples", "xs"):
+            if key in data:
+                samples = np.asarray(data[key])
+                break
+        weights = None
+        for key in ("weights", "w"):
+            if key in data:
+                weights = np.asarray(data[key], dtype=float)
+                break
+        if samples is None:
+            return None
+        if samples.ndim == 1:
+            samples = samples.reshape(-1, 1)
+        N = samples.shape[0]
+        if weights is None or weights.size != N:
+            weights = np.ones(N, dtype=float) / float(N)
+        else:
+            s = float(np.sum(weights))
+            weights = weights / s if s > 0 else np.ones(N, dtype=float) / float(N)
+        if names is None or len(names) != samples.shape[1]:
+            names = [f"param_{i}" for i in range(samples.shape[1])]
+        # Compute weighted median (p50) for each parameter
+        order = np.argsort(samples, axis=0)
+        params_p50: Dict[str, float] = {}
+        for j, name in enumerate(names):
+            idx = order[:, j]
+            xs = samples[idx, j]
+            ws = weights[idx]
+            cdf = np.cumsum(ws)
+            cdf /= cdf[-1]
+            p50 = float(np.interp(0.5, cdf, xs))
+            params_p50[name] = p50
+        return params_p50
+    except Exception:
+        return None
+
+
+def _load_params_from_run(run_dir: Path) -> Optional[Dict[str, float]]:
+    # Prefer post_analysis/params_summary.csv (p50 column) if exists
+    csv_path = run_dir / "post_analysis" / "params_summary.csv"
+    if csv_path.exists():
+        try:
+            params: Dict[str, float] = {}
+            with open(csv_path, newline="", encoding="utf-8") as cf:
+                reader = csv.DictReader(cf)
+                for row in reader:
+                    name = row.get("parameter")
+                    p50 = row.get("p50")
+                    if name is None or p50 is None:
+                        continue
+                    try:
+                        params[name] = float(p50)
+                    except Exception:
+                        continue
+            if params:
+                return params
+        except Exception:
+            pass
+    # Fallback: posterior_samples.npz
+    npz_path = run_dir / "posterior_samples.npz"
+    if npz_path.exists():
+        return _weighted_quantiles_from_npz(npz_path)
+    return None
+
+
+def _maybe_update_params_from_runs(baryon: dict, xi_params: dict, gr_run: Optional[str], er_run: Optional[str]) -> tuple[dict, dict]:
+    b = dict(baryon)
+    x = dict(xi_params)
+    # Update baryon params from GR run if present
+    if gr_run:
+        gr_p = _load_params_from_run(Path(gr_run))
+        if gr_p:
+            b.update({k: v for k, v in gr_p.items() if k in b or k.startswith("M_") or k.endswith("_kpc")})
+    # Update xi + baryon params from ER run if present
+    if er_run:
+        er_p = _load_params_from_run(Path(er_run))
+        if er_p:
+            # First update baryon keys that match
+            for k in list(b.keys()):
+                if k in er_p:
+                    b[k] = er_p[k]
+            # Then update xi params for known keys
+            for key in ("rho_c_solar_kpc3", "gamma_exp", "lambda_max", "T0", "sigma_lnT", "wmin"):
+                if key in er_p:
+                    x[key] = er_p[key]
+    return b, x
+
+
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--gr_run", type=str, default=None, help="Path to GR run directory (to read fitted params)")
+    ap.add_argument("--er_run", type=str, default=None, help="Path to ER (tidal_band) run directory (to read fitted params)")
+    args = ap.parse_args()
+
     # Output directory
     out_dir = REPO_ROOT / "images"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -217,6 +324,10 @@ def main():
 
     baryon = default_baryon_params()
     tidal_band = default_tidal_band_params()
+
+    # Optionally override with fitted parameters from runs
+    baryon, tidal_band = _maybe_update_params_from_runs(baryon, tidal_band, args.gr_run, args.er_run)
+
     ddmm_params = build_param_dict(baryon, tidal_band)
 
     print("Computing GR (baryon-only) curve...")
@@ -231,15 +342,15 @@ def main():
 
     # 4) Plot
     print("Plotting...")
-    plt.figure(figsize=(10, 7))
+    plt.figure(figsize=(11, 8))
 
     valid = np.isfinite(v_med)
-    plt.plot(R_centers[valid], v_med[valid], color="tab:gray", lw=2, label="Gaia: median stellar speed")
+    plt.plot(R_centers[valid], v_med[valid], color="#4D4D4D", lw=2, label="Gaia: median stellar speed")
     band_valid = np.isfinite(v_lo) & np.isfinite(v_hi)
-    plt.fill_between(R_centers[band_valid], v_lo[band_valid], v_hi[band_valid], color="tab:gray", alpha=0.2, label="Gaia: 16–84 percentile")
+    plt.fill_between(R_centers[band_valid], v_lo[band_valid], v_hi[band_valid], color="#A6A6A6", alpha=0.25, label="Gaia: 16–84 percentile")
 
     plt.plot(R_grid, v_gr, "b--", lw=2, label="GR (baryon-only)")
-    plt.plot(R_grid, v_ddmm, "r-", lw=2, label=f"DDMM ({xi_type})")
+    plt.plot(R_grid, v_ddmm, "r-", lw=2.5, label=f"DDMM ({xi_type})")
 
     plt.xlabel("Galactocentric radius R (kpc)")
     plt.ylabel("Circular speed v (km/s)")
@@ -248,11 +359,12 @@ def main():
     plt.xlim(2, 30)
     ymax = np.nanmax([np.nanmax(v_med), np.nanmax(v_gr), np.nanmax(v_ddmm)])
     plt.ylim(0, max(300, float(ymax) + 40))
-    plt.legend()
+    plt.legend(frameon=False)
 
     out_file = out_dir / "rotation_comparison_tidal_band.png"
     plt.tight_layout()
     plt.savefig(out_file, dpi=150)
+    print(f"Saved: {out_file}")
     print(f"Saved: {out_file}")
 
 
