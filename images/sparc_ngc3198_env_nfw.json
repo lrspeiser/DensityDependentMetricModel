@@ -1,0 +1,21 @@
+{
+  "galaxy_id": "NGC3198",
+  "file_rotmod": "C:\\Users\\henry\\Documents\\GitHub\\DensityDependentMetricModel\\external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
+  "model": "nfw",
+  "params": {
+    "log10_rho_c": 14.0,
+    "gamma_exp": 1.0,
+    "lambda_max": 0.0,
+    "lnT0": 0.015188781030870534,
+    "sigma_lnT": 0.3,
+    "w_min": 0.0035933457077331615,
+    "ups_disk": 0.5,
+    "ups_bul": 0.7,
+    "V200": 150.0,
+    "c": 10.0
+  },
+  "chi2": 234.7022870708485,
+  "chi2_dof": 6.343305055968878,
+  "loglike_no_const": -117.35114353542426,
+  "mode": "fit"
+}
