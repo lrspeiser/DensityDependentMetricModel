@@ -3,7 +3,7 @@
 Plot Milky Way rotation curve comparison:
 - Binned Gaia observed median speeds vs radius
 - GR (baryon-only) prediction
-- DDMM prediction using the 'tidal_band' xi model
+- ER (Environmental Relativity) prediction using the 'tidal_band' xi model
 
 Usage examples:
   # Use default, reasonable parameters (no run dirs required)
@@ -337,7 +337,7 @@ def main():
     if XI_FUNCTION_MAP is not None and xi_type not in XI_FUNCTION_MAP:
         raise RuntimeError(f"xi_type '{xi_type}' not available. Available: {list(XI_FUNCTION_MAP.keys())}")
 
-    print(f"Computing DDMM curve with xi_type='{xi_type}' (backend: {'CuPy' if _use_cupy_backend else 'CPU'})...")
+    print(f"Computing ER curve with xi_type='{xi_type}' (backend: {'CuPy' if _use_cupy_backend else 'CPU'})...")
     v_ddmm = v_total_kms(R_grid, ddmm_params, xi_type=xi_type)
 
     # 4) Plot
@@ -350,11 +350,11 @@ def main():
     plt.fill_between(R_centers[band_valid], v_lo[band_valid], v_hi[band_valid], color="#A6A6A6", alpha=0.25, label="Gaia: 16–84 percentile")
 
     plt.plot(R_grid, v_gr, "b--", lw=2, label="GR (baryon-only)")
-    plt.plot(R_grid, v_ddmm, "r-", lw=2.5, label=f"DDMM ({xi_type})")
+    plt.plot(R_grid, v_ddmm, "r-", lw=2.5, label=f"ER ({xi_type})")
 
     plt.xlabel("Galactocentric radius R (kpc)")
     plt.ylabel("Circular speed v (km/s)")
-    plt.title("Milky Way Rotation Curve: Data vs GR vs DDMM (tidal_band)")
+    plt.title("Milky Way Rotation Curve: Data vs GR vs ER (tidal_band)")
     plt.grid(True, alpha=0.3)
     plt.xlim(2, 30)
     ymax = np.nanmax([np.nanmax(v_med), np.nanmax(v_gr), np.nanmax(v_ddmm)])
