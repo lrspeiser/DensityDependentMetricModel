@@ -122,13 +122,18 @@ def main():
     ap.add_argument('--galaxy_id', required=True)
     ap.add_argument('--sparc_dir', required=True)
     ap.add_argument('--out', default=None)
-    # Inits
+    ap.add_argument('--model', choices=['gr','er','nfw'], default='er', help='Model type to fit')
+    ap.add_argument('--mode', choices=['fit','evidence'], default='fit', help='Operation: quick fit (chi2) or evidence scaffold output')
+    # Inits / priors centers
     ap.add_argument('--log10_rho_c', type=float, default=15.0)
     ap.add_argument('--gamma_exp', type=float, default=3.0)
     ap.add_argument('--lambda_max', type=float, default=4.0)
     ap.add_argument('--lnT0', type=float, default=0.0)
     ap.add_argument('--sigma_lnT', type=float, default=0.8)
     ap.add_argument('--w_min', type=float, default=0.02)
+    # NFW inits
+    ap.add_argument('--V200', type=float, default=150.0, help='NFW V200 [km/s]')
+    ap.add_argument('--c', type=float, default=10.0, help='NFW concentration')
     args = ap.parse_args()
 
     init = [args.log10_rho_c, args.gamma_exp, args.lambda_max, args.lnT0, args.sigma_lnT, args.w_min]
@@ -180,6 +185,9 @@ def main():
         }
     })
 
+    # Optionally override model selection for output/plot
+    model = args.model
+
     # Plot
     name = data['galaxy_id']
     out_path = Path(args.out) if args.out else Path('images')/f'sparc_env_fit_{name.lower()}.png'
@@ -191,22 +199,39 @@ def main():
 
     R_grid = np.linspace(max(1e-3, R.min()), max(R.max()*1.2, R.max()+5), 400)
     vbar_g = np.interp(R_grid, R, vbar)
-    # For plotting xi band, rebuild proxy on grid using vbar_g
-    from models.er_env import tidal_proxy_from_vbar, xi_env
-    T_g = tidal_proxy_from_vbar(R_grid, vbar_g)
-    # Interp rho to grid (nearest/linear)
-    rho_g = np.interp(R_grid, R, rho_mid)
-    xi_g = xi_env(rho_g, T_g, lambda_max, rho_c, gamma_exp, T0, sigma_lnT, w_min)
-    ver_g = np.sqrt(np.clip(xi_g, 0, None)) * vbar_g
+
+    # Build model prediction on grid for display based on selection
+    if model == 'er':
+        # For plotting xi band, rebuild proxy on grid using vbar_g
+        from models.er_env import tidal_proxy_from_vbar, xi_env
+        T_g = tidal_proxy_from_vbar(R_grid, vbar_g)
+        # Interp rho to grid (nearest/linear)
+        rho_g = np.interp(R_grid, R, rho_mid)
+        xi_g = xi_env(rho_g, T_g, lambda_max, rho_c, gamma_exp, T0, sigma_lnT, w_min)
+        ver_g = np.sqrt(np.clip(xi_g, 0, None)) * vbar_g
+        curve_in, curve_out = ver_g, ver_g
+    elif model == 'nfw':
+        from models.nfw import v_model_nfw
+        ver_g = v_model_nfw(R_grid, vbar_g, args.V200, args.c)
+        curve_in, curve_out = ver_g, ver_g
+    else:
+        curve_in = np.interp(R_grid, R, vbar)
+        curve_out = curve_in
 
     R_data_max = float(np.max(R))
     m_in = R_grid <= R_data_max
     m_out = ~m_in
     if np.any(m_in):
-        plt.plot(R_grid[m_in], ver_g[m_in], 'r-', lw=2.5, label='ER — constrained')
+        if model == 'er':
+            plt.plot(R_grid[m_in], curve_in[m_in], 'r-', lw=2.5, label='ER — constrained')
+        elif model == 'nfw':
+            plt.plot(R_grid[m_in], curve_in[m_in], color='green', ls='-.', lw=2.5, label='NFW (ΛCDM)')
+        else:
+            plt.plot(R_grid[m_in], curve_in[m_in], 'b--', lw=2.5, label='GR (baryons)')
     if np.any(m_out):
-        plt.plot(R_grid[m_out], ver_g[m_out], color='#FF8C00', ls='--', lw=2.5, label='ER — extrapolation')
-        plt.axvspan(R_data_max, R_grid.max(), color='#FFA500', alpha=0.08)
+        if model == 'er':
+            plt.plot(R_grid[m_out], curve_out[m_out], color='#FF8C00', ls='--', lw=2.5, label='ER — extrapolation')
+            plt.axvspan(R_data_max, R_grid.max(), color='#FFA500', alpha=0.08)
     plt.axvline(R_data_max, color='k', ls=':', alpha=0.6, label=f"Max data R ≈ {R_data_max:.1f} kpc")
 
     plt.xlabel('R (kpc)')
@@ -221,10 +246,15 @@ def main():
     plt.savefig(out_path, dpi=150)
     print(f"Saved: {out_path}")
 
+    # Compute simple log-likelihood at best fit for reporting
+    # ln L = -0.5 * chi2 + const; we report the -0.5*chi2 term (const cancels in deltas)
+    lnL = -0.5 * float(chi2_best)
+
     # Write JSON sidecar
     meta = {
         'galaxy_id': name,
-        'file_rotmod': str(Path(sparc_dir)/f'{name}_rotmod.dat'),
+'file_rotmod': str(Path(args.sparc_dir)/f'{name}_rotmod.dat'),
+        'model': model,
         'params': {
             'log10_rho_c': log10_rho_c,
             'gamma_exp': gamma_exp,
@@ -234,9 +264,13 @@ def main():
             'w_min': w_min,
             'ups_disk': float(ups_d),
             'ups_bul': float(ups_b),
+            'V200': float(args.V200),
+            'c': float(args.c),
         },
         'chi2': float(chi2_best),
         'chi2_dof': float(chi2_best/dof),
+        'loglike_no_const': lnL,
+        'mode': args.mode,
     }
     with open(out_path.with_suffix('.json'), 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=2)
