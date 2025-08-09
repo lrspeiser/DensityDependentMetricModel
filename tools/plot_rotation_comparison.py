@@ -205,14 +205,19 @@ def build_param_dict(baryon_params: dict, xi_params: dict) -> dict:
 def _weighted_quantiles_from_npz(npz_path: Path) -> Optional[Dict[str, float]]:
     try:
         data = np.load(str(npz_path))
+        # Prefer explicit param names; support both 'names' and 'param_names'
         names = None
         if "names" in data:
             names = [str(n) for n in data["names"]]
+        elif "param_names" in data:
+            names = [str(n) for n in data["param_names"]]
+        # Samples can be stored under several keys
         samples = None
         for key in ("samples", "posterior_samples", "xs"):
             if key in data:
                 samples = np.asarray(data[key])
                 break
+        # Weights (optional)
         weights = None
         for key in ("weights", "w"):
             if key in data:
@@ -264,6 +269,24 @@ def _load_params_from_run(run_dir: Path) -> Optional[Dict[str, float]]:
                     except Exception:
                         continue
             if params:
+                # If parameters are generic (param_0, param_1, ...), try to remap using npz param_names
+                generic = all(k.startswith("param_") for k in params.keys())
+                if generic:
+                    npz_path = run_dir / "posterior_samples.npz"
+                    if npz_path.exists():
+                        try:
+                            data = np.load(str(npz_path))
+                            if "param_names" in data:
+                                names = [str(n) for n in data["param_names"]]
+                                remapped: Dict[str, float] = {}
+                                for i, real_name in enumerate(names):
+                                    key = f"param_{i}"
+                                    if key in params:
+                                        remapped[real_name] = params[key]
+                                if remapped:
+                                    return remapped
+                        except Exception:
+                            pass
                 return params
         except Exception:
             pass

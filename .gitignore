@@ -161,6 +161,9 @@ chains_dynesty*/
 *.png
 *.txt
 !progress_plots.png
+# Keep figures used in the paper and README
+!images/*.png
+!docs/figures/*.png
 
 # -------------------------------------------------------------------
 # 🚨 FIXED: Ignore CSV and Parquet globally, except for gaia_sky_slices/

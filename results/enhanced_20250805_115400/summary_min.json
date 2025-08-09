@@ -1,0 +1,14 @@
+{
+  "timestamp": null,
+  "xi_type": null,
+  "logz": null,
+  "logz_error": null,
+  "rho_c_solar_kpc3_best": null,
+  "gamma_exp_best": null,
+  "lambda_max_best": null,
+  "n_samples": null,
+  "efficiency": null,
+  "delta_logz_vs_gr": null,
+  "bayes_factor_log10": null,
+  "status": null
+}

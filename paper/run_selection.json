@@ -1,0 +1,16 @@
+{
+  "RUN_TB": "runs\\tidal_band_20250807_142530",
+  "selection_notes": {
+    "status": "incomplete",
+    "reason": "Only available tidal_band run from 20250807 series",
+    "last_checked": "2025-01-03",
+    "run_details": {
+      "phase": "early_exploration",
+      "convergence_status": "in_progress",
+      "last_update": "2025-08-08T09:50:55",
+      "n_samples": 5045,
+      "efficiency_percent": 45.69
+    },
+    "warning": "Run is not yet finished - no completion markers found"
+  }
+}

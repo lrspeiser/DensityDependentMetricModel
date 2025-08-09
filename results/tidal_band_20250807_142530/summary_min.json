@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-08-08T09:40:41.321493",
+  "xi_type": "tidal_band",
+  "logz": -592156.6288035642,
+  "logz_error": 0.059503900546747736,
+  "rho_c_solar_kpc3_best": 3.742748770002237e+16,
+  "gamma_exp_best": 3.6260325968314167,
+  "lambda_max_best": 2.619652472965031,
+  "n_samples": 12394,
+  "efficiency": 10.485174062010913,
+  "delta_logz_vs_gr": 898740.89620613,
+  "bayes_factor_log10": 390318.21188310545,
+  "status": "exploring"
+}
