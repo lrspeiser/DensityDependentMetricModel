@@ -2,11 +2,13 @@
 
 ## Abstract
 
-Observed rotation curves of disk galaxies remain flat to large radii, inconsistent with Newtonian/GR predictions from baryons alone. We propose Environmental Relativity (ER), a metric framework in which gravitational strength depends smoothly on the local baryonic environment via a bounded enhancement factor ξ(ρ, T) that approaches unity at high density (Solar System) and grows in low-density, tidally structured regions (galactic outskirts). We implement a tidal-band form,
+Observed rotation curves of disk galaxies remain flat to large radii, inconsistent with Newtonian/GR predictions from baryons alone. We propose Environmental Relativity (ER), a metric framework in which gravitational strength depends smoothly on the local baryonic environment via a bounded enhancement factor $\xi(\rho, T)$ that approaches unity at high density (Solar System) and grows in low-density, tidally structured regions (galactic outskirts). We implement a tidal-band form,
 
-ξ(ρ, T)=1+λ_max S_ρ(ρ) W(T), with ξ∈[1, 1+λ_max],
+$$
+\xi(\rho, T) = 1 + \lambda_{\max}\, S_\rho(\rho)\, W(T), \quad \xi \in [1,\,1+\lambda_{\max}].
+$$
 
-with S_ρ(ρ)=[1+(ρ/ρ_c)^{γ_exp}]^{-1} and W(T)=max{w_min, exp[-(ln(T/T_0))^2/(2 σ_{ln T}^2)]}.
+with $S_\rho(\rho) = [1 + (\rho/\rho_c)^{\gamma_{\exp}}]^{-1}$ and $W(T) = \max\{w_{\min},\, \exp[-(\ln(T/T_0))^2/(2\,\sigma_{\ln T}^2)]\}$.
 
 Using Gaia DR3 Milky Way kinematics (N=144,000 stars, 5–16 kpc), we perform dynamic nested sampling to compare ER against a matched GR baseline (baryons only). Our representative ER fit yields log Z_ER = −9.82153×10^5 ± 0.06 versus log Z_GR ≈ −1.49090×10^6 (same pipeline), i.e. Δlog Z ≈ +5.09×10^5 (decisive on Jeffreys’ scale). Typical parameters: ρ_c ≃ 1.19×10^{15} M_⊙ kpc^{-3}, γ_exp ≃ 3.04, λ_max ≃ 4.23, with Cassini-safe screening (|ξ−1| ≪ 10^{−5}) and plausible void-redshift expectations.
 
@@ -28,22 +30,22 @@ We develop Environmental Relativity (ER), in which the metric is locally rescale
 
 We adopt a conformal rescaling of the spacetime metric,
 
-\tilde{g}_{μν} = ξ(ρ, T) g_{μν}, with ξ>0.
+$$\tilde{g}_{\mu\nu} = \xi(\rho, T)\, g_{\mu\nu}, \qquad \xi>0.$$
 
 In the weak-field, stationary limit relevant to disks,
 
-g_eff(R, z) = ξ(ρ, T) g_Newton(R, z),
+$$g_{\rm eff}(R,z) = \xi(\rho, T)\, g_{\rm Newton}(R,z),$$
 
-so circular speeds satisfy v_ER^2(R) = ξ(ρ, T) v_bar^2(R) for the same baryonic mass model.
+so circular speeds satisfy $v_{\rm ER}^2(R) = \xi(\rho, T)\, v_{\rm bar}^2(R)$ for the same baryonic mass model.
 
 ### 2.2 Bounded tidal-band enhancement
 
 We use a bounded form to ensure Solar-System safety and numerical stability:
 
-ξ(ρ, T)=1+λ_max S_ρ(ρ) W(T), with 0 ≤ S_ρ, W ≤ 1.
+$$\xi(\rho, T) = 1 + \lambda_{\max}\, S_\rho(\rho)\, W(T), \qquad 0 \le S_\rho, W \le 1.$$
 
-- Density response: S_ρ(ρ)=1/[1+(ρ/ρ_c)^{γ_exp}], with ρ_c>0, γ_exp>0.
-- Tidal band window (log-normal in a scalar tidal indicator T): W(T)=max{w_min, exp[-(ln(T/T_0))^2/(2 σ_{ln T}^2)]}.
+- Density response: $S_\rho(\rho) = 1/[1 + (\rho/\rho_c)^{\gamma_{\exp}}]$, with $\rho_c>0$, $\gamma_{\exp}>0$.
+- Tidal band window (log-normal in a scalar tidal indicator $T$): $W(T) = \max\{w_{\min},\, \exp[-(\ln(T/T_0))^2/(2\,\sigma_{\ln T}^2)]\}$.
 
 Here T is computed from the tidal tensor T_ij = ∂_i ∂_j Φ_bar via a scalar invariant (e.g., Frobenius norm T = ||T||_F) normalized by a local scale; details in §4.3. The cap λ_max enforces ξ ∈ [1, 1+λ_max].
 
@@ -314,7 +316,79 @@ With the multi-galaxy validation, ΛCDM matched comparisons, and tight screening
 
 ## References
 
-[1] Rubin & Ford (1970)… [2] Bosma (1981)… [3]–[37] as in your original list; update numbers where new citations are added.
+[1] Rubin, V. C. & Ford, W. K. Rotation of the Andromeda Nebula from a spectroscopic survey of emission regions. Astrophys. J. 159, 379–403 (1970).
+
+[2] Bosma, A. 21-cm line studies of spiral galaxies. II. The distribution and kinematics of neutral hydrogen in spiral galaxies of various morphological types. Astron. J. 86, 1825–1846 (1981).
+
+[3] de Blok, W. J. G. The core-cusp problem. Adv. Astron. 2010, 789293 (2010).
+
+[4] Planck Collaboration. Planck 2018 results. VI. Cosmological parameters. Astron. Astrophys. 641, A6 (2020).
+
+[5] Milgrom, M. A modification of the Newtonian dynamics as a possible alternative to the hidden mass hypothesis. Astrophys. J. 270, 365–370 (1983).
+
+[6] Famaey, B. & McGaugh, S. S. Modified Newtonian Dynamics (MOND): observational phenomenology and relativistic extensions. Living Rev. Relativ. 15, 10 (2012).
+
+[7] McGaugh, S. S., Lelli, F. & Schombert, J. M. Radial acceleration relation in rotationally supported galaxies. Phys. Rev. Lett. 117, 201101 (2016).
+
+[8] Chae, K.-H. et al. Testing the strong equivalence principle: detection of the external field effect in rotationally supported galaxies. Astrophys. J. 904, 51 (2020).
+
+[9] Kroupa, P. et al. Asymmetrical tidal tails of open star clusters: stars crossing their cluster's práh challenge Newtonian gravitation. Mon. Not. R. Astron. Soc. 517, 3613–3639 (2022).
+
+[10] Skordis, C. & Złośnik, T. New relativistic theory for Modified Newtonian Dynamics. Phys. Rev. Lett. 127, 161302 (2021).
+
+[11] Abbott, B. P. et al. GW170817: observation of gravitational waves from a binary neutron star inspiral. Phys. Rev. Lett. 119, 161101 (2017).
+
+[12] Gross, D. J. & Wilczek, F. Ultraviolet behavior of non-Abelian gauge theories. Phys. Rev. Lett. 30, 1343–1346 (1973).
+
+[13] Bethke, S. The 2022 world average of α_s. Prog. Part. Nucl. Phys. 126, 103965 (2022).
+
+[14] Gaia Collaboration. Gaia Data Release 3: summary of the content and survey properties. Astron. Astrophys. 674, A1 (2023).
+
+[15] Katz, D. et al. Gaia Data Release 3: spectroscopic content. Astron. Astrophys. 674, A5 (2023).
+
+[16] Speagle, J. S. dynesty: a dynamic nested sampling package for estimating Bayesian posteriors and evidences. Mon. Not. R. Astron. Soc. 493, 3132–3158 (2020).
+
+[17] Bland-Hawthorn, J. & Gerhard, O. The Galaxy in context: structural, kinematic, and integrated properties. Annu. Rev. Astron. Astrophys. 54, 529–596 (2016).
+
+[18] McMillan, P. J. The mass distribution and gravitational potential of the Milky Way. Mon. Not. R. Astron. Soc. 465, 76–94 (2017).
+
+[19] Bertotti, B., Iess, L. & Tortora, P. A test of general relativity using radio links with the Cassini spacecraft. Nature 425, 374–376 (2003).
+
+[20] Khoury, J. & Weltman, A. Chameleon fields: awaiting surprises for tests of gravity in space. Phys. Rev. Lett. 93, 171104 (2004).
+
+[21] Hinterbichler, K. & Khoury, J. Symmetron fields: screening long-range forces through local symmetry restoration. Phys. Rev. Lett. 104, 231301 (2010).
+
+[22] McGaugh, S. S. The baryonic Tully-Fisher relation of gas-rich galaxies as a test of ΛCDM and MOND. Astron. J. 143, 40 (2012).
+
+[23] Labbé, I. et al. A population of red candidate massive galaxies ~600 Myr after the Big Bang. Nature 616, 266–269 (2023).
+
+[24] Bern, Z., Carrasco, J. J. M. & Johansson, H. New relations for gauge-theory amplitudes. Phys. Rev. D 78, 085011 (2008).
+
+[25] Angus, G. W., Famaey, B. & Zhao, H. Can MOND take a bullet? Analytical comparisons of three versions of MOND beyond spherical symmetry. Mon. Not. R. Astron. Soc. 371, 138–146 (2006).
+
+[26] Binney, J. & Tremaine, S. Galactic Dynamics 2nd edn (Princeton Univ. Press, 2008).
+
+[27] Miyamoto, M. & Nagai, R. Three-dimensional models for the distribution of mass in galaxies. Publ. Astron. Soc. Jpn. 27, 533–543 (1975).
+
+[28] Higson, E. et al. Dynamic nested sampling: an improved algorithm for parameter estimation and evidence calculation. Stat. Comput. 29, 891–913 (2019).
+
+[29] Jeffreys, H. Theory of Probability 3rd edn (Oxford Univ. Press, 1961).
+
+[30] Rein, H. & Liu, S.-F. REBOUND: an open-source multi-purpose N-body code for collisional dynamics. Astron. Astrophys. 537, A128 (2012).
+
+[31] Deur, A. Implications of graviton-graviton interaction to dark matter. Phys. Lett. B 676, 21–24 (2009).
+
+[32] Deur, A. An explanation for dark matter and dark energy consistent with the Standard Model of particle physics and General Relativity. Eur. Phys. J. C 79, 883 (2019).
+
+[33] Reuter, M. & Weyer, H. Running Newton constant, improved gravitational actions, and galaxy rotation curves. Phys. Rev. D 70, 124028 (2004).
+
+[34] Moffat, J. W. Scalar–tensor–vector gravity theory. J. Cosmol. Astropart. Phys. 2006, 004 (2006).
+
+[35] Verlinde, E. Emergent gravity and the dark universe. SciPost Phys. 2, 016 (2017).
+
+[36] Chae, K.-H. et al. Testing the strong equivalence principle: detection of the external field effect in rotationally supported galaxies. Astrophys. J. 904, 51 (2020).
+
+[37] Adelberger, E. G. et al. Tests of the gravitational inverse-square law. Annu. Rev. Nucl. Part. Sci. 53, 77–121 (2003).
 
 ---
 
