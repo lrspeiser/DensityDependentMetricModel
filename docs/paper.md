@@ -197,6 +197,95 @@ Extended Data / Supplementary: Star counts per annulus; selection function tests
 
 ---
 
+## 8A. Extragalactic validation on SPARC (methods and preliminary results)
+
+### 8A.1 Data and baryonic inputs (SPARC)
+We use SPARC rotation curves and 3.6 µm photometry with H I surface densities for individual galaxies (e.g., NGC 3198, NGC 2403, M33, NGC 5055, NGC 2903, NGC 6946, NGC 2841, UGC 128). For each system we ingest:
+
+- R_k, V_obs(R_k), σ_V,k (H I/Hα combined where available),
+- stellar surface brightness Σ*(R) at 3.6 µm and gas Σ_gas(R) (H I×1.33),
+- distance D and inclination i with literature uncertainties,
+- a mass-to-light prior Υ_3.6 ~ N(0.45, 0.1^2) M_⊙/L_⊙ unless otherwise noted.
+
+Vertical structure to midplane density. We convert to midplane densities via Σ(R) ≈ 2 h_z(R) ρ(R,0), adopting an isothermal sheet with h_z,* = 0.30 kpc and h_z,gas = 0.10 kpc, and optional linear flaring h_z(R) = h_z,0[1 + α R/R_d] with α ∈ [0, 0.2]. Sensitivity to h_z and α is included in the error budget (Extended Data Table ED-VP). [TODO-SPARC-VP] Log adopted h_z, α assumptions per galaxy in the JSON sidecar.
+
+### 8A.2 Tidal indicator T(R) (proxy family)
+For SPARC’s first pass we compute T from a baryon-only field (never from V_obs), evaluating three proxies:
+
+- Curvature: T_curv = | d/dR (v_bar^2 / R) |
+- Shear: T_shear = | dΩ/dR |, with Ω = v_bar / R
+- Epicyclic: T_κ via κ = 2(1+β) Ω, β = d ln v_bar / d ln R
+
+Each T is normalized by its median over fitted radii, then used in the ER window W(T). We will report Δlog Z stability across these T choices (Fig. S1; Table ED-T). [TODO-SPARC-T] Include the chosen proxy name in each result JSON.
+
+### 8A.3 Models, priors, and likelihood (per galaxy)
+- Baryons: Use SPARC component rotation curves or fit MN/Hernquist analogs to Σ*, Σ_gas so the same density engine computes ρ(R,0) and T(R).
+- GR baseline: V_GR(R) = V_bar(R).
+- ER: V_ER(R) = sqrt(ξ(ρ(R,0), T(R))) V_bar(R) with ξ as in §2.2 and priors as in §5.2.
+- ΛCDM/NFW: add V_halo^2(R) with NFW (M_200, c) or (V_200, c) priors; identical sampler settings. [TODO-SPARC-NFW] Implement minimal NFW baseline; record priors in JSON.
+
+Nuisance/systematics: Gaussian priors on D and i. We add a velocity floor σ_floor ∈ [0,3] km s^{-1} in quadrature to σ_V,k and marginalize σ_floor with a weak half-normal prior. Likelihood as in §5.1; matched dynesty controls across GR/ER/NFW. We report logZ and Bayes factors.
+
+### 8A.4 Preliminary results: NGC 3198 (first pass)
+Using the density-aware ER (midplane ρ(R,0)) and the curvature tidal proxy, we obtain:
+
+Evidence (placeholders until runs complete; do not cite):
+- logZ_GR = …
+- logZ_ER = …
+- logZ_NFW = …
+so ΔlogZ(ER−GR) = …, ΔlogZ(ER−NFW) = ….
+
+Best-fit ER (placeholders):
+- ρ_c = …, γ_exp = …, λ_max = …,
+- T_0 = …, σ_lnT = …, w_min = …,
+- Υ_3.6 = ….
+
+Robustness: Δlog Z varies by ≤ … across the three T proxies.
+
+[TODO-SPARC-1] Replace placeholders with outputs from tools/fit_sparc_er_env.py --mode evidence (JSON), for T ∈ {curvature, shear, epicyclic}.
+
+Figure ED-NGC3198 (placeholder caption)
+ER vs GR vs NFW rotation curve for NGC 3198. Points show V_obs(R) with 1σ errors. Curves: GR baryons-only (blue dashed), ER best fit (red solid; shaded 68% posterior predictive), NFW (green dot-dash). Lower panel: residuals V_obs − V_model. Vertical bands: radii excluded by inclination warp or beam-smearing cuts. Inset: S_ρ(ρ) and W(T) for best-fit parameters across radii.
+
+Extended Data Table ED-SPARC (schema; to be auto-filled)
+
+Galaxy | D (Mpc) | i (deg) | Υ_3.6 | σ_floor (km s^{-1}) | logZ_GR | logZ_ER | logZ_NFW | ΔlogZ(ER−GR) | ΔlogZ(ER−NFW) | T proxy | Notes
+NGC 3198 | 13.8 | 72 | 0.45±0.10 | 2.0 | … | … | … | … | … | curvature | clean
+NGC 2403 | … | … | … | … | … | … | … | … | … | shear | …
+M33 | … | … | … | … | … | … | … | … | … | epicyclic | …
+
+[TODO-SPARC-2] Auto-generate from sparc_batch_summary.csv. Include ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min in a supplementary table.
+
+Methods addendum (commands; paste into §10 or Supplement)
+
+```
+python tools/batch_sparc_env_fit.py \
+  --sparc_dir external_data/Rotmod_LTG \
+  --galaxies NGC3198 NGC2403 NGC598 NGC5055 NGC2903 NGC6946 NGC2841 UGC128 \
+  --mode evidence
+```
+
+Artifacts per galaxy: PNG figure, JSON with priors/assumptions and results (incl. T proxy, vertical profile params, σ_floor, and logZ values). A CSV aggregator produces ED-SPARC.
+
+Reviewer-facing sanity checks (to add in Supplement)
+- σ-floor sensitivity: show Δlog Z stability for σ_floor ∈ [0,3] km s^{-1} on one or two galaxies.
+- M/L prior sensitivity: repeat NGC 3198 with flat Υ_3.6 ∈ [0.3, 0.7] vs Gaussian.
+- T-proxy swap: “For NGC 3198, Δlog Z(ER−GR) varies by ≤ X across curvature/shear/epicyclic proxies (Table ED-T).”
+
+Editorial notes / consistency fixes
+- Figure numbering: ensure the Introduction figure is Fig. 1 and Gaia/rotation comparison is Fig. 2, or renumber consistently. [TODO-EDITOR-FIG]
+- Units typography: standardize km s^{-1} and M_⊙ kpc^{-3}. [TODO-EDITOR-UNITS]
+- GR baseline reconciliation: headline Δlog Z must reference the matched GR run in §10. [TODO-CONSISTENCY-A]
+
+TL;DR action list
+- Run evidence-mode ER/GR/NFW on NGC 3198 (density-aware + T proxy).
+- Drop in numbers above and add the figure.
+- Batch 5–10 SPARC galaxies; auto-fill ED-SPARC table.
+- Add σ_floor, D/i nuisance priors, and T-proxy family to Methods.
+- Renumber figures; confirm matched GR baseline for Δlog Z headline.
+
+---
+
 ## 9. Tests we will add before submission (with existing public data)
 
 1) Multi-galaxy validation (SPARC/THINGS): Fit ≥20 high-quality rotation curves with identical ER hyperprior ranges. Compare Δlog Z vs GR and vs ΛCDM (NFW). Deliverables: Table 1 (per-galaxy evidences), Figure ED1 (stacked residuals). [TODO-MG-1] Implement SPARC loader and reproducible per-galaxy configs. Preliminary CPU-only test on NGC 3198 using a radius-window proxy yields χ²/dof ≈ 6.2 and highlights the need to compute per-galaxy densities and tidal indicators for a faithful ER window (figure in README).
