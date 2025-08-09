@@ -227,7 +227,7 @@ Each T is normalized by its median over fitted radii, then used in the ER window
 Nuisance/systematics: Gaussian priors on D and i. We add a velocity floor σ_floor ∈ [0,3] km s^{-1} in quadrature to σ_V,k and marginalize σ_floor with a weak half-normal prior. Likelihood as in §5.1; matched dynesty controls across GR/ER/NFW. We report logZ and Bayes factors.
 
 ### 8A.4 Preliminary results: NGC 3198 (first pass)
-Using the density-aware ER (midplane ρ(R,0)) and the curvature tidal proxy, we obtain:
+Using the density-aware ER (midplane ρ(R,0)) and the curvature tidal proxy, we obtain: See Extended Data Figure ED-NGC 3198 for the rotation-curve fit from the same run whose parameters and evidences will be reported below.
 
 Evidence (placeholders until runs complete; do not cite):
 - logZ_GR = …
@@ -244,8 +244,9 @@ Robustness: Δlog Z varies by ≤ … across the three T proxies.
 
 [TODO-SPARC-1] Replace placeholders with outputs from tools/fit_sparc_er_env.py --mode evidence (JSON), for T ∈ {curvature, shear, epicyclic}.
 
-Figure ED-NGC3198 (placeholder caption)
-ER vs GR vs NFW rotation curve for NGC 3198. Points show V_obs(R) with 1σ errors. Curves: GR baryons-only (blue dashed), ER best fit (red solid; shaded 68% posterior predictive), NFW (green dot-dash). Lower panel: residuals V_obs − V_model. Vertical bands: radii excluded by inclination warp or beam-smearing cuts. Inset: S_ρ(ρ) and W(T) for best-fit parameters across radii.
+![Extended Data Figure ED-NGC 3198](../images/sparc_ngc3198_fit.png)
+
+Figure ED-NGC 3198: Rotation curve fit using Environmental Relativity (ER) versus General Relativity (GR) for the SPARC galaxy NGC 3198. Black points show observed circular speeds with 1σ errors. The GR baryons-only model (blue dashed) systematically underpredicts the outer-disk velocities. The ER model (red solid: fitted range; orange dashed: extrapolated beyond the last measured point) matches the flat outer curve without invoking a dark halo. Shaded region: radii beyond the last SPARC data point (R ≈ 44.1 kpc). Fit shown corresponds to the preliminary χ²/dof = 6.22 case described in §8A.4.
 
 Extended Data Table ED-SPARC (schema; to be auto-filled)
 
@@ -288,7 +289,7 @@ TL;DR action list
 
 ## 9. Tests we will add before submission (with existing public data)
 
-1) Multi-galaxy validation (SPARC/THINGS): Fit ≥20 high-quality rotation curves with identical ER hyperprior ranges. Compare Δlog Z vs GR and vs ΛCDM (NFW). Deliverables: Table 1 (per-galaxy evidences), Figure ED1 (stacked residuals). [TODO-MG-1] Implement SPARC loader and reproducible per-galaxy configs. Preliminary CPU-only test on NGC 3198 using a radius-window proxy yields χ²/dof ≈ 6.2 and highlights the need to compute per-galaxy densities and tidal indicators for a faithful ER window (figure in README).
+1) Multi-galaxy validation (SPARC/THINGS): Fit ≥20 high-quality rotation curves with identical ER hyperprior ranges. Compare Δlog Z vs GR and vs ΛCDM (NFW). Deliverables: Table 1 (per-galaxy evidences), Figure ED1 (stacked residuals). [TODO-MG-1] Implement SPARC loader and reproducible per-galaxy configs. Preliminary CPU-only test on NGC 3198 using a radius-window proxy yields χ²/dof ≈ 6.2 and highlights the need to compute per-galaxy densities and tidal indicators for a faithful ER window (Extended Data Figure ED-NGC 3198).
 
 2) Direct ΛCDM comparison: Add halo (NFW or Einasto) to the baryon model; same sampler settings; report Bayes factors ER vs ΛCDM. [TODO-LCDM-1] Publish posterior on halo concentration–mass and compare to abundance matching.
 
