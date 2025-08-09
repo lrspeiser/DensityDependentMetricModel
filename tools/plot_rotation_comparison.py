@@ -324,6 +324,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gr_run", type=str, default=None, help="Path to GR run directory (to read fitted params)")
     ap.add_argument("--er_run", type=str, default=None, help="Path to ER (tidal_band) run directory (to read fitted params)")
+    ap.add_argument("--no_split_extrapolation", action="store_true", help="Do not split ER curve; draw as one line")
+    ap.add_argument("--no_shade_extrapolation", action="store_true", help="Do not shade extrapolation region")
     args = ap.parse_args()
 
     # Output directory
@@ -337,6 +339,7 @@ def main():
 
     R_kpc = df["R_kpc"].values.astype(np.float64)
     v_obs = df["v_obs"].values.astype(np.float64)
+    R_data_max = float(np.nanmax(R_kpc)) if R_kpc.size else 0.0
 
     # 2) Bin the data
     bins = np.linspace(2.0, 30.0, 29)
@@ -362,6 +365,10 @@ def main():
 
     print(f"Computing ER curve with xi_type='{xi_type}' (backend: {'CuPy' if _use_cupy_backend else 'CPU'})...")
     v_ddmm = v_total_kms(R_grid, ddmm_params, xi_type=xi_type)
+    # Report theoretical enhancement cap based on lambda_max, if present
+    lam = float(ddmm_params.get('lambda_max', 0.0))
+    xi_cap = 1.0 + lam
+    print(f"Theoretical ER enhancement cap xi_max = 1 + lambda_max = {xi_cap:.3f} (cannot reach 100x).")
 
     # 4) Plot
     print("Plotting...")
@@ -373,12 +380,26 @@ def main():
     plt.fill_between(R_centers[band_valid], v_lo[band_valid], v_hi[band_valid], color="#A6A6A6", alpha=0.25, label="Gaia: 16–84 percentile")
 
     plt.plot(R_grid, v_gr, "b--", lw=2, label="GR (baryon-only)")
-    plt.plot(R_grid, v_ddmm, "r-", lw=2.5, label=f"ER ({xi_type})")
+    # ER curve: split into data-constrained vs extrapolation beyond Gaia R_max
+    if args.no_split_extrapolation:
+        plt.plot(R_grid, v_ddmm, "r-", lw=2.5, label=f"ER ({xi_type})")
+    else:
+        m_in = R_grid <= R_data_max
+        m_out = ~m_in
+        if np.any(m_in):
+            plt.plot(R_grid[m_in], v_ddmm[m_in], "r-", lw=2.5, label=f"ER ({xi_type}) — constrained")
+        if np.any(m_out):
+            plt.plot(R_grid[m_out], v_ddmm[m_out], color="#FF8C00", ls="--", lw=2.5, label=f"ER ({xi_type}) — extrapolation")
 
     plt.xlabel("Galactocentric radius R (kpc)")
     plt.ylabel("Circular speed v (km/s)")
     plt.title("Milky Way Rotation Curve: Data vs GR vs ER (tidal_band)")
     plt.grid(True, alpha=0.3)
+    # Mark and optionally shade extrapolation region beyond Gaia data
+    if not args.no_split_extrapolation and R_data_max > 0:
+        plt.axvline(R_data_max, color="k", ls=":", alpha=0.6, label=f"Max Gaia R ≈ {R_data_max:.1f} kpc")
+        if not args.no_shade_extrapolation:
+            plt.axvspan(R_data_max, R_grid.max(), color="#FFA500", alpha=0.08)
     plt.xlim(2, 30)
     ymax = np.nanmax([np.nanmax(v_med), np.nanmax(v_gr), np.nanmax(v_ddmm)])
     plt.ylim(0, max(300, float(ymax) + 40))
