@@ -209,8 +209,8 @@ def main():
         plt.axvspan(R_data_max, R_grid.max(), color='#FFA500', alpha=0.08)
     plt.axvline(R_data_max, color='k', ls=':', alpha=0.6, label=f"Max data R ≈ {R_data_max:.1f} kpc")
 
-    plt.xlabel('Radius R (kpc)')
-    plt.ylabel('Circular speed v (km/s)')
+    plt.xlabel('R (kpc)')
+    plt.ylabel('Vc (km s^{-1})')
     plt.title(f'{name}: SPARC env-ER fit (chi2/dof={chi2_best/dof:.2f})')
     plt.grid(True, alpha=0.3)
     plt.legend(frameon=False)

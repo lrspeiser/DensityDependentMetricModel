@@ -41,6 +41,7 @@ def main():
     ap.add_argument("--w_min", type=float, default=0.02)
     ap.add_argument("--ups_disk", type=float, default=0.5, help="Stellar disk mass-to-light (3.6um) ")
     ap.add_argument("--ups_bul", type=float, default=0.7, help="Stellar bulge mass-to-light (3.6um)")
+    ap.add_argument("--out", default=None, help="Optional output file path for the plot PNG")
     args = ap.parse_args()
 
     data = load_rotmod(args.file)
@@ -84,8 +85,8 @@ def main():
         plt.axvline(R_data_max, color='k', ls=':', alpha=0.6, label=f"Max data R ≈ {R_data_max:.1f} kpc")
         print(f"xi_max = 1 + lambda_max = {1.0 + args.lambda_max:.3f}")
 
-    plt.xlabel('Radius R (kpc)')
-    plt.ylabel('Circular speed v (km/s)')
+    plt.xlabel('R (kpc)')
+    plt.ylabel('Vc (km s^{-1})')
     plt.title(f'{name}: SPARC vs GR vs ER')
     plt.grid(True, alpha=0.3)
     plt.legend(frameon=False)
@@ -93,7 +94,7 @@ def main():
     ymax = max(np.nanmax(Vobs+eV), np.nanmax(vbar)*1.2)
     plt.ylim(0, max(300, float(ymax)+40))
 
-    out_file = out_dir / f"sparc_{name_slug}.png"
+    out_file = Path(args.out) if args.out else (out_dir / f"sparc_{name_slug}.png")
     plt.tight_layout()
     plt.savefig(out_file, dpi=150)
     print(f"Saved: {out_file}")
