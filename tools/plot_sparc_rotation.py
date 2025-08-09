@@ -17,8 +17,14 @@ Outputs image under images/sparc_<name_slug>.png
 from __future__ import annotations
 from pathlib import Path
 import argparse
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+
+# Ensure repo root on sys.path
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from data_loaders.sparc_loader import load_rotmod
 from models.er_sparc import v_bar_from_components, v_er_from_components, xi_log_normal_R

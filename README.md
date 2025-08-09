@@ -337,6 +337,17 @@ GR baseline diagnostics (runs/gr_20250809_000755):
 
 A matched GR baseline run is now available for precise ΔlogZ comparison; see the above figures and the Reproducibility section for commands.
 
+### External check: SPARC galaxy (preliminary)
+
+We added a quick CPU-only ER-on-SPARC fitter. As a smoke test on NGC 3198 using our Rotmod_LTG file, we obtain a preliminary fit with chi2/dof ≈ 6.22 using a simple radial ER window (no full 3D density/tidal model yet). The plot separates data-constrained ER (solid red) from extrapolation (dashed orange), analogous to our Milky Way plot:
+
+![SPARC NGC 3198](images/sparc_ngc3198_fit.png?v=20250809-2)
+
+Notes:
+- This is a pragmatic first pass; parameters hit broad bounds (R0 ≈ 40 kpc, σ_lnR ≈ 1.5), suggesting the ER window proxy in R needs refinement per-galaxy (or full density/tidal computation) to capture shapes like NGC 3198 accurately.
+- The fitter prints xi_max = 1 + lambda_max; with the current fit xi_max ≈ 5.93, so the model remains bounded and cannot approach 100×.
+- Next: implement per-galaxy density fields and a tidal indicator to use the same physics as the Milky Way run; add ΛCDM/NFW baseline for head-to-head comparison.
+
 ## Methods
 
 **Data acquisition and preparation**: We obtained Milky Way rotation curve data from Gaia DR3, selecting stars with radial velocity uncertainties below 5 km/s and parallax signal-to-noise ratios exceeding 5. The sample comprises 132,000 stars spanning galactocentric radii from 5 to 16 kpc, stratified across 11 longitude bins for uniform azimuthal coverage. We binned data in annuli of width ΔR = 0.5 kpc, computing mean circular velocities using the Jeans equation formalism correcting for asymmetric drift [26].

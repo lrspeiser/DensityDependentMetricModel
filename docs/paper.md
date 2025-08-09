@@ -199,7 +199,7 @@ Extended Data / Supplementary: Star counts per annulus; selection function tests
 
 ## 9. Tests we will add before submission (with existing public data)
 
-1) Multi-galaxy validation (SPARC/THINGS): Fit ≥20 high-quality rotation curves with identical ER hyperprior ranges. Compare Δlog Z vs GR and vs ΛCDM (NFW). Deliverables: Table 1 (per-galaxy evidences), Figure ED1 (stacked residuals). [TODO-MG-1] Implement SPARC loader and reproducible per-galaxy configs.
+1) Multi-galaxy validation (SPARC/THINGS): Fit ≥20 high-quality rotation curves with identical ER hyperprior ranges. Compare Δlog Z vs GR and vs ΛCDM (NFW). Deliverables: Table 1 (per-galaxy evidences), Figure ED1 (stacked residuals). [TODO-MG-1] Implement SPARC loader and reproducible per-galaxy configs. Preliminary CPU-only test on NGC 3198 using a radius-window proxy yields χ²/dof ≈ 6.2 and highlights the need to compute per-galaxy densities and tidal indicators for a faithful ER window (figure in README).
 
 2) Direct ΛCDM comparison: Add halo (NFW or Einasto) to the baryon model; same sampler settings; report Bayes factors ER vs ΛCDM. [TODO-LCDM-1] Publish posterior on halo concentration–mass and compare to abundance matching.
 
