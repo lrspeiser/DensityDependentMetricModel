@@ -47,6 +47,13 @@ try:
 except Exception:
     _HAS_SCIPY = False
 
+# Optional dynesty for evidence mode (non-invasive; does not touch original runners)
+try:
+    import dynesty  # type: ignore
+    _HAS_DYNASTY = True
+except Exception:
+    _HAS_DYNASTY = False
+
 
 def _compute_tidal_proxy(R, vbar, mode: str = "curvature", norm: str = "robust"):
     R = np.asarray(R, dtype=float)
@@ -371,7 +378,29 @@ def main():
     plt.savefig(out_path, dpi=150)
     print(f"Saved: {out_path}")
 
-    # Compute simple log-likelihood at best fit for reporting
+    # Evidence mode (optional, non-invasive)
+    logZ = None; logZ_err = None
+    if args.mode == 'evidence' and _HAS_DYNASTY:
+        # Build loglike and prior transform for dynesty on current data/problem
+        lo = np.array([b[0] for b in bounds], dtype=float)
+        hi = np.array([b[1] for b in bounds], dtype=float)
+        ndim = lo.size
+        def prior_transform(u):
+            u = np.asarray(u)
+            return lo + u * (hi - lo)
+        def loglike(theta):
+            theta = np.asarray(theta, dtype=float)
+            c2 = chi2_env(theta, R, Vobs, eV, Vgas, Vdisk, Vbul, rho_mid_base,
+                          args.T_proxy, args.tidal_norm, args.sigma_floor,
+                          fit_ml_flags, ml_priors, ml_sigmas)
+            return -0.5 * float(c2)
+        dsampler = dynesty.DynamicNestedSampler(loglike, prior_transform, ndim=ndim, bound='multi', sample='rslice')
+        dsampler.run_nested(maxcall=20000)
+        res = dsampler.results
+        logZ = float(res.logz[-1])
+        logZ_err = float(res.logzerr[-1]) if hasattr(res, 'logzerr') else None
+
+    # Compute simple log-likelihood at best fit for reporting (also used if evidence not available)
     # ln L = -0.5 * chi2 + const; we report the -0.5*chi2 term (const cancels in deltas)
     lnL = -0.5 * float(chi2_best)
 
@@ -430,7 +459,11 @@ def main():
         'chi2': float(chi2_best),
         'chi2_dof': float(chi2_best/dof),
         'loglike_no_const': lnL,
-        'mode': args.mode,
+'mode': args.mode,
+        'evidence': {
+            'logZ': logZ,
+            'logZ_err': logZ_err,
+        },
     }
     with open(out_path.with_suffix('.json'), 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=2)

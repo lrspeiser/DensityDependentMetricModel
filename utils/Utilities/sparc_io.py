@@ -103,7 +103,7 @@ def load_single_sparc_galaxy(galaxy_id: str,
         # Many SPARC rotmod files include SBdisk and SBbulge columns. Read 8 columns; extra will be ignored, missing become NaN.
         df_rotmod = pd.read_csv(
             rotmod_file,
-            delim_whitespace=True,
+            sep='\s+',
             comment='#',
             names=['R_kpc', 'V_obs', 'e_V_obs', 'V_gas', 'V_disk', 'V_bulge', 'SB_disk_Lsun_pc2', 'SB_bulge_Lsun_pc2']
         )
@@ -116,7 +116,7 @@ def load_single_sparc_galaxy(galaxy_id: str,
         sigma_gas_interp_Msun_pc2 = np.zeros_like(common_R_kpc)
         need_gas_reconstruct = False
         if hirad_file.exists():
-            df_hirad = pd.read_csv(hirad_file, delim_whitespace=True, comment='#',
+            df_hirad = pd.read_csv(hirad_file, sep='\s+', comment='#',
                                    names=['R_HI_kpc', 'Sigma_HI_Msun_pc2'])
             if not df_hirad.empty and len(df_hirad['R_HI_kpc']) > 1:
                 # Ensure radii are sorted for interpolation
@@ -145,7 +145,7 @@ def load_single_sparc_galaxy(galaxy_id: str,
         sigma_star_interp_Msun_pc2 = np.zeros_like(common_R_kpc)
         used_sb_source = None
         if sb_file.exists():
-            df_sb = pd.read_csv(sb_file, delim_whitespace=True, comment='#',
+            df_sb = pd.read_csv(sb_file, sep='\s+', comment='#',
                                 names=['R_SB_kpc', 'SB_disk_Lsun_pc2', 'SB_bulge_Lsun_pc2'])
             if not df_sb.empty and len(df_sb['R_SB_kpc']) > 1:
                 sort_idx_sb = np.argsort(df_sb['R_SB_kpc'].values)
