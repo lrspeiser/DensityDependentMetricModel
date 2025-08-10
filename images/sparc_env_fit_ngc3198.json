@@ -38,6 +38,9 @@
     "sigma_floor": 5.0,
     "T_proxy": "epicyclic",
     "tidal_norm": "robust",
+    "hz_star_kpc": 0.3,
+    "hz_gas_kpc": 0.1,
+    "hz_alpha": 0.0,
     "prior_edge_hits": {
       "log10_rho_c": true,
       "gamma_exp": true,
@@ -52,10 +55,10 @@
   "chi2": 273.06036701161923,
   "chi2_dof": 7.80172477176055,
   "loglike_no_const": -136.53018350580962,
-  "mode": "evidence",
+  "mode": "fit",
   "evidence": {
-    "logZ": -147.97651806596855,
-    "logZ_err": 2.7908346123821652,
+    "logZ": null,
+    "logZ_err": null,
     "nlive": 1000,
     "maxcall": 200000,
     "dlogz_target": 0.01,

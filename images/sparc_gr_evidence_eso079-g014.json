@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "ESO079-G014",
+  "model": "gr",
+  "sigma_floor": 0.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 1654.3800429182456,
+  "loglike_no_const": -827.1900214591228,
+  "evidence": {
+    "logZ": -827.1901656864279,
+    "logZ_err": 0.0003582120901730617,
+    "nlive": 400,
+    "maxcall": 80000,
+    "dlogz_target": 0.02,
+    "seed": 42
+  }
+}

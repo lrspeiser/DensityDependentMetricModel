@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "D564-8",
+  "model": "gr",
+  "sigma_floor": 0.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 171.0846872765243,
+  "loglike_no_const": -85.54234363826215,
+  "evidence": {
+    "logZ": -85.54248786556468,
+    "logZ_err": 0.00035816169681472996,
+    "nlive": 400,
+    "maxcall": 80000,
+    "dlogz_target": 0.02,
+    "seed": 42
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "NGC4013",
+  "model": "gr",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": true
+  },
+  "chi2": 1034.693732846315,
+  "loglike_no_const": -517.3468664231575,
+  "evidence": {
+    "logZ": -517.3470092769022,
+    "logZ_err": 0.00035488693327787436,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

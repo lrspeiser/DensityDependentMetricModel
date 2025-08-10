@@ -398,6 +398,27 @@ Notes: this script orchestrates GR, NFW, and ER evidence runs per galaxy, then w
 
 Artifacts per galaxy: PNG figure, JSON with priors/assumptions and results (incl. T proxy, vertical profile params, σ_floor, and logZ values). A CSV aggregator produces ED-SPARC.
 
+### 8A.5 Preliminary batch evidence summary (this work)
+
+We ran a preliminary batch (N=10 galaxies) using the new batch runner with matched dynesty controls (nlive=400, maxcall=80k, dlogz_target=0.02, σ_floor=0). The aggregated table and per-galaxy JSON sidecars are available here:
+- Table: docs/ed_sparc_table.md
+- CSV: ed_sparc_batch.csv
+
+Headline results from this batch:
+- ER vs GR: ER preferred (ΔlogZ = logZ_ER − logZ_GR > 0) in 10/10 galaxies.
+- ER vs NFW: ER preferred in 7/10 galaxies.
+
+Examples (ΔlogZ values):
+- CamB: ΔlogZ(ER−GR)=+31.06, ΔlogZ(ER−NFW)=+64.23
+- D631-7: ΔlogZ(ER−GR)=+680.99, ΔlogZ(ER−NFW)=+48.30
+- DDO170: ΔlogZ(ER−GR)=+1926.45, ΔlogZ(ER−NFW)=−25.66 (NFW favored)
+
+Caveats and next steps:
+- Settings (nlive, maxcall, σ_floor) were chosen for speed; we will scale up to the paper-grade settings and extend to ≥20 galaxies.
+- We will harmonize σ_floor and M/L priors across all three models (GR/ER/NFW) and include distance/inclination priors where available.
+- We will add the ER+NFW composite baseline and report its evidence to test for residual halo needs.
+- The summary table will be regenerated automatically as additional galaxies finish.
+
 Reviewer-facing sanity checks (to add in Supplement)
 - σ-floor sensitivity: show Δlog Z stability for σ_floor ∈ [0,3] km s^{-1} on one or two galaxies.
 - M/L prior sensitivity: repeat NGC 3198 with flat Υ_3.6 ∈ [0.3, 0.7] vs Gaussian.

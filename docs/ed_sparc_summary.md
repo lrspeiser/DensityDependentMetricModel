@@ -1,21 +1,21 @@
 # ED-SPARC Evidence Summary
 
-- Galaxies analyzed: 20
-- ER preferred over GR (ΔlogZ>0): 20/20
-- ER preferred over NFW (ΔlogZ>0): 15/20
+- Galaxies analyzed: 10
+- ER preferred over GR (ΔlogZ>0): 10/10
+- ER preferred over NFW (ΔlogZ>0): 7/10
 
 ## Top 5 by ΔlogZ(ER−GR)
-- NGC2841: ΔlogZ(ER−GR)=3438.20, ΔlogZ(ER−NFW)=545.57
-- NGC5985: ΔlogZ(ER−GR)=1805.07, ΔlogZ(ER−NFW)=802.97
-- NGC7331: ΔlogZ(ER−GR)=1360.68, ΔlogZ(ER−NFW)=1364.08
-- NGC5055: ΔlogZ(ER−GR)=1240.61, ΔlogZ(ER−NFW)=1096.71
-- NGC2403: ΔlogZ(ER−GR)=1193.23, ΔlogZ(ER−NFW)=-128.42
+- DDO154: ΔlogZ(ER−GR)=32531.26, ΔlogZ(ER−NFW)=35.38
+- DDO161: ΔlogZ(ER−GR)=5003.36, ΔlogZ(ER−NFW)=13.11
+- DDO170: ΔlogZ(ER−GR)=1925.45, ΔlogZ(ER−NFW)=-25.66
+- ESO079-G014: ΔlogZ(ER−GR)=795.68, ΔlogZ(ER−NFW)=18.09
+- D631-7: ΔlogZ(ER−GR)=680.99, ΔlogZ(ER−NFW)=48.30
 
 ## Bottom 5 by ΔlogZ(ER−GR)
-- UGC06917: ΔlogZ(ER−GR)=111.27, ΔlogZ(ER−NFW)=-2.17
-- NGC5005: ΔlogZ(ER−GR)=92.94, ΔlogZ(ER−NFW)=96.15
-- UGC05918: ΔlogZ(ER−GR)=28.73, ΔlogZ(ER−NFW)=-2.55
-- NGC4010: ΔlogZ(ER−GR)=25.96, ΔlogZ(ER−NFW)=6.87
-- NGC7793: ΔlogZ(ER−GR)=12.03, ΔlogZ(ER−NFW)=1.64
+- DDO168: ΔlogZ(ER−GR)=612.19, ΔlogZ(ER−NFW)=41.55
+- D564-8: ΔlogZ(ER−GR)=79.16, ΔlogZ(ER−NFW)=1.15
+- DDO064: ΔlogZ(ER−GR)=49.97, ΔlogZ(ER−NFW)=-2.77
+- CamB: ΔlogZ(ER−GR)=31.06, ΔlogZ(ER−NFW)=64.23
+- D512-2: ΔlogZ(ER−GR)=17.31, ΔlogZ(ER−NFW)=-2.65
 
 See full table in docs/ed_sparc_table.md.

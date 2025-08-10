@@ -993,6 +993,9 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
         sigma_data_cupy = to_cupy_array(sigma_data)
         
         params = dict(zip(param_names, theta))
+        # Pass halo toggle if halo parameters present
+        if 'V200_kms' in params and 'c_concentration' in params:
+            params['include_halo'] = True
 
         v_model = v_total_kms_cupy(R_data_cupy, params, xi_type=args.xi)
         if not cp.all(cp.isfinite(v_model)):
@@ -2178,6 +2181,9 @@ def main_cupy():
                        help='Number of live points')
     parser.add_argument('--maxcall', type=int, default=1500000,
                        help='Maximum likelihood calls')
+    # Physics toggles
+    parser.add_argument('--include_halo', action='store_true', default=False,
+                       help='Include NFW halo component (adds V200_kms and c_concentration parameters)')
     parser.add_argument('--num_threads', type=int, default=4,
                        help='Number of threads')
     parser.add_argument('--dlogz_target', type=float, default=0.01,
@@ -2231,6 +2237,9 @@ def main_cupy():
 
     # Enforce published xi by default
     try:
+        # Ensure the registry has defaults before validation
+        from core.density_metric_cupy import ensure_xi_registry_defaults  # safe import
+        ensure_xi_registry_defaults()
         from core.xi_registry import get_allowed_xi_names
         allowed_published = set(get_allowed_xi_names(False))
         if (not args.allow_experimental) and (args.xi not in allowed_published):
@@ -2353,6 +2362,14 @@ def main_cupy():
 
     # --- Setup Data and Parameters ---
     param_names, bounds_low, bounds_high, use_log_prior = setup_parameter_bounds(args.xi)
+
+    # Optional ΛCDM halo toggle: include V200 and c parameters via CLI flag
+    if args.include_halo:
+        # Append halo parameters to param_names and bounds
+        param_names = list(param_names) + ['V200_kms', 'c_concentration']
+        bounds_low = np.concatenate([bounds_low, np.array([20.0, 1.5], dtype=float)])
+        bounds_high = np.concatenate([bounds_high, np.array([400.0, 40.0], dtype=float)])
+        use_log_prior = np.concatenate([use_log_prior, np.array([False, False], dtype=bool)])
     
     # If resuming from best, load previous results and adjust bounds
     if args.resume_from_best:
@@ -2620,7 +2637,10 @@ def main_cupy():
                         if ENHANCED_SUMMARY_AVAILABLE and now - last_summary_time >= float(getattr(args, 'summary_interval', 60)):
                             logger.info("\n" + "="*80)
                             logger.info("ENHANCED SUMMARY UPDATE")
-                            create_periodic_summary(sampler, param_names, args, start_time)
+                            try:
+                                create_periodic_summary(sampler, param_names, args, start_time)
+                            except Exception as es_e:
+                                logger.warning(f"Enhanced summary failed (non-critical): {es_e}")
                             last_summary_time = now
 
                         # Run periodic analysis

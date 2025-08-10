@@ -1,0 +1,34 @@
+{
+  "galaxy_id": "D564-8",
+  "model": "nfw",
+  "sigma_floor": 0.0,
+  "priors": {
+    "use_master_priors": false,
+    "V200": {
+      "min": 40.0,
+      "max": 400.0
+    },
+    "c": {
+      "min": 2.0,
+      "max": 40.0
+    }
+  },
+  "evidence": {
+    "logZ": -7.530120232429907,
+    "logZ_err": 0.08276626128341369,
+    "nlive": 400,
+    "maxcall": 80000,
+    "dlogz_target": 0.02,
+    "seed": 42,
+    "priors_gaussian": {
+      "V200": {
+        "mean": null,
+        "sigma": null
+      },
+      "c": {
+        "mean": null,
+        "sigma": null
+      }
+    }
+  }
+}

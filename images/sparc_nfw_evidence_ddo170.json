@@ -1,0 +1,34 @@
+{
+  "galaxy_id": "DDO170",
+  "model": "nfw",
+  "sigma_floor": 0.0,
+  "priors": {
+    "use_master_priors": false,
+    "V200": {
+      "min": 40.0,
+      "max": 400.0
+    },
+    "c": {
+      "min": 2.0,
+      "max": 40.0
+    }
+  },
+  "evidence": {
+    "logZ": -12.763113515826928,
+    "logZ_err": 0.09715604028702181,
+    "nlive": 400,
+    "maxcall": 80000,
+    "dlogz_target": 0.02,
+    "seed": 42,
+    "priors_gaussian": {
+      "V200": {
+        "mean": null,
+        "sigma": null
+      },
+      "c": {
+        "mean": null,
+        "sigma": null
+      }
+    }
+  }
+}

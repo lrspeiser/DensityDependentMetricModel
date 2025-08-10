@@ -11,7 +11,22 @@ def load_many(patterns):
                 if not gid:
                     m = re.search(r"_([A-Za-z0-9]+)\.json$", os.path.basename(p))
                     gid = m.group(1) if m else os.path.splitext(os.path.basename(p))[0]
-                out[gid] = d
+                # Normalize evidence fields if nested
+                logZ = d.get("logZ")
+                logZ_err = d.get("logZ_err")
+                if logZ is None and isinstance(d.get("evidence"), dict):
+                    logZ = d["evidence"].get("logZ")
+                    logZ_err = d["evidence"].get("logZ_err")
+                model = d.get("model")
+                # Store compact record to avoid mixing structures from different tools
+                rec = out.get(gid, {})
+                rec.update({
+                    "galaxy_id": gid,
+                    "model": model or rec.get("model"),
+                    "logZ": logZ if logZ is not None else rec.get("logZ"),
+                    "logZ_err": logZ_err if logZ_err is not None else rec.get("logZ_err"),
+                })
+                out[gid] = rec
             except Exception:
                 pass
     return out

@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "DDO168",
+  "model": "gr",
+  "sigma_floor": 0.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 1249.103788811374,
+  "loglike_no_const": -624.551894405687,
+  "evidence": {
+    "logZ": -624.5520386329921,
+    "logZ_err": 0.0003581993695906683,
+    "nlive": 400,
+    "maxcall": 80000,
+    "dlogz_target": 0.02,
+    "seed": 42
+  }
+}

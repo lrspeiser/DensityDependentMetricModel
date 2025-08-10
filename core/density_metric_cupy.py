@@ -875,12 +875,30 @@ def v_baryon_comprehensive_kms_cupy(R_kpc, p):
     # ADD NaN PROTECTION to prevent numerical issues
     v_total_sq = cp.nan_to_num(v_total_sq, nan=0.0, posinf=0.0, neginf=0.0)
     
+    # Include optional NFW halo if requested (ΛCDM baseline)
+    if bool(p.get('include_halo', False)):
+        # Halo parameters V200, c
+        V200 = float(p.get('V200_kms', 0.0))
+        c_conc = float(p.get('c_concentration', 10.0))
+        if V200 > 0.0 and c_conc > 0.0:
+            # Minimal NFW halo term: v^2_total += v_halo^2
+            # Implement NFW v_halo in CuPy directly to avoid host bounce
+            H0 = 70.0  # km/s/Mpc
+            R200_kpc = V200 / (10.0 * H0) * 1000.0
+            rs = R200_kpc / max(c_conc, 1e-6)
+            x = cp.clip(R_kpc_arr / max(rs, 1e-12), 1e-8, cp.inf)
+            def f_cupy(z):
+                return cp.log1p(z) - z/(1.0+z)
+            norm = cp.maximum(f_cupy(cp.array(c_conc, dtype=DEFAULT_DTYPE)), 1e-12)
+            vx2_halo = (V200**2) * (f_cupy(x) / cp.maximum(x, 1e-12)) / norm
+            v_total_sq += cp.maximum(vx2_halo, 0.0)
+
     # Return velocity
     v_out_kms = cp.sqrt(cp.maximum(v_total_sq, 0.0))
-    
+
     # Additional safety check for final result
     v_out_kms = cp.nan_to_num(v_out_kms, nan=0.0, posinf=0.0, neginf=0.0)
-    
+
     return v_out_kms
 
 def volume_density_comprehensive_solar_kpc3_cupy(R_kpc, p):
@@ -1013,18 +1031,25 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
             raise ValueError("tidal_band requires tidal proxy T; computed internally when xi_type='tidal_band'")
         return xi_tidal_bandpass_cupy(rho, T, rho_c, gamma, lambda_max, T0, sigma_lnT, wmin)
 
-    # Register published and selected experimental xi names (idempotent)
-    try:
-        register_xi('gr', _xi_gr_published, published=True, doc="GR baseline (xi≡1)")
-        register_xi('tidal_band', _xi_tidal_band_published, published=True, doc="ER tidal-band with density screening")
-        # Experimental examples (available only if allow_experimental=True)
-        register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: exponential screening")
-        register_xi('grav_color_void_safe', lambda rho, **kw: xi_gravitational_color_void_safe_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: void-safe color")
-        register_xi('balanced_screening', lambda rho, **kw: xi_balanced_screening_cupy(rho, kw.get('rho_c'), kw.get('R'), kw.get('R_screen', 50.0), kw.get('n_exp', 1.0), kw.get('A_max', 2.0)), published=False, doc="Experimental: bounded enhancement with R cutoff")
-        # ... add other xi_* variants here as needed
-    except Exception:
-        # Ignore if already registered in a prior call
-        pass
+    # Helper to ensure xi registry has published defaults available early
+    def ensure_xi_registry_defaults():
+        """
+        Idempotently register published xi ('gr', 'tidal_band') and declare experimental ones.
+        Safe to call at import time or before CLI validation.
+        """
+        try:
+            register_xi('gr', _xi_gr_published, published=True, doc="GR baseline (xi≡1)")
+            register_xi('tidal_band', _xi_tidal_band_published, published=True, doc="ER tidal-band with density screening")
+            # Experimental examples (available only if allow_experimental=True)
+            register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: exponential screening")
+            register_xi('grav_color_void_safe', lambda rho, **kw: xi_gravitational_color_void_safe_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: void-safe color")
+            register_xi('balanced_screening', lambda rho, **kw: xi_balanced_screening_cupy(rho, kw.get('rho_c'), kw.get('R'), kw.get('R_screen', 50.0), kw.get('n_exp', 1.0), kw.get('A_max', 2.0)), published=False, doc="Experimental: bounded enhancement with R cutoff")
+        except Exception:
+            # Ignore if already registered in a prior call
+            pass
+
+    # Ensure defaults are registered for any consumer that imported this function
+    ensure_xi_registry_defaults()
 
     try:
         xi_fn = resolve_xi(xi_type, allow_experimental=allow_experimental)
@@ -1033,7 +1058,20 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         raise
 
     xi_kwargs = dict(p)
-    xi_kwargs.update({"rho_c": rho_c, "T": T, "R": R_safe})
+    xi_kwargs.update({"rho_c": float(rho_c) if rho_c is not None else 7e7, "T": T, "R": R_safe})
+
+    # Parameter normalization for tidal_band and similar xi
+    if xi_type == 'tidal_band':
+        # Map gamma_exp -> gamma if needed
+        if 'gamma' not in xi_kwargs or xi_kwargs.get('gamma') is None:
+            gamma_val = xi_kwargs.get('gamma_exp', 3.0)
+            xi_kwargs['gamma'] = float(gamma_val)
+        # Ensure required scalars exist and are numeric
+        xi_kwargs['lambda_max'] = float(xi_kwargs.get('lambda_max', 4.0))
+        xi_kwargs['T0'] = float(xi_kwargs.get('T0', 10.0))
+        xi_kwargs['sigma_lnT'] = float(xi_kwargs.get('sigma_lnT', 0.8))
+        xi_kwargs['wmin'] = float(xi_kwargs.get('wmin', 0.02))
+
     xi = xi_fn(rho=rho_total, **xi_kwargs)
 
     v_total_sq = cp.nan_to_num(v_baryon_sq * xi, nan=0.0, posinf=0.0, neginf=0.0)

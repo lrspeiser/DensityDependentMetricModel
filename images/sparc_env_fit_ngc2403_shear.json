@@ -5,8 +5,8 @@
   "mask": "none",
   "params": {
     "log10_rho_c": 17.0,
-    "gamma_exp": 1.0,
-    "lambda_max": 4.176050921050913,
+    "gamma_exp": 5.0,
+    "lambda_max": 4.176050878044824,
     "lnT0": -1.0,
     "sigma_lnT": 2.0,
     "w_min": 0.0,
@@ -16,7 +16,7 @@
     "c": 10.0
   },
   "priors": {
-    "use_master_priors": true,
+    "use_master_priors": false,
     "distance_Mpc": 3.16,
     "e_distance_Mpc": 0.16,
     "incl_deg": 63.0,
@@ -31,13 +31,16 @@
     "penalty_mass": 0.0
   },
   "sanity": {
-    "xi_min": 1.7236470353475273,
-    "xi_med": 4.0874586202294125,
-    "xi_max": 5.175145510255808,
+    "xi_min": 1.7236470320388444,
+    "xi_med": 4.087458592893715,
+    "xi_max": 5.175145468749747,
     "R_peak_W": 6.96,
     "sigma_floor": 5.0,
     "T_proxy": "shear",
     "tidal_norm": "robust",
+    "hz_star_kpc": 0.3,
+    "hz_gas_kpc": 0.1,
+    "hz_alpha": 0.0,
     "prior_edge_hits": {
       "log10_rho_c": true,
       "gamma_exp": true,
@@ -49,13 +52,13 @@
       "ups_bul": true
     }
   },
-  "chi2": 690.9882153226454,
-  "chi2_dof": 10.630587928040699,
-  "loglike_no_const": -345.4941076613227,
+  "chi2": 677.9882163673673,
+  "chi2_dof": 10.430587944113343,
+  "loglike_no_const": -338.99410818368364,
   "mode": "evidence",
   "evidence": {
-    "logZ": -390.6021149707745,
-    "logZ_err": 3.0672522264058006,
+    "logZ": -373.6395701242537,
+    "logZ_err": 2.8523716045591816,
     "nlive": 1000,
     "maxcall": 200000,
     "dlogz_target": 0.01,

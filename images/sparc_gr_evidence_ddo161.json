@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "DDO161",
+  "model": "gr",
+  "sigma_floor": 0.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 10061.08143490559,
+  "loglike_no_const": -5030.540717452795,
+  "evidence": {
+    "logZ": -5030.540861680086,
+    "logZ_err": 0.00035991001324351215,
+    "nlive": 400,
+    "maxcall": 80000,
+    "dlogz_target": 0.02,
+    "seed": 42
+  }
+}

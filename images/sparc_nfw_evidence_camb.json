@@ -1,0 +1,34 @@
+{
+  "galaxy_id": "CamB",
+  "model": "nfw",
+  "sigma_floor": 0.0,
+  "priors": {
+    "use_master_priors": false,
+    "V200": {
+      "min": 40.0,
+      "max": 400.0
+    },
+    "c": {
+      "min": 2.0,
+      "max": 40.0
+    }
+  },
+  "evidence": {
+    "logZ": -75.80332811095164,
+    "logZ_err": 0.2257504157456913,
+    "nlive": 400,
+    "maxcall": 80000,
+    "dlogz_target": 0.02,
+    "seed": 42,
+    "priors_gaussian": {
+      "V200": {
+        "mean": null,
+        "sigma": null
+      },
+      "c": {
+        "mean": null,
+        "sigma": null
+      }
+    }
+  }
+}
