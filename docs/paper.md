@@ -625,10 +625,15 @@ With the multi-galaxy validation, ΛCDM matched comparisons, and tight screening
 
 ### Quick checklist (what we still need to run before submission)
 
-- [ ] SPARC/THINGS multi-galaxy ER vs GR vs NFW evidences (≥20 galaxies).
+- [x] SPARC/THINGS multi-galaxy ER vs GR vs NFW evidences (≥20 galaxies).
+  - Batch completed; see docs/ed_sparc_table.md and docs/ed_sparc_summary.md for table and summary.
+  - JSON sidecars saved under images/; CSV aggregate at ed_sparc_batch.csv.
 - [ ] Matched ΛCDM fits on the Milky Way dataset.
 - [ ] Posterior predictive residual plots + k-fold CV.
 - [ ] Solar-system tight-screening ER refit (exponential S_ρ) + constraints table.
 - [ ] Environment split (void vs group) rotation curve offsets.
 - [ ] Lensing pilot with 2–3 SLACS systems.
 - [ ] Consistency pass: one canonical GR/ER matched-pair for the headline Δlog Z.
+
+Notes:
+- Partial robustness checks for tidal proxy choice (curvature, shear, epicyclic) completed for two representative galaxies; see docs/robustness_tidal_proxy.md.
