@@ -615,7 +615,7 @@ With the multi-galaxy validation, ΛCDM matched comparisons, and tight screening
 
 - Table S1. Priors for baryonic and ER parameters (bounds, types).
 - Table S2. Star counts and v_c, σ_v per annulus. [TODO-DATA-3]
-- Table S3. Solar-System |ξ − 1| at representative densities; Cassini/LLR/ephemeris comparisons (power-law vs exponential screening). [TODO-SOLAR-4]
+- Table S3. Solar-System |ξ − 1| at representative densities; Cassini/LLR/ephemeris comparisons (power-law vs exponential screening). See docs/table_solar_screening.md.
 - Fig. S1. Alternative tidal indicator definitions and impact on ξ. [TODO-THEORY-B]
 - Fig. S2. k-fold cross-validation residuals; calibration curves. [TODO-PPC-3]
 - Methods S1. Jeans equation implementation; asymmetric-drift model; anisotropy assumptions; sensitivity tests.
