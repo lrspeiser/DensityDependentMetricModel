@@ -181,9 +181,12 @@ def main():
     # Gas truncation controls (forwarded to loader via env for now)
     ap.add_argument('--gas-truncation', choices=['RHI','KRD'], default=None, help='Truncation scheme for gas disk')
     ap.add_argument('--gas-krd', type=float, default=3.0, help='k for Rmax = k Rd when using KRD truncation')
+    ap.add_argument('--gas-profile', choices=['RHI','Vgas'], default='RHI', help='Gas profile model: RHI-truncated exponential (preferred) or Vgas-shaped fallback')
     # Tidal proxy controls
     ap.add_argument('--T-proxy', choices=['curvature','shear','epicyclic'], default='curvature')
     ap.add_argument('--tidal-norm', choices=['robust','simple'], default='robust')
+    # MasterSheet priors on distance/inclination (logged for parity)
+    ap.add_argument('--use-master-priors', action='store_true', help='Record and (optionally) apply MasterSheet D/i priors for parity across models')
     # Inits / priors centers
     ap.add_argument('--log10_rho_c', type=float, default=15.0)
     ap.add_argument('--gamma_exp', type=float, default=3.0)
@@ -210,6 +213,11 @@ def main():
         _os.environ['SPARC_GAS_RMAX_MODE'] = args.gas_truncation.upper()
         if args.gas_truncation.upper() == 'KRD':
             _os.environ['SPARC_GAS_KRD'] = str(args.gas_krd)
+    # Gas profile override
+    if args.gas_profile.upper() == 'VGAS':
+        _os.environ['SPARC_GAS_FORCE_VGAS'] = '1'
+    else:
+        _os.environ.pop('SPARC_GAS_FORCE_VGAS', None)
     # Parameter vector includes ups_d and ups_b at the end
     # Initialize ups based on whether we fit them
     init_ups_d = args.ml_prior_disk
@@ -260,6 +268,15 @@ def main():
     T = _compute_tidal_proxy(R, vbar, mode=args.T_proxy, norm=args.tidal_norm)
     xi = xi_env(rho_mid, T, lambda_max, rho_c, gamma_exp, T0, sigma_lnT, w_min)
     vmod = np.sqrt(np.clip(xi, 0.0, None)) * np.maximum(vbar, 0.0)
+    # Sanity diagnostics: xi stats and W(T) peak location
+    from models.er_env import W_log_normal
+    W_vals = W_log_normal(T, T0, sigma_lnT, w_min)
+    xi_stats = {
+        'xi_min': float(np.nanmin(xi)),
+        'xi_med': float(np.nanmedian(xi)),
+        'xi_max': float(np.nanmax(xi)),
+    }
+    R_peak_W = float(R[np.nanargmax(W_vals)]) if np.all(np.isfinite(W_vals)) and (W_vals.size > 0) else float('nan')
 
     dof = max(1, R.size - len(x_best))
     print({
@@ -278,6 +295,19 @@ def main():
             'sigma_floor': float(args.sigma_floor),
             'T_proxy': args.T_proxy,
             'tidal_norm': args.tidal_norm,
+        },
+        'priors': {
+            'use_master_priors': bool(args.use_master_priors),
+            'distance_Mpc': float(data.get('distance_Mpc', np.nan)),
+            'e_distance_Mpc': float(data.get('e_distance_Mpc', np.nan)),
+            'incl_deg': float(data.get('incl_deg', np.nan)),
+            'e_incl_deg': float(data.get('e_incl_deg', np.nan)),
+        },
+        'gas': {
+            'profile_mode': data.get('gas_profile_mode', None),
+            'Rd_kpc': float(data.get('gas_Rd_kpc', np.nan)),
+            'Sigma0': float(data.get('gas_Sigma0', np.nan)),
+            'Rmax_kpc': float(data.get('gas_Rmax_kpc', np.nan)),
         }
     })
 
@@ -350,6 +380,7 @@ def main():
         'galaxy_id': name,
 'file_rotmod': str(Path(args.sparc_dir)/f'{name}_rotmod.dat'),
         'model': model,
+        'mask': 'none',
         'params': {
             'log10_rho_c': log10_rho_c,
             'gamma_exp': gamma_exp,
@@ -360,7 +391,41 @@ def main():
             'ups_disk': float(ups_d),
             'ups_bul': float(ups_b),
             'V200': float(args.V200),
-            'c': float(args.c),
+'c': float(args.c),
+        },
+        'priors': {
+            'use_master_priors': bool(args.use_master_priors),
+            'distance_Mpc': float(data.get('distance_Mpc', np.nan)),
+            'e_distance_Mpc': float(data.get('e_distance_Mpc', np.nan)),
+            'incl_deg': float(data.get('incl_deg', np.nan)),
+            'e_incl_deg': float(data.get('e_incl_deg', np.nan)),
+        },
+        'gas': {
+            'profile_mode': data.get('gas_profile_mode', None),
+            'Rd_kpc': float(data.get('gas_Rd_kpc', np.nan)),
+            'Sigma0': float(data.get('gas_Sigma0', np.nan)),
+            'Rmax_kpc': float(data.get('gas_Rmax_kpc', np.nan)),
+            'mass_mismatch': float(data.get('gas_mass_mismatch', np.nan)),
+            'penalty_mass': float(data.get('gas_penalty_mass', 0.0)),
+        },
+        'sanity': {
+            'xi_min': xi_stats['xi_min'],
+            'xi_med': xi_stats['xi_med'],
+            'xi_max': xi_stats['xi_max'],
+            'R_peak_W': R_peak_W,
+            'sigma_floor': float(args.sigma_floor),
+            'T_proxy': args.T_proxy,
+            'tidal_norm': args.tidal_norm,
+            'prior_edge_hits': {
+                'log10_rho_c': (log10_rho_c in [bounds[0][0], bounds[0][1]]),
+                'gamma_exp': (gamma_exp in [bounds[1][0], bounds[1][1]]),
+                'lambda_max': (lambda_max in [bounds[2][0], bounds[2][1]]),
+                'lnT0': (lnT0 in [bounds[3][0], bounds[3][1]]),
+                'sigma_lnT': (sigma_lnT in [bounds[4][0], bounds[4][1]]),
+                'w_min': (w_min in [bounds[5][0], bounds[5][1]]),
+                'ups_disk': (ups_d in [bounds[6][0], bounds[6][1]]),
+                'ups_bul': (ups_b in [bounds[7][0], bounds[7][1]]),
+            },
         },
         'chi2': float(chi2_best),
         'chi2_dof': float(chi2_best/dof),

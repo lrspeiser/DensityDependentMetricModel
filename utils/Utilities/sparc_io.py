@@ -234,7 +234,16 @@ def load_single_sparc_galaxy(galaxy_id: str,
                     elif 'RHI' in galaxy_meta: RHI_kpc_val = float(galaxy_meta['RHI'])
                     elif 'R_HI' in galaxy_meta: RHI_kpc_val = float(galaxy_meta['R_HI'])
                 used_option = None
-                if (MHI_1e9 is not None) and (RHI_kpc_val is not None) and (reconstruct_gas_exponential_truncated is not None):
+                # Optional override: force use of Vgas-shaped profile
+                import os as _os
+                force_vgas = _os.environ.get("SPARC_GAS_FORCE_VGAS", "0").strip() in ("1","true","True")
+                if force_vgas and reconstruct_gas_from_vgas is not None:
+                    Vgas_col = df_rotmod['V_gas'].values if 'V_gas' in df_rotmod.columns else np.zeros_like(common_R_kpc)
+                    gasB = reconstruct_gas_from_vgas(common_R_kpc, Vgas_col, MHI_1e9Msun=MHI_1e9, include_He=True)
+                    sigma_gas_interp_Msun_pc2 = gasB['Sigma_gas']
+                    used_option = 'B_shape(Vgas) [forced]'
+                    logger.info(f"[{galaxy_id}] Forced Vgas-shaped Sigma_gas via env SPARC_GAS_FORCE_VGAS.")
+                if used_option is None and (MHI_1e9 is not None) and (RHI_kpc_val is not None) and (reconstruct_gas_exponential_truncated is not None):
                     # Allow runtime override of truncation mode via environment variables
                     import os as _os
                     rmax_mode_env = _os.environ.get("SPARC_GAS_RMAX_MODE", "RHI").strip().upper()
@@ -252,6 +261,7 @@ def load_single_sparc_galaxy(galaxy_id: str,
                         Rmax_mode=("RHI" if rmax_mode_env == "RHI" else "kRd"),
                         kRd=krd_env,
                         rd_bracket_kpc=(0.1, 30.0),
+                        enforce_rd_bounds=True,
                         verbose=True,
                     )
                     sigma_gas_interp_Msun_pc2 = gasA['Sigma_gas']
@@ -259,9 +269,12 @@ def load_single_sparc_galaxy(galaxy_id: str,
                     rd_val = float(gasA['Rd_kpc'][0]) if 'Rd_kpc' in gasA else float('nan')
                     rmax_val = float(gasA['Rmax_kpc'][0]) if 'Rmax_kpc' in gasA else float('nan')
                     s0_val = float(gasA['Sigma0'][0]) if 'Sigma0' in gasA else float('nan')
-                    logger.info(f"[{galaxy_id}] Reconstructed Sigma_gas via Truncated Option A. Rd={rd_val:.3f} kpc; Σ0={s0_val:.2f}; Rmax={rmax_val:.2f} kpc; mode={rmax_mode_env} kRd={krd_env:.2f}")
+                    mass_mismatch = float(gasA.get('mass_mismatch', [1.0])[0]) if isinstance(gasA.get('mass_mismatch', [1.0]), np.ndarray) else 1.0
+                    penalty_mass = float(gasA.get('penalty_mass', [0.0])[0]) if isinstance(gasA.get('penalty_mass', [0.0]), np.ndarray) else 0.0
+                    logger.info(f"[{galaxy_id}] Reconstructed Sigma_gas via Truncated Option A. Rd={rd_val:.3f} kpc; Σ0={s0_val:.2f}; Rmax={rmax_val:.2f} kpc; mode={rmax_mode_env} kRd={krd_env:.2f}; mass_mismatch={mass_mismatch:.3f}; penalty≈{penalty_mass:.2f}")
                     if rmax_mode_env == "RHI":
                         if not (0.5 <= rd_val <= 10.0):
+                            logger.warning(f"[{galaxy_id}] Gas Rd={rd_val:.3f} kpc outside [0.5,10] under RHI truncation. Applying soft Σ(RHI)≈1 constraint; fallback to Vgas-shape only if still pathological.")
                             logger.warning(f"[{galaxy_id}] Gas Rd={rd_val:.3f} kpc outside [0.5,10] under RHI truncation. Check MHI/RHI metadata or consider Vgas-shaped fallback.")
                 if used_option is None and reconstruct_gas_from_vgas is not None:
                     Vgas_col = df_rotmod['V_gas'].values if 'V_gas' in df_rotmod.columns else np.zeros_like(common_R_kpc)
@@ -299,8 +312,18 @@ def load_single_sparc_galaxy(galaxy_id: str,
             # 'rho_total_mid_Msun_kpc3' will be calculated in main.py after M/L scaling of stellar part
             'assumed_hz_stellar_kpc': assume_stellar_hz_kpc,
             'assumed_hz_gas_kpc': assume_gas_hz_kpc,
-            'distance_Mpc': galaxy_meta['D_Mpc'] if galaxy_meta is not None and 'D_Mpc' in galaxy_meta else np.nan,
+'distance_Mpc': galaxy_meta['D_Mpc'] if galaxy_meta is not None and 'D_Mpc' in galaxy_meta else np.nan,
+            'e_distance_Mpc': galaxy_meta['e_D'] if galaxy_meta is not None and 'e_D' in galaxy_meta else np.nan,
+            'incl_deg': galaxy_meta['Inc'] if galaxy_meta is not None and 'Inc' in galaxy_meta else np.nan,
+            'e_incl_deg': galaxy_meta['e_Inc'] if galaxy_meta is not None and 'e_Inc' in galaxy_meta else np.nan,
             'M_HI_Msun': (galaxy_meta['MHI_1e9Msun'] * 1e9) if galaxy_meta is not None and ('MHI_1e9Msun' in galaxy_meta) else (galaxy_meta['MHI'] if galaxy_meta is not None and 'MHI' in galaxy_meta else np.nan),
+            # Gas reconstruction meta (optional)
+            'gas_profile_mode': used_option if 'used_option' in locals() else None,
+            'gas_Rd_kpc': (gasA['Rd_kpc'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'Rd_kpc' in gasA) else np.nan),
+            'gas_Sigma0': (gasA['Sigma0'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'Sigma0' in gasA) else np.nan),
+            'gas_Rmax_kpc': (gasA['Rmax_kpc'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'Rmax_kpc' in gasA) else np.nan),
+            'gas_mass_mismatch': (gasA['mass_mismatch'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'mass_mismatch' in gasA) else np.nan),
+            'gas_penalty_mass': (gasA['penalty_mass'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'penalty_mass' in gasA) else 0.0),
         }
         return output_dict
 

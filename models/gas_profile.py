@@ -84,6 +84,7 @@ def reconstruct_gas_exponential_truncated(
     Rmax_mode: str = "RHI",   # "RHI" or "kRd"
     kRd: float = 3.0,         # only used if Rmax_mode=="kRd"
     rd_bracket_kpc=(0.1, 30.0),
+    enforce_rd_bounds: bool = False,
     verbose: bool = True,
 ) -> Dict[str, np.ndarray]:
     """
@@ -110,44 +111,89 @@ def reconstruct_gas_exponential_truncated(
         return M_pred - Mgas
 
     lo, hi = rd_bracket_kpc
-    # bracket growth if needed
-    f_lo, f_hi = mass_residual(lo), mass_residual(hi)
-    grow = 0
-    while f_lo * f_hi > 0 and hi < 200.0:
-        hi *= 1.5
-        f_hi = mass_residual(hi)
-        grow += 1
-        if grow > 40:
-            break
+    # If enforcing bounds for RHI mode, clamp bracket to [0.5,10] kpc per conservative recipe
+    if enforce_rd_bounds and Rmax_mode.upper() == "RHI":
+        lo, hi = max(lo, 0.5), min(hi, 10.0)
+        if lo >= hi:
+            lo, hi = 0.5, 10.0
 
-    # bisection
-    Rd_kpc = 0.5 * (lo + hi)
-    for _ in range(200):
-        mid = 0.5 * (lo + hi)
-        f_mid = mass_residual(mid)
-        if abs(f_mid) < 1e-6 or (hi - lo) < 1e-6:
-            Rd_kpc = mid
-            break
-        if f_lo * f_mid < 0:
-            hi = mid
-            f_hi = f_mid
-        else:
-            lo = mid
-            f_lo = f_mid
+    # Attempt to find a sign change within bracket; if none, we will pick the minimizer inside [lo,hi]
+    f_lo, f_hi = mass_residual(lo), mass_residual(hi)
+    have_bracket = (f_lo * f_hi <= 0)
+
+    # bracket growth if allowed and not enforcing strict bounds
+    if (not have_bracket) and (not enforce_rd_bounds):
+        grow = 0
+        while f_lo * f_hi > 0 and hi < 200.0:
+            hi *= 1.5
+            f_hi = mass_residual(hi)
+            grow += 1
+            if grow > 40:
+                break
+        have_bracket = (f_lo * f_hi <= 0)
+
+    Rd_kpc = None
+    if have_bracket:
+        # bisection
+        lo_b, hi_b = lo, hi
+        f_lo_b, f_hi_b = f_lo, f_hi
+        for _ in range(200):
+            mid = 0.5 * (lo_b + hi_b)
+            f_mid = mass_residual(mid)
+            if abs(f_mid) < 1e-6 or (hi_b - lo_b) < 1e-6:
+                Rd_kpc = mid
+                break
+            if f_lo_b * f_mid < 0:
+                hi_b = mid
+                f_hi_b = f_mid
+            else:
+                lo_b = mid
+                f_lo_b = f_mid
+        if Rd_kpc is None:
+            Rd_kpc = 0.5 * (lo_b + hi_b)
+        mass_mismatch = 0.0
+        penalty_mass = 0.0
     else:
-        Rd_kpc = 0.5 * (lo + hi)
+        # No root in [lo,hi]; choose Rd that minimizes |mass_residual| within bounds and compute a soft penalty
+        # Coarse scan then local refine
+        grid = _np.linspace(lo, hi, 200)
+        vals = _np.abs([mass_residual(x) for x in grid])
+        idx = int(_np.argmin(vals))
+        Rd_init = float(grid[idx])
+        # Simple golden-section like refine
+        a, b = max(lo, Rd_init - (hi-lo)*0.1), min(hi, Rd_init + (hi-lo)*0.1)
+        for _ in range(80):
+            m1 = a + (b - a) / 3.0
+            m2 = b - (b - a) / 3.0
+            f1 = abs(mass_residual(m1))
+            f2 = abs(mass_residual(m2))
+            if f1 < f2:
+                b = m2
+            else:
+                a = m1
+        Rd_kpc = 0.5 * (a + b)
+        # Define a mass mismatch ratio and convert to a 0.2 dex Gaussian penalty equivalent
+        M_pred = 2.0 * _m.pi * _m.exp(RHI_kpc / Rd_kpc) * (Rd_kpc**2) * (1.0 - _m.exp(-( (RHI_kpc if Rmax_mode == "RHI" else (kRd*Rd_kpc)) / Rd_kpc)) * (1.0 + ( (RHI_kpc if Rmax_mode == "RHI" else (kRd*Rd_kpc)) / Rd_kpc))) * (PC_PER_KPC**2)
+        ratio = (M_pred / MHI) if MHI > 0 else 1.0
+        # treat log10 ratio deviation with sigma=0.2 dex
+        import math as __math
+        dlog10 = __math.log10(max(ratio, 1e-30))
+        penalty_mass = (dlog10 / 0.2) ** 2
+        mass_mismatch = ratio
 
     Sigma0 = _m.exp(RHI_kpc / Rd_kpc)
     Rmax_kpc = (RHI_kpc if Rmax_mode == "RHI" else kRd * Rd_kpc)
     if verbose:
         print(f"[gas_profile] Truncated-A: Rd={Rd_kpc:.3f} kpc, Sigma0={Sigma0:.2f} Msun/pc^2, Rmax={Rmax_kpc:.3f} kpc")
+        if not have_bracket:
+            print(f"[gas_profile] Note: No exact mass solve within bounds; using best-effort Rd with mass_mismatch={mass_mismatch:.3f} and penalty≈{penalty_mass:.2f}")
 
     R_pc  = _np.asarray(R_kpc) * PC_PER_KPC
     Rd_pc = Rd_kpc * PC_PER_KPC
     Rmax_pc = Rmax_kpc * PC_PER_KPC
     Sigma = Sigma0 * _np.exp(-R_pc / Rd_pc)
     Sigma[R_pc > Rmax_pc] = 0.0
-    return {"Sigma_gas": Sigma, "Rd_kpc": np.array([Rd_kpc]), "Sigma0": np.array([Sigma0]), "Rmax_kpc": np.array([Rmax_kpc])}
+    return {"Sigma_gas": Sigma, "Rd_kpc": np.array([Rd_kpc]), "Sigma0": np.array([Sigma0]), "Rmax_kpc": np.array([Rmax_kpc]), "mass_mismatch": _np.array([mass_mismatch if have_bracket is False else 1.0]), "penalty_mass": _np.array([penalty_mass if have_bracket is False else 0.0])}
 
 
 def reconstruct_gas_from_vgas(
