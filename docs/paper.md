@@ -218,6 +218,13 @@ For SPARC’s first pass we compute T from a baryon-only field (never from V_obs
 
 Each T is normalized by its median over fitted radii, then used in the ER window W(T). We will report Δlog Z stability across these T choices (Fig. S1; Table ED-T). [TODO-SPARC-T] Include the chosen proxy name in each result JSON.
 
+Table ED-T (T-proxy robustness; matched controls)
+
+| Galaxy   | logZ_ER (epicyclic)    | logZ_ER (curvature)     | logZ_ER (shear)         |
+|----------|-------------------------|-------------------------|-------------------------|
+| NGC 3198 | −144.543 ± 0.104        | −256.909 ± 0.530        | −343.239 ± 0.306        |
+| NGC 2403 | −259.785 ± 2.917        | −296.999 ± 0.619        | −390.602 ± 0.502        |
+
 ### 8A.3 Models, priors, and likelihood (per galaxy)
 - Baryons: Use SPARC component rotation curves or fit MN/Hernquist analogs to Σ*, Σ_gas so the same density engine computes ρ(R,0) and T(R).
 - GR baseline: V_GR(R) = V_bar(R).
