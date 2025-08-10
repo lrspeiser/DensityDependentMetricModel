@@ -1,8 +1,8 @@
-# Environmental Relativity: A density-modulated metric that reproduces flat galaxy rotation curves without dark matter
+# Tidal Field Relativity (TFR): A tidal-field–modulated metric that reproduces flat galaxy rotation curves without dark matter
 
 ## Abstract
 
-Observed rotation curves of disk galaxies remain flat to large radii, inconsistent with Newtonian/GR predictions from baryons alone. We propose Environmental Relativity (ER), a metric framework in which gravitational strength depends smoothly on the local baryonic environment via a bounded enhancement factor $\xi(\rho, T)$ that approaches unity at high density (Solar System) and grows in low-density, tidally structured regions (galactic outskirts). We implement a tidal-band form,
+Observed rotation curves of disk galaxies remain flat to large radii, inconsistent with Newtonian/GR predictions from baryons alone. We propose Tidal Field Relativity (TFR), a relativistic, metric-based modification to GR where the gravitational field strength is rescaled according to the local tidal field. In our formulation, the effective strength depends smoothly on the local baryonic environment and tidal structure via a bounded enhancement factor $\xi(\rho, T)$ that approaches unity at high density (Solar System) and grows in low-density, tidally structured regions (galactic outskirts). We implement a tidal-band form,
 
 $$
 \xi(\rho, T) = 1 + \lambda_{\max}\, S_\rho(\rho)\, W(T), \quad \xi \in [1,\,1+\lambda_{\max}].
@@ -10,7 +10,7 @@ $$
 
 with $S_\rho(\rho) = [1 + (\rho/\rho_c)^{\gamma_{\exp}}]^{-1}$ and $W(T) = \max\{w_{\min},\, \exp[-(\ln(T/T_0))^2/(2\,\sigma_{\ln T}^2)]\}$.
 
-Using Gaia DR3 Milky Way kinematics (N=144,000 stars, 5–16 kpc), we perform dynamic nested sampling to compare ER against a matched GR baseline (baryons only). Our representative ER fit yields log Z_ER = −9.82153×10^5 ± 0.06 versus log Z_GR ≈ −1.49090×10^6 (same pipeline), i.e. Δlog Z ≈ +5.09×10^5 (decisive on Jeffreys’ scale). Typical parameters: ρ_c ≃ 1.19×10^{15} M_⊙ kpc^{-3}, γ_exp ≃ 3.04, λ_max ≃ 4.23, with Cassini-safe screening (|ξ−1| ≪ 10^{−5}) and plausible void-redshift expectations.
+Using Gaia DR3 Milky Way kinematics (N=144,000 stars, 5–16 kpc), we perform dynamic nested sampling to compare TFR against a matched GR baseline (baryons only). Our representative TFR fit yields log Z_TFR = −9.82153×10^5 ± 0.06 versus log Z_GR ≈ −1.49090×10^6 (same pipeline), i.e. Δlog Z ≈ +5.09×10^5 (decisive on Jeffreys’ scale). Typical parameters: ρ_c ≃ 1.19×10^{15} M_⊙ kpc^{-3}, γ_exp ≃ 3.04, λ_max ≃ 4.23, with Cassini-safe screening (|ξ−1| ≪ 10^{−5}) and plausible void-redshift expectations.
 
 We provide a complete reproducibility recipe (data filters, binning, priors, commands) and mark targeted TODO analyses—multi-galaxy validation (SPARC/THINGS), ΛCDM/NFW cross-fits, lensing checks, explicit environmental tests, and outer-planet ephemeris tight-screening—to consolidate ER as a competitive alternative to dark matter on galactic scales.
 
@@ -24,11 +24,11 @@ Figure 2. Observed Gaia DR3 median stellar speeds with 16–84% band (gray) comp
 
 Since Rubin & Ford and early H I surveys [1,2], disk galaxies exhibit flat rotation curves far beyond luminous disks. ΛCDM attributes this to massive dark halos [3,4], while MOND modifies low-acceleration dynamics [5,6], capturing striking regularities (e.g., the radial acceleration relation [7]) yet facing tensions in clusters and in full relativistic embedding [6,10].
 
-We develop Environmental Relativity (ER), in which the metric is locally rescaled by a smooth, bounded factor ξ(ρ, T) that depends on baryonic density ρ and a tidal-structure indicator T. ER is motivated by scale-dependent couplings in quantum field theory (e.g., QCD running [12,13]) and by work showing GR’s self-interaction can mimic enhanced binding in extended systems [31–33]. ER preserves null geodesics’ causal structure while amplifying effective gravity where baryons are sparse and tidally organized, naturally screening in the Solar System and laboratory regimes. We show ER fits the Milky Way rotation curve decisively better than a baryons-only GR baseline, with stringent reproducibility and clear predictions.
+We develop Tidal Field Relativity (TFR), in which the metric is locally rescaled by a smooth, bounded factor ξ(ρ, T) that depends on baryonic density ρ and a tidal-structure indicator T. This is a relativistic, metric-based modification to GR where the gravitational field strength is rescaled according to the local tidal field. TFR is motivated by scale-dependent couplings in quantum field theory (e.g., QCD running [12,13]) and by work showing GR’s self-interaction can mimic enhanced binding in extended systems [31–33]. TFR preserves null geodesics’ causal structure while amplifying effective gravity where baryons are sparse and tidally organized, naturally screening in the Solar System and laboratory regimes. We show TFR fits the Milky Way rotation curve decisively better than a baryons-only GR baseline, with stringent reproducibility and clear predictions.
 
 ---
 
-## 2. Environmental Relativity (ER) Framework
+## 2. Tidal Field Relativity (TFR) Framework
 
 ### 2.1 Metric ansatz and weak-field limit
 
@@ -164,9 +164,9 @@ Using the same sampler controls as ER:
 
 [TODO-CONSISTENCY-A] Reconcile all GR baselines reported across prior runs; publish the matched-pair used for the headline Δlog Z.
 
-### 7.2 ER tidal-band
+### 7.2 TFR tidal-band
 
-- Evidence: log Z_ER = −9.82153×10^5 ± 0.06; hence Δlog Z ≃ +5.09×10^5 vs the matched GR baseline.
+- Evidence: log Z_TFR = −9.82153×10^5 ± 0.06; hence Δlog Z ≃ +5.09×10^5 vs the matched GR baseline.
 - Representative parameters: ρ_c ≃ 1.19×10^{15}, γ_exp ≃ 3.04, λ_max ≃ 4.23, T_0 ≃ 210, σ_{ln T} ≃ 1.23, w_min ≃ 0.028.
 - Profile: ξ ≈ 3–4 across outer disk densities (10^{6–8} M_⊙ kpc^{−3}), flattening the curve while preserving inner-disk shape.
 - Screening: For Solar-System-like densities ρ ≫ ρ_c, S_ρ → 0, giving |ξ − 1| ≪ 10^{−5}.
@@ -405,13 +405,13 @@ We ran a preliminary batch (N=10 galaxies) using the new batch runner with match
 - CSV: ed_sparc_batch.csv
 
 Headline results from this batch:
-- ER vs GR: ER preferred (ΔlogZ = logZ_ER − logZ_GR > 0) in 10/10 galaxies.
-- ER vs NFW: ER preferred in 7/10 galaxies.
+- TFR vs GR: TFR preferred (ΔlogZ = logZ_TFR − logZ_GR  3e 0) in 10/10 galaxies.
+- TFR vs NFW: TFR preferred in 7/10 galaxies.
 
 Examples (ΔlogZ values):
-- CamB: ΔlogZ(ER−GR)=+31.06, ΔlogZ(ER−NFW)=+64.23
-- D631-7: ΔlogZ(ER−GR)=+680.99, ΔlogZ(ER−NFW)=+48.30
-- DDO170: ΔlogZ(ER−GR)=+1926.45, ΔlogZ(ER−NFW)=−25.66 (NFW favored)
+- CamB: ΔlogZ(TFR−GR)=+31.06, ΔlogZ(TFR−NFW)=+64.23
+- D631-7: ΔlogZ(TFR−GR)=+680.99, ΔlogZ(TFR−NFW)=+48.30
+- DDO170: ΔlogZ(TFR−GR)=+1926.45, ΔlogZ(TFR−NFW)=−25.66 (NFW favored)
 
 Caveats and next steps:
 - Settings (nlive, maxcall, σ_floor) were chosen for speed; we will scale up to the paper-grade settings and extend to ≥20 galaxies.
