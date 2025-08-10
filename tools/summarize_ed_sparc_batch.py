@@ -36,7 +36,7 @@ def load_rows() -> List[Dict[str, Any]]:
             rows.append(row)
     return rows
 
-def compute_metrics(rows: List[Dict[str, Any]]) -e List[Dict[str, Any]]:
+def compute_metrics(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out = []
     for row in rows:
         z_gr = safe_float(row.get('logZ_GR'))
@@ -60,7 +60,6 @@ def compute_metrics(rows: List[Dict[str, Any]]) -e List[Dict[str, Any]]:
             'dCOMP_NFW': d_comp_nfw,
             'dCOMP_ER': d_comp_er,
         })
-    return out
     return out
 
 
