@@ -1,0 +1,24 @@
+{
+  "galaxy_id": "NGC2903",
+  "model": "nfw",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": true,
+    "V200": {
+      "min": 40.0,
+      "max": 400.0
+    },
+    "c": {
+      "min": 2.0,
+      "max": 40.0
+    }
+  },
+  "evidence": {
+    "logZ": -1001.0327746566796,
+    "logZ_err": 0.09263043344991276,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

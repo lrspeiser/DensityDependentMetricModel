@@ -5,12 +5,12 @@
   "mask": "none",
   "params": {
     "log10_rho_c": 17.0,
-    "gamma_exp": 5.0,
-    "lambda_max": 3.90467357776768,
+    "gamma_exp": 1.0,
+    "lambda_max": 1.1229046539675667,
     "lnT0": -1.0,
     "sigma_lnT": 2.0,
     "w_min": 0.05,
-    "ups_disk": 0.3,
+    "ups_disk": 0.8,
     "ups_bul": 0.5,
     "V200": 150.0,
     "c": 10.0
@@ -23,20 +23,20 @@
     "e_incl_deg": 3.0
   },
   "gas": {
-    "profile_mode": null,
-    "Rd_kpc": NaN,
-    "Sigma0": NaN,
-    "Rmax_kpc": NaN,
-    "mass_mismatch": NaN,
-    "penalty_mass": 0.0
+    "profile_mode": "A_trunc_exp(MHI,RHI); mode=RHI kRd=3.00",
+    "Rd_kpc": 9.999999999999996,
+    "Sigma0": 35.37481053330208,
+    "Rmax_kpc": 35.66,
+    "mass_mismatch": 1.7810052964810306,
+    "penalty_mass": 1.570826200156651
   },
   "sanity": {
-    "xi_min": 1.802565409248783,
-    "xi_med": 4.3613135287858675,
-    "xi_max": 4.896005323612844,
-    "R_peak_W": 16.07,
+    "xi_min": 1.0561452319346403,
+    "xi_med": 1.803801117832409,
+    "xi_max": 2.122040520649712,
+    "R_peak_W": 20.05,
     "sigma_floor": 5.0,
-    "T_proxy": "epicyclic",
+    "T_proxy": "curvature",
     "tidal_norm": "robust",
     "prior_edge_hits": {
       "log10_rho_c": true,
@@ -49,13 +49,13 @@
       "ups_bul": true
     }
   },
-  "chi2": 273.06036701161923,
-  "chi2_dof": 7.80172477176055,
-  "loglike_no_const": -136.53018350580962,
+  "chi2": 1003.7350963826088,
+  "chi2_dof": 28.678145610931683,
+  "loglike_no_const": -501.8675481913044,
   "mode": "evidence",
   "evidence": {
-    "logZ": -147.97651806596855,
-    "logZ_err": 2.7908346123821652,
+    "logZ": -256.90935952407534,
+    "logZ_err": 2.812922582310516,
     "nlive": 1000,
     "maxcall": 200000,
     "dlogz_target": 0.01,

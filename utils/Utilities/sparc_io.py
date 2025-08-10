@@ -88,7 +88,59 @@ def load_single_sparc_galaxy(galaxy_id: str,
     """
     if not isinstance(galaxy_id, str): galaxy_id = str(galaxy_id)
 
-    rotmod_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_rotmod.dat"
+    # Resolve rotmod file robustly (handles leading zeros, underscores, aliases like M33)
+    sparc_dir_path = pathlib.Path(sparc_dir)
+    def resolve_rotmod_path(gid: str) -> pathlib.Path | None:
+        # Direct canonical
+        candidates = [
+            sparc_dir_path / f"{gid}_rotmod.dat",
+        ]
+        # Variants: remove underscore, remove leading zeros in numeric part
+        import re
+        m = re.match(r"^([A-Za-z]+)0*(\d+)$", gid)
+        if m:
+            base = m.group(1); num = m.group(2)
+            nozero = f"{base}{int(num)}"  # e.g., NGC0598 -> NGC598
+            candidates += [
+                sparc_dir_path / f"{nozero}_rotmod.dat",
+                sparc_dir_path / f"{nozero}rotmod.dat",
+                sparc_dir_path / f"{gid}rotmod.dat",
+                sparc_dir_path / f"{gid.replace('_','')}_rotmod.dat",
+            ]
+            # Messier alias for common cases (e.g., NGC0598/M33)
+            try:
+                n_int = int(num)
+                if base.upper() == 'NGC' and n_int == 598:
+                    for alias in ['M033', 'M33']:
+                        candidates += [
+                            sparc_dir_path / f"{alias}_rotmod.dat",
+                            sparc_dir_path / f"{alias}rotmod.dat",
+                        ]
+            except Exception:
+                pass
+        # Try exact candidates first
+        for pth in candidates:
+            if pth.exists():
+                return pth
+        # Glob fallback: try patterns around numeric or M33 tokens
+        pats = []
+        if m:
+            pats.append(f"*{int(m.group(2))}*rotmod*.dat")
+        if 'M33' not in ''.join([str(c) for c in candidates]):
+            pats.append("*M33*rotmod*.dat")
+        best = None
+        for pat in pats:
+            for pth in sparc_dir_path.glob(pat):
+                if best is None or len(str(pth.name)) > len(str(best.name)):
+                    best = pth
+        return best
+
+    rotmod_path_resolved = resolve_rotmod_path(galaxy_id)
+    if rotmod_path_resolved is None:
+        logger.error(f"Galaxy _rotmod.dat file not found for {galaxy_id} in {sparc_dir}")
+        return None
+
+    rotmod_file = rotmod_path_resolved
     hirad_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_HIrad.dat" # HI surface density (optional)
     sb_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_SB.dat"       # 3.6um Surface Brightness (optional)
 
@@ -323,7 +375,11 @@ def load_single_sparc_galaxy(galaxy_id: str,
             'gas_Sigma0': (gasA['Sigma0'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'Sigma0' in gasA) else np.nan),
             'gas_Rmax_kpc': (gasA['Rmax_kpc'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'Rmax_kpc' in gasA) else np.nan),
             'gas_mass_mismatch': (gasA['mass_mismatch'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'mass_mismatch' in gasA) else np.nan),
-            'gas_penalty_mass': (gasA['penalty_mass'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'penalty_mass' in gasA) else 0.0),
+'gas_penalty_mass': (gasA['penalty_mass'][0] if (locals().get('gasA') is not None and isinstance(gasA, dict) and 'penalty_mass' in gasA) else 0.0),
+            # Resolved file paths for transparency/debugging
+            'rotmod_path': str(rotmod_file),
+            'hirad_path': (str(hirad_file) if hirad_file.exists() else None),
+            'sb_path': (str(sb_file) if sb_file.exists() else None),
         }
         return output_dict
 

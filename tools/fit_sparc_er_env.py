@@ -194,6 +194,11 @@ def main():
     ap.add_argument('--tidal-norm', choices=['robust','simple'], default='robust')
     # MasterSheet priors on distance/inclination (logged for parity)
     ap.add_argument('--use-master-priors', action='store_true', help='Record and (optionally) apply MasterSheet D/i priors for parity across models')
+    # Dynesty evidence controls (non-invasive)
+    ap.add_argument('--nlive', type=int, default=1000, help='Dynesty nlive (evidence mode)')
+    ap.add_argument('--maxcall', type=int, default=200000, help='Dynesty maxcall (evidence mode)')
+    ap.add_argument('--dlogz-target', type=float, default=0.01, help='Dynesty target dlogz (evidence mode)')
+    ap.add_argument('--seed', type=int, default=42, help='Random seed for sampler (evidence mode)')
     # Inits / priors centers
     ap.add_argument('--log10_rho_c', type=float, default=15.0)
     ap.add_argument('--gamma_exp', type=float, default=3.0)
@@ -394,8 +399,9 @@ def main():
                           args.T_proxy, args.tidal_norm, args.sigma_floor,
                           fit_ml_flags, ml_priors, ml_sigmas)
             return -0.5 * float(c2)
-        dsampler = dynesty.DynamicNestedSampler(loglike, prior_transform, ndim=ndim, bound='multi', sample='rslice')
-        dsampler.run_nested(maxcall=20000)
+        rng = np.random.default_rng(int(args.seed))
+        dsampler = dynesty.DynamicNestedSampler(loglike, prior_transform, ndim=ndim, bound='multi', sample='rslice', rstate=rng)
+        dsampler.run_nested(maxcall=int(args.maxcall), dlogz_init=float(args.dlogz_target), nlive_init=int(args.nlive))
         res = dsampler.results
         logZ = float(res.logz[-1])
         logZ_err = float(res.logzerr[-1]) if hasattr(res, 'logzerr') else None
@@ -460,9 +466,13 @@ def main():
         'chi2_dof': float(chi2_best/dof),
         'loglike_no_const': lnL,
 'mode': args.mode,
-        'evidence': {
+'evidence': {
             'logZ': logZ,
             'logZ_err': logZ_err,
+            'nlive': int(args.nlive),
+            'maxcall': int(args.maxcall),
+            'dlogz_target': float(args.dlogz_target),
+            'seed': int(args.seed),
         },
     }
     with open(out_path.with_suffix('.json'), 'w', encoding='utf-8') as f:

@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "NGC2841",
+  "model": "gr",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": true
+  },
+  "chi2": 8073.56404922983,
+  "loglike_no_const": -4036.782024614915,
+  "evidence": {
+    "logZ": -4036.7821674686666,
+    "logZ_err": 0.00035522649047398813,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

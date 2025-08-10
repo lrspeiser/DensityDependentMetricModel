@@ -242,6 +242,15 @@ Results (χ², identical σ-floor/mask across models)
 - NFW halo: χ² = 74.30, χ²/dof = 1.81
 - ER (epicyclic; gas=RHI-truncated): χ² = 273.06, χ²/dof = 7.80
 
+Evidences (matched dynesty controls: nlive=1000, maxcall=200000, dlogz_target=0.01; σ-floor=5 km s^{-1}, identical masks and D/i priors)
+- logZ_GR = −951.499 (plateau; GR has no free parameters)
+- logZ_NFW = −42.687 ± 0.068
+- logZ_ER = −144.543 ± 0.104
+- Bayes factors (ΔlogZ):
+  - ER − GR: +806.956 ± 0.104 (decisive for ER over GR)
+  - NFW − GR: +908.812 ± 0.068 (decisive for NFW over GR)
+  - ER − NFW: −101.856 ± 0.124 (NFW favored over ER for this galaxy, as expected)
+
 Acceptance criteria (Δln L ≈ −½Δχ² as a proxy for Δlog Z)
 - ER − GR (epicyclic, primary): Δln L ≈ +815 → passes “strong” (≫10)
 - ER − GR (curvature): Δln L ≈ +449 → still strongly > 10
@@ -249,7 +258,11 @@ Acceptance criteria (Δln L ≈ −½Δχ² as a proxy for Δlog Z)
 
 Sensitivity checks
 - Gas profile: ER, epicyclic, V_gas-shaped (forced) → χ² = 273.06 (identical to primary). Δχ²(Vgas − RHI) = 0.00 → no sensitivity to gas-profile choice.
-- Tidal proxy: ER, curvature, RHI-truncated → χ² = 1003.74. Δχ²(curvature − epicyclic) = +730.68 → epicyclic clearly preferred.
+- Tidal proxy: ER evidences under matched controls (σ-floor=5; nlive=1000; maxcall=200k; dlogz=0.01):
+  - epicyclic: logZ_ER = −144.543 ± 0.104 (primary)
+  - curvature: logZ_ER = −256.909 ± 0.530
+  - shear:     logZ_ER = −343.239 ± 0.306
+  Hence, epicyclic maximizes the ER evidence on NGC 3198; the spread ΔlogZ across proxies is O(100), reported in Table ED-T.
 
 Gas reconstruction diagnostics (RHI-truncated exponential)
 - R_d ≈ 10.0 kpc (within [0.5,10]); Σ_0 ≈ 35.4 M_⊙ pc^{-2}; R_max ≈ 35.66 kpc
@@ -262,13 +275,18 @@ Figure ED-NGC 3198 (conservative recipe)
 
 Black points: observed V_c with 1σ errors. Blue dashed: GR (baryons-only). Red solid: ER fit over data radii; orange dashed: ER extrapolation. Shaded region beyond last SPARC point. Settings as above (σ-floor=5; epicyclic; RHI gas; M/L priors/clamps; D/i priors). This replaces older preliminary numbers; prior χ²/dof ≈ 6.22 text is deprecated and removed to avoid confusion.
 
-Extended Data Table ED-SPARC (schema; to be auto-filled)
+Extended Data Table ED-SPARC (evidence batch; this work)
 
-| Galaxy | D (Mpc) | i (deg) | Υ_3.6 | σ_floor (km s^{-1}) | logZ_GR | logZ_ER | logZ_NFW | ΔlogZ(ER−GR) | ΔlogZ(ER−NFW) | T proxy | Notes |
-|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---|---|
-| NGC 3198 | 13.8 | 72 | 0.45±0.10 | 5.0 | … | … | … | … | … | epicyclic | conservative |
-| NGC 2403 | … | … | … | 5.0 | … | … | … | … | … | shear | … |
-| M33 | … | … | … | 5.0 | … | … | … | … | … | epicyclic | … |
+| Galaxy   | logZ_GR          | logZ_NFW             | logZ_ER               | ΔlogZ(ER−GR) | ΔlogZ(ER−NFW) |
+|----------|-------------------|----------------------|-----------------------|--------------|---------------|
+| NGC 2403 | −1453.019 ± 0.000 | −131.360 ± 0.120     | −259.785 ± 2.917      | +1193.235     | −128.425      |
+| NGC 2841 | −4036.782 ± 0.000 | −1144.154 ± 2.602    | −598.584 ± 3.105      | +3438.199     | +545.571      |
+| NGC 2903 | −1193.474 ± 0.000 | −1001.033 ± 0.093    | −172.664 ± 3.056      | +1020.810     | +828.369      |
+| NGC 3198 | −951.499 ± 0.000  | −42.687 ± 0.072      | −144.543 ± 0.104      | +806.957      | −101.856      |
+| NGC 5055 | −1400.164 ± 0.000 | −1256.264 ± 0.169    | −159.558 ± 3.071      | +1240.606     | +1096.706     |
+| NGC 6946 | −432.795 ± 0.000  | −444.878 ± 0.070     | −33.034 ± 2.897       | +399.760      | +411.844      |
+| UGC 00128| −1603.288 ± 0.000 | −7.592 ± 0.059       | −46.067 ± 1.552       | +1557.222     | −38.475       |
+| NGC 0598 | −306.618 ± 0.000  | −15.512 ± 0.056      | −11.314 ± 0.488       | +295.304      | +4.199        |
 
 [TODO-SPARC-2] Auto-generate from sparc_batch_summary.csv. Include ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min in a supplementary table.
 
