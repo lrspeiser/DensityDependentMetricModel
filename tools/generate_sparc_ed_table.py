@@ -59,12 +59,15 @@ def load_entry(p: Path) -> dict | None:
         with p.open("r", encoding="utf-8") as f:
             j = json.load(f)
         # Normalize keys
-        galaxy = j.get("galaxy") or j.get("name") or j.get("target")
+        galaxy = j.get("galaxy") or j.get("galaxy_id") or j.get("name") or j.get("target")
         model = (j.get("model") or j.get("mode") or j.get("fit_model") or "").upper()
-        logZ = j.get("logZ")
-        logZ_err = j.get("logZ_err") or j.get("logZ_unc") or j.get("logZ_sigma")
-        sigma_floor = j.get("sigma_floor")
-        t_proxy = j.get("t_proxy") or j.get("tidal_proxy") or j.get("T_proxy")
+        # Support nested evidence objects
+        ev = j.get("evidence") or {}
+        logZ = j.get("logZ", ev.get("logZ"))
+        logZ_err = j.get("logZ_err") or j.get("logZ_unc") or j.get("logZ_sigma") or ev.get("logZ_err") or ev.get("logZ_sigma")
+        sigma_floor = j.get("sigma_floor") or j.get("params", {}).get("sigma_floor") or ev.get("sigma_floor")
+        # Try several locations for tidal proxy label
+        t_proxy = j.get("t_proxy") or j.get("tidal_proxy") or j.get("T_proxy") or j.get("params", {}).get("t_proxy") or j.get("sanity", {}).get("t_proxy")
         # Fallback galaxy name from filename
         if not galaxy:
             m = RE_GAL.search(p.name)

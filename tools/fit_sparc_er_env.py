@@ -129,13 +129,16 @@ def fit_one_galaxy_env(galaxy_id: str, sparc_dir: str,
                         sigma_floor: float,
                         fit_ml_flags: tuple[bool, bool],
                         ml_priors: tuple[float, float],
-                        ml_sigmas: tuple[float, float]):
+                        ml_sigmas: tuple[float, float],
+                        hz_star: float,
+                        hz_gas: float,
+                        hz_alpha: float):
     data = load_single_sparc_galaxy(
         galaxy_id,
         sparc_dir=sparc_dir,
-        assume_gas_hz_kpc=float(args.hz_gas),
-        assume_stellar_hz_kpc=float(args.hz_star),
-        assume_hz_alpha=float(args.hz_alpha),
+        assume_gas_hz_kpc=float(hz_gas),
+        assume_stellar_hz_kpc=float(hz_star),
+        assume_hz_alpha=float(hz_alpha),
     )
     if data is None:
         raise FileNotFoundError(f"Failed to load SPARC data for {galaxy_id} from {sparc_dir}")
@@ -270,6 +273,9 @@ def main():
         fit_ml_flags,
         ml_priors,
         ml_sigmas,
+        args.hz_star,
+        args.hz_gas,
+        args.hz_alpha,
     )
 
     R = data['R_kpc']
