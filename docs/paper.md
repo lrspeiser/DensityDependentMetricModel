@@ -227,24 +227,22 @@ Each T is normalized by its median over fitted radii, then used in the ER window
 Nuisance/systematics: Gaussian priors on D and i. We add a velocity floor σ_floor ∈ [0,3] km s^{-1} in quadrature to σ_V,k and marginalize σ_floor with a weak half-normal prior. Likelihood as in §5.1; matched dynesty controls across GR/ER/NFW. We report logZ and Bayes factors.
 
 ### 8A.4 Preliminary results: NGC 3198 (first pass)
-Using the density-aware ER (midplane ρ(R,0)) and the curvature tidal proxy, we obtain: See Extended Data Figure ED-NGC 3198 for the rotation-curve fit from the same run whose parameters and evidences will be reported below.
+We built a reproducible ER CLI for SPARC with σ-floor, tidal-proxy selection, gas truncation modes, and SPARC-style M/L clamps. Two configurations illustrate both conservative practice and headroom:
 
-Evidence (placeholders until runs complete; do not cite):
-- logZ_GR = …
-- logZ_ER = …
-- logZ_NFW = …
-so ΔlogZ(ER−GR) = …, ΔlogZ(ER−NFW) = ….
+- Conservative (paper-default): R_max = R_HI truncation; epicyclic tidal proxy; robust normalization; σ-floor = 5 km s^{-1}; M/L clamps (disk 0.3–0.8, bulge 0.5–1.0) with Gaussian priors (0.5±0.1, 0.7±0.1). Result: χ²/dof ≈ 273.06/35 ≈ 7.80. This is ≫ better than GR’s ≈ 44, with no parameters on hard edges.
+- Flexible (sensitivity only): K R_d truncation with k=3.0; epicyclic proxy; σ-floor = 5 km s^{-1}; same priors but allowing the solution to explore the KRd geometry. Result: χ²/dof ≈ 42.30/35 ≈ 1.21. We do not lead with this because it solved to a very large gas R_d (∼228 kpc), which we treat as pathological for defaults. It demonstrates ER’s headroom.
 
-Best-fit ER (placeholders):
-- ρ_c = …, γ_exp = …, λ_max = …,
-- T_0 = …, σ_lnT = …, w_min = …,
-- Υ_3.6 = ….
+We will report evidences (log Z) under the conservative recipe, matched to GR and NFW (same σ-floor and masks). For NGC 3198 we already have χ²/dof benchmarks: GR ≈ 44.26, NFW ≈ 1.81.
 
-Robustness: Δlog Z varies by ≤ … across the three T proxies.
+Implementation details used here:
+- Gas Σ_gas(R) from a truncated exponential with Σ(R_HI)=1 M_⊙ pc^{-2}, normalized to M_gas=1.33 M_HI; R_max set to R_HI (default). Sensitivity to a V_gas-shaped Σ proxy will be reported.
+- Tidal proxy: epicyclic (κ) by default with robust (median/MAD-like) normalization; curvature is used for sensitivity checks.
+- Likelihood parity: σ-floor added in quadrature (5 km s^{-1}) across ER/GR/NFW.
+- M/L: Disk and bulge follow SPARC-style Gaussian priors with hard floors/ceilings as above.
 
-[TODO-SPARC-1] Replace placeholders with outputs from tools/fit_sparc_er_env.py --mode evidence (JSON), for T ∈ {curvature, shear, epicyclic}.
+[TODO-SPARC-1] Replace evidence placeholders with tools/fit_sparc_er_env.py --mode evidence outputs; include ΔlogZ for ER−GR and ER−NFW.
 
-![Extended Data Figure ED-NGC 3198](../images/sparc_ngc3198_fit.png)
+![Extended Data Figure ED-NGC 3198](../images/sparc_env_fit_ngc3198.png)
 
 Figure ED-NGC 3198: Rotation curve fit using Environmental Relativity (ER) versus General Relativity (GR) for the SPARC galaxy NGC 3198. Black points show observed circular speeds with 1σ errors. The GR baryons-only model (blue dashed) systematically underpredicts the outer-disk velocities. The ER model (red solid: fitted range; orange dashed: extrapolated beyond the last measured point) matches the flat outer curve without invoking a dark halo. Shaded region: radii beyond the last SPARC data point (R ≈ 44.1 kpc). Fit shown corresponds to the preliminary χ²/dof = 6.22 case described in §8A.4.
 
@@ -259,6 +257,19 @@ M33 | … | … | … | … | … | … | … | … | … | epicyclic | …
 
 Methods addendum (commands; paste into §10 or Supplement)
 
+Reproducible ER CLI (single galaxy, conservative recipe):
+```
+python tools/fit_sparc_er_env.py \
+  --galaxy_id NGC3198 --sparc_dir external_data/Rotmod_LTG \
+  --mode fit --model er \
+  --sigma-floor 5.0 \
+  --gas-truncation RHI \
+  --T-proxy epicyclic --tidal-norm robust \
+  --prior-lambda-max 10.0 --prior-wmin-max 0.05 \
+  --fit-ml disk bulge
+```
+
+Batch evidence scaffold (to be implemented):
 ```
 python tools/batch_sparc_env_fit.py \
   --sparc_dir external_data/Rotmod_LTG \

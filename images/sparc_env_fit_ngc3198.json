@@ -1,0 +1,21 @@
+{
+  "galaxy_id": "NGC3198",
+  "file_rotmod": "external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
+  "model": "er",
+  "params": {
+    "log10_rho_c": 17.0,
+    "gamma_exp": 5.0,
+    "lambda_max": 3.90467357776768,
+    "lnT0": -1.0,
+    "sigma_lnT": 2.0,
+    "w_min": 0.05,
+    "ups_disk": 0.3,
+    "ups_bul": 0.5,
+    "V200": 150.0,
+    "c": 10.0
+  },
+  "chi2": 273.06036701161923,
+  "chi2_dof": 7.80172477176055,
+  "loglike_no_const": -136.53018350580962,
+  "mode": "fit"
+}

@@ -7,6 +7,17 @@ import numpy as np
 import logging
 import pathlib
 from scipy.interpolate import interp1d # For interpolating profiles
+# Gas profile reconstruction helpers
+try:
+    from models.gas_profile import (
+        reconstruct_gas_exponential,
+        reconstruct_gas_exponential_truncated,
+        reconstruct_gas_from_vgas,
+    )
+except Exception:
+    reconstruct_gas_exponential = None
+    reconstruct_gas_exponential_truncated = None
+    reconstruct_gas_from_vgas = None
 
 # Initialize logger for this module
 logger = logging.getLogger("sparc_loader")
@@ -25,13 +36,44 @@ def load_sparc_metadata(sparc_dir=DEFAULT_SPARC_DATA_DIR):
     if not meta_file.exists():
         logger.error(f"SPARC MasterSheet {meta_file} not found.")
         return None
+    # Try straightforward CSV read first
     try:
         df_meta = pd.read_csv(meta_file)
         logger.info(f"Successfully loaded SPARC MasterSheet with {len(df_meta)} galaxies.")
         return df_meta
-    except Exception as e:
-        logger.error(f"Error loading SPARC MasterSheet {meta_file}: {e}")
-        return None
+    except Exception:
+        # Fallback: skip MRT header preamble and parse only data block
+        try:
+            with open(meta_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            start_idx = None
+            for i, ln in enumerate(lines):
+                if not ln.strip():
+                    continue
+                # Heuristic: data lines look like Name,T,D_Mpc,... where fields 2 and 3 are numbers
+                parts = [p.strip() for p in ln.split(',')]
+                if len(parts) >= 5:
+                    # parts[1] should be integer-like (Hubble T), parts[2] float-like (Distance)
+                    try:
+                        int(parts[1])
+                        float(parts[2])
+                        start_idx = i
+                        break
+                    except Exception:
+                        continue
+            if start_idx is None:
+                raise ValueError("Could not locate data section in MasterSheet_SPARC.csv")
+            # Define expected column names for the data block
+            cols = [
+                'Name','T','D_Mpc','e_D','f_D','Inc','e_Inc','L_3p6_1e9Lsun','e_L_3p6','Reff_kpc',
+                'SBeff_Lsun_pc2','Rdisk_kpc','SBdisk0_Lsun_pc2','MHI_1e9Msun','RHI_kpc','Vflat_kms','e_Vflat_kms','Q','Ref'
+            ]
+            df_meta = pd.read_csv(meta_file, skiprows=start_idx, header=None, names=cols)
+            logger.info(f"Successfully parsed SPARC MasterSheet data section with {len(df_meta)} galaxies (skipped header preamble).")
+            return df_meta
+        except Exception as e2:
+            logger.error(f"Error loading SPARC MasterSheet {meta_file}: {e2}")
+            return None
 
 def load_single_sparc_galaxy(galaxy_id: str,
                              sparc_dir=DEFAULT_SPARC_DATA_DIR,
@@ -47,20 +89,24 @@ def load_single_sparc_galaxy(galaxy_id: str,
     if not isinstance(galaxy_id, str): galaxy_id = str(galaxy_id)
 
     rotmod_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_rotmod.dat"
-    hirad_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_HIrad.dat" # HI surface density
-    sb_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_SB.dat"       # 3.6um Surface Brightness
+    hirad_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_HIrad.dat" # HI surface density (optional)
+    sb_file = pathlib.Path(sparc_dir) / f"{galaxy_id}_SB.dat"       # 3.6um Surface Brightness (optional)
 
     if not rotmod_file.exists():
         logger.error(f"Galaxy _rotmod.dat file {rotmod_file} not found for {galaxy_id}.")
         return None
     if not hirad_file.exists():
-        logger.warning(f"Galaxy _HIrad.dat file {hirad_file} not found for {galaxy_id}. Gas density will be zero.")
-    if not sb_file.exists():
-        logger.warning(f"Galaxy _SB.dat file {sb_file} not found for {galaxy_id}. Stellar density will be zero.")
+        logger.warning(f"Galaxy _HIrad.dat file {hirad_file} not found for {galaxy_id}. Gas surface density will be derived from rotmod gas curves only.")
+    # SB may be provided by rotmod as SB columns; warn only if neither _SB.dat nor rotmod SB columns exist (checked later)
 
     try:
-        df_rotmod = pd.read_csv(rotmod_file, delim_whitespace=True, comment='#',
-                                names=['R_kpc', 'V_obs', 'e_V_obs', 'V_gas', 'V_disk', 'V_bulge'])
+        # Many SPARC rotmod files include SBdisk and SBbulge columns. Read 8 columns; extra will be ignored, missing become NaN.
+        df_rotmod = pd.read_csv(
+            rotmod_file,
+            delim_whitespace=True,
+            comment='#',
+            names=['R_kpc', 'V_obs', 'e_V_obs', 'V_gas', 'V_disk', 'V_bulge', 'SB_disk_Lsun_pc2', 'SB_bulge_Lsun_pc2']
+        )
         logger.info(f"[{galaxy_id}] Loaded {len(df_rotmod)} radial points from {rotmod_file.name}.")
         # Use R_kpc from rotmod as the common radial grid
         common_R_kpc = df_rotmod['R_kpc'].values
@@ -68,6 +114,7 @@ def load_single_sparc_galaxy(galaxy_id: str,
         # --- Load and Interpolate Gas Surface Density (_HIrad.dat) ---
         # Columns: Radius (kpc), Sigma_HI (Msun/pc^2, already includes 1.33x for He)
         sigma_gas_interp_Msun_pc2 = np.zeros_like(common_R_kpc)
+        need_gas_reconstruct = False
         if hirad_file.exists():
             df_hirad = pd.read_csv(hirad_file, delim_whitespace=True, comment='#',
                                    names=['R_HI_kpc', 'Sigma_HI_Msun_pc2'])
@@ -89,12 +136,14 @@ def load_single_sparc_galaxy(galaxy_id: str,
             else:
                 logger.warning(f"[{galaxy_id}] _HIrad.dat is empty or has too few points for interpolation.")
         else:
-            logger.warning(f"[{galaxy_id}] No _HIrad.dat file. Sigma_gas set to 0.")
+            logger.warning(f"[{galaxy_id}] No _HIrad.dat file. Will attempt reconstruction from SPARC metadata/rotmod.")
+            need_gas_reconstruct = True
 
 
         # --- Load and Interpolate Stellar Surface Brightness (_SB.dat) and convert to Mass Surface Density ---
         # Columns: Radius (kpc), SB_disk (Lsun/pc^2 at 3.6um), SB_bulge (Lsun/pc^2 at 3.6um)
         sigma_star_interp_Msun_pc2 = np.zeros_like(common_R_kpc)
+        used_sb_source = None
         if sb_file.exists():
             df_sb = pd.read_csv(sb_file, delim_whitespace=True, comment='#',
                                 names=['R_SB_kpc', 'SB_disk_Lsun_pc2', 'SB_bulge_Lsun_pc2'])
@@ -116,18 +165,31 @@ def load_single_sparc_galaxy(galaxy_id: str,
                 sigma_star_disk_Msun_pc2 = sb_disk_interp_Lsun_pc2 * BASE_M_L_3_6_MICRON_DISK
                 sigma_star_bulge_Msun_pc2 = sb_bulge_interp_Lsun_pc2 * BASE_M_L_3_6_MICRON_BULGE
                 sigma_star_interp_Msun_pc2 = np.maximum(sigma_star_disk_Msun_pc2 + sigma_star_bulge_Msun_pc2, 0)
+                used_sb_source = sb_file.name
                 logger.info(f"[{galaxy_id}] Interpolated Sigma_star from {sb_file.name} using base M/L values.")
             elif not df_sb.empty and len(df_sb['R_SB_kpc']) == 1:
                 # Basic single point handling
                 sb_disk_val = df_sb['SB_disk_Lsun_pc2'].iloc[0] * BASE_M_L_3_6_MICRON_DISK
                 sb_bulge_val = df_sb['SB_bulge_Lsun_pc2'].iloc[0] * BASE_M_L_3_6_MICRON_BULGE
                 sigma_star_interp_Msun_pc2[:] = max(0, sb_disk_val + sb_bulge_val)
+                used_sb_source = sb_file.name
                 logger.warning(f"[{galaxy_id}] Only one point in _SB.dat. Applied if R matches.")
 
-            else:
-                logger.warning(f"[{galaxy_id}] _SB.dat is empty or has too few points for interpolation.")
-        else:
-            logger.warning(f"[{galaxy_id}] No _SB.dat file. Sigma_star set to 0.")
+        # If no _SB.dat or unusable, try SB columns from rotmod (already on common grid and in Lsun/pc^2)
+        if used_sb_source is None and ('SB_disk_Lsun_pc2' in df_rotmod.columns):
+            sb_disk = df_rotmod['SB_disk_Lsun_pc2'].values if 'SB_disk_Lsun_pc2' in df_rotmod.columns else None
+            sb_bulge = df_rotmod['SB_bulge_Lsun_pc2'].values if 'SB_bulge_Lsun_pc2' in df_rotmod.columns else None
+            if sb_disk is not None and np.any(np.isfinite(sb_disk)):
+                sb_disk_interp_Lsun_pc2 = np.nan_to_num(sb_disk, nan=0.0)
+                sb_bulge_interp_Lsun_pc2 = np.nan_to_num(sb_bulge, nan=0.0) if sb_bulge is not None else np.zeros_like(sb_disk_interp_Lsun_pc2)
+                sigma_star_disk_Msun_pc2 = sb_disk_interp_Lsun_pc2 * BASE_M_L_3_6_MICRON_DISK
+                sigma_star_bulge_Msun_pc2 = sb_bulge_interp_Lsun_pc2 * BASE_M_L_3_6_MICRON_BULGE
+                sigma_star_interp_Msun_pc2 = np.maximum(sigma_star_disk_Msun_pc2 + sigma_star_bulge_Msun_pc2, 0)
+                used_sb_source = f"{rotmod_file.name} (SB columns)"
+                logger.info(f"[{galaxy_id}] Used SB from rotmod file columns to compute Sigma_star (base M/L).")
+
+        if used_sb_source is None:
+            logger.warning(f"[{galaxy_id}] No usable SB data (_SB.dat or rotmod SB columns). Sigma_star set to 0.")
 
         # Midplane volume densities
         kpc_per_pc_sq = (1e3)**2
@@ -155,10 +217,72 @@ def load_single_sparc_galaxy(galaxy_id: str,
 
             if not potential_matches.empty:
                 galaxy_meta = potential_matches.iloc[0]
-                logger.info(f"[{galaxy_id}] Found metadata: Dist={galaxy_meta.get('D_Mpc', 'N/A')} Mpc, M_HI={galaxy_meta.get('MHI', 'N/A')} Msun")
+                logger.info(f"[{galaxy_id}] Found metadata: Dist={galaxy_meta.get('D_Mpc', 'N/A')} Mpc, M_HI={galaxy_meta.get('MHI_1e9Msun', galaxy_meta.get('MHI', 'N/A'))} (1e9 Msun)")
             else:
                 logger.warning(f"[{galaxy_id}] Metadata not found in MasterSheet for ID '{galaxy_id}' (standardized to '{std_galaxy_id_arg}').")
+
+        # If we need gas reconstruction and helpers are available, try truncated Option A then B
+        if need_gas_reconstruct and (reconstruct_gas_exponential_truncated is not None or reconstruct_gas_from_vgas is not None):
+            try:
+                MHI_1e9 = None
+                RHI_kpc_val = None
+                if galaxy_meta is not None:
+                    # Accept several possible column names
+                    if 'MHI_1e9Msun' in galaxy_meta: MHI_1e9 = float(galaxy_meta['MHI_1e9Msun'])
+                    elif 'MHI' in galaxy_meta: MHI_1e9 = float(galaxy_meta['MHI'])
+                    if 'RHI_kpc' in galaxy_meta: RHI_kpc_val = float(galaxy_meta['RHI_kpc'])
+                    elif 'RHI' in galaxy_meta: RHI_kpc_val = float(galaxy_meta['RHI'])
+                    elif 'R_HI' in galaxy_meta: RHI_kpc_val = float(galaxy_meta['R_HI'])
+                used_option = None
+                if (MHI_1e9 is not None) and (RHI_kpc_val is not None) and (reconstruct_gas_exponential_truncated is not None):
+                    # Allow runtime override of truncation mode via environment variables
+                    import os as _os
+                    rmax_mode_env = _os.environ.get("SPARC_GAS_RMAX_MODE", "RHI").strip().upper()
+                    if rmax_mode_env not in ("RHI", "KRD"):
+                        rmax_mode_env = "RHI"
+                    try:
+                        krd_env = float(_os.environ.get("SPARC_GAS_KRD", "3.0"))
+                    except Exception:
+                        krd_env = 3.0
+                    gasA = reconstruct_gas_exponential_truncated(
+                        common_R_kpc,
+                        MHI_1e9,
+                        RHI_kpc_val,
+                        include_He=True,
+                        Rmax_mode=("RHI" if rmax_mode_env == "RHI" else "kRd"),
+                        kRd=krd_env,
+                        rd_bracket_kpc=(0.1, 30.0),
+                        verbose=True,
+                    )
+                    sigma_gas_interp_Msun_pc2 = gasA['Sigma_gas']
+                    used_option = f"A_trunc_exp(MHI,RHI); mode={rmax_mode_env} kRd={krd_env:.2f}"
+                    rd_val = float(gasA['Rd_kpc'][0]) if 'Rd_kpc' in gasA else float('nan')
+                    rmax_val = float(gasA['Rmax_kpc'][0]) if 'Rmax_kpc' in gasA else float('nan')
+                    s0_val = float(gasA['Sigma0'][0]) if 'Sigma0' in gasA else float('nan')
+                    logger.info(f"[{galaxy_id}] Reconstructed Sigma_gas via Truncated Option A. Rd={rd_val:.3f} kpc; Σ0={s0_val:.2f}; Rmax={rmax_val:.2f} kpc; mode={rmax_mode_env} kRd={krd_env:.2f}")
+                    if rmax_mode_env == "RHI":
+                        if not (0.5 <= rd_val <= 10.0):
+                            logger.warning(f"[{galaxy_id}] Gas Rd={rd_val:.3f} kpc outside [0.5,10] under RHI truncation. Check MHI/RHI metadata or consider Vgas-shaped fallback.")
+                if used_option is None and reconstruct_gas_from_vgas is not None:
+                    Vgas_col = df_rotmod['V_gas'].values if 'V_gas' in df_rotmod.columns else np.zeros_like(common_R_kpc)
+                    gasB = reconstruct_gas_from_vgas(common_R_kpc, Vgas_col, MHI_1e9Msun=MHI_1e9, include_He=True)
+                    sigma_gas_interp_Msun_pc2 = gasB['Sigma_gas']
+                    used_option = 'B_shape(Vgas)'
+                    logger.info(f"[{galaxy_id}] Reconstructed Sigma_gas via Option B (Vgas shape).")
+                if used_option is None:
+                    logger.warning(f"[{galaxy_id}] Gas reconstruction failed; Sigma_gas kept at zeros.")
+            except Exception as e:
+                logger.warning(f"[{galaxy_id}] Gas reconstruction error: {e}. Sigma_gas kept at zeros.")
         
+        # Midplane volume densities
+        kpc_per_pc_sq = (1e3)**2
+        rho_star_mid_Msun_kpc3 = (sigma_star_interp_Msun_pc2 * kpc_per_pc_sq) / (2 * assume_stellar_hz_kpc) if assume_stellar_hz_kpc > 1e-9 else np.zeros_like(common_R_kpc)
+        rho_gas_mid_Msun_kpc3 = (sigma_gas_interp_Msun_pc2 * kpc_per_pc_sq) / (2 * assume_gas_hz_kpc) if assume_gas_hz_kpc > 1e-9 else np.zeros_like(common_R_kpc)
+        rho_total_mid_Msun_kpc3 = rho_star_mid_Msun_kpc3 + rho_gas_mid_Msun_kpc3 # This rho_star part will be scaled by M/L in main.py
+
+        logger.info(f"[{galaxy_id}] Max stellar rho_mid (base M/L): {np.max(rho_star_mid_Msun_kpc3):.2e} Msun/kpc^3 (hz_star={assume_stellar_hz_kpc} kpc)")
+        logger.info(f"[{galaxy_id}] Max gas rho_mid: {np.max(rho_gas_mid_Msun_kpc3):.2e} Msun/kpc^3 (hz_gas={assume_gas_hz_kpc} kpc)")
+
         # V_newton_bary_kms will be constructed in main.py using these components and ML factor
         output_dict = {
             'galaxy_id': galaxy_id,
@@ -176,7 +300,7 @@ def load_single_sparc_galaxy(galaxy_id: str,
             'assumed_hz_stellar_kpc': assume_stellar_hz_kpc,
             'assumed_hz_gas_kpc': assume_gas_hz_kpc,
             'distance_Mpc': galaxy_meta['D_Mpc'] if galaxy_meta is not None and 'D_Mpc' in galaxy_meta else np.nan,
-            'M_HI_Msun': galaxy_meta['MHI'] if galaxy_meta is not None and 'MHI' in galaxy_meta else np.nan,
+            'M_HI_Msun': (galaxy_meta['MHI_1e9Msun'] * 1e9) if galaxy_meta is not None and ('MHI_1e9Msun' in galaxy_meta) else (galaxy_meta['MHI'] if galaxy_meta is not None and 'MHI' in galaxy_meta else np.nan),
         }
         return output_dict
 

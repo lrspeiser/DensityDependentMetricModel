@@ -39,7 +39,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from utils.Utilities.sparc_io import load_single_sparc_galaxy, BASE_M_L_3_6_MICRON_DISK, BASE_M_L_3_6_MICRON_BULGE
 from models.er_sparc import v_bar_from_components
-from models.er_env import predict_v_er
+from models.er_env import xi_env, tidal_proxy_from_vbar
 
 try:
     from scipy import optimize as _opt  # type: ignore
@@ -48,29 +48,81 @@ except Exception:
     _HAS_SCIPY = False
 
 
-def chi2_env(params, R, Vobs, eV, Vgas, Vdisk, Vbul, rho_mid_base, ups_d, ups_b):
+def _compute_tidal_proxy(R, vbar, mode: str = "curvature", norm: str = "robust"):
+    R = np.asarray(R, dtype=float)
+    vb = np.asarray(vbar, dtype=float)
+    R_safe = np.clip(R, 1e-6, None)
+    if mode == "curvature":
+        g = (np.maximum(vb, 0.0) ** 2) / R_safe
+        from models.er_env import finite_diff
+        dgdR = finite_diff(g, R_safe)
+        T_raw = np.abs(dgdR)
+    elif mode == "shear":
+        Omega = np.maximum(vb, 0.0) / R_safe
+        from models.er_env import finite_diff
+        dO_dR = finite_diff(Omega, R_safe)
+        T_raw = np.abs(dO_dR)
+    elif mode == "epicyclic":
+        Omega = np.maximum(vb, 0.0) / R_safe
+        from models.er_env import finite_diff
+        dO_dR = finite_diff(Omega, R_safe)
+        kappa2 = 2.0 * Omega * (2.0 * Omega + R_safe * dO_dR)
+        T_raw = np.sqrt(np.clip(np.abs(kappa2), 0.0, None))
+    else:
+        T_raw = tidal_proxy_from_vbar(R, vb)
+    # normalization
+    if norm == "robust":
+        med = float(np.nanmedian(T_raw))
+        mad = float(np.nanmedian(np.abs(T_raw - med)))
+        scale = med if med > 0 else (np.nanmax(T_raw) if np.nanmax(T_raw) > 0 else 1.0)
+        Tn = T_raw / scale
+    else:
+        med = float(np.nanmedian(T_raw))
+        scale = med if med > 0 else (np.nanmax(T_raw) if np.nanmax(T_raw) > 0 else 1.0)
+        Tn = T_raw / scale
+    return np.clip(Tn, 1e-12, None)
+
+
+def chi2_env(params, R, Vobs, eV, Vgas, Vdisk, Vbul, rho_mid_base,
+             tidal_mode: str, tidal_norm: str,
+             sigma_floor: float,
+             fit_ml: tuple[bool, bool], ml_priors: tuple[float, float], ml_sigmas: tuple[float, float]):
     # Unpack
-    log10_rho_c, gamma_exp, lambda_max, lnT0, sigma_lnT, w_min = params
+    log10_rho_c, gamma_exp, lambda_max, lnT0, sigma_lnT, w_min, ups_d, ups_b = params
     # Build vbar with current M/L
     vbar = v_bar_from_components(R, Vgas, Vdisk, Vbul, ups_d, ups_b)
-    # Scale stellar density piece by M/L factors relative to base-ML already in rho_mid_base
-    # rho_mid_base already includes base-ML stellar + gas. If we change stell M/L via ups_d, ups_b,
-    # we can approximate scaling the stellar density contribution by factor (ups_d/BASE_ML_disk) for disk parts.
-    # Lacking a clean disk/bulge split of rho, we scale total rho by a conservative factor near unity:
-    # Use f_ML ≈ (ups_d/BASE_ML_disk)^0.5 as a mild adjustment to avoid overshooting with uncertain decomposition.
+    # Scale rho_mid for M/L change (approximate; mild factor)
     f_ml = max(0.3, min(3.0, (ups_d / BASE_M_L_3_6_MICRON_DISK) ** 0.5))
     rho_mid = np.clip(rho_mid_base * f_ml, 1e-30, None)
     # ER prediction
     rho_c = 10 ** float(log10_rho_c)
     T0 = float(np.exp(lnT0))
-    _, vmod = predict_v_er(R, vbar, rho_mid, float(lambda_max), rho_c, float(gamma_exp), T0, float(sigma_lnT), float(w_min))
-    w = 1.0 / np.clip(eV, 1e-3, None)
-    r = (Vobs - vmod) * w
-    return float(np.sum(r * r))
+    T = _compute_tidal_proxy(R, vbar, mode=tidal_mode, norm=tidal_norm)
+    xi = xi_env(rho_mid, T, float(lambda_max), rho_c, float(gamma_exp), T0, float(sigma_lnT), float(w_min))
+    vmod = np.sqrt(np.clip(xi, 0.0, None)) * np.maximum(vbar, 0.0)
+    # errors with sigma floor
+    e_eff = np.sqrt(np.asarray(eV, dtype=float)**2 + float(max(0.0, sigma_floor))**2)
+    e_eff = np.where(e_eff > 0, e_eff, 1.0)
+    r = (Vobs - vmod) / e_eff
+    chi2 = float(np.sum(r * r))
+    # M/L priors if requested
+    pen = 0.0
+    if fit_ml[0]:
+        mu, sig = ml_priors[0], max(ml_sigmas[0], 1e-6)
+        pen += ((ups_d - mu) / sig) ** 2
+    if fit_ml[1]:
+        mu, sig = ml_priors[1], max(ml_sigmas[1], 1e-6)
+        pen += ((ups_b - mu) / sig) ** 2
+    return chi2 + pen
 
 
 def fit_one_galaxy_env(galaxy_id: str, sparc_dir: str,
-                        init, bounds):
+                        init, bounds,
+                        tidal_mode: str, tidal_norm: str,
+                        sigma_floor: float,
+                        fit_ml_flags: tuple[bool, bool],
+                        ml_priors: tuple[float, float],
+                        ml_sigmas: tuple[float, float]):
     data = load_single_sparc_galaxy(galaxy_id, sparc_dir=sparc_dir)
     if data is None:
         raise FileNotFoundError(f"Failed to load SPARC data for {galaxy_id} from {sparc_dir}")
@@ -87,12 +139,12 @@ def fit_one_galaxy_env(galaxy_id: str, sparc_dir: str,
     hi = np.array([b[1] for b in bounds], dtype=float)
     x0 = np.clip(x0, lo, hi)
 
-    # We also optimize ups_disk and ups_bul as weakly-coupled outer variables for simplicity here.
-    ups_d0, ups_b0 = 0.5, 0.7
-
+    # Now optimize including ups_d and ups_b as parameters (at the end of vector)
     def obj_full(x):
         x = np.clip(x, lo, hi)
-        return chi2_env(x, R, Vobs, eV, Vgas, Vdisk, Vbul, rho_mid_base, ups_d0, ups_b0)
+        return chi2_env(x, R, Vobs, eV, Vgas, Vdisk, Vbul, rho_mid_base,
+                        tidal_mode, tidal_norm, sigma_floor,
+                        fit_ml_flags, ml_priors, ml_sigmas)
 
     if _HAS_SCIPY:
         res = _opt.minimize(obj_full, x0, method='Nelder-Mead', options={'maxiter': 3000, 'xatol': 1e-4, 'fatol': 1e-4})
@@ -114,7 +166,7 @@ def fit_one_galaxy_env(galaxy_id: str, sparc_dir: str,
                 x_best, chi2_best = cand, f
             step *= 0.98
 
-    return data, x_best, chi2_best, ups_d0, ups_b0
+    return data, x_best, chi2_best
 
 
 def main():
@@ -124,29 +176,69 @@ def main():
     ap.add_argument('--out', default=None)
     ap.add_argument('--model', choices=['gr','er','nfw'], default='er', help='Model type to fit')
     ap.add_argument('--mode', choices=['fit','evidence'], default='fit', help='Operation: quick fit (chi2) or evidence scaffold output')
+    # Likelihood controls
+    ap.add_argument('--sigma-floor', type=float, default=0.0, help='Velocity error floor (km/s) added in quadrature')
+    # Gas truncation controls (forwarded to loader via env for now)
+    ap.add_argument('--gas-truncation', choices=['RHI','KRD'], default=None, help='Truncation scheme for gas disk')
+    ap.add_argument('--gas-krd', type=float, default=3.0, help='k for Rmax = k Rd when using KRD truncation')
+    # Tidal proxy controls
+    ap.add_argument('--T-proxy', choices=['curvature','shear','epicyclic'], default='curvature')
+    ap.add_argument('--tidal-norm', choices=['robust','simple'], default='robust')
     # Inits / priors centers
     ap.add_argument('--log10_rho_c', type=float, default=15.0)
     ap.add_argument('--gamma_exp', type=float, default=3.0)
     ap.add_argument('--lambda_max', type=float, default=4.0)
+    ap.add_argument('--prior-lambda-max', type=float, default=6.0, help='Upper prior bound for lambda_max')
     ap.add_argument('--lnT0', type=float, default=0.0)
     ap.add_argument('--sigma_lnT', type=float, default=0.8)
     ap.add_argument('--w_min', type=float, default=0.02)
+    ap.add_argument('--prior-wmin-max', type=float, default=0.1, help='Upper prior bound for w_min')
+    # M/L fitting
+    ap.add_argument('--fit-ml', nargs='*', choices=['disk','bulge'], default=[], help='Fit stellar M/L for selected components')
+    ap.add_argument('--ml-prior-disk', type=float, default=0.5)
+    ap.add_argument('--ml-prior-disk-sigma', type=float, default=0.1)
+    ap.add_argument('--ml-prior-bulge', type=float, default=0.7)
+    ap.add_argument('--ml-prior-bulge-sigma', type=float, default=0.1)
     # NFW inits
     ap.add_argument('--V200', type=float, default=150.0, help='NFW V200 [km/s]')
     ap.add_argument('--c', type=float, default=10.0, help='NFW concentration')
     args = ap.parse_args()
 
-    init = [args.log10_rho_c, args.gamma_exp, args.lambda_max, args.lnT0, args.sigma_lnT, args.w_min]
+    # Set gas truncation envs for loader if flags provided
+    import os as _os
+    if args.gas_truncation is not None:
+        _os.environ['SPARC_GAS_RMAX_MODE'] = args.gas_truncation.upper()
+        if args.gas_truncation.upper() == 'KRD':
+            _os.environ['SPARC_GAS_KRD'] = str(args.gas_krd)
+    # Parameter vector includes ups_d and ups_b at the end
+    # Initialize ups based on whether we fit them
+    init_ups_d = args.ml_prior_disk
+    init_ups_b = args.ml_prior_bulge
+    init = [args.log10_rho_c, args.gamma_exp, args.lambda_max, args.lnT0, args.sigma_lnT, args.w_min, init_ups_d, init_ups_b]
     bounds = [
         (14.0, 17.0),  # log10_rho_c
         (1.0, 5.0),    # gamma_exp
-        (0.0, 6.0),    # lambda_max
+        (0.0, float(args.prior_lambda_max)),    # lambda_max upper bound adjustable
         (-1.0, 1.0),   # lnT0
         (0.3, 2.0),    # sigma_lnT
-        (0.0, 0.1),    # w_min
+        (0.0, float(args.prior_wmin_max)),    # w_min upper bound adjustable
+        (0.3, 0.8),    # ups_disk (SPARC-style clamp)
+        (0.5, 1.0),    # ups_bulge (SPARC-style clamp)
     ]
 
-    data, x_best, chi2_best, ups_d, ups_b = fit_one_galaxy_env(args.galaxy_id, args.sparc_dir, init, bounds)
+    fit_ml_flags = (('disk' in args.fit_ml), ('bulge' in args.fit_ml))
+    ml_priors = (args.ml_prior_disk, args.ml_prior_bulge)
+    ml_sigmas = (args.ml_prior_disk_sigma, args.ml_prior_bulge_sigma)
+
+    data, x_best, chi2_best = fit_one_galaxy_env(
+        args.galaxy_id, args.sparc_dir,
+        init, bounds,
+        args.T_proxy, args.tidal_norm,
+        args.sigma_floor,
+        fit_ml_flags,
+        ml_priors,
+        ml_sigmas,
+    )
 
     R = data['R_kpc']
     Vobs = data['V_obs']
@@ -156,24 +248,25 @@ def main():
     Vbul = data['V_bulge_comp_kms']
     rho_mid_base = data['rho_star_mid_Msun_kpc3_baseML'] + data['rho_gas_mid_Msun_kpc3']
 
+    # Unpack best params (including M/L)
+    log10_rho_c, gamma_exp, lambda_max, lnT0, sigma_lnT, w_min, ups_d, ups_b = map(float, x_best)
     vbar = v_bar_from_components(R, Vgas, Vdisk, Vbul, ups_d, ups_b)
-    # Scale rho for M/L change using same mild factor as in chi2
     f_ml = max(0.3, min(3.0, (ups_d / BASE_M_L_3_6_MICRON_DISK) ** 0.5))
     rho_mid = np.clip(rho_mid_base * f_ml, 1e-30, None)
-
-    log10_rho_c, gamma_exp, lambda_max, lnT0, sigma_lnT, w_min = map(float, x_best)
     rho_c = 10 ** log10_rho_c
     T0 = float(np.exp(lnT0))
 
-    from models.er_env import predict_v_er, tidal_proxy_from_vbar
-    xi, vmod = predict_v_er(R, vbar, rho_mid, lambda_max, rho_c, gamma_exp, T0, sigma_lnT, w_min)
+    # Build T with selected proxy and normalization
+    T = _compute_tidal_proxy(R, vbar, mode=args.T_proxy, norm=args.tidal_norm)
+    xi = xi_env(rho_mid, T, lambda_max, rho_c, gamma_exp, T0, sigma_lnT, w_min)
+    vmod = np.sqrt(np.clip(xi, 0.0, None)) * np.maximum(vbar, 0.0)
 
     dof = max(1, R.size - len(x_best))
     print({
         'galaxy_id': data['galaxy_id'],
         'chi2': float(chi2_best),
         'chi2_dof': float(chi2_best/dof),
-        'params': {
+'params': {
             'log10_rho_c': log10_rho_c,
             'gamma_exp': gamma_exp,
             'lambda_max': lambda_max,
@@ -182,6 +275,9 @@ def main():
             'w_min': w_min,
             'ups_disk': float(ups_d),
             'ups_bul': float(ups_b),
+            'sigma_floor': float(args.sigma_floor),
+            'T_proxy': args.T_proxy,
+            'tidal_norm': args.tidal_norm,
         }
     })
 
@@ -203,7 +299,6 @@ def main():
     # Build model prediction on grid for display based on selection
     if model == 'er':
         # For plotting xi band, rebuild proxy on grid using vbar_g
-        from models.er_env import tidal_proxy_from_vbar, xi_env
         T_g = tidal_proxy_from_vbar(R_grid, vbar_g)
         # Interp rho to grid (nearest/linear)
         rho_g = np.interp(R_grid, R, rho_mid)
