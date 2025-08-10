@@ -1,8 +1,8 @@
 # Solar-System Screening Comparison (Illustrative)
 
 Parameters:
-- Power-law: rho_c=1.0e+15, n=3.00, A=4.00
-- Exponential: rho_c=1.0e+15, gamma=3.00, lambda_max=4.00
+- Power-law: rho_c=1.0e+14, n=3.00, A=4.00
+- Exponential: rho_c=1.0e+14, gamma=5.00, lambda_max=3.90
 
 | Environment | ρ [M_⊙/kpc³] | |ξ−1| (power) | |ξ−1| (exp) |
 |---|---:|---:|---:|

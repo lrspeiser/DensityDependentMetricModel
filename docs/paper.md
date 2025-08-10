@@ -411,6 +411,8 @@ Artifacts per galaxy: PNG figure, JSON with priors/assumptions and results (incl
 
 ### 8A.5 Preliminary batch evidence summary (this work)
 
+See docs/ed_sparc_stats.md and images/ed_sparc_hist_dlogz.png for an auto-generated summary: fraction with ΔlogZ(TFR−GR)>10, median and IQR across the current sample, and a histogram panel.
+
 We ran a preliminary batch (N=10 galaxies) using the new batch runner with matched dynesty controls (nlive=400, maxcall=80k, dlogz_target=0.02, σ_floor=0). The aggregated table and per-galaxy JSON sidecars are available here:
 - Table: docs/ed_sparc_table.md
 - CSV: ed_sparc_batch.csv
@@ -438,6 +440,7 @@ Reviewer-facing sanity checks (to add in Supplement)
 Editorial notes / consistency fixes
 - Figure numbering: Introduction concept is Fig. 1; Gaia/rotation comparison is Fig. 2; ED figures reserved for SPARC. Numbering reviewed and aligned.
 - Units typography: standardized throughout to km s^{-1} and M_⊙ kpc^{-3}.
+- GR/NFW parity: σ-floor, masks, and D/i priors are identical across TFR/GR/NFW. The NFW optimizer includes a short local refinement step; settings are recorded in JSON sidecars for parity.
 - GR baseline reconciliation: headline Δlog Z must reference the matched GR run in §10. [TODO-CONSISTENCY-A]
 
 TL;DR action list
