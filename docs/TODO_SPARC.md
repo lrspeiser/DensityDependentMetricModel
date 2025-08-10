@@ -8,19 +8,19 @@ Note: Check items as they are completed and link artifacts (JSON, CSV, PNG, figu
 
 ## Tier 1 – Core science gaps (highest priority)
 
-- [ ] 1) Full evidence-mode fits for NGC 3198
-  - [ ] Implement evidence mode interfaces
-    - [ ] Extend tools/fit_sparc_er_env.py with a --mode evidence that writes JSON with logZ and best-fit params
-    - [ ] Provide matched GR (baryons-only), ER (density-aware), and NFW modes
-  - [ ] Run NGC 3198 for all three models
-    - [ ] GR: record logZ_GR, params
-    - [ ] ER: record logZ_ER and best-fit (ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min, Υ_3.6), σ_floor, T-proxy name
-    - [ ] NFW: record logZ_NFW and best-fit (M_200, c) or (V_200, c)
-  - [ ] T proxies (ER): run curvature, shear, epicyclic
-  - [ ] Deliverables
-    - [ ] Fill §8A.4 placeholders for NGC 3198 (evidences, parameters)
-    - [ ] Populate NGC 3198 row in ED-SPARC table
-    - [ ] Update ED figure caption with actual χ²/dof and evidence values
+- [x] 1) Full evidence-mode fits for NGC 3198
+  - [x] Implement evidence mode interfaces
+    - [x] Extend tools/fit_sparc_er_env.py with a --mode evidence that writes JSON with logZ and best-fit params
+    - [x] Provide matched GR (baryons-only), ER (density-aware), and NFW modes
+  - [x] Run NGC 3198 for all three models
+    - [x] GR: record logZ_GR, params
+    - [x] ER: record logZ_ER and best-fit (ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min, Υ_3.6), σ_floor, T-proxy name
+    - [x] NFW: record logZ_NFW and best-fit (M_200, c) or (V_200, c)
+  - [x] T proxies (ER): run curvature, shear, epicyclic
+  - [x] Deliverables
+    - [x] Fill §8A.4 placeholders for NGC 3198 (evidences, parameters)
+    - [x] Populate NGC 3198 row in ED-SPARC table
+    - [x] Update ED figure caption with actual χ²/dof and evidence values
 
 - [ ] 2) Implement & run NFW baseline for SPARC
   - [ ] Minimal NFW in fitter with priors from abundance matching
@@ -44,13 +44,13 @@ Note: Check items as they are completed and link artifacts (JSON, CSV, PNG, figu
 
 ## Tier 2 – Completeness & Reviewer Confidence
 
-- [ ] 5) σ_floor and M/L prior sensitivity (NGC 3198)
-  - [ ] Re-run ER with σ_floor ∈ {0, 2, 3} km s^{-1}
-  - [ ] Re-run with flat Υ_3.6 ∈ [0.3, 0.7] vs Gaussian prior
-  - [ ] Deliverables: small Supplement figure/table; note in §8A.4 sanity checks
+- [x] 5) σ_floor and M/L prior sensitivity (NGC 3198)
+  - [x] Re-run ER with σ_floor ∈ {0, 2, 3} km s^{-1}
+  - [x] Re-run with flat Υ_3.6 ∈ [0.3, 0.7] vs Gaussian prior
+  - [x] Deliverables: small Supplement figure/table; note in §8A.4 sanity checks
 
 - [ ] 6) Solar-system tight-screening variant
-  - [ ] Implement exponential S_ρ(ρ) = exp[−(ρ/ρ_c)^{γ_exp}]
+  - [x] Implement exponential S_ρ(ρ) = exp[−(ρ/ρ_c)^{γ_exp}]
   - [ ] Re-run MW and NGC 3198 ER fits; compare evidences and key params
   - [ ] Deliverables: Supplementary table; constraints “radar” plot
 
