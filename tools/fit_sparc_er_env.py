@@ -31,6 +31,11 @@ import json
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+try:
+    from utils.plot_style import apply_paper_style
+except Exception:
+    def apply_paper_style():
+        pass
 
 # repo root on path
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -356,6 +361,7 @@ def main():
     out_path = Path(args.out) if args.out else Path('images')/f'sparc_env_fit_{name.lower()}.png'
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    apply_paper_style()
     plt.figure(figsize=(10,7))
     plt.errorbar(R, Vobs, yerr=eV, fmt='o', color='k', ms=4, lw=1, alpha=0.8, label='Observed (SPARC)')
     plt.plot(R, vbar, 'b--', lw=2, label='GR (baryons)')

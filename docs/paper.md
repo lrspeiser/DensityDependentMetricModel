@@ -183,7 +183,7 @@ Using the same sampler controls as ER:
 
 - Figure 1 (Concept). ER mechanism schematic. Panels: (a) S_ρ(ρ) vs ρ/ρ_c for several γ_exp; (b) W(T) vs T/T_0 for σ_{ln T} and w_min; (c) heatmap of ξ(ρ, T) showing bounded region 1 → 1+λ_max. [TODO-FIG1] Generate curves with best-fit parameters; overlay Solar-System and disk density markers.
 
-- Figure 2 (Rotation curves). Data vs GR vs ER. Observed v_c(R) with 1σ errors; lines for GR (baryons only), ER best-fit, and posterior predictive bands. Residuals panel beneath. [TODO-FIG2] Produce from scripts/analyze_results.py.
+- Figure 2 (Rotation curves). Data vs GR vs ER. Observed v_c(R) with 1σ errors; lines for GR (baryons only), ER best-fit, and posterior predictive bands. Residuals panel beneath. [TODO-FIG2] Produce from scripts/analyze_results.py. Styling unified via utils/plot_style.apply_paper_style().
 
 - Figure 3 (Parameter posteriors). 1D/2D posteriors for key ER params. Corner plot for ρ_c, γ_exp, λ_max, T_0, σ_{ln T}, w_min. [TODO-FIG3] Save hi-res PNG and PDF.
 
@@ -216,7 +216,7 @@ For SPARC’s first pass we compute T from a baryon-only field (never from V_obs
 - Shear: T_shear = | dΩ/dR |, with Ω = v_bar / R
 - Epicyclic: T_κ via κ = 2(1+β) Ω, β = d ln v_bar / d ln R
 
-Each T is normalized by its median over fitted radii, then used in the ER window W(T). We will report Δlog Z stability across these T choices (Fig. S1; Table ED-T). Each result JSON records the chosen T-proxy and normalization under params and sanity (fields: T_proxy, tidal_norm).
+Each T is normalized by its median over fitted radii, then used in the ER window W(T). We will report Δlog Z stability across these T choices (Fig. S1; Table ED-T). See docs/ED-T.md for the current summary table. Each result JSON records the chosen T-proxy and normalization under params and sanity (fields: T_proxy, tidal_norm).
 
 Table ED-T (T-proxy robustness; matched controls)
 
