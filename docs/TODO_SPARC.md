@@ -35,10 +35,10 @@ Note: Check items as they are completed and link artifacts (JSON, CSV, PNG, figu
     - [ ] Fill Extended Data Table ED-SPARC
     - [ ] Optional: Figure ED1 (stacked residuals GR vs ER)
 
-- [ ] 4) Robustness tests for T proxy
-  - [ ] For NGC 3198 and ≥1 other galaxy, run all 3 proxies
-  - [ ] Compute ΔlogZ spread across proxies; compile Table ED-T
-  - [ ] Text: “ΔlogZ varies by ≤ X across curvature/shear/epicyclic proxies.”
+- [x] 4) Robustness tests for T proxy
+  - [x] For NGC 3198 and ≥1 other galaxy, run all 3 proxies
+  - [x] Compute ΔlogZ spread across proxies; compile Table ED-T
+  - [x] Text: “ΔlogZ varies across curvature/shear/epicyclic proxies; epicyclic maximizes ER evidence on NGC 3198 and NGC 2403 under matched controls.”
 
 ---
 

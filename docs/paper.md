@@ -223,13 +223,13 @@ Table ED-T (T-proxy robustness; matched controls)
 | Galaxy   | logZ_ER (epicyclic)    | logZ_ER (curvature)     | logZ_ER (shear)         |
 |----------|-------------------------|-------------------------|-------------------------|
 | NGC 3198 | −144.543 ± 0.104        | −256.909 ± 0.530        | −343.239 ± 0.306        |
-| NGC 2403 | −259.785 ± 2.917        | −296.999 ± 0.619        | −390.602 ± 0.502        |
+| NGC 2403 | −255.242 ± 0.598        | −286.596 ± 0.263        | −373.640 ± —            |
 
 ### 8A.3 Models, priors, and likelihood (per galaxy)
 - Baryons: Use SPARC component rotation curves or fit MN/Hernquist analogs to Σ*, Σ_gas so the same density engine computes ρ(R,0) and T(R).
 - GR baseline: V_GR(R) = V_bar(R).
 - ER: V_ER(R) = sqrt(ξ(ρ(R,0), T(R))) V_bar(R) with ξ as in §2.2 and priors as in §5.2.
-- ΛCDM/NFW: add V_halo^2(R) with NFW (M_200, c) or (V_200, c) priors; identical sampler settings. Implemented via tools/fit_sparc_nfw_evidence.py, which records priors and dynesty controls in the JSON sidecar.
+- ΛCDM/NFW: add V_halo^2(R) with NFW (M_200, c) or (V_200, c) priors; identical sampler settings. Implemented via tools/fit_sparc_nfw_evidence.py, which records priors and dynesty controls in the JSON sidecar. Optional Gaussian priors (abundance-informed) on V200 and c are supported via --prior-V200-mean/--prior-V200-sigma and --prior-c-mean/--prior-c-sigma and enter additively in ln L.
 
 Nuisance/systematics: Gaussian priors on D and i. We add a velocity floor σ_floor ∈ [0,3] km s^{-1} in quadrature to σ_V,k and marginalize σ_floor with a weak half-normal prior. Likelihood as in §5.1; matched dynesty controls across GR/ER/NFW. We report logZ and Bayes factors.
 
