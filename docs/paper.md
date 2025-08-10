@@ -359,18 +359,7 @@ Black points: observed V_c with 1σ errors. Blue dashed: GR (baryons-only). Red 
 
 Extended Data Table ED-SPARC (evidence batch; this work)
 
-| Galaxy   | logZ_GR          | logZ_NFW             | logZ_ER               | ΔlogZ(ER−GR) | ΔlogZ(ER−NFW) |
-|----------|-------------------|----------------------|-----------------------|--------------|---------------|
-| NGC 2403 | −1453.019 ± 0.000 | −131.360 ± 0.120     | −259.785 ± 2.917      | +1193.235     | −128.425      |
-| NGC 2841 | −4036.782 ± 0.000 | −1144.154 ± 2.602    | −598.584 ± 3.105      | +3438.199     | +545.571      |
-| NGC 2903 | −1193.474 ± 0.000 | −1001.033 ± 0.093    | −172.664 ± 3.056      | +1020.810     | +828.369      |
-| NGC 3198 | −951.499 ± 0.000  | −42.687 ± 0.072      | −144.543 ± 0.104      | +806.957      | −101.856      |
-| NGC 5055 | −1400.164 ± 0.000 | −1256.264 ± 0.169    | −159.558 ± 3.071      | +1240.606     | +1096.706     |
-| NGC 6946 | −432.795 ± 0.000  | −444.878 ± 0.070     | −33.034 ± 2.897       | +399.760      | +411.844      |
-| UGC 00128| −1603.288 ± 0.000 | −7.592 ± 0.059       | −46.067 ± 1.552       | +1557.222     | −38.475       |
-| NGC 0598 | −306.618 ± 0.000  | −15.512 ± 0.056      | −11.314 ± 0.488       | +295.304      | +4.199        |
-
-Auto-generated from images/sparc_evidence_triplet_summary.csv using scripts/aggregate_sparc_triplet.py; a Markdown rendition is produced by scripts/gen_ed_sparc_md.py and available at docs/ED-SPARC.md for inclusion. We will also provide a supplementary table listing ER hyperparameters (ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min) per galaxy.
+See docs/ED-SPARC.md for the refreshed table generated from images/sparc_evidence_triplet_summary.csv. Current coverage: 9 galaxies (8 with ER/GR, 9 with NFW entries). We will also provide a supplementary table listing ER hyperparameters (ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min) per galaxy.
 
 Methods note — evidence triplet aggregation and reruns
 - We aggregate ER/GR/NFW log-evidences and deltas into images/sparc_evidence_triplet_summary.csv using scripts/aggregate_sparc_triplet.py. This scans images/sparc_{gr,er,nfw}_evidence_*.json sidecars and writes a single CSV with ΔlogZ columns (ER−GR, NFW−GR, ER−NFW) per galaxy.
