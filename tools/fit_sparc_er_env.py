@@ -130,7 +130,13 @@ def fit_one_galaxy_env(galaxy_id: str, sparc_dir: str,
                         fit_ml_flags: tuple[bool, bool],
                         ml_priors: tuple[float, float],
                         ml_sigmas: tuple[float, float]):
-    data = load_single_sparc_galaxy(galaxy_id, sparc_dir=sparc_dir)
+    data = load_single_sparc_galaxy(
+        galaxy_id,
+        sparc_dir=sparc_dir,
+        assume_gas_hz_kpc=float(args.hz_gas),
+        assume_stellar_hz_kpc=float(args.hz_star),
+        assume_hz_alpha=float(args.hz_alpha),
+    )
     if data is None:
         raise FileNotFoundError(f"Failed to load SPARC data for {galaxy_id} from {sparc_dir}")
     R = data['R_kpc']
@@ -194,6 +200,10 @@ def main():
     ap.add_argument('--tidal-norm', choices=['robust','simple'], default='robust')
     # MasterSheet priors on distance/inclination (logged for parity)
     ap.add_argument('--use-master-priors', action='store_true', help='Record and (optionally) apply MasterSheet D/i priors for parity across models')
+    # Vertical profile assumptions (recorded in JSON for reproducibility)
+    ap.add_argument('--hz-star', type=float, default=0.30, help='Assumed stellar scale height h_z,* (kpc)')
+    ap.add_argument('--hz-gas', type=float, default=0.10, help='Assumed gas scale height h_z,gas (kpc)')
+    ap.add_argument('--hz-alpha', type=float, default=0.0, help='Optional linear flaring coefficient alpha (dimensionless)')
     # Dynesty evidence controls (non-invasive)
     ap.add_argument('--nlive', type=int, default=1000, help='Dynesty nlive (evidence mode)')
     ap.add_argument('--maxcall', type=int, default=200000, help='Dynesty maxcall (evidence mode)')
@@ -307,6 +317,9 @@ def main():
             'sigma_floor': float(args.sigma_floor),
             'T_proxy': args.T_proxy,
             'tidal_norm': args.tidal_norm,
+            'hz_star_kpc': float(args.hz_star),
+            'hz_gas_kpc': float(args.hz_gas),
+            'hz_alpha': float(args.hz_alpha),
         },
         'priors': {
             'use_master_priors': bool(args.use_master_priors),
@@ -315,11 +328,14 @@ def main():
             'incl_deg': float(data.get('incl_deg', np.nan)),
             'e_incl_deg': float(data.get('e_incl_deg', np.nan)),
         },
-        'gas': {
+'gas': {
             'profile_mode': data.get('gas_profile_mode', None),
             'Rd_kpc': float(data.get('gas_Rd_kpc', np.nan)),
             'Sigma0': float(data.get('gas_Sigma0', np.nan)),
             'Rmax_kpc': float(data.get('gas_Rmax_kpc', np.nan)),
+            'hz_star_kpc': float(data.get('assumed_hz_stellar_kpc', np.nan)),
+            'hz_gas_kpc': float(data.get('assumed_hz_gas_kpc', np.nan)),
+            'hz_alpha': float(data.get('assumed_hz_alpha', np.nan)),
         }
     })
 
@@ -443,7 +459,7 @@ def main():
             'mass_mismatch': float(data.get('gas_mass_mismatch', np.nan)),
             'penalty_mass': float(data.get('gas_penalty_mass', 0.0)),
         },
-        'sanity': {
+'sanity': {
             'xi_min': xi_stats['xi_min'],
             'xi_med': xi_stats['xi_med'],
             'xi_max': xi_stats['xi_max'],
@@ -451,6 +467,9 @@ def main():
             'sigma_floor': float(args.sigma_floor),
             'T_proxy': args.T_proxy,
             'tidal_norm': args.tidal_norm,
+            'hz_star_kpc': float(args.hz_star),
+            'hz_gas_kpc': float(args.hz_gas),
+            'hz_alpha': float(args.hz_alpha),
             'prior_edge_hits': {
                 'log10_rho_c': (log10_rho_c in [bounds[0][0], bounds[0][1]]),
                 'gamma_exp': (gamma_exp in [bounds[1][0], bounds[1][1]]),

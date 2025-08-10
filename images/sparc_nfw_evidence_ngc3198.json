@@ -3,7 +3,7 @@
   "model": "nfw",
   "sigma_floor": 5.0,
   "priors": {
-    "use_master_priors": true,
+    "use_master_priors": false,
     "V200": {
       "min": 40.0,
       "max": 400.0

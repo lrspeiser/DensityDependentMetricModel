@@ -1,0 +1,64 @@
+{
+  "galaxy_id": "NGC3198",
+  "file_rotmod": "external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
+  "model": "er",
+  "mask": "none",
+  "params": {
+    "log10_rho_c": 17.0,
+    "gamma_exp": 5.0,
+    "lambda_max": 4.2600242381319084,
+    "lnT0": -1.0,
+    "sigma_lnT": 1.4492558983240096,
+    "w_min": 0.05,
+    "ups_disk": 0.3,
+    "ups_bul": 0.5,
+    "V200": 150.0,
+    "c": 10.0
+  },
+  "priors": {
+    "use_master_priors": true,
+    "distance_Mpc": 13.8,
+    "e_distance_Mpc": 1.4,
+    "incl_deg": 73.0,
+    "e_incl_deg": 3.0
+  },
+  "gas": {
+    "profile_mode": "A_trunc_exp(MHI,RHI); mode=RHI kRd=3.00",
+    "Rd_kpc": 9.999999999999996,
+    "Sigma0": 35.37481053330208,
+    "Rmax_kpc": 35.66,
+    "mass_mismatch": 1.7810052964810306,
+    "penalty_mass": 1.570826200156651
+  },
+  "sanity": {
+    "xi_min": 1.2130012119065954,
+    "xi_med": 4.202421986212343,
+    "xi_max": 5.242031694632851,
+    "R_peak_W": 16.07,
+    "sigma_floor": 2.0,
+    "T_proxy": "epicyclic",
+    "tidal_norm": "robust",
+    "prior_edge_hits": {
+      "log10_rho_c": true,
+      "gamma_exp": true,
+      "lambda_max": false,
+      "lnT0": true,
+      "sigma_lnT": false,
+      "w_min": true,
+      "ups_disk": true,
+      "ups_bul": true
+    }
+  },
+  "chi2": 840.6304901873583,
+  "chi2_dof": 24.018014005353095,
+  "loglike_no_const": -420.31524509367915,
+  "mode": "evidence",
+  "evidence": {
+    "logZ": -465.870854647758,
+    "logZ_err": 3.099270340852683,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

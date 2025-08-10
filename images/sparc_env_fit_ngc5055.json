@@ -4,36 +4,36 @@
   "model": "er",
   "mask": "none",
   "params": {
-    "log10_rho_c": 17.0,
+    "log10_rho_c": 14.0,
     "gamma_exp": 5.0,
-    "lambda_max": 2.9007291300139397,
+    "lambda_max": 2.9814018472446713,
     "lnT0": -1.0,
-    "sigma_lnT": 1.4313976196481588,
-    "w_min": 0.05,
+    "sigma_lnT": 1.3798255830168973,
+    "w_min": 0.1,
     "ups_disk": 0.3,
-    "ups_bul": 0.5,
+    "ups_bul": 1.0,
     "V200": 150.0,
     "c": 10.0
   },
   "priors": {
-    "use_master_priors": true,
+    "use_master_priors": false,
     "distance_Mpc": 9.9,
     "e_distance_Mpc": 0.3,
     "incl_deg": 55.0,
     "e_incl_deg": 6.0
   },
   "gas": {
-    "profile_mode": null,
-    "Rd_kpc": NaN,
-    "Sigma0": NaN,
-    "Rmax_kpc": NaN,
-    "mass_mismatch": NaN,
-    "penalty_mass": 0.0
+    "profile_mode": "A_trunc_exp(MHI,RHI); mode=RHI kRd=3.00",
+    "Rd_kpc": 9.999999999999996,
+    "Sigma0": 33.31474194252643,
+    "Rmax_kpc": 35.06,
+    "mass_mismatch": 1.5441960765365144,
+    "penalty_mass": 0.890215315637482
   },
   "sanity": {
-    "xi_min": 1.145036456500697,
-    "xi_med": 3.0260120676307123,
-    "xi_max": 3.90018479999815,
+    "xi_min": 1.2981401847244671,
+    "xi_med": 3.026284976431267,
+    "xi_max": 3.980799780394503,
     "R_peak_W": 28.74,
     "sigma_floor": 5.0,
     "T_proxy": "epicyclic",
@@ -49,15 +49,15 @@
       "ups_bul": true
     }
   },
-  "chi2": 305.9198617914704,
-  "chi2_dof": 15.29599308957352,
-  "loglike_no_const": -152.9599308957352,
+  "chi2": 282.7818820037644,
+  "chi2_dof": 14.13909410018822,
+  "loglike_no_const": -141.3909410018822,
   "mode": "evidence",
   "evidence": {
-    "logZ": -159.55841310025212,
-    "logZ_err": 3.0705012128771796,
-    "nlive": 1000,
-    "maxcall": 200000,
+    "logZ": -153.43436880170472,
+    "logZ_err": 2.6550088507364458,
+    "nlive": 2000,
+    "maxcall": 400000,
     "dlogz_target": 0.01,
     "seed": 42
   }

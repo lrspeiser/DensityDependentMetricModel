@@ -33,50 +33,26 @@ except Exception as e:
     logger.warning(f"CuPy initialization warning: {e}")
 
 # ============================================================================
-# BESSEL FUNCTION WRAPPERS - Optimized for CuPy
+# BESSEL FUNCTION WRAPPERS - Optimized for CuPy (GPU-native, no host bounce)
 # ============================================================================
+try:
+    from cupyx.scipy import special as cpx_special
+except Exception as _e:
+    raise RuntimeError(
+        "[density_metric_cupy] CuPy SciPy special not available. Install cupyx.scipy (CuPy >= 12)."
+    )
 
 def bessel_i0_cupy(x):
-    """Bessel I0 optimized for CuPy arrays."""
-    if isinstance(x, cp.ndarray):
-        # For CuPy arrays, we need to use scipy on CPU then transfer back
-        x_cpu = cp.asnumpy(x)
-        result_cpu = scipy_i0(x_cpu)
-        return cp.asarray(result_cpu, dtype=DEFAULT_DTYPE)
-    else:
-        # For scalar or numpy arrays
-        result = scipy_i0(x)
-        return cp.asarray(result, dtype=DEFAULT_DTYPE)
+    return cpx_special.i0(x)
 
 def bessel_i1_cupy(x):
-    """Bessel I1 optimized for CuPy arrays."""
-    if isinstance(x, cp.ndarray):
-        x_cpu = cp.asnumpy(x)
-        result_cpu = scipy_i1(x_cpu)
-        return cp.asarray(result_cpu, dtype=DEFAULT_DTYPE)
-    else:
-        result = scipy_i1(x)
-        return cp.asarray(result, dtype=DEFAULT_DTYPE)
+    return cpx_special.i1(x)
 
 def bessel_k0_cupy(x):
-    """Bessel K0 optimized for CuPy arrays."""
-    if isinstance(x, cp.ndarray):
-        x_cpu = cp.asnumpy(x)
-        result_cpu = scipy_kv(0, x_cpu)
-        return cp.asarray(result_cpu, dtype=DEFAULT_DTYPE)
-    else:
-        result = scipy_kv(0, x)
-        return cp.asarray(result, dtype=DEFAULT_DTYPE)
+    return cpx_special.k0(x)
 
 def bessel_k1_cupy(x):
-    """Bessel K1 optimized for CuPy arrays."""
-    if isinstance(x, cp.ndarray):
-        x_cpu = cp.asnumpy(x)
-        result_cpu = scipy_kv(1, x_cpu)
-        return cp.asarray(result_cpu, dtype=DEFAULT_DTYPE)
-    else:
-        result = scipy_kv(1, x)
-        return cp.asarray(result, dtype=DEFAULT_DTYPE)
+    return cpx_special.k1(x)
 
 # ============================================================================
 # CORE PHYSICS FUNCTIONS - CuPy Optimized
@@ -984,24 +960,21 @@ def volume_density_comprehensive_solar_kpc3_cupy(R_kpc, p):
     
     return rho_total
 
+from .xi_registry import register_xi, resolve_xi
+
 def v_total_kms_cupy(R_kpc, p, xi_type='power'):
     """
-    Total velocity including modified gravity effects - CuPy optimized.
-    
-    This is the main function that calculates the total circular velocity
-    including baryonic components and modified gravity effects.
+    Total circular velocity including baryons and a selectable xi.
+    IMPORTANT: For reproducible paper runs, only 'gr' and 'tidal_band' are enabled by default.
+               To enable experimental xi forms, pass p['allow_experimental']=True.
     """
     R_kpc_arr = cp.atleast_1d(cp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
-    
-    # Check if we're using the new comprehensive parameter structure
+
+    # Baryons and density
     if 'M_thin_disk_solar' in p:
-        # Use comprehensive baryonic model
         v_baryon_sq = v_baryon_comprehensive_kms_cupy(R_kpc_arr, p)**2
-        
-        # Calculate total density for xi function
         rho_total = volume_density_comprehensive_solar_kpc3_cupy(R_kpc_arr, p)
     else:
-        # Legacy parameter structure (for backward compatibility)
         p_baryons = {
             'M_disk_solar': p.get('M_disk_solar', 0.0),
             'R_d_kpc': p.get('R_d_kpc', 3.0),
@@ -1012,11 +985,7 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
             'R_gas_kpc': p.get('R_gas_kpc', 7.0),
             'include_gas': p.get('include_gas', False),
         }
-        
-        # Calculate baryonic velocity (Newtonian)
         v_baryon_sq = v_baryon_total_newtonian_kms_cupy(R_kpc_arr, p_baryons)**2
-        
-        # Calculate total density for xi function
         rho_total = volume_density_total_midplane_solar_kpc3_cupy(
             R_kpc_arr,
             p_baryons['M_disk_solar'], p_baryons['R_d_kpc'], p.get('hz_disk_kpc', 0.3),
@@ -1024,175 +993,52 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
             p_baryons['M_gas_solar'], p_baryons['R_gas_kpc'], p.get('hz_gas_kpc', 0.1),
             p_baryons['include_gas']
         )
-    
-    # Calculate xi enhancement factor
-    # CRITICAL: rho_c should be near solar density for Cassini constraint
-    # Typical solar density is ~1e7 to 1e8 M_sun/kpc^3
-    rho_c = p.get('rho_c_solar_kpc3', 7e7)  # Default to typical solar density
-    
-    # Safe radius to avoid division by zero
+
+    # Registry-resolved xi
+    allow_experimental = bool(p.get('allow_experimental', False))
     R_safe = cp.maximum(R_kpc_arr, 1e-9)
-    
-    if xi_type == 'power':
-        n_exp = p.get('n_exp', 2.0)
-        A = p.get('A_xi', 1.0)
-        xi = xi_power_law_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'enhanced':
-        # Enhanced is power law with fitted amplitude
-        n_exp = p.get('n_exp', 2.0)
-        A = p.get('A', 5.0)  # Use 'A' not 'A_xi' for enhanced
-        xi = xi_power_law_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'logistic':
-        n_exp = p.get('n_exp', 2.0)
-        A = p.get('A_xi', 1.0)
-        xi = xi_logistic_law_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'exponential':
-        n_exp = p.get('n_exp', 2.0)
-        A = p.get('A_xi', 1.0)
-        xi = xi_exponential_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'grav_color':
-        gamma = p.get('gamma_exp', 2.7)
-        lambda_g = p.get('lambda_g', 8.0)
-        xi = xi_gravitational_color_cupy(rho_total, rho_c, gamma, lambda_g)
-    elif xi_type == 'grav_color_void_safe':
-        gamma = p.get('gamma_exp', 2.7)
-        lambda_g = p.get('lambda_g', 8.0)
-        xi = xi_gravitational_color_void_safe_cupy(rho_total, rho_c, gamma, lambda_g)
-    elif xi_type == 'tidal_band':
-        # Compute tidal proxy T ~ v_baryon^2 / R^2
+    rho_c = p.get('rho_c_solar_kpc3', 7e7)
+
+    # Prepare tidal proxy only if needed
+    T = None
+    if xi_type == 'tidal_band':
         T = cp.maximum(v_baryon_sq, 0.0) / cp.maximum(R_safe*R_safe, 1e-18)
-        lambda_max = p.get('lambda_max', 3.5)
-        gamma = p.get('gamma_exp', 3.0)
-        T0 = p.get('T0', 100.0)
-        sigma_lnT = p.get('sigma_lnT', 0.6)
-        wmin = p.get('wmin', 0.0)
-        xi = xi_tidal_bandpass_cupy(rho_total, T, rho_c, gamma, lambda_max, T0, sigma_lnT, wmin)
-    elif xi_type == 'balanced_screening':
-        R_screen = p.get('R_screen', 50.0)
-        n_exp = p.get('n_exp', 1.0)
-        A_max = p.get('A_max', 2.0)
-        xi = xi_balanced_screening_cupy(rho_total, rho_c, R_safe, R_screen, n_exp, A_max)
-    elif xi_type == 'hybrid_safe':
-        n_exp = p.get('n_exp', 1.5)
-        A = p.get('A_xi', 5.0)
-        xi = xi_hybrid_safe_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'smooth_transition':
-        n_exp = p.get('n_exp', 1.5)  
-        A = p.get('A_xi', 5.0)
-        xi = xi_smooth_transition_cupy(rho_total, rho_c, n_exp, A)
-    elif xi_type == 'elastic_strain':
-        # Elastic strain model parameters
-        elastic_params = {
-            'relaxation_scale': p.get('relaxation_scale', 1.0),
-            'strain_critical': p.get('strain_critical', 10.0),
-            'k_elastic': p.get('k_elastic', 0.5),
-            'rho_solar': rho_c
-        }
-        xi = xi_elastic_strain_cupy(rho_total, rho_c, elastic_params)
-    elif xi_type == 'tension_field':
-        # Tension field model parameters
-        tension_params = {
-            'rho_relaxation': p.get('rho_relaxation', 1e8),
-            'tension_max': p.get('tension_max', 5.0),
-            'R_snap': p.get('R_snap', 25.0)
-        }
-        xi = xi_tension_field_cupy(rho_total, R_kpc_arr, tension_params)
-    elif xi_type == 'hookean':
-        # Hookean potential model parameters
-        hookean_params = {
-            'k_spacetime': p.get('k_spacetime', 0.1),
-            'rho_equilibrium': p.get('rho_equilibrium', 1e9),
-            'stress_break': p.get('stress_break', 100.0)
-        }
-        xi = xi_hookean_potential_cupy(rho_total, R_kpc_arr, hookean_params)
-    elif xi_type == 'gaussian':
-        rho_peak = p.get('rho_peak_solar_kpc3', 1e8)
-        sigma_log = p.get('sigma_log', 1.0)
-        lambda_max = p.get('lambda_max', 2.0)
-        xi = xi_gaussian_enhancement_cupy(rho_total, rho_peak, sigma_log, lambda_max)
-    elif xi_type == 'mond':
-        n = p.get('n_mond', 1.0)
-        xi = xi_mond_like_cupy(rho_total, rho_c, n)
-    elif xi_type == 'gr':
-        # Standard GR - no enhancement
-        xi = cp.ones(rho_total.shape, dtype=rho_total.dtype)
-    elif xi_type == 'sigmoid':
-        n_exp = p.get('n_exp', 2.0)
-        A = p.get('A', 5.0)
-        xi = xi_sigmoid_saturation_cupy(rho_total, rho_c, A, n_exp)
-    elif xi_type == 'peak':
-        rho_peak = p.get('rho_peak_solar_kpc3', 100.0)  # Peak at void boundaries
-        width = p.get('width_log', 1.5)
-        A = p.get('A', 5.0)
-        xi = xi_peak_enhancement_cupy(rho_total, rho_peak, width, A)
-    elif xi_type == 'yukawa':
-        A = p.get('A', 5.0)
-        lambda_screen = p.get('lambda_screen_kpc', 10.0)
-        xi = xi_yukawa_screening_cupy(rho_total, R_kpc_arr, rho_c, A, lambda_screen)
-    elif xi_type == 'transition':
-        # For transition model, calculate density at slightly different radius
-        R_prev = cp.maximum(R_kpc_arr - 0.1, 0.1)  # 0.1 kpc step
-        rho_prev = volume_density_comprehensive_solar_kpc3_cupy(R_prev, p)
-        A = p.get('A', 5.0)
-        width = p.get('width_gradient', 1.0)
-        xi = xi_transition_based_cupy(rho_total, rho_prev, A, width)
 
-    elif xi_type == 'broken':
-        rho_break = p.get('rho_break_solar_kpc3', 1e5)
-        n_low = p.get('n_low', 2.0)
-        n_high = p.get('n_high', 0.5)
-        A = p.get('A', 5.0)
-        xi = xi_broken_power_cupy(rho_total, rho_break, n_low, n_high, A)
+    # Define small wrappers for published xi
+    def _xi_gr_published(rho, **kwargs):
+        return cp.ones_like(rho, dtype=rho.dtype)
 
-    elif xi_type == 'hybrid':
-        rho_c = p.get('rho_c_solar_kpc3', 1e15)
-        n_exp = p.get('n_exp', 1.2)
-        A_power = p.get('A_power', 3.0)
-        rho_peak = p.get('rho_peak_solar_kpc3', 1e5)
-        width = p.get('width_log', 1.5)
-        A_peak = p.get('A_peak', 2.0)
-        xi = xi_hybrid_cupy(rho_total, rho_c, n_exp, A_power, rho_peak, width, A_peak)
+    def _xi_tidal_band_published(rho, T=None, rho_c=None, gamma=None, lambda_max=None, T0=None, sigma_lnT=None, wmin=None, **kwargs):
+        if T is None:
+            raise ValueError("tidal_band requires tidal proxy T; computed internally when xi_type='tidal_band'")
+        return xi_tidal_bandpass_cupy(rho, T, rho_c, gamma, lambda_max, T0, sigma_lnT, wmin)
 
-    elif xi_type == 'tanh':
-        rho_mid = p.get('rho_mid_solar_kpc3', 1e5)
-        width = p.get('width_transition', 1.0)
-        A_low = p.get('A_low', 10.0)  # Enhancement at low density
-        A_high = p.get('A_high', 0.0)  # Enhancement at high density (usually 0)
-        xi = xi_tanh_transition_cupy(rho_total, rho_mid, width, A_low, A_high)
+    # Register published and selected experimental xi names (idempotent)
+    try:
+        register_xi('gr', _xi_gr_published, published=True, doc="GR baseline (xi≡1)")
+        register_xi('tidal_band', _xi_tidal_band_published, published=True, doc="ER tidal-band with density screening")
+        # Experimental examples (available only if allow_experimental=True)
+        register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: exponential screening")
+        register_xi('grav_color_void_safe', lambda rho, **kw: xi_gravitational_color_void_safe_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: void-safe color")
+        register_xi('balanced_screening', lambda rho, **kw: xi_balanced_screening_cupy(rho, kw.get('rho_c'), kw.get('R'), kw.get('R_screen', 50.0), kw.get('n_exp', 1.0), kw.get('A_max', 2.0)), published=False, doc="Experimental: bounded enhancement with R cutoff")
+        # ... add other xi_* variants here as needed
+    except Exception:
+        # Ignore if already registered in a prior call
+        pass
 
-    elif xi_type == 'spacetime_grain':
-        # Quantum spacetime granularity model
-        grain_size = p.get('grain_size_kpc', 10.0)
-        rho_compress = p.get('rho_compress', 1e5) 
-        A_grain = p.get('A_grain', 8.0)
-        
-        # Use v2 which works with density
-        xi = xi_spacetime_grain_v2_cupy(R_kpc_arr, rho_total, grain_size, rho_compress, A_grain)
-        
-        # CRITICAL: Enforce Cassini constraint
-        # Check if we're in Solar System regime (around 8.5 kpc)
-        solar_mask = cp.abs(R_kpc_arr - 8.5) < 1.0
-        xi = cp.where(solar_mask, 1.0, xi)  # Force xi=1 near Sun
+    try:
+        xi_fn = resolve_xi(xi_type, allow_experimental=allow_experimental)
+    except Exception as e:
+        print(f"[v_total_kms_cupy] ERROR resolving xi_type='{xi_type}': {e}")
+        raise
 
-    else:
-        # Default to power law
-        n_exp = p.get('n_exp', 2.0)
-        A = p.get('A_xi', 1.0)
-        xi = xi_power_law_cupy(rho_total, rho_c, n_exp, A)
+    xi_kwargs = dict(p)
+    xi_kwargs.update({"rho_c": rho_c, "T": T, "R": R_safe})
+    xi = xi_fn(rho=rho_total, **xi_kwargs)
 
-    
-    # Apply xi enhancement to velocity
-    v_total_sq = v_baryon_sq * xi
-    
-    # ADD NaN PROTECTION to prevent numerical issues
-    v_total_sq = cp.nan_to_num(v_total_sq, nan=0.0, posinf=0.0, neginf=0.0)
-    
+    v_total_sq = cp.nan_to_num(v_baryon_sq * xi, nan=0.0, posinf=0.0, neginf=0.0)
     v_total = cp.sqrt(cp.maximum(v_total_sq, 0.0))
-    
-    # Additional safety check for final result
-    v_total = cp.nan_to_num(v_total, nan=0.0, posinf=0.0, neginf=0.0)
-    
-    return v_total
+    return cp.nan_to_num(v_total, nan=0.0, posinf=0.0, neginf=0.0)
 
 # ============================================================================
 # UTILITY FUNCTIONS

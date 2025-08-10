@@ -1,40 +1,40 @@
 {
-  "galaxy_id": "NGC2841",
-  "file_rotmod": "external_data\\Rotmod_LTG\\NGC2841_rotmod.dat",
+  "galaxy_id": "NGC3198",
+  "file_rotmod": "external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
   "model": "er",
   "mask": "none",
   "params": {
     "log10_rho_c": 17.0,
     "gamma_exp": 5.0,
-    "lambda_max": 4.659706958298836,
+    "lambda_max": 3.9046735923792477,
     "lnT0": -1.0,
     "sigma_lnT": 2.0,
-    "w_min": 0.1,
+    "w_min": 0.05,
     "ups_disk": 0.3,
-    "ups_bul": 0.5,
+    "ups_bul": 1.0,
     "V200": 150.0,
     "c": 10.0
   },
   "priors": {
-    "use_master_priors": false,
-    "distance_Mpc": 14.1,
+    "use_master_priors": true,
+    "distance_Mpc": 13.8,
     "e_distance_Mpc": 1.4,
-    "incl_deg": 76.0,
-    "e_incl_deg": 10.0
+    "incl_deg": 73.0,
+    "e_incl_deg": 3.0
   },
   "gas": {
     "profile_mode": "A_trunc_exp(MHI,RHI); mode=RHI kRd=3.00",
     "Rd_kpc": 9.999999999999996,
-    "Sigma0": 91.10384411247749,
-    "Rmax_kpc": 45.12,
-    "mass_mismatch": 5.50168201884321,
-    "penalty_mass": 13.708339113217969
+    "Sigma0": 35.37481053330208,
+    "Rmax_kpc": 35.66,
+    "mass_mismatch": 1.7810052964810306,
+    "penalty_mass": 1.570826200156651
   },
   "sanity": {
-    "xi_min": 2.967166842166555,
-    "xi_med": 4.908349137061676,
-    "xi_max": 5.658046766659512,
-    "R_peak_W": 24.59,
+    "xi_min": 1.8025654122520403,
+    "xi_med": 4.361313541364143,
+    "xi_max": 4.896005338191974,
+    "R_peak_W": 16.07,
     "sigma_floor": 5.0,
     "T_proxy": "epicyclic",
     "tidal_norm": "robust",
@@ -49,15 +49,15 @@
       "ups_bul": true
     }
   },
-  "chi2": 1259.8104478434093,
-  "chi2_dof": 29.99548685341451,
-  "loglike_no_const": -629.9052239217046,
+  "chi2": 265.06161701161926,
+  "chi2_dof": 7.573189057474836,
+  "loglike_no_const": -132.53080850580963,
   "mode": "evidence",
   "evidence": {
-    "logZ": -590.5532218045391,
-    "logZ_err": 3.1717307922645808,
-    "nlive": 2000,
-    "maxcall": 400000,
+    "logZ": -149.74253065644663,
+    "logZ_err": 3.0851477726611667,
+    "nlive": 1000,
+    "maxcall": 200000,
     "dlogz_target": 0.01,
     "seed": 42
   }

@@ -1,5 +1,5 @@
 {
-  "galaxy_id": "NGC2841",
+  "galaxy_id": "UGC0128",
   "model": "nfw",
   "sigma_floor": 5.0,
   "priors": {
@@ -14,8 +14,8 @@
     }
   },
   "evidence": {
-    "logZ": -1144.1542675437122,
-    "logZ_err": 2.602109769106264,
+    "logZ": -7.591516390007868,
+    "logZ_err": 0.058650502810434865,
     "nlive": 1000,
     "maxcall": 200000,
     "dlogz_target": 0.01,

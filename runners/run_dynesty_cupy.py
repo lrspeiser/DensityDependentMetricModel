@@ -2167,8 +2167,9 @@ def main_cupy():
     
     # Core options
     parser.add_argument('--xi', type=str, default='tidal_band', 
-                       choices=['gr', 'power', 'enhanced', 'grav_color', 'grav_color_void_safe', 'tidal_band', 'hybrid_safe', 'smooth_transition', 'sigmoid', 'peak', 'yukawa', 'transition', 'spacetime_grain', 'broken', 'hybrid', 'tanh', 'elastic_strain', 'tension_field', 'hookean', 'balanced_screening'],
-                       help='Xi function type')
+                       help="Xi model. Published: 'gr', 'tidal_band'. Add --allow_experimental to unlock others.")
+    parser.add_argument('--allow_experimental', action='store_true',
+                       help='Allow experimental xi models (NOT for paper-grade reproducibility).')
     parser.add_argument('--output_dir', type=str, default='cupy_results',
                        help='Output directory (ignored unless --resume_from is provided)')
     parser.add_argument('--resume_from', type=str, default=None,
@@ -2227,6 +2228,23 @@ def main_cupy():
                        help='Bounding method')
     
     args = parser.parse_args()
+
+    # Enforce published xi by default
+    try:
+        from core.xi_registry import get_allowed_xi_names
+        allowed_published = set(get_allowed_xi_names(False))
+        if (not args.allow_experimental) and (args.xi not in allowed_published):
+            allowed_list = ", ".join(sorted(allowed_published))
+            raise SystemExit(
+                f"[run_dynesty_cupy] '{args.xi}' is experimental or unknown.\n"
+                f"For reproducible runs choose one of: {allowed_list}\n"
+                f"To enable experimental xi, pass --allow_experimental."
+            )
+        print(f"[run_dynesty_cupy] Using xi='{args.xi}' "
+              f"{'EXPERIMENTAL' if (args.allow_experimental and args.xi not in allowed_published) else 'PUBLISHED'}")
+    except Exception as e:
+        # If registry not available, do not block the run; just warn
+        print(f"[run_dynesty_cupy] Warning: xi publication check skipped ({e})")
 
     # Determine output directory
     if args.resume_from or args.resume_from_best:
@@ -2453,6 +2471,9 @@ def main_cupy():
             # Prepare arguments for parallel execution
             logl_args = (param_names, args, R_data, v_data, sigma_data)
             ptform_args = (param_names, bounds_low, bounds_high, use_log_prior)
+
+            # Propagate experimental allowance into params used by likelihood
+            setattr(args, 'allow_experimental', bool(getattr(args, 'allow_experimental', False)))
             
             # Create sampler (same path for both fresh and resume; resume uses restore below)
             sampler = dynesty.DynamicNestedSampler(

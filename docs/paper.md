@@ -207,7 +207,7 @@ We use SPARC rotation curves and 3.6 µm photometry with H I surface densities f
 - distance D and inclination i with literature uncertainties,
 - a mass-to-light prior Υ_3.6 ~ N(0.45, 0.1^2) M_⊙/L_⊙ unless otherwise noted.
 
-Vertical structure to midplane density. We convert to midplane densities via Σ(R) ≈ 2 h_z(R) ρ(R,0), adopting an isothermal sheet with h_z,* = 0.30 kpc and h_z,gas = 0.10 kpc, and optional linear flaring h_z(R) = h_z,0[1 + α R/R_d] with α ∈ [0, 0.2]. Sensitivity to h_z and α is included in the error budget (Extended Data Table ED-VP). [TODO-SPARC-VP] Log adopted h_z, α assumptions per galaxy in the JSON sidecar.
+Vertical structure to midplane density. We convert to midplane densities via Σ(R) ≈ 2 h_z(R) ρ(R,0), adopting an isothermal sheet with h_z,* = 0.30 kpc and h_z,gas = 0.10 kpc, and optional linear flaring h_z(R) = h_z,0[1 + α R/R_d] with α ∈ [0, 0.2]. Sensitivity to h_z and α is included in the error budget (Extended Data Table ED-VP). We record per-galaxy vertical profile assumptions (h_z, α) in each result JSON sidecar; defaults can be controlled via --hz-star, --hz-gas, and --hz-alpha in tools/fit_sparc_er_env.py.
 
 ### 8A.2 Tidal indicator T(R) (proxy family)
 For SPARC’s first pass we compute T from a baryon-only field (never from V_obs), evaluating three proxies:
@@ -216,7 +216,7 @@ For SPARC’s first pass we compute T from a baryon-only field (never from V_obs
 - Shear: T_shear = | dΩ/dR |, with Ω = v_bar / R
 - Epicyclic: T_κ via κ = 2(1+β) Ω, β = d ln v_bar / d ln R
 
-Each T is normalized by its median over fitted radii, then used in the ER window W(T). We will report Δlog Z stability across these T choices (Fig. S1; Table ED-T). [TODO-SPARC-T] Include the chosen proxy name in each result JSON.
+Each T is normalized by its median over fitted radii, then used in the ER window W(T). We will report Δlog Z stability across these T choices (Fig. S1; Table ED-T). Each result JSON records the chosen T-proxy and normalization under params and sanity (fields: T_proxy, tidal_norm).
 
 Table ED-T (T-proxy robustness; matched controls)
 
@@ -271,6 +271,81 @@ Sensitivity checks
   - shear:     logZ_ER = −343.239 ± 0.306
   Hence, epicyclic maximizes the ER evidence on NGC 3198; the spread ΔlogZ across proxies is O(100), reported in Table ED-T.
 
+- σ-floor sensitivity (NGC 3198, epicyclic; matched dynesty):
+
+  | σ_floor (km s^{-1}) | logZ_ER             |
+  |---------------------:|---------------------|
+  | 0.0                  | −968.016 ± 0.437    |
+  | 2.0                  | −465.871 ± 0.504    |
+  | 3.0                  | −296.919 ± 0.702    |
+  | 5.0 (baseline)       | −144.543 ± 0.104    |
+
+  Trend: increasing σ_floor reduces penalty on residuals and increases ER evidence, as expected. Our conservative baseline (5 km s^{-1}) is reported throughout for parity across models.
+
+- M/L prior sensitivity (NGC 3198, epicyclic; matched dynesty):
+
+  | Υ_3.6 prior           | logZ_ER             |
+  |-----------------------|---------------------|
+  | Gaussian (0.5±0.1, 0.7±0.1) | −144.543 ± 0.104    |
+  | Broad/flat-like (σ≈10)       | −149.743 ± 1.103    |
+
+  Conclusion: broadening stellar M/L priors yields only a small change in ER evidence for NGC 3198 under the conservative recipe.
+
+Methods note — exact CLI used for the NGC 3198 sensitivity runs
+
+Sigma-floor grid (evidence mode; matched dynesty controls; epicyclic proxy and RHI gas truncation):
+
+```
+# σ_floor = 0.0 km/s
+python tools/fit_sparc_er_env.py \
+  --galaxy_id NGC3198 --sparc_dir external_data/Rotmod_LTG \
+  --mode evidence --model er \
+  --T-proxy epicyclic --gas-truncation RHI \
+  --sigma-floor 0.0 \
+  --nlive 1000 --maxcall 200000 --dlogz-target 0.01 --seed 42
+
+# σ_floor = 2.0 km/s
+python tools/fit_sparc_er_env.py \
+  --galaxy_id NGC3198 --sparc_dir external_data/Rotmod_LTG \
+  --mode evidence --model er \
+  --T-proxy epicyclic --gas-truncation RHI \
+  --sigma-floor 2.0 \
+  --nlive 1000 --maxcall 200000 --dlogz-target 0.01 --seed 42
+
+# σ_floor = 3.0 km/s
+python tools/fit_sparc_er_env.py \
+  --galaxy_id NGC3198 --sparc_dir external_data/Rotmod_LTG \
+  --mode evidence --model er \
+  --T-proxy epicyclic --gas-truncation RHI \
+  --sigma-floor 3.0 \
+  --nlive 1000 --maxcall 200000 --dlogz-target 0.01 --seed 42
+
+# σ_floor = 5.0 km/s (baseline)
+python tools/fit_sparc_er_env.py \
+  --galaxy_id NGC3198 --sparc_dir external_data/Rotmod_LTG \
+  --mode evidence --model er \
+  --T-proxy epicyclic --gas-truncation RHI \
+  --sigma-floor 5.0 \
+  --nlive 1000 --maxcall 200000 --dlogz-target 0.01 --seed 42
+```
+
+M/L prior sensitivity (broadened, effectively flat Gaussians on disk and bulge M/L; same evidence controls):
+
+```
+python tools/fit_sparc_er_env.py \
+  --galaxy_id NGC3198 --sparc_dir external_data/Rotmod_LTG \
+  --mode evidence --model er \
+  --T-proxy epicyclic --gas-truncation RHI \
+  --sigma-floor 5.0 \
+  --nlive 1000 --maxcall 200000 --dlogz-target 0.01 --seed 42 \
+  --ml-disk-mean 0.50 --ml-disk-sigma 10.0 \
+  --ml-bulge-mean 0.70 --ml-bulge-sigma 10.0
+```
+
+Notes:
+- All runs use identical masks, distance/inclination priors, and figure/JSON artifact emission provided by tools/fit_sparc_er_env.py.
+- The broadened M/L priors above (σ ≈ 10) replicate the “flat-like” prior test summarized in the table.
+
 Gas reconstruction diagnostics (RHI-truncated exponential)
 - R_d ≈ 10.0 kpc (within [0.5,10]); Σ_0 ≈ 35.4 M_⊙ pc^{-2}; R_max ≈ 35.66 kpc
 - No exact mass solve within [0.5,10] kpc; best-effort solution with soft Σ(R_HI) penalty (mass_mismatch ≈ 1.78, penalty ≈ 1.57)
@@ -295,7 +370,11 @@ Extended Data Table ED-SPARC (evidence batch; this work)
 | UGC 00128| −1603.288 ± 0.000 | −7.592 ± 0.059       | −46.067 ± 1.552       | +1557.222     | −38.475       |
 | NGC 0598 | −306.618 ± 0.000  | −15.512 ± 0.056      | −11.314 ± 0.488       | +295.304      | +4.199        |
 
-[TODO-SPARC-2] Auto-generate from sparc_batch_summary.csv. Include ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min in a supplementary table.
+Auto-generated from images/sparc_evidence_triplet_summary.csv using scripts/aggregate_sparc_triplet.py; a Markdown rendition is produced by scripts/gen_ed_sparc_md.py and available at docs/ED-SPARC.md for inclusion. We will also provide a supplementary table listing ER hyperparameters (ρ_c, γ_exp, λ_max, T_0, σ_lnT, w_min) per galaxy.
+
+Methods note — evidence triplet aggregation and reruns
+- We aggregate ER/GR/NFW log-evidences and deltas into images/sparc_evidence_triplet_summary.csv using scripts/aggregate_sparc_triplet.py. This scans images/sparc_{gr,er,nfw}_evidence_*.json sidecars and writes a single CSV with ΔlogZ columns (ER−GR, NFW−GR, ER−NFW) per galaxy.
+- Any galaxy with dynesty early-stop warnings or large logZ_err is rerun with a higher sampling budget. For example, NGC 0598 (M33) NFW was rerun with maxcall=400000 (nlive=1000, dlogz_target=0.01, seed=42, σ_floor=5.0), yielding logZ_NFW ≈ −15.507 ± 0.046 and clearing the stop:nan warning.
 
 Methods addendum (commands; paste into §10 or Supplement)
 

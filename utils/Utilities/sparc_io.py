@@ -78,13 +78,18 @@ def load_sparc_metadata(sparc_dir=DEFAULT_SPARC_DATA_DIR):
 def load_single_sparc_galaxy(galaxy_id: str,
                              sparc_dir=DEFAULT_SPARC_DATA_DIR,
                              assume_gas_hz_kpc=0.1,
-                             assume_stellar_hz_kpc=0.3
+                             assume_stellar_hz_kpc=0.3,
+                             assume_hz_alpha=0.0
                              ):
     """
     Loads data for a single SPARC galaxy from _rotmod.dat, _HIrad.dat, and _SB.dat.
     Interpolates all data onto the radial grid of _rotmod.dat.
     Returns a dictionary including R_kpc, V_obs, e_V_obs, V_gas_comp_kms, V_disk_comp_kms, V_bulge_comp_kms,
     Sigma_gas_Msun_pc2, Sigma_star_Msun_pc2 (at base M/L), and derived rho_total_mid_Msun_kpc3.
+
+    Notes:
+    - assume_hz_alpha encodes a simple linear flaring coefficient h_z(R) = h_z,0 * (1 + alpha * R/R_d). It is recorded
+      in outputs for reproducibility, but not yet applied to the midplane density conversion in this loader.
     """
     if not isinstance(galaxy_id, str): galaxy_id = str(galaxy_id)
 
@@ -362,8 +367,9 @@ def load_single_sparc_galaxy(galaxy_id: str,
             'rho_star_mid_Msun_kpc3_baseML': rho_star_mid_Msun_kpc3, # Stellar vol. dens. at base M/L
             'rho_gas_mid_Msun_kpc3': rho_gas_mid_Msun_kpc3,
             # 'rho_total_mid_Msun_kpc3' will be calculated in main.py after M/L scaling of stellar part
-            'assumed_hz_stellar_kpc': assume_stellar_hz_kpc,
+'assumed_hz_stellar_kpc': assume_stellar_hz_kpc,
             'assumed_hz_gas_kpc': assume_gas_hz_kpc,
+            'assumed_hz_alpha': assume_hz_alpha,
 'distance_Mpc': galaxy_meta['D_Mpc'] if galaxy_meta is not None and 'D_Mpc' in galaxy_meta else np.nan,
             'e_distance_Mpc': galaxy_meta['e_D'] if galaxy_meta is not None and 'e_D' in galaxy_meta else np.nan,
             'incl_deg': galaxy_meta['Inc'] if galaxy_meta is not None and 'Inc' in galaxy_meta else np.nan,
