@@ -229,7 +229,7 @@ Table ED-T (T-proxy robustness; matched controls)
 - Baryons: Use SPARC component rotation curves or fit MN/Hernquist analogs to Σ*, Σ_gas so the same density engine computes ρ(R,0) and T(R).
 - GR baseline: V_GR(R) = V_bar(R).
 - ER: V_ER(R) = sqrt(ξ(ρ(R,0), T(R))) V_bar(R) with ξ as in §2.2 and priors as in §5.2.
-- ΛCDM/NFW: add V_halo^2(R) with NFW (M_200, c) or (V_200, c) priors; identical sampler settings. [TODO-SPARC-NFW] Implement minimal NFW baseline; record priors in JSON.
+- ΛCDM/NFW: add V_halo^2(R) with NFW (M_200, c) or (V_200, c) priors; identical sampler settings. Implemented via tools/fit_sparc_nfw_evidence.py, which records priors and dynesty controls in the JSON sidecar.
 
 Nuisance/systematics: Gaussian priors on D and i. We add a velocity floor σ_floor ∈ [0,3] km s^{-1} in quadrature to σ_V,k and marginalize σ_floor with a weak half-normal prior. Likelihood as in §5.1; matched dynesty controls across GR/ER/NFW. We report logZ and Bayes factors.
 
