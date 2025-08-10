@@ -22,17 +22,17 @@ Note: Check items as they are completed and link artifacts (JSON, CSV, PNG, figu
     - [x] Populate NGC 3198 row in ED-SPARC table
     - [x] Update ED figure caption with actual χ²/dof and evidence values
 
-- [ ] 2) Implement & run NFW baseline for SPARC
-  - [ ] Minimal NFW in fitter with priors from abundance matching
-  - [ ] Matched evidence run for NGC 3198
-  - [ ] Report ΔlogZ(ER−NFW) in §8A.4 and ED table
+- [x] 2) Implement \u0026 run NFW baseline for SPARC
+  - [x] Minimal NFW in fitter with priors from abundance matching (CLI Gaussian priors supported)
+  - [x] Matched evidence run for NGC 3198
+  - [x] Report ΔlogZ(ER−NFW) in §8A.4 and ED table
 
-- [ ] 3) Batch 5–10 galaxy run (SPARC)
-  - [ ] Select clean set: NGC 3198, NGC 2403, M33, NGC 5055, NGC 2903, NGC 6946, NGC 2841, UGC 128
-  - [ ] For each galaxy, run GR, ER, NFW in evidence mode and write JSON
-  - [ ] Aggregate CSV (sparc_batch_summary.csv) with logZs, best-fit params, and T-proxy
-  - [ ] Deliverables
-    - [ ] Fill Extended Data Table ED-SPARC
+- [x] 3) Batch 5–10 galaxy run (SPARC)
+  - [x] Select clean set: NGC 3198, NGC 2403, M33, NGC 5055, NGC 2903, NGC 6946, NGC 2841, UGC 128
+  - [x] For each galaxy, run GR, ER, NFW in evidence mode and write JSON
+  - [x] Aggregate CSV (sparc_batch_summary.csv) with logZs, best-fit params, and T-proxy
+  - [x] Deliverables
+    - [x] Fill Extended Data Table ED-SPARC
     - [ ] Optional: Figure ED1 (stacked residuals GR vs ER)
 
 - [x] 4) Robustness tests for T proxy
