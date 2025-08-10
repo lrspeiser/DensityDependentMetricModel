@@ -55,10 +55,10 @@
   "chi2": 265.06036701161923,
   "chi2_dof": 7.573153343189121,
   "loglike_no_const": -132.53018350580962,
-  "mode": "evidence",
+  "mode": "fit",
   "evidence": {
-    "logZ": -141.49842248912597,
-    "logZ_err": 3.086267547234773,
+    "logZ": null,
+    "logZ_err": null,
     "nlive": 1000,
     "maxcall": 200000,
     "dlogz_target": 0.01,
