@@ -2103,8 +2103,9 @@ def save_tuning_snapshot(sampler, param_names, args, start_time, output_dir, log
         # Assemble JSON
         snapshot = {
             "metadata": {
-                "run_id": getattr(args, 'run_id', str(Path(output_dir).name)),
+            "run_id": getattr(args, 'run_id', str(Path(output_dir).name)),
                 "xi_type": getattr(args, 'xi', 'gr'),
+                "rho_screen": getattr(args, 'rho_screen', 'power'),
                 "timestamp_utc": now_iso,
                 "n_params": int(n_params),
                 "param_names": list(param_names),
@@ -2184,6 +2185,8 @@ def main_cupy():
     # Physics toggles
     parser.add_argument('--include_halo', action='store_true', default=False,
                        help='Include NFW halo component (adds V200_kms and c_concentration parameters)')
+    parser.add_argument('--rho-screen', type=str, choices=['power','exp'], default='power',
+                       help="Screening family for published xi models (recorded for reproducibility; default 'power')")
     parser.add_argument('--num_threads', type=int, default=4,
                        help='Number of threads')
     parser.add_argument('--dlogz_target', type=float, default=0.01,
