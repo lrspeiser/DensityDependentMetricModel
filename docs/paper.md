@@ -379,13 +379,14 @@ python tools/fit_sparc_er_env.py \
   --fit-ml disk bulge
 ```
 
-Batch evidence scaffold (to be implemented):
+Batch evidence scaffold (now available):
 ```
 python tools/batch_sparc_env_fit.py \
   --sparc_dir external_data/Rotmod_LTG \
   --galaxies NGC3198 NGC2403 NGC598 NGC5055 NGC2903 NGC6946 NGC2841 UGC128 \
-  --mode evidence
+  --mode evidence --sigma-floor 5.0 --nlive 1000 --maxcall 200000 --dlogz-target 0.01 --seed 42
 ```
+Notes: this script orchestrates GR, NFW, and ER evidence runs per galaxy, then writes a CSV. The global aggregation still uses scripts/aggregate_sparc_triplet.py to produce images/sparc_evidence_triplet_summary.csv (fed into docs/ED-SPARC.md). We will extend the galaxy list to ≥20 high-quality systems to complete the multi-galaxy validation deliverable.
 
 Artifacts per galaxy: PNG figure, JSON with priors/assumptions and results (incl. T proxy, vertical profile params, σ_floor, and logZ values). A CSV aggregator produces ED-SPARC.
 
