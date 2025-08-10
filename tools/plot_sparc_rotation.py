@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Plot ER/GR predictions against a SPARC/Rotmod galaxy file.
+Plot TFR/GR predictions against a SPARC/Rotmod galaxy file.
 
 Example (NGC 3198):
   python tools/plot_sparc_rotation.py \
@@ -78,16 +78,16 @@ def main():
         m_in = R_grid <= R_data_max
         m_out = ~m_in
         if np.any(m_in):
-            plt.plot(R_grid[m_in], ver_g[m_in], 'r-', lw=2.5, label='ER — constrained')
+            plt.plot(R_grid[m_in], ver_g[m_in], 'r-', lw=2.5, label='TFR — constrained')
         if np.any(m_out):
-            plt.plot(R_grid[m_out], ver_g[m_out], color='#FF8C00', ls='--', lw=2.5, label='ER — extrapolation')
+            plt.plot(R_grid[m_out], ver_g[m_out], color='#FF8C00', ls='--', lw=2.5, label='TFR — extrapolation')
             plt.axvspan(R_data_max, R_grid.max(), color='#FFA500', alpha=0.08)
         plt.axvline(R_data_max, color='k', ls=':', alpha=0.6, label=f"Max data R ≈ {R_data_max:.1f} kpc")
         print(f"xi_max = 1 + lambda_max = {1.0 + args.lambda_max:.3f}")
 
     plt.xlabel('R (kpc)')
     plt.ylabel('Vc (km s^{-1})')
-    plt.title(f'{name}: SPARC vs GR vs ER')
+    plt.title(f'{name}: SPARC vs GR vs TFR')
     plt.grid(True, alpha=0.3)
     plt.legend(frameon=False)
     plt.xlim(0, max(R.max()*1.2, R.max()+5))
