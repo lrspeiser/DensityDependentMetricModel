@@ -1,7 +1,7 @@
 {
   "galaxy_id": "DDO064",
   "model": "nfw",
-  "sigma_floor": 0.0,
+  "sigma_floor": 5.0,
   "priors": {
     "use_master_priors": false,
     "V200": {
@@ -14,11 +14,11 @@
     }
   },
   "evidence": {
-    "logZ": -5.926946313071323,
-    "logZ_err": 0.04349421634591291,
-    "nlive": 400,
-    "maxcall": 80000,
-    "dlogz_target": 0.02,
+    "logZ": -3.435922712626592,
+    "logZ_err": 0.023734533591560657,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
     "seed": 42,
     "priors_gaussian": {
       "V200": {

@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "ESO563-G021",
+  "model": "gr",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 1168.4453590813432,
+  "loglike_no_const": -584.2226795406716,
+  "evidence": {
+    "logZ": -584.2228223944163,
+    "logZ_err": 0.0003548809936996074,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

@@ -1,7 +1,7 @@
 {
   "galaxy_id": "DDO170",
   "model": "er_radial_log_normal",
-  "sigma_floor": 0.0,
+  "sigma_floor": 5.0,
   "priors": {
     "use_master_priors": false,
     "lambda_max": {
@@ -30,11 +30,11 @@
     }
   },
   "evidence": {
-    "logZ": -38.42545522459534,
-    "logZ_err": 1.1585757749889927,
-    "nlive": 400,
-    "maxcall": 80000,
-    "dlogz_target": 0.02,
+    "logZ": -5.952206723589794,
+    "logZ_err": 0.07801954142513787,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
     "seed": 42
   }
 }

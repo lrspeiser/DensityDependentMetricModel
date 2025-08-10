@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "F563-V2",
+  "model": "gr",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 129.09093609189011,
+  "loglike_no_const": -64.54546804594506,
+  "evidence": {
+    "logZ": -64.54561089968685,
+    "logZ_err": 0.00035493460892087965,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

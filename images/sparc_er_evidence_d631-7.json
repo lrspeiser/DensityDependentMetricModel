@@ -1,7 +1,7 @@
 {
   "galaxy_id": "D631-7",
   "model": "er_radial_log_normal",
-  "sigma_floor": 0.0,
+  "sigma_floor": 5.0,
   "priors": {
     "use_master_priors": false,
     "lambda_max": {
@@ -30,11 +30,11 @@
     }
   },
   "evidence": {
-    "logZ": -23.0575111598323,
-    "logZ_err": 2.6769068812115036,
-    "nlive": 400,
-    "maxcall": 80000,
-    "dlogz_target": 0.02,
+    "logZ": -11.81340698267065,
+    "logZ_err": 0.5813008119898508,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
     "seed": 42
   }
 }

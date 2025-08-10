@@ -1,7 +1,7 @@
 {
   "galaxy_id": "ESO079-G014",
   "model": "nfw",
-  "sigma_floor": 0.0,
+  "sigma_floor": 5.0,
   "priors": {
     "use_master_priors": false,
     "V200": {
@@ -14,11 +14,11 @@
     }
   },
   "evidence": {
-    "logZ": -49.596038211250466,
-    "logZ_err": 0.1335015590569261,
-    "nlive": 400,
-    "maxcall": 80000,
-    "dlogz_target": 0.02,
+    "logZ": -22.44351771964503,
+    "logZ_err": 0.058369037252035294,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
     "seed": 42,
     "priors_gaussian": {
       "V200": {

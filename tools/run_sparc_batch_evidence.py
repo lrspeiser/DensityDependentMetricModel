@@ -31,6 +31,7 @@ REPO = Path(__file__).resolve().parents[1]
 GR_TOOL = REPO / 'tools' / 'fit_sparc_gr_evidence.py'
 NFW_TOOL = REPO / 'tools' / 'fit_sparc_nfw_evidence.py'
 ER_TOOL = REPO / 'tools' / 'fit_sparc_er_evidence.py'
+COMP_TOOL = REPO / 'tools' / 'fit_sparc_composite_evidence.py'
 CSV_PATH = REPO / 'ed_sparc_batch.csv'
 SUMMARY_TOOL = REPO / 'tools' / 'summarize_ed_sparc_batch.py'
 
@@ -88,6 +89,7 @@ def main():
     ap.add_argument('--maxcall', type=int, default=150000)
     ap.add_argument('--dlogz-target', type=float, default=0.01)
     ap.add_argument('--seed', type=int, default=42)
+    ap.add_argument('--resume', action='store_true', help='Skip galaxies already present in CSV with 3 evidences')
     args = ap.parse_args()
 
     sparc_dir = Path(args.sparc_dir)
@@ -100,16 +102,30 @@ def main():
         print('No galaxies found to process.')
         sys.exit(2)
 
-    # Prepare CSV
-    CSV_PATH.unlink(missing_ok=True)
+    # Prepare or load CSV
+    existing = {}
+    if args.resume and CSV_PATH.exists():
+        with CSV_PATH.open('r', encoding='utf-8') as f:
+            r = csv.DictReader(f)
+            for row in r:
+                existing[row['galaxy']] = row
     with CSV_PATH.open('w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(['galaxy', 'logZ_GR', 'logZ_NFW', 'logZ_ER'])
+        w.writerow(['galaxy', 'logZ_GR', 'logZ_NFW', 'logZ_ER', 'logZ_COMP'])
+        # write back existing rows if resuming
+        for gid, row in existing.items():
+            w.writerow([gid, row.get('logZ_GR'), row.get('logZ_NFW'), row.get('logZ_ER'), row.get('logZ_COMP')])
 
     # Loop galaxies
     for gid in galaxies:
         print(f"\n=== {gid} ===")
-        row = {'galaxy': gid, 'logZ_GR': None, 'logZ_NFW': None, 'logZ_ER': None}
+        # Skip if resume and we have all four values already
+        if args.resume and gid in existing:
+            r0 = existing[gid]
+            if all(r0.get(k) not in (None, '', 'None') for k in ('logZ_GR','logZ_NFW','logZ_ER','logZ_COMP')):
+                print(f"Skipping {gid}: already complete in CSV")
+                continue
+        row = {'galaxy': gid, 'logZ_GR': None, 'logZ_NFW': None, 'logZ_ER': None, 'logZ_COMP': None}
 
         # GR
         cmd_gr = [sys.executable, str(GR_TOOL), '--galaxy_id', gid, '--sparc_dir', str(sparc_dir),
@@ -150,7 +166,7 @@ def main():
         else:
             print('Warning: could not parse NFW output JSON')
 
-        # ER
+        # ER/TFR
         cmd_er = [sys.executable, str(ER_TOOL), '--galaxy_id', gid, '--sparc_dir', str(sparc_dir),
                   '--sigma-floor', str(args.sigma_floor), '--nlive', str(args.nlive), '--maxcall', str(args.maxcall),
                   '--dlogz-target', str(args.dlogz_target), '--seed', str(args.seed)]
@@ -169,10 +185,29 @@ def main():
         else:
             print('Warning: could not parse ER output JSON')
 
+        # Composite (ER+NFW)
+        cmd_comp = [sys.executable, str(COMP_TOOL), '--galaxy_id', gid, '--sparc_dir', str(sparc_dir),
+                    '--sigma-floor', str(args.sigma_floor), '--nlive', str(args.nlive), '--maxcall', str(args.maxcall),
+                    '--dlogz-target', str(args.dlogz_target), '--seed', str(args.seed)]
+        rc, out = run_cmd(cmd_comp)
+        meta = parse_json_line_from_output(out)
+        if not isinstance(meta, dict):
+            p = REPO / 'images' / f"sparc_composite_evidence_{gid.lower()}.json"
+            if p.exists():
+                try:
+                    meta = json.loads(p.read_text(encoding='utf-8'))
+                except Exception:
+                    meta = None
+        if isinstance(meta, dict):
+            ev = meta.get('evidence', {})
+            row['logZ_COMP'] = ev.get('logZ')
+        else:
+            print('Warning: could not parse composite output JSON')
+
         # Append to CSV
         with CSV_PATH.open('a', newline='', encoding='utf-8') as f:
             w = csv.writer(f)
-            w.writerow([row['galaxy'], row['logZ_GR'], row['logZ_NFW'], row['logZ_ER']])
+            w.writerow([row['galaxy'], row['logZ_GR'], row['logZ_NFW'], row['logZ_ER'], row['logZ_COMP']])
         print(f"Wrote row: {row}")
 
     # Generate docs

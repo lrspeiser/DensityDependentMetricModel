@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "F568-3",
+  "model": "gr",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 188.54488023555206,
+  "loglike_no_const": -94.27244011777603,
+  "evidence": {
+    "logZ": -94.27258297151782,
+    "logZ_err": 0.0003549349283626025,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

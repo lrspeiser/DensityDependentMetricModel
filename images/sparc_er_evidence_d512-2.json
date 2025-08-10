@@ -1,7 +1,7 @@
 {
   "galaxy_id": "D512-2",
   "model": "er_radial_log_normal",
-  "sigma_floor": 0.0,
+  "sigma_floor": 5.0,
   "priors": {
     "use_master_priors": false,
     "lambda_max": {
@@ -30,11 +30,11 @@
     }
   },
   "evidence": {
-    "logZ": -4.900046124688221,
-    "logZ_err": 0.12023143741549161,
-    "nlive": 400,
-    "maxcall": 80000,
-    "dlogz_target": 0.02,
+    "logZ": -3.186824445986047,
+    "logZ_err": 0.04880180347284311,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
     "seed": 42
   }
 }

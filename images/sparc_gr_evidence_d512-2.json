@@ -1,18 +1,18 @@
 {
   "galaxy_id": "D512-2",
   "model": "gr",
-  "sigma_floor": 0.0,
+  "sigma_floor": 5.0,
   "priors": {
     "use_master_priors": false
   },
-  "chi2": 44.42579649505268,
-  "loglike_no_const": -22.21289824752634,
+  "chi2": 14.62395771813177,
+  "loglike_no_const": -7.311978859065885,
   "evidence": {
-    "logZ": -22.213042474828757,
-    "logZ_err": 0.00035816176504132864,
-    "nlive": 400,
-    "maxcall": 80000,
-    "dlogz_target": 0.02,
+    "logZ": -7.312121712807707,
+    "logZ_err": 0.0003549340956225019,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
     "seed": 42
   }
 }
