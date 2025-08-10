@@ -147,7 +147,7 @@ We evaluate ξ(ρ, T) at densities representative of lab and planetary environme
 
 - Cassini PPN γ: |γ − 1| < 2.3×10^{−5} [19] is met with wide margin because S_ρ(ρ ≫ ρ_c) → 0.
 - Ephemerides/LLR: Our current power-law density response can approach marginal tension for outer planets unless γ_exp is sufficiently steep or w_min sufficiently small at high-T Solar-System values.
-- [TODO-SOLAR-1] Run a sharper screening variant S_ρ(ρ)=exp[−(ρ/ρ_c)^{γ_exp}] and refit; re-evaluate LLR/DE440 constraints (publish a table like S3).
+- Solar-system sharper screening variant implemented: S_ρ(ρ)=exp[−(ρ/ρ_c)^{γ_exp}] (use --rho-screen exp in tools/fit_sparc_er_env.py). We will re-run Solar-System checks (LLR/DE440) and publish a comparison table (Table S3).
 - [TODO-SOLAR-2] Provide REBOUND integrations (100 yr) comparing ER vs GR trajectories and residuals.
 
 ---
@@ -191,7 +191,7 @@ Using the same sampler controls as ER:
 
 - Figure 5 (Environment prediction). ER environmental dependence. Mock comparison: same baryons in low- vs high-density large-scale environments; show ξ map and v_c(R) differences. [TODO-FIG5] Generate from controlled toy disks.
 
-- Figure 6 (Solar-system screening). |ξ − 1| vs representative densities. Markers at lab, Earth, Jupiter, Saturn, Neptune; Cassini and LLR bands shaded. [TODO-FIG6] Include power-law vs exponential S_ρ variants.
+- Figure 6 (Solar-system screening). |ξ − 1| vs representative densities. Markers at lab, Earth, Jupiter, Saturn, Neptune; Cassini and LLR bands shaded. Include power-law vs exponential S_ρ variants (use --rho-screen power|exp).
 
 Extended Data / Supplementary: Star counts per annulus; selection function tests; alternative tidal indicators; PPC details; priors table; ER hyperparameters per SPARC galaxy (docs/ED-SPARC-params.md).
 

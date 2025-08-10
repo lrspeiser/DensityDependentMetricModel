@@ -198,6 +198,8 @@ def main():
     # Tidal proxy controls
     ap.add_argument('--T-proxy', choices=['curvature','shear','epicyclic'], default='curvature')
     ap.add_argument('--tidal-norm', choices=['robust','simple'], default='robust')
+    # Screening family
+    ap.add_argument('--rho-screen', choices=['power','exp'], default='power', help='S_rho screening family: power (1/[1+(rho/rho_c)^gamma]) or exp (exp(-(rho/rho_c)^gamma))')
     # MasterSheet priors on distance/inclination (logged for parity)
     ap.add_argument('--use-master-priors', action='store_true', help='Record and (optionally) apply MasterSheet D/i priors for parity across models')
     # Vertical profile assumptions (recorded in JSON for reproducibility)
@@ -288,7 +290,7 @@ def main():
 
     # Build T with selected proxy and normalization
     T = _compute_tidal_proxy(R, vbar, mode=args.T_proxy, norm=args.tidal_norm)
-    xi = xi_env(rho_mid, T, lambda_max, rho_c, gamma_exp, T0, sigma_lnT, w_min)
+    xi = (xi_env if args.rho_screen == 'power' else __import__('models.er_env', fromlist=['xi_env_exp']).xi_env_exp)(rho_mid, T, lambda_max, rho_c, gamma_exp, T0, sigma_lnT, w_min)
     vmod = np.sqrt(np.clip(xi, 0.0, None)) * np.maximum(vbar, 0.0)
     # Sanity diagnostics: xi stats and W(T) peak location
     from models.er_env import W_log_normal
@@ -307,6 +309,7 @@ def main():
         'chi2_dof': float(chi2_best/dof),
 'params': {
             'log10_rho_c': log10_rho_c,
+            'rho_screen': args.rho_screen,
             'gamma_exp': gamma_exp,
             'lambda_max': lambda_max,
             'lnT0': lnT0,

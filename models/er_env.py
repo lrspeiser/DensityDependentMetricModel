@@ -29,6 +29,20 @@ def S_rho_powerlaw(rho: np.ndarray, rho_c: float, gamma_exp: float) -> np.ndarra
     return 1.0 / (1.0 + np.clip(x, 0.0, np.inf))
 
 
+def S_rho_exponential(rho: np.ndarray, rho_c: float, gamma_exp: float) -> np.ndarray:
+    """
+    Sharper screening variant requested for Solar-System safety tests:
+    S_rho(ρ) = exp(-(ρ/ρ_c)^γ)
+    """
+    rho = np.asarray(rho, dtype=float)
+    rho_c = max(float(rho_c), 1e-30)
+    gamma = max(float(gamma_exp), 1e-9)
+    with np.errstate(over='ignore', invalid='ignore'):
+        x = (rho / rho_c) ** gamma
+    S = np.exp(-np.clip(x, 0.0, np.inf))
+    return np.clip(S, 0.0, 1.0)
+
+
 def W_log_normal(T: np.ndarray, T0: float, sigma_lnT: float, w_min: float) -> np.ndarray:
     T = np.asarray(T, dtype=float)
     T0 = max(float(T0), 1e-12)
@@ -54,6 +68,28 @@ def xi_env(rho: np.ndarray,
         raise ValueError(f"rho and T must have the same shape, got {rho.shape} vs {T.shape}")
     lam = float(max(lambda_max, 0.0))
     S = S_rho_powerlaw(rho, rho_c, gamma_exp)
+    W = W_log_normal(T, T0, sigma_lnT, w_min)
+    xi = 1.0 + lam * (S * W)
+    return np.clip(xi, 1.0, 1.0 + lam)
+
+
+def xi_env_exp(rho: np.ndarray,
+               T: np.ndarray,
+               lambda_max: float,
+               rho_c: float,
+               gamma_exp: float,
+               T0: float,
+               sigma_lnT: float,
+               w_min: float) -> np.ndarray:
+    """
+    xi constructed with the exponential screening S_rho variant for Solar-System checks.
+    """
+    rho = np.asarray(rho, dtype=float)
+    T = np.asarray(T, dtype=float)
+    if rho.shape != T.shape:
+        raise ValueError(f"rho and T must have the same shape, got {rho.shape} vs {T.shape}")
+    lam = float(max(lambda_max, 0.0))
+    S = S_rho_exponential(rho, rho_c, gamma_exp)
     W = W_log_normal(T, T0, sigma_lnT, w_min)
     xi = 1.0 + lam * (S * W)
     return np.clip(xi, 1.0, 1.0 + lam)
