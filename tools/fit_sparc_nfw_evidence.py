@@ -45,6 +45,11 @@ def main():
     ap.add_argument('--V200_max', type=float, default=400.0)
     ap.add_argument('--c_min', type=float, default=2.0)
     ap.add_argument('--c_max', type=float, default=40.0)
+    # Optional Gaussian priors (abundance-informed) on V200 and c
+    ap.add_argument('--prior-V200-mean', type=float, default=None)
+    ap.add_argument('--prior-V200-sigma', type=float, default=None)
+    ap.add_argument('--prior-c-mean', type=float, default=None)
+    ap.add_argument('--prior-c-sigma', type=float, default=None)
     # Dynesty knobs
     ap.add_argument('--nlive', type=int, default=1000)
     ap.add_argument('--maxcall', type=int, default=200000)
@@ -71,7 +76,13 @@ def main():
         V200, c = float(theta[0]), float(theta[1])
         vmod = v_model_nfw(R, vbar, V200, c)
         r = (Vobs - vmod) / e_eff()
-        return -0.5 * float(np.sum(r*r))
+        ll = -0.5 * float(np.sum(r*r))
+        # Gaussian priors if provided
+        if args.prior_V200_mean is not None and args.prior_V200_sigma is not None and args.prior_V200_sigma > 0:
+            ll += -0.5 * ((V200 - float(args.prior_V200_mean)) / float(args.prior_V200_sigma))**2
+        if args.prior_c_mean is not None and args.prior_c_sigma is not None and args.prior_c_sigma > 0:
+            ll += -0.5 * ((c - float(args.prior_c_mean)) / float(args.prior_c_sigma))**2
+        return ll
 
     lo = np.array([args.V200_min, args.c_min], dtype=float)
     hi = np.array([args.V200_max, args.c_max], dtype=float)
@@ -108,6 +119,10 @@ def main():
             'maxcall': int(args.maxcall),
             'dlogz_target': float(args.dlogz_target),
             'seed': int(args.seed),
+            'priors_gaussian': {
+                'V200': {'mean': args.prior_V200_mean, 'sigma': args.prior_V200_sigma},
+                'c': {'mean': args.prior_c_mean, 'sigma': args.prior_c_sigma},
+            }
         },
     }
     with open(out_json, 'w', encoding='utf-8') as f:
