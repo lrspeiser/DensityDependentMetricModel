@@ -385,8 +385,11 @@ python tools/batch_sparc_env_fit.py \
   --sparc_dir external_data/Rotmod_LTG \
   --galaxies NGC3198 NGC2403 NGC598 NGC5055 NGC2903 NGC6946 NGC2841 UGC128 \
   --mode evidence --sigma-floor 5.0 --nlive 1000 --maxcall 200000 --dlogz-target 0.01 --seed 42
+
+# After runs finish, generate the ED-SPARC table and summary CSV
+python tools/generate_sparc_ed_table.py
 ```
-Notes: this script orchestrates GR, NFW, and ER evidence runs per galaxy, then writes a CSV. The global aggregation still uses scripts/aggregate_sparc_triplet.py to produce images/sparc_evidence_triplet_summary.csv (fed into docs/ED-SPARC.md). We will extend the galaxy list to ≥20 high-quality systems to complete the multi-galaxy validation deliverable.
+Notes: this script orchestrates GR, NFW, and ER evidence runs per galaxy, then writes per-galaxy JSONs. The ED-SPARC aggregation is done by tools/generate_sparc_ed_table.py, which produces data/sparc_batch_summary.csv and docs/ED-SPARC.md. We will extend the galaxy list to ≥20 high-quality systems to complete the multi-galaxy validation deliverable.
 
 Artifacts per galaxy: PNG figure, JSON with priors/assumptions and results (incl. T proxy, vertical profile params, σ_floor, and logZ values). A CSV aggregator produces ED-SPARC.
 
@@ -396,8 +399,8 @@ Reviewer-facing sanity checks (to add in Supplement)
 - T-proxy swap: “For NGC 3198, Δlog Z(ER−GR) varies by ≤ X across curvature/shear/epicyclic proxies (Table ED-T).”
 
 Editorial notes / consistency fixes
-- Figure numbering: ensure the Introduction figure is Fig. 1 and Gaia/rotation comparison is Fig. 2, or renumber consistently. [TODO-EDITOR-FIG]
-- Units typography: standardize km s^{-1} and M_⊙ kpc^{-3}. [TODO-EDITOR-UNITS]
+- Figure numbering: Introduction concept is Fig. 1; Gaia/rotation comparison is Fig. 2; ED figures reserved for SPARC. Numbering reviewed and aligned.
+- Units typography: standardized throughout to km s^{-1} and M_⊙ kpc^{-3}.
 - GR baseline reconciliation: headline Δlog Z must reference the matched GR run in §10. [TODO-CONSISTENCY-A]
 
 TL;DR action list

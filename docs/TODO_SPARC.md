@@ -64,8 +64,8 @@ Note: Check items as they are completed and link artifacts (JSON, CSV, PNG, figu
 
 - [ ] 8) Figure consistency
   - [x] Standardize axis labels and legend styling (SPARC NGC 3198)
-  - [ ] Ensure figure numbering: Fig. 1 concept; Fig. 2 MW; ED figs for SPARC
-  - [ ] Units typography: km s^{-1}, M_⊙ kpc^{-3}
+  - [x] Ensure figure numbering: Fig. 1 concept; Fig. 2 MW; ED figs for SPARC
+  - [x] Units typography: km s^{-1}, M_⊙ kpc^{-3}
   - [ ] Match colors/line styles across MW and SPARC plots
 
 - [ ] 9) Extended Data & Supplement completion
