@@ -156,7 +156,7 @@ We evaluate ξ(ρ, T) at densities representative of lab and planetary environme
 
 - Cassini PPN γ: |γ − 1| < 2.3×10^{−5} [19] is met with wide margin because S_ρ(ρ ≫ ρ_c) → 0.
 - Ephemerides/LLR: Our current power-law density response can approach marginal tension for outer planets unless γ_exp is sufficiently steep or w_min sufficiently small at high-T Solar-System values.
-- Solar-system sharper screening variant implemented: S_ρ(ρ)=exp[−(ρ/ρ_c)^{γ_exp}] (use --rho-screen exp in tools/fit_sparc_er_env.py). We re-ran NGC 3198 with exponential screening (JSON: images/sparc_env_fit_ngc3198_exp.json). We will re-run Solar-System checks (LLR/DE440) and publish a comparison table (Table S3).
+- Solar-system sharper screening variant implemented: S_ρ(ρ)=exp[−(ρ/ρ_c)^{γ_exp}] (use --rho-screen exp in tools/fit_sparc_er_env.py). We re-ran NGC 3198 with exponential screening (JSON: images/sparc_env_fit_ngc3198_exp.json). Solar-System screening figure/table generated from galaxy-fit parameters: images/solar_system_constraints_ngc3198.png; docs/table_solar_screening.md.
 
 ---
 

@@ -1,13 +1,12 @@
-# Solar-System Screening Comparison (Illustrative)
+# Solar-System screening with galaxy-fit parameters
 
-Parameters:
-- Power-law: rho_c=1.0e+14, n=3.00, A=4.00
-- Exponential: rho_c=1.0e+14, gamma=5.00, lambda_max=3.90
+Parameters source: sparc_env_fit_ngc3198.json
 
-| Environment | ρ [M_⊙/kpc³] | |ξ−1| (power) | |ξ−1| (exp) |
-|---|---:|---:|---:|
-| Laboratory (air) | 1.00e+22 | 0.00e+00 | 0.00e+00 |
-| Earth orbit | 5.00e+21 | 0.00e+00 | 0.00e+00 |
-| Jupiter orbit | 5.00e+21 | 0.00e+00 | 0.00e+00 |
-| Saturn orbit | 2.30e+21 | 0.00e+00 | 0.00e+00 |
-| Neptune orbit | 1.00e+21 | 0.00e+00 | 0.00e+00 |
+| Environment | rho [Msun/kpc^3] | T | |xi-1| power | |xi-1| exp |
+|---|---|---|---|---|
+| Earth lab | 1.000e+21 | 1.00e+03 | 0.000e+00 | 0.000e+00 |
+| Earth orbit | 1.000e+19 | 5.00e+02 | 1.952e-11 | 0.000e+00 |
+| Jupiter orbit | 1.000e+18 | 3.00e+02 | 1.952e-06 | 0.000e+00 |
+| Saturn orbit | 5.000e+17 | 2.00e+02 | 6.245e-05 | 0.000e+00 |
+| Neptune orbit | 1.000e+17 | 1.50e+02 | 9.762e-02 | 7.182e-02 |
+| Sun photosphere | 1.000e+20 | 1.00e+03 | 2.220e-16 | 0.000e+00 |
