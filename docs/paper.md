@@ -150,7 +150,13 @@ Physically motivated, weakly informative priors (see Table S1):
 
 ---
 
-## 6. Solar-system & laboratory constraints
+## 6. Solar-system \u0026 laboratory constraints
+
+Figure S-SS (NGC 3198 parameters). Using the exact galaxy-fit parameters from images/sparc_env_fit_ngc3198.json, we compute |ξ−1| at representative Solar-System environments (Earth lab/orbit, Jupiter, Saturn, Neptune, Sun photosphere) and overlay reference bands (Cassini γ and an indicative LLR scale). Both the power-law S_ρ and exponential S_ρ variants are shown for comparison.
+
+![Solar-System constraints (NGC 3198 params)](../images/solar_system_constraints_ngc3198.png)
+
+A machine-readable table with the values used in the figure is provided at docs/solar/solar_ngc3198.md.
 
 We evaluate ξ(ρ, T) at densities representative of lab and planetary environments (screening requirement).
 
