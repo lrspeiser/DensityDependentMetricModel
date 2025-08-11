@@ -3,7 +3,7 @@
 Plot Milky Way rotation curve comparison:
 - Binned Gaia observed median speeds vs radius
 - GR (baryon-only) prediction
-- ER (Environmental Relativity) prediction using the 'tidal_band' xi model
+- TFR (Tidal Field Relativity) prediction using the 'tidal_band' xi model
 
 Usage examples:
   # Use default, reasonable parameters (no run dirs required)
@@ -363,12 +363,12 @@ def main():
     if XI_FUNCTION_MAP is not None and xi_type not in XI_FUNCTION_MAP:
         raise RuntimeError(f"xi_type '{xi_type}' not available. Available: {list(XI_FUNCTION_MAP.keys())}")
 
-    print(f"Computing ER curve with xi_type='{xi_type}' (backend: {'CuPy' if _use_cupy_backend else 'CPU'})...")
+    print(f"Computing TFR curve with xi_type='{xi_type}' (backend: {'CuPy' if _use_cupy_backend else 'CPU'})...")
     v_ddmm = v_total_kms(R_grid, ddmm_params, xi_type=xi_type)
     # Report theoretical enhancement cap based on lambda_max, if present
     lam = float(ddmm_params.get('lambda_max', 0.0))
     xi_cap = 1.0 + lam
-    print(f"Theoretical ER enhancement cap xi_max = 1 + lambda_max = {xi_cap:.3f} (cannot reach 100x).")
+    print(f"Theoretical TFR enhancement cap xi_max = 1 + lambda_max = {xi_cap:.3f} (cannot reach 100x).")
 
     # 4) Plot
     print("Plotting...")
@@ -382,18 +382,18 @@ def main():
     plt.plot(R_grid, v_gr, "b--", lw=2, label="GR (baryon-only)")
     # ER curve: split into data-constrained vs extrapolation beyond Gaia R_max
     if args.no_split_extrapolation:
-        plt.plot(R_grid, v_ddmm, "r-", lw=2.5, label=f"ER ({xi_type})")
+        plt.plot(R_grid, v_ddmm, "r-", lw=2.5, label=f"TFR ({xi_type})")
     else:
         m_in = R_grid <= R_data_max
         m_out = ~m_in
         if np.any(m_in):
-            plt.plot(R_grid[m_in], v_ddmm[m_in], "r-", lw=2.5, label=f"ER ({xi_type}) — constrained")
+            plt.plot(R_grid[m_in], v_ddmm[m_in], "r-", lw=2.5, label=f"TFR ({xi_type}) — constrained")
         if np.any(m_out):
-            plt.plot(R_grid[m_out], v_ddmm[m_out], color="#FF8C00", ls="--", lw=2.5, label=f"ER ({xi_type}) — extrapolation")
+            plt.plot(R_grid[m_out], v_ddmm[m_out], color="#FF8C00", ls="--", lw=2.5, label=f"TFR ({xi_type}) — extrapolation")
 
     plt.xlabel("Galactocentric radius R (kpc)")
     plt.ylabel("Circular speed v (km/s)")
-    plt.title("Milky Way Rotation Curve: Data vs GR vs ER (tidal_band)")
+    plt.title("Milky Way Rotation Curve: Data vs GR vs TFR (tidal_band)")
     plt.grid(True, alpha=0.3)
     # Mark and optionally shade extrapolation region beyond Gaia data
     if not args.no_split_extrapolation and R_data_max > 0:

@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-08-11T05:13:24.073034",
+  "xi_type": "gr",
+  "logz": -510920.0232587194,
+  "logz_error": 0.13763826365324983,
+  "rho_c_solar_kpc3_best": null,
+  "gamma_exp_best": null,
+  "lambda_max_best": null,
+  "n_samples": 95610,
+  "efficiency": 1.24288228574905,
+  "delta_logz_vs_gr": null,
+  "bayes_factor_log10": null,
+  "status": "converged"
+}

@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "F579-V1",
+  "model": "gr",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 152.16430769899006,
+  "loglike_no_const": -76.08215384949503,
+  "evidence": {
+    "logZ": -76.08229670323682,
+    "logZ_err": 0.00035493476371172326,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

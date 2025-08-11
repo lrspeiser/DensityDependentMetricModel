@@ -1,0 +1,18 @@
+{
+  "galaxy_id": "NGC1705",
+  "model": "gr",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": false
+  },
+  "chi2": 371.9217486655121,
+  "loglike_no_const": -185.96087433275605,
+  "evidence": {
+    "logZ": -185.96101718649768,
+    "logZ_err": 0.0003549301535452185,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

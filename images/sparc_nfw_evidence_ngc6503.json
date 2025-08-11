@@ -14,10 +14,10 @@
     }
   },
   "evidence": {
-    "logZ": -55.06958602927276,
-    "logZ_err": 0.05461885178619902,
-    "nlive": 1000,
-    "maxcall": 200000,
+    "logZ": -55.09866283102614,
+    "logZ_err": 0.03960372362763448,
+    "nlive": 2000,
+    "maxcall": 400000,
     "dlogz_target": 0.01,
     "seed": 42,
     "priors_gaussian": {

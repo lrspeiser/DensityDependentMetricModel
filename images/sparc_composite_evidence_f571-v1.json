@@ -1,0 +1,52 @@
+{
+  "galaxy_id": "F571-V1",
+  "model": "er_plus_nfw",
+  "sigma_floor": 5.0,
+  "priors": {
+    "use_master_priors": false,
+    "er": {
+      "lambda_max": {
+        "min": 0.0,
+        "max": 6.0
+      },
+      "R0_kpc": {
+        "min": 2.0,
+        "max": 40.0
+      },
+      "sigma_lnR": {
+        "min": 0.2,
+        "max": 1.5
+      },
+      "w_min": {
+        "min": 0.0,
+        "max": 0.2
+      },
+      "ups_disk": {
+        "min": 0.1,
+        "max": 1.0
+      },
+      "ups_bul": {
+        "min": 0.1,
+        "max": 1.0
+      }
+    },
+    "nfw": {
+      "V200": {
+        "min": 40.0,
+        "max": 400.0
+      },
+      "c": {
+        "min": 2.0,
+        "max": 40.0
+      }
+    }
+  },
+  "evidence": {
+    "logZ": -2.7480236441664423,
+    "logZ_err": 0.043759106610512834,
+    "nlive": 1000,
+    "maxcall": 200000,
+    "dlogz_target": 0.01,
+    "seed": 42
+  }
+}

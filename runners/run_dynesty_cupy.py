@@ -270,7 +270,7 @@ def _build_tuning_snapshot(
         "metadata": {
             "run_id": run_id,
             "xi_type": xi_type,
-            "timestamp_utc": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+                "timestamp_utc": __import__("datetime").datetime.datetime.now(__import__("datetime").timezone.utc).isoformat(),
             "n_params": int(D),
             "param_names": list(param_names),
             "sampler": "dynesty_cupy"
@@ -405,7 +405,8 @@ def _rotate_backup_if_due(path: str, run_dir: str, last_backup_ts: float, backup
     try:
         p = Path(path)
         if p.exists():
-            ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            from datetime import UTC
+            ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             backup_name = p.with_name(f"{p.stem}.{ts}{p.suffix}")
             shutil.copy2(p, backup_name)
             return now
@@ -2002,7 +2003,8 @@ def save_tuning_snapshot(sampler, param_names, args, start_time, output_dir, log
         res = getattr(sampler, 'results', None)
         if res is None:
             return False
-        now_iso = datetime.utcnow().isoformat() + 'Z'
+        from datetime import UTC
+        now_iso = datetime.now(UTC).isoformat()
         n_params = len(param_names)
         # Basic arrays
         samples = getattr(res, 'samples', None)
@@ -2319,7 +2321,7 @@ def main_cupy():
         f.write(f"#\n")
         f.write(f"{cli_command}\n")
     
-    logger.info(f"Output directory: {output_dir}")
+    logger.info(f"Run directory: {output_dir}")
     logger.info(f"CLI command saved to: {cli_file}")
 
     # Ensure all components write to the same output directory

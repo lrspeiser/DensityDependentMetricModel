@@ -57,10 +57,10 @@
   "loglike_no_const": -38.19063776450894,
   "mode": "evidence",
   "evidence": {
-    "logZ": -46.066743837263765,
-    "logZ_err": 1.5515563085616986,
-    "nlive": 1000,
-    "maxcall": 200000,
+    "logZ": -45.997840490068285,
+    "logZ_err": 1.1793398264305932,
+    "nlive": 2000,
+    "maxcall": 400000,
     "dlogz_target": 0.01,
     "seed": 42
   }

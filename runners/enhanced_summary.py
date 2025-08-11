@@ -63,7 +63,7 @@ class DynestyRunSummary:
             "parameter_estimates": self._get_parameter_estimates(results, param_names),
             "evidence_metrics": self._get_evidence_metrics(results),
             "performance_metrics": self._get_performance_metrics(results, elapsed_seconds),
-            "model_comparison": self._get_model_comparison(results),
+            "model_comparison": (self._get_model_comparison(results) if getattr(args, 'xi', None) != 'gr' else {}),
             "quality_assessment": self._assess_quality(results)
         }
         
@@ -321,6 +321,8 @@ class DynestyRunSummary:
         lines.append(f"  Elapsed: {summary['metadata']['elapsed_time']}")
         lines.append(f"  Status: {summary['metadata']['status']}")
         lines.append(f"  Xi Type: {summary['metadata']['xi_type']}")
+        if 'output_dir' in summary.get('metadata', {}):
+            lines.append(f"  Run Directory: {summary['metadata']['output_dir']}")
         
         # Convergence
         conv = summary['convergence_metrics']
@@ -344,8 +346,8 @@ class DynestyRunSummary:
                     else:
                         lines.append(f"  {key}: {val:.4f}")
         
-        # Model comparison
-        if 'model_comparison' in summary and 'vs_gr' in summary['model_comparison']:
+        # Model comparison (skip for pure GR runs to avoid GR-vs-GR nonsense)
+        if summary.get('metadata', {}).get('xi_type') != 'gr' and 'model_comparison' in summary and 'vs_gr' in summary['model_comparison']:
             comp = summary['model_comparison']['vs_gr']
             lines.append(f"\nModel Comparison vs GR:")
             lines.append(f"  Delta LogZ: {comp['delta_logz']:+.2f}")
