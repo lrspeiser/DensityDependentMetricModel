@@ -747,29 +747,3 @@ With the multi-galaxy validation, ΛCDM matched comparisons, and tight screening
 
 ---
 
-## Supplementary Information (outline)
-
-- Table S1. Priors for baryonic and TFR parameters (bounds, types).
-- Table S2. Star counts and v_c, σ_v per annulus.
-- Table S3. Solar-System |ξ − 1| at representative densities; Cassini/LLR/ephemeris comparisons (power-law vs exponential screening). See docs/table_solar_screening.md.
-- Fig. S1. Alternative tidal indicator definitions and impact on ξ.
-- Fig. S2. k-fold cross-validation residuals; calibration curves.
-- Methods S1. Jeans equation implementation; asymmetric-drift model; anisotropy assumptions; sensitivity tests.
-- Methods S2. Numerical details of tidal tensor computation and normalization.
-
----
-
-### Quick checklist (final pre-submission tasks)
-
-- [x] SPARC/THINGS multi-galaxy TFR vs GR vs NFW evidences (initial batch).
-  - Batch completed; see docs/ed_sparc_table.md and docs/ed_sparc_summary.md for table and summary.
-  - JSON sidecars saved under images/; CSV aggregate at ed_sparc_batch.csv.
-- [ ] Matched ΛCDM fits on the Milky Way dataset.
-- [ ] Posterior predictive residual plots + k-fold CV.
-- [x] Solar-system tight-screening ER refit (exponential S_ρ) + constraints table.
-- [ ] Environment split (void vs group) rotation curve offsets.
-- [ ] Lensing pilot with 2–3 SLACS systems.
-- [ ] Consistency pass: one canonical GR/ER matched-pair for the headline Δlog Z.
-
-Notes:
-- Partial robustness checks for tidal proxy choice (curvature, shear, epicyclic) completed for two representative galaxies; see docs/robustness_tidal_proxy.md.
