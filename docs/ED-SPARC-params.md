@@ -1,4 +1,4 @@
-# Extended Data: ER hyperparameters per SPARC galaxy
+# Extended Data: TFR hyperparameters per SPARC galaxy
 
 | Galaxy | log10_rho_c | gamma_exp | lambda_max | lnT0 | sigma_lnT | w_min |
 | --- | --- | --- | --- | --- | --- | --- |
