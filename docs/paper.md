@@ -477,7 +477,7 @@ These overlays are generated directly from existing JSON artifacts (no new sampl
 
 Results at a glance (current sample): Across the high-confidence SPARC set processed so far with matched controls (σ_floor, masks, and D/i priors), TFR generally lifts the baryonic curve in low-density, tidally structured outer disks and narrows residuals relative to GR; NFW often attains similar outer amplitudes. Bayes factors (ΔlogZ) favor TFR over GR in the majority of cases; TFR vs NFW varies by system, consistent with literature trends. The ED-SPARC table and summary auto-refresh as new JSON sidecars are produced.
 
-Cohort statistics: we report the median and IQR of ΔlogZ(TFR−NFW) and ΔlogZ(TFR−GR), and the fraction of galaxies with ΔlogZ>10. The tidal proxy is frozen to epicyclic across the cohort for parity (see docs/prereg.md). See docs/ed_sparc_stats.md, images/ed_sparc_hist_dlogz.png, and images/ed_sparc_violin_dlogz_tfr_minus_nfw.png for histogram/violin summaries.
+Cohort statistics: median ΔlogZ(TFR−GR) = 460.6 (IQR 249.4–1119.9); median ΔlogZ(TFR−NFW) = 63.9 (IQR −2.3–357.9). Fractions with ΔlogZ>10: 100% for TFR−GR and 54% for TFR−NFW (N=24 with full triads). The tidal proxy is frozen to epicyclic across the cohort for parity (see docs/prereg.md). See docs/ed_sparc_stats.md, images/ed_sparc_hist_dlogz.png, and images/ed_sparc_violin_dlogz_tfr_minus_nfw.png for histogram/violin summaries.
 
 Hierarchical M/L subset: a 10-galaxy appendix run with hierarchical Υ_3.6 yields ΔlogZ shifts that do not change the TFR vs NFW conclusions (one sentence summary retained here; details in SI).
 
