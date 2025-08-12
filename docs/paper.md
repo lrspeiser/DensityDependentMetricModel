@@ -10,7 +10,7 @@ $$
 
 with $S_\rho(\rho) = [1 + (\rho/\rho_c)^{\gamma_{\exp}}]^{-1}$ and $W(T) = \max\{w_{\min},\, \exp[-(\ln(T/T_0))^2/(2\,\sigma_{\ln T}^2)]\}$.
 
-Using Gaia DR3 Milky Way kinematics (N=144,000 stars, 5–16 kpc), we perform dynamic nested sampling to compare TFR against a matched GR baseline (baryons only). Our representative TFR fit yields log Z_TFR = −9.82153×10^5 ± 0.06 versus log Z_GR ≈ −1.49090×10^6 (same pipeline), i.e. Δlog Z ≈ +5.09×10^5 (decisive on Jeffreys’ scale). Typical parameters: ρ_c ≃ 1.19×10^{15} M_⊙ kpc^{-3}, γ_exp ≃ 3.04, λ_max ≃ 4.23, with Cassini-safe screening (|ξ−1| ≪ 10^{−5}) and plausible void-redshift expectations.
+Using Gaia DR3 Milky Way kinematics (N=144,000 stars, 5–16 kpc), we perform dynamic nested sampling to compare TFR against a matched GR baseline (baryons only). Our representative TFR fit yields log Z_TFR = −9.82153×10^5 ± 0.06 versus log Z_GR ≈ −1.49090×10^6 (same pipeline), i.e. Δlog Z ≈ +5.09×10^5 (very strong on the Jeffreys scale). Typical parameters: ρ_c ≃ 1.19×10^{15} M_⊙ kpc^{-3}, γ_exp ≃ 3.04, λ_max ≃ 4.23, with Cassini-safe screening (|ξ−1| ≪ 10^{−5}) and plausible void-redshift expectations.
 
 We provide a complete reproducibility recipe (data filters, binning, priors, commands) and mark targeted TODO analyses—multi-galaxy validation (SPARC/THINGS), ΛCDM/NFW cross-fits, lensing checks, explicit environmental tests, and outer-planet ephemeris tight-screening—to consolidate TFR as a competitive alternative to dark matter on galactic scales.
 
@@ -174,7 +174,7 @@ We evaluate ξ(ρ, T) at densities representative of lab and planetary environme
 
 ### 7.1 GR (baryons-only) baseline
 
-Using the same sampler controls as ER:
+Using the same sampler controls as TFR:
 
 - Evidence: log Z_GR ≈ −1.49090×10^6 (matched settings).
 - Rotation curve: Shows Keplerian decline beyond R ~ 8 kpc; outer-disk residuals exceed 100 km s^{−1}.
@@ -269,11 +269,11 @@ Results (χ², identical σ-floor/mask across models)
 Evidences (matched dynesty controls: nlive=1000, maxcall=200000, dlogz_target=0.01; σ-floor=5 km s^{-1}, identical masks and D/i priors)
 - logZ_GR = −951.499 (plateau; GR has no free parameters)
 - logZ_NFW = −42.687 ± 0.068
-- logZ_ER = −144.543 ± 0.104
-- Bayes factors (ΔlogZ):
-  - ER − GR: +806.956 ± 0.104 (decisive for ER over GR)
-  - NFW − GR: +908.812 ± 0.068 (decisive for NFW over GR)
-  - ER − NFW: −101.856 ± 0.124 (NFW favored over ER for this galaxy, as expected)
+- logZ_TFR = −144.543 ± 0.104
+- Bayes factors (ΔlogZ ± err; Jeffreys scale):
+  - TFR − GR: +806.956 ± 0.104 (very strong for TFR over GR)
+  - NFW − GR: +908.812 ± 0.068 (very strong for NFW over GR)
+  - TFR − NFW: −101.856 ± 0.124 (NFW favored over TFR for this galaxy)
 
 Acceptance criteria (Δln L ≈ −½Δχ² as a proxy for Δlog Z)
 - ER − GR (epicyclic, primary): Δln L ≈ +815 → passes “strong” (≫10)
@@ -286,7 +286,7 @@ Sensitivity checks
   - epicyclic: logZ_ER = −144.543 ± 0.104 (primary)
   - curvature: logZ_ER = −256.909 ± 0.530
   - shear:     logZ_ER = −343.239 ± 0.306
-  Hence, epicyclic maximizes the ER evidence on NGC 3198; the spread ΔlogZ across proxies is O(100), reported in Table ED-T.
+Hence, epicyclic maximizes the TFR evidence on NGC 3198; the spread ΔlogZ across proxies is O(100), reported in Table ED-T.
 
 - σ-floor sensitivity (NGC 3198, epicyclic; matched dynesty):
 
@@ -297,7 +297,7 @@ Sensitivity checks
   | 3.0                  | −296.919 ± 0.702    |
   | 5.0 (baseline)       | −144.543 ± 0.104    |
 
-  Trend: increasing σ_floor reduces penalty on residuals and increases ER evidence, as expected. Our conservative baseline (5 km s^{-1}) is reported throughout for parity across models.
+Trend: increasing σ_floor reduces penalty on residuals and increases TFR evidence, as expected. Our conservative baseline (5 km s^{-1}) is reported throughout for parity across models.
 
 - M/L prior sensitivity (NGC 3198, epicyclic; matched dynesty):
 
@@ -306,7 +306,7 @@ Sensitivity checks
   | Gaussian (0.5±0.1, 0.7±0.1) | −144.543 ± 0.104    |
   | Broad/flat-like (σ≈10)       | −149.743 ± 1.103    |
 
-  Conclusion: broadening stellar M/L priors yields only a small change in ER evidence for NGC 3198 under the conservative recipe.
+Conclusion: broadening stellar M/L priors yields only a small change in TFR evidence for NGC 3198 under the conservative recipe.
 
 Methods note — exact CLI used for the NGC 3198 sensitivity runs
 
@@ -417,7 +417,7 @@ Artifacts per galaxy: PNG figure, JSON with priors/assumptions and results (incl
 
 ### 8A.4a Posterior predictive checks (PPC) visuals
 
-We include PPC residual envelopes for NGC 3198 and a stacked SPARC residual histogram using existing JSON artifacts (no new sampler runs). The helper produces:
+We include PPC residual envelopes for NGC 3198 and a stacked SPARC residual histogram using existing JSON artifacts (no new sampler runs). Residuals are standardized using the per-run σ_floor in quadrature with σ_obs, and we include a QQ-plot against N(0,1) to diagnose tail behavior; if heavy tails persist, we acknowledge likely contributors (underestimated systematics or proxy mismatch) and maintain σ_floor parity across models. The helper produces:
 - images/ppc_ngc3198_envelope.png — median model band with 16–84% envelope and residual panel.
 - images/ed_sparc_residual_hist.png — stacked standardized residuals across the current ER fit set.
 
