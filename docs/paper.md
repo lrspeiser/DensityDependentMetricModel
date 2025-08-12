@@ -152,17 +152,20 @@ Physically motivated, weakly informative priors (see Table S1):
 
 ## 6. Solar-system \u0026 laboratory constraints
 
-Figure S-SS (NGC 3198 parameters). Using the exact galaxy-fit parameters from images/sparc_env_fit_ngc3198.json, we compute |ξ−1| at representative Solar-System environments (Earth lab/orbit, Jupiter, Saturn, Neptune, Sun photosphere) and overlay reference bands (Cassini γ and an indicative LLR scale). Both the power-law S_ρ and exponential S_ρ variants are shown for comparison.
+Main-text composite. We aggregate five SPARC-calibrated galaxies (NGC 3198, NGC 2403, NGC 2841, NGC 6946, NGC 5055) and plot |ξ−1| versus density with two bands per galaxy: exponential S_ρ (solid; median with 16–84%) and power-law S_ρ with w_min ≤ 0.05 (dashed; median with 16–84%). Constraint overlays include Cassini PPN |γ−1| < 2.3×10^{−5}, an LLR guidance band, and a conservative inverse-square/ranging band (annotated). The y-range is fixed across panels at 10^{−14} to 10^{−3}. Bands are computed from the same posteriors that produce the galaxy fits; Solar-System T mapping is described in Methods §6.
 
-![Solar-System constraints (NGC 3198 params)](../images/solar_system_constraints_ngc3198.png)
+![Solar-System constraints — composite (five galaxies; exp solid, power dashed)](../paper_assets/solar/solar_system_constraints_composite.png)
 
-A machine-readable table with the values used in the figure is provided at docs/solar/solar_ngc3198.md.
+Per-galaxy panels and tables are provided in paper_assets/solar/ and docs/solar/.
+
+Definition of T_high and sensitivity. We evaluate Solar-System |ξ−1| in the high-T tail using a fixed representative T_high derived from the baryon-only Solar potential, normalized by the same ⟨∥T∥⟩ used in the galaxy fits (Milky Way 5–16 kpc annulus). A sensitivity inset varies T_high by ±1 dex and shows negligible change in |ξ−1| once in the high-T regime; thus we keep a fixed T_high for auditability.
 
 We evaluate ξ(ρ, T) at densities representative of lab and planetary environments (screening requirement).
 
-- Cassini PPN γ: |γ − 1| < 2.3×10^{−5} [19] is met with wide margin because S_ρ(ρ ≫ ρ_c) → 0.
+- Cassini PPN γ: |γ − 1| \u003c 2.3×10^{−5} [19] is met with wide margin because S_ρ(ρ ≫ ρ_c) → 0.
 - Ephemerides/LLR: Our current power-law density response can approach marginal tension for outer planets unless γ_exp is sufficiently steep or w_min sufficiently small at high-T Solar-System values.
 - Solar-system sharper screening variant implemented: S_ρ(ρ)=exp[−(ρ/ρ_c)^{γ_exp}] (use --rho-screen exp in tools/fit_sparc_er_env.py). We re-ran NGC 3198 with exponential screening (JSON: images/sparc_env_fit_ngc3198_exp.json). Solar-System screening figure/table generated from galaxy-fit parameters: images/solar_system_constraints_ngc3198.png; docs/table_solar_screening.md.
+- Batch check on SPARC exemplars: We ran evidence-mode fits for NGC 3198, NGC 2403, NGC 5055, NGC 2841, and NGC 6946 under (i) exponential screening (flag --rho-screen exp) and (ii) power-law screening with a reduced ceiling w_min ≤ 0.05 (flag --prior-wmin-max 0.05). Result JSONs are saved alongside plots as images/sparc_env_fit_<GAL>_exp.json and images/sparc_env_fit_<GAL>_power_wmin005.json. Across this subset, Δlog Z values remain consistent with prior power-law runs within reported uncertainties, while |ξ−1| at outer-planet densities is further suppressed as expected.
 
 ---
 
@@ -740,7 +743,7 @@ With the multi-galaxy validation, ΛCDM matched comparisons, and tight screening
   - JSON sidecars saved under images/; CSV aggregate at ed_sparc_batch.csv.
 - [ ] Matched ΛCDM fits on the Milky Way dataset.
 - [ ] Posterior predictive residual plots + k-fold CV.
-- [ ] Solar-system tight-screening ER refit (exponential S_ρ) + constraints table.
+- [x] Solar-system tight-screening ER refit (exponential S_ρ) + constraints table.
 - [ ] Environment split (void vs group) rotation curve offsets.
 - [ ] Lensing pilot with 2–3 SLACS systems.
 - [ ] Consistency pass: one canonical GR/ER matched-pair for the headline Δlog Z.
