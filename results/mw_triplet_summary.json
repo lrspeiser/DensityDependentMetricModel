@@ -1,0 +1,22 @@
+{
+  "runs": {
+    "gr": "C:\\Users\\henry\\Documents\\GitHub\\DensityDependentMetricModel\\runs\\gr_20250811_232403",
+    "tfr": "C:\\Users\\henry\\Documents\\GitHub\\DensityDependentMetricModel\\runs\\tidal_band_20250810_102330",
+    "nfw": "C:\\Users\\henry\\Documents\\GitHub\\DensityDependentMetricModel\\runs\\nfw_20250812_082825"
+  },
+  "logZ": {
+    "GR": -520239.9100638862,
+    "TFR": -522633.5078373129,
+    "NFW": -514920.82270903746
+  },
+  "logZ_err": {
+    "GR": 0.12355639581093161,
+    "TFR": 3.4939752775265123,
+    "NFW": 0.06662469522365909
+  },
+  "deltas": {
+    "TFR_minus_GR": -2393.597773426678,
+    "NFW_minus_GR": 5319.087354848743,
+    "TFR_minus_NFW": -7712.685128275421
+  }
+}
