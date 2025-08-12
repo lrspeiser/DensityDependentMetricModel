@@ -1,12 +1,12 @@
 {
-  "galaxy_id": "NGC3198",
-  "file_rotmod": "external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
+  "galaxy_id": "NGC2403",
+  "file_rotmod": "external_data\\Rotmod_LTG\\NGC2403_rotmod.dat",
   "model": "er",
   "mask": "none",
   "params": {
-    "log10_rho_c": 14.0,
+    "log10_rho_c": 17.0,
     "gamma_exp": 5.0,
-    "lambda_max": 3.90467357776768,
+    "lambda_max": 3.7573252464702933,
     "lnT0": -1.0,
     "sigma_lnT": 2.0,
     "w_min": 0.1,
@@ -17,24 +17,24 @@
   },
   "priors": {
     "use_master_priors": true,
-    "distance_Mpc": 13.8,
-    "e_distance_Mpc": 1.4,
-    "incl_deg": 73.0,
+    "distance_Mpc": 3.16,
+    "e_distance_Mpc": 0.16,
+    "incl_deg": 63.0,
     "e_incl_deg": 3.0
   },
   "gas": {
     "profile_mode": "A_trunc_exp(MHI,RHI); mode=RHI kRd=3.00",
-    "Rd_kpc": 9.999999999999996,
-    "Sigma0": 35.37481053330208,
-    "Rmax_kpc": 35.66,
-    "mass_mismatch": 1.7810052964810306,
-    "penalty_mass": 1.570826200156651
+    "Rd_kpc": 3.8510403782129288,
+    "Sigma0": 50.58297481684701,
+    "Rmax_kpc": 15.11,
+    "mass_mismatch": 1.0,
+    "penalty_mass": 0.0
   },
   "sanity": {
-    "xi_min": 1.802565409248783,
-    "xi_med": 4.3613135287858675,
-    "xi_max": 4.896005323612844,
-    "R_peak_W": 16.07,
+    "xi_min": 2.3198229508419974,
+    "xi_med": 4.18119913565768,
+    "xi_max": 4.7572630348930005,
+    "R_peak_W": 9.44,
     "sigma_floor": 5.0,
     "T_proxy": "epicyclic",
     "tidal_norm": "robust",
@@ -52,16 +52,16 @@
       "ups_bul": true
     }
   },
-  "chi2": 265.06036701161923,
-  "chi2_dof": 7.573153343189121,
-  "loglike_no_const": -132.53018350580962,
+  "chi2": 470.521291802993,
+  "chi2_dof": 7.238789104661431,
+  "loglike_no_const": -235.2606459014965,
   "mode": "evidence",
   "evidence": {
-    "logZ": -142.33392106058207,
-    "logZ_err": 3.170808604680562,
-    "nlive": 800,
-    "maxcall": 200000,
+    "logZ": -245.7352921792768,
+    "logZ_err": 0.09177663714415331,
+    "nlive": 2000,
+    "maxcall": 5000000,
     "dlogz_target": 0.01,
-    "seed": 3198
+    "seed": 12403
   }
 }

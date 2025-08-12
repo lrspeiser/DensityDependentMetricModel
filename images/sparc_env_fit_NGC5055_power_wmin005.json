@@ -1,15 +1,15 @@
 {
-  "galaxy_id": "NGC3198",
-  "file_rotmod": "external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
+  "galaxy_id": "NGC5055",
+  "file_rotmod": "external_data\\Rotmod_LTG\\NGC5055_rotmod.dat",
   "model": "er",
   "mask": "none",
   "params": {
     "log10_rho_c": 14.0,
     "gamma_exp": 5.0,
-    "lambda_max": 3.90467357776768,
+    "lambda_max": 2.9007291412978375,
     "lnT0": -1.0,
-    "sigma_lnT": 2.0,
-    "w_min": 0.1,
+    "sigma_lnT": 1.4313976107967332,
+    "w_min": 0.05,
     "ups_disk": 0.3,
     "ups_bul": 1.0,
     "V200": 150.0,
@@ -17,24 +17,24 @@
   },
   "priors": {
     "use_master_priors": true,
-    "distance_Mpc": 13.8,
-    "e_distance_Mpc": 1.4,
-    "incl_deg": 73.0,
-    "e_incl_deg": 3.0
+    "distance_Mpc": 9.9,
+    "e_distance_Mpc": 0.3,
+    "incl_deg": 55.0,
+    "e_incl_deg": 6.0
   },
   "gas": {
     "profile_mode": "A_trunc_exp(MHI,RHI); mode=RHI kRd=3.00",
     "Rd_kpc": 9.999999999999996,
-    "Sigma0": 35.37481053330208,
-    "Rmax_kpc": 35.66,
-    "mass_mismatch": 1.7810052964810306,
-    "penalty_mass": 1.570826200156651
+    "Sigma0": 33.31474194252643,
+    "Rmax_kpc": 35.06,
+    "mass_mismatch": 1.5441960765365144,
+    "penalty_mass": 0.890215315637482
   },
   "sanity": {
-    "xi_min": 1.802565409248783,
-    "xi_med": 4.3613135287858675,
-    "xi_max": 4.896005323612844,
-    "R_peak_W": 16.07,
+    "xi_min": 1.1450364570648919,
+    "xi_med": 3.0260120665291437,
+    "xi_max": 3.9001848112731987,
+    "R_peak_W": 28.74,
     "sigma_floor": 5.0,
     "T_proxy": "epicyclic",
     "tidal_norm": "robust",
@@ -46,22 +46,22 @@
       "gamma_exp": true,
       "lambda_max": false,
       "lnT0": true,
-      "sigma_lnT": true,
+      "sigma_lnT": false,
       "w_min": true,
       "ups_disk": true,
       "ups_bul": true
     }
   },
-  "chi2": 265.06036701161923,
-  "chi2_dof": 7.573153343189121,
-  "loglike_no_const": -132.53018350580962,
+  "chi2": 297.9198617914704,
+  "chi2_dof": 14.895993089573519,
+  "loglike_no_const": -148.9599308957352,
   "mode": "evidence",
   "evidence": {
-    "logZ": -142.33392106058207,
-    "logZ_err": 3.170808604680562,
+    "logZ": -158.53750052671097,
+    "logZ_err": 2.4997679432386164,
     "nlive": 800,
     "maxcall": 200000,
     "dlogz_target": 0.01,
-    "seed": 3198
+    "seed": 95055
   }
 }

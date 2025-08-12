@@ -9,7 +9,7 @@
     "lambda_max": 3.90467357776768,
     "lnT0": -1.0,
     "sigma_lnT": 2.0,
-    "w_min": 0.1,
+    "w_min": 0.05,
     "ups_disk": 0.3,
     "ups_bul": 1.0,
     "V200": 150.0,
@@ -57,11 +57,11 @@
   "loglike_no_const": -132.53018350580962,
   "mode": "evidence",
   "evidence": {
-    "logZ": -142.33392106058207,
-    "logZ_err": 3.170808604680562,
+    "logZ": -145.54700675315374,
+    "logZ_err": 2.5243204097616103,
     "nlive": 800,
     "maxcall": 200000,
     "dlogz_target": 0.01,
-    "seed": 3198
+    "seed": 93198
   }
 }

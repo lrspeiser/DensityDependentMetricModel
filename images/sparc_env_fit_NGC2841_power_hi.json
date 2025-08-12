@@ -1,40 +1,40 @@
 {
-  "galaxy_id": "NGC3198",
-  "file_rotmod": "external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
+  "galaxy_id": "NGC2841",
+  "file_rotmod": "external_data\\Rotmod_LTG\\NGC2841_rotmod.dat",
   "model": "er",
   "mask": "none",
   "params": {
-    "log10_rho_c": 14.0,
+    "log10_rho_c": 17.0,
     "gamma_exp": 5.0,
-    "lambda_max": 3.90467357776768,
+    "lambda_max": 4.659706958298836,
     "lnT0": -1.0,
     "sigma_lnT": 2.0,
-    "w_min": 0.1,
+    "w_min": 0.05,
     "ups_disk": 0.3,
-    "ups_bul": 1.0,
+    "ups_bul": 0.5,
     "V200": 150.0,
     "c": 10.0
   },
   "priors": {
     "use_master_priors": true,
-    "distance_Mpc": 13.8,
+    "distance_Mpc": 14.1,
     "e_distance_Mpc": 1.4,
-    "incl_deg": 73.0,
-    "e_incl_deg": 3.0
+    "incl_deg": 76.0,
+    "e_incl_deg": 10.0
   },
   "gas": {
     "profile_mode": "A_trunc_exp(MHI,RHI); mode=RHI kRd=3.00",
     "Rd_kpc": 9.999999999999996,
-    "Sigma0": 35.37481053330208,
-    "Rmax_kpc": 35.66,
-    "mass_mismatch": 1.7810052964810306,
-    "penalty_mass": 1.570826200156651
+    "Sigma0": 91.10384411247749,
+    "Rmax_kpc": 45.12,
+    "mass_mismatch": 5.50168201884321,
+    "penalty_mass": 13.708339113217969
   },
   "sanity": {
-    "xi_min": 1.802565409248783,
-    "xi_med": 4.3613135287858675,
-    "xi_max": 4.896005323612844,
-    "R_peak_W": 16.07,
+    "xi_min": 2.967166842166555,
+    "xi_med": 4.908349137061676,
+    "xi_max": 5.658046766659512,
+    "R_peak_W": 24.59,
     "sigma_floor": 5.0,
     "T_proxy": "epicyclic",
     "tidal_norm": "robust",
@@ -52,16 +52,16 @@
       "ups_bul": true
     }
   },
-  "chi2": 265.06036701161923,
-  "chi2_dof": 7.573153343189121,
-  "loglike_no_const": -132.53018350580962,
+  "chi2": 1259.8104478434093,
+  "chi2_dof": 29.99548685341451,
+  "loglike_no_const": -629.9052239217046,
   "mode": "evidence",
   "evidence": {
-    "logZ": -142.33392106058207,
-    "logZ_err": 3.170808604680562,
-    "nlive": 800,
-    "maxcall": 200000,
+    "logZ": -548.93950166395,
+    "logZ_err": 0.10825880738989956,
+    "nlive": 2000,
+    "maxcall": 5000000,
     "dlogz_target": 0.01,
-    "seed": 3198
+    "seed": 92841
   }
 }
