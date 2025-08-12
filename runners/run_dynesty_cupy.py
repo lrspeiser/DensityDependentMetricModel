@@ -2173,7 +2173,7 @@ def main_cupy():
     
     # Core options
     parser.add_argument('--xi', type=str, default='tidal_band', 
-                       help="Xi model. Published: 'gr', 'tidal_band'. Add --allow_experimental to unlock others.")
+                       help="Xi model. Published: 'gr', 'tidal_band', 'nfw' (alias: xi≡1 with NFW halo). Add --allow_experimental to unlock others.")
     parser.add_argument('--allow_experimental', action='store_true',
                        help='Allow experimental xi models (NOT for paper-grade reproducibility).')
     parser.add_argument('--output_dir', type=str, default='cupy_results',

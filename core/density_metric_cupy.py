@@ -983,10 +983,18 @@ from .xi_registry import register_xi, resolve_xi
 def v_total_kms_cupy(R_kpc, p, xi_type='power'):
     """
     Total circular velocity including baryons and a selectable xi.
-    IMPORTANT: For reproducible paper runs, only 'gr' and 'tidal_band' are enabled by default.
-               To enable experimental xi forms, pass p['allow_experimental']=True.
+    IMPORTANT: For reproducible paper runs, published xi are 'gr', 'tidal_band'.
+               We also permit 'nfw' as a convenience alias that sets xi≡1 and enables an NFW halo term
+               via p['include_halo']=True in the comprehensive baryonic model.
+               To enable additional experimental xi forms, pass p['allow_experimental']=True.
     """
     R_kpc_arr = cp.atleast_1d(cp.asarray(R_kpc, dtype=DEFAULT_DTYPE))
+
+    # If xi_type requests NFW, ensure the halo is included
+    if xi_type == 'nfw':
+        # Avoid mutating caller's dict
+        p = dict(p)
+        p['include_halo'] = True
 
     # Baryons and density
     if 'M_thin_disk_solar' in p:
@@ -1040,6 +1048,8 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         try:
             register_xi('gr', _xi_gr_published, published=True, doc="GR baseline (xi≡1)")
             register_xi('tidal_band', _xi_tidal_band_published, published=True, doc="ER tidal-band with density screening")
+            # Convenience alias: 'nfw' uses xi≡1 but enables an NFW halo via include_halo in the velocity model
+            register_xi('nfw', _xi_gr_published, published=True, doc="ΛCDM/NFW baseline (xi≡1) with halo term enabled")
             # Experimental examples (available only if allow_experimental=True)
             register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: exponential screening")
             register_xi('grav_color_void_safe', lambda rho, **kw: xi_gravitational_color_void_safe_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: void-safe color")
