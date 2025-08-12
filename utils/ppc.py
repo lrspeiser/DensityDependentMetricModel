@@ -221,9 +221,10 @@ def plot_residual_envelopes(R: np.ndarray,
 
 def aggregate_sparc_residuals(json_paths: List[Path], standardize: bool = True) -> np.ndarray:
     """
-    Aggregate residuals across many SPARC ER fit JSONs.
+    Aggregate residuals across many SPARC TFR fit JSONs.
     For each JSON, recompute model curve at observed radii and collect residuals.
-    If standardize=True, divide residuals by eV (σ) before stacking.
+    If standardize=True, divide residuals by sqrt(eV^2 + sigma_floor^2) before stacking, where
+    sigma_floor is read per-run from the JSON (default 0 if absent).
     Returns a 1D array of stacked residuals.
     """
     all_res = []
@@ -241,8 +242,11 @@ def aggregate_sparc_residuals(json_paths: List[Path], standardize: bool = True) 
             vmod = model_curve_from_params(params, R, Vgas, Vdisk, Vbul, sanity=sanity)
             res = Vobs - vmod
             if standardize:
+                # Include per-run sigma floor if present
+                sigma_floor = float(meta.get("sigma_floor", meta.get("params", {}).get("sigma_floor", 0.0)))
+                sigma_eff = np.sqrt(eV**2 + sigma_floor**2)
                 with np.errstate(divide='ignore', invalid='ignore'):
-                    res = np.where(eV > 0, res / eV, np.nan)
+                    res = np.where(sigma_eff > 0, res / sigma_eff, np.nan)
             all_res.append(res)
         except Exception:
             continue
@@ -267,8 +271,31 @@ def plot_residual_hist(residuals: np.ndarray, out_png: Path, title: str = "Stack
         sig = float(np.nanstd(residuals)) if residuals.size else 1.0
         plt.axvline(0.0, color='k', ls=':')
         plt.title(f"{title}\nmean={mu:.2f}, std={sig:.2f}, N={residuals.size}")
-    plt.xlabel('Standardized residual (sigma)')
+    plt.xlabel('Standardized residual (σ)')
     plt.ylabel('Density')
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=150)
+
+
+def plot_residual_qq(residuals: np.ndarray, out_png: Path, title: str = "QQ-plot of standardized residuals (SPARC)") -> None:
+    """QQ-plot against N(0,1) to diagnose heavy tails."""
+    apply_paper_style()
+    import scipy.stats as st
+    plt.figure(figsize=(6, 6))
+    if residuals.size == 0:
+        plt.text(0.5, 0.5, 'No residuals found', transform=plt.gca().transAxes, ha='center', va='center')
+    else:
+        osm, osr = st.probplot(residuals, dist="norm")
+        (theo, _), (fit_slope, fit_intercept, _) = osm, osr
+        plt.scatter(theo, residuals[np.argsort(residuals)], s=10, alpha=0.6, label='Data quantiles')
+        # Reference line from fit
+        xref = np.linspace(min(theo), max(theo), 100)
+        plt.plot(xref, fit_slope*xref + fit_intercept, 'r--', lw=1.5, label='Reference')
+    plt.xlabel('Theoretical quantiles N(0,1)')
+    plt.ylabel('Observed quantiles')
+    plt.title(title)
+    plt.legend(frameon=False)
     out_png.parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()
     plt.savefig(out_png, dpi=150)

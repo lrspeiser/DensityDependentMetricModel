@@ -372,7 +372,7 @@ Figure ED-NGC 3198 (conservative recipe)
 
 ![Extended Data Figure ED-NGC 3198](../images/overlay_ngc3198.png)
 
-Observed points with 1σ errors (black). GR (baryons-only) prediction V_bar (blue dashed). ΛCDM/NFW halo fit for plotting (green dash-dot). Tidal (TFR env) prediction (red solid) using ξ(ρ_mid,T) applied to V_bar; same baryonic components and vertical profile assumptions as the fit JSON. Shaded regions beyond last SPARC radius are not used to constrain the fit. Settings: σ-floor=5 km s^{-1}, epicyclic proxy with robust normalization, RHI-truncated gas, SPARC M/L clamps and D/i priors.
+Observed points with 1σ errors (black). GR (baryons-only) prediction V_bar (blue dashed). ΛCDM/NFW halo curve shown: if a matching NFW evidence JSON exists, the plotted curve uses its best-fit parameters; otherwise a bounded plot-only fit is used strictly for visualization (never for evidence values). Tidal (TFR env) prediction (red solid) using ξ(ρ_mid,T) applied to V_bar; same baryonic components and vertical profile assumptions as the fit JSON. Shaded regions beyond last SPARC radius are not used to constrain the fit. Settings: σ-floor=5 km s^{-1}, epicyclic proxy with robust normalization, RHI-truncated gas, SPARC M/L clamps and D/i priors.
 
 JSON artifacts (NGC 3198; matched controls)
 - GR evidence: images/sparc_gr_evidence_ngc3198.json
