@@ -25,7 +25,8 @@ We provide a complete reproducibility recipe (data filters, binning, priors, com
   - ED-SPARC evidence summary: docs/ED-SPARC.md
   - ER/TFR hyperparameters per galaxy: docs/ED-SPARC-params.md
   - Tidal-proxy robustness table: docs/ED-T.md
-  - Solar-System screening comparison: docs/table_solar_screening.md
+- Solar-System screening comparison: docs/table_solar_screening.md
+- Theory hygiene note: docs/theory_hygiene.md (weak-field EFT rules, conservation, stability, GW speed, EPs, sourcing of ξ)
 
 ## 1. Introduction
 
@@ -512,6 +513,28 @@ TL;DR action list
 ---
 
 ## 9. Tests we will add before submission (with existing public data)
+
+9.1 Lensing checks (pilot; SLACS-like)
+- Theory note: docs/lensing.md formalizes our weak-field prescription that resolves the conformal issue via an effective disformal coupling. Photons see Φ+Ψ that includes (a_env+b_env) φ_env with φ_env = 0.5 ln ξ, while Solar-System screening ensures φ_env → 0 at high ρ/T.
+- Reproducible pilot: run a small SLACS-like batch to compare GR baryons-only vs TFR-lensing predicted Einstein radii.
+
+Commands:
+```
+# Worked example from the predictor (prints GR and TFR θ_E)
+python tools/lensing_predict.py --worked_example
+
+# Batch of three SLACS-like systems; emits docs/lensing_results.md and plots under images/
+python tools/lensing_slacs_examples.py --A-env 0.3 --p-env 1.1 --r0-kpc 5.0 --a-env 1.0 --b-env 1.0 --mc 1000
+```
+
+Artifacts:
+- docs/lensing.md — method and assumptions.
+- docs/lensing_results.md — table with θ_E predictions (median [16,84]).
+- images/lensing_*.png — per-lens deflection overlays with GR and TFR and marked θ_E.
+
+Interpretation guidance:
+- If θ_E_TFR ≈ θ_E_obs with baryons-only mass while θ_E_GR underpredicts, this supports the environmental-lensing term magnitude (a_env+b_env)×φ_env. Screening guarantees null Solar-System impact.
+- We will follow up with curated SLACS systems and posterior-informed φ_env from SPARC fits.
 
 1) Multi-galaxy validation (SPARC/THINGS): Fit ≥20 high-quality rotation curves with identical ER hyperprior ranges. Compare Δlog Z vs GR and vs ΛCDM (NFW). Deliverables: Table 1 (per-galaxy evidences), Figure ED1 (stacked residuals). [TODO-MG-1] Implement SPARC loader and reproducible per-galaxy configs. Preliminary CPU-only test on NGC 3198 using a radius-window proxy yields χ²/dof ≈ 6.2 and highlights the need to compute per-galaxy densities and tidal indicators for a faithful ER window (Extended Data Figure ED-NGC 3198).
 
