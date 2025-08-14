@@ -270,7 +270,7 @@ def _build_tuning_snapshot(
         "metadata": {
             "run_id": run_id,
             "xi_type": xi_type,
-                "timestamp_utc": __import__("datetime").datetime.datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "timestamp_utc": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
             "n_params": int(D),
             "param_names": list(param_names),
             "sampler": "dynesty_cupy"
