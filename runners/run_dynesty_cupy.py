@@ -820,9 +820,9 @@ def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
         
         # Import analyzer (do it here to avoid circular imports)
         try:
-            from analyze_results import DynestyAnalyzer
+            from analysis.analyze_results import DynestyAnalyzer
         except ImportError:
-            logger.warning("analyze_results.py not found - skipping periodic analysis")
+            logger.warning("analysis.analyze_results not found - skipping periodic analysis")
             return
         
         # Create timestamped analysis subdirectory
@@ -851,7 +851,7 @@ def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
         
         # Save JSON summary
         try:
-            from analyze_results import export_summary
+            from analysis.analyze_results import export_summary
             json_summary = export_summary(analyzer, stats_dict)
             json_file = analysis_subdir / "summary.json"
             with open(json_file, 'w') as f:
@@ -997,6 +997,8 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
         # Pass halo toggle if halo parameters present
         if 'V200_kms' in params and 'c_concentration' in params:
             params['include_halo'] = True
+        # Forward experimental gate into physics layer so experimental xi can resolve
+        params['allow_experimental'] = bool(getattr(args, 'allow_experimental', False))
 
         v_model = v_total_kms_cupy(R_data_cupy, params, xi_type=args.xi)
         if not cp.all(cp.isfinite(v_model)):
@@ -1107,6 +1109,11 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
     except Exception as e:
         if hasattr(log_likelihood_dynesty_cupy, 'call_count') and log_likelihood_dynesty_cupy.call_count <= 3:
             print(f"LIKELIHOOD ERROR #{log_likelihood_dynesty_cupy.call_count}: {e}")
+            try:
+                import traceback
+                print(traceback.format_exc())
+            except Exception:
+                pass
         return -np.inf
 
 def prior_transform_dynesty_cupy(u, param_names, bounds_low, bounds_high, use_log_prior):
@@ -1802,6 +1809,75 @@ def setup_parameter_bounds(xi_type):
             True, False, False,
             True, False, False, True, False, False
         ])
+
+    elif xi_type == 'tidal_band2':
+        # logistic lnT onset + softened screening (β) + soft cap (κ)
+        param_names = [
+            'M_thin_disk_solar','R_thin_disk_kpc','hz_thin_disk_kpc',
+            'M_thick_disk_solar','R_thick_disk_kpc','hz_thick_disk_kpc',
+            'M_bulge_solar','R_bulge_kpc',
+            'M_gas_solar','R_gas_kpc','hz_gas_kpc',
+            'rho_c_solar_kpc3','gamma_exp','beta',
+            'lambda_max','T0','alpha','kappa','wmin'
+        ]
+        bounds_low = np.array([
+            1e10,2.0,0.2,   1e9,3.0,0.6,   1e9,0.5,   1e9,5.0,0.1,
+            1e14,1.0,0.5,   0.0, 1e-3,0.5,0.5,0.0
+        ], dtype=float)
+        bounds_high = np.array([
+            1e11,4.0,0.4,   1e10,5.0,1.0,  1e10,2.0,  1e10,10.0,0.3,
+            1e17,5.0,1.0,   20.0,1e3, 6.0,3.0,0.05
+        ], dtype=float)
+        use_log_prior = np.array([
+            True,False,False,  True,False,False,  True,False,  True,False,False,
+            True,False,False,  False,True,False,False,False
+        ], dtype=bool)
+
+    elif xi_type == 'tidal_ratio':
+        # single trigger U = ln(T/T0) + η ln(ρc/ρ)
+        param_names = [
+            'M_thin_disk_solar','R_thin_disk_kpc','hz_thin_disk_kpc',
+            'M_thick_disk_solar','R_thick_disk_kpc','hz_thick_disk_kpc',
+            'M_bulge_solar','R_bulge_kpc',
+            'M_gas_solar','R_gas_kpc','hz_gas_kpc',
+            'rho_c_solar_kpc3','eta',
+            'lambda_max','T0','alpha','kappa','wmin'
+        ]
+        bounds_low = np.array([
+            1e10,2.0,0.2,   1e9,3.0,0.6,   1e9,0.5,  1e9,5.0,0.1,
+            1e14,0.0,       0.0, 1e-3,0.5,0.5,0.0
+        ], dtype=float)
+        bounds_high = np.array([
+            1e11,4.0,0.4,   1e10,5.0,1.0,  1e10,2.0, 1e10,10.0,0.3,
+            1e17,2.5,       20.0,1e3, 6.0,3.0,0.05
+        ], dtype=float)
+        use_log_prior = np.array([
+            True,False,False,  True,False,False,  True,False,  True,False,False,
+            True,False,        False,True,False,False,False
+        ], dtype=bool)
+
+    elif xi_type == 'tidal_noisyor':
+        # classic Sρ with logistic wT aggregated via noisy-OR; soft cap κ
+        param_names = [
+            'M_thin_disk_solar','R_thin_disk_kpc','hz_thin_disk_kpc',
+            'M_thick_disk_solar','R_thick_disk_kpc','hz_thick_disk_kpc',
+            'M_bulge_solar','R_bulge_kpc',
+            'M_gas_solar','R_gas_kpc','hz_gas_kpc',
+            'rho_c_solar_kpc3','gamma_exp',
+            'lambda_max','T0','alpha','kappa','wmin'
+        ]
+        bounds_low = np.array([
+            1e10,2.0,0.2,   1e9,3.0,0.6,   1e9,0.5,  1e9,5.0,0.1,
+            1e14,1.0,       0.0, 1e-3,0.5,0.5,0.0
+        ], dtype=float)
+        bounds_high = np.array([
+            1e11,4.0,0.4,   1e10,5.0,1.0,  1e10,2.0, 1e10,10.0,0.3,
+            1e17,5.0,       20.0,1e3, 6.0,3.0,0.05
+        ], dtype=float)
+        use_log_prior = np.array([
+            True,False,False,  True,False,False,  True,False,  True,False,False,
+            True,False,        False,True,False,False,False
+        ], dtype=bool)
     
     else: # Fallback to simple model
         param_names = ['M_disk_solar', 'R_d_kpc']
@@ -2815,7 +2891,7 @@ def main_cupy():
         
         if args.run_analysis:
             try:
-                import analyze_results as ar
+                from analysis import analyze_results as ar
                 original_argv = sys.argv
                 sys.argv = ['analyze_results.py', str(posterior_npz)]
                 ar.main()

@@ -417,6 +417,11 @@ def main():
     # Evidence mode (optional, non-invasive)
     logZ = None; logZ_err = None
     if args.mode == 'evidence' and _HAS_DYNASTY:
+        # Parameter names in sampling order
+        param_names = [
+            'log10_rho_c', 'gamma_exp', 'lambda_max', 'lnT0', 'sigma_lnT', 'w_min',
+            'ups_disk', 'ups_bul'
+        ]
         # Build loglike and prior transform for dynesty on current data/problem
         lo = np.array([b[0] for b in bounds], dtype=float)
         hi = np.array([b[1] for b in bounds], dtype=float)
@@ -436,6 +441,17 @@ def main():
         res = dsampler.results
         logZ = float(res.logz[-1])
         logZ_err = float(res.logzerr[-1]) if hasattr(res, 'logzerr') else None
+        # Save posterior samples sidecar for downstream Solar-System posterior bands
+        try:
+            samp = getattr(res, 'samples', None)
+            logwt = getattr(res, 'logwt', None)
+            logl = getattr(res, 'logl', None)
+            if samp is not None and logwt is not None and logl is not None:
+                np.savez(out_path.with_suffix('.npz'), samples=samp, logwt=logwt, logl=logl,
+                         param_names=np.array(param_names), bounds=np.array(bounds),
+                         model=np.array([model]), galaxy=np.array([name]))
+        except Exception as e:
+            print(f"Warning: failed saving posterior NPZ: {e}")
 
     # Compute simple log-likelihood at best fit for reporting (also used if evidence not available)
     # ln L = -0.5 * chi2 + const; we report the -0.5*chi2 term (const cancels in deltas)

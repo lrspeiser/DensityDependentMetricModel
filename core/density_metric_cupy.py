@@ -799,6 +799,55 @@ def xi_tidal_bandpass_cupy(rho, T, rho_c, gamma, lambda_max, T0, sigma_lnT, wmin
     xi = cp.where(cp.isfinite(xi), xi, 1.0)
     return xi
 
+# --- NEW: logistic helper (numerically stable) --------------------------------
+def _sigmoid_cupy(x):
+    # 0.5 * (1 + tanh(x/2)) is stable for large |x|
+    return 0.5 * (1.0 + cp.tanh(0.5 * x))
+
+# --- NEW: tidal_band2 (logistic in lnT + softened density screen) -------------
+def xi_tidal_band2_cupy(rho, T, rho_c, gamma, beta, lambda_max, T0, alpha, kappa, wmin):
+    rho_safe   = cp.maximum(rho,   1e-30)
+    rho_c_safe = cp.maximum(rho_c, 1e-30)
+    T_safe     = cp.maximum(T,     1e-30)
+    T0_safe    = cp.maximum(T0,    1e-30)
+    beta_safe  = cp.maximum(beta,  1e-6)
+    wmin_c     = cp.clip(cp.asarray(wmin, dtype=DEFAULT_DTYPE), 0.0, 0.2)
+    S_rho = cp.power(1.0 + cp.power(rho_safe / rho_c_safe, gamma), -beta_safe)
+    wT   = _sigmoid_cupy(alpha * (cp.log(T_safe) - cp.log(T0_safe)))
+    wT   = cp.maximum(wT, wmin_c)
+    xi   = 1.0 + lambda_max * (1.0 - cp.exp(-kappa * S_rho * wT))
+    xi   = cp.clip(xi, 1.0, 1.0 + lambda_max)
+    return cp.where(cp.isfinite(xi), xi, 1.0)
+
+# --- NEW: tidal_ratio (single trigger from lnT and lnρ) -----------------------
+def xi_tidal_ratio_cupy(rho, T, rho_c, eta, lambda_max, T0, alpha, kappa, wmin):
+    rho_safe   = cp.maximum(rho,   1e-30)
+    rho_c_safe = cp.maximum(rho_c, 1e-30)
+    T_safe     = cp.maximum(T,     1e-30)
+    T0_safe    = cp.maximum(T0,    1e-30)
+    wmin_c     = cp.clip(cp.asarray(wmin, dtype=DEFAULT_DTYPE), 0.0, 0.2)
+    U   = (cp.log(T_safe) - cp.log(T0_safe)) + eta * (cp.log(rho_c_safe) - cp.log(rho_safe))
+    w   = _sigmoid_cupy(alpha * U)
+    w   = cp.maximum(w, wmin_c)
+    xi  = 1.0 + lambda_max * (1.0 - cp.exp(-kappa * w))
+    xi  = cp.clip(xi, 1.0, 1.0 + lambda_max)
+    return cp.where(cp.isfinite(xi), xi, 1.0)
+
+# --- NEW: tidal_noisyor (noisy-OR aggregator of Sρ and wT) --------------------
+def xi_tidal_noisyor_cupy(rho, T, rho_c, gamma, lambda_max, T0, alpha, kappa, wmin):
+    rho_safe   = cp.maximum(rho,   1e-30)
+    rho_c_safe = cp.maximum(rho_c, 1e-30)
+    T_safe     = cp.maximum(T,     1e-30)
+    T0_safe    = cp.maximum(T0,    1e-30)
+    wmin_c     = cp.clip(cp.asarray(wmin, dtype=DEFAULT_DTYPE), 0.0, 0.2)
+    S_rho = 1.0 / (1.0 + cp.power(rho_safe / rho_c_safe, gamma))
+    wT    = _sigmoid_cupy(alpha * (cp.log(T_safe) - cp.log(T0_safe)))
+    wT    = cp.maximum(wT, wmin_c)
+    G     = 1.0 - (1.0 - S_rho) * (1.0 - wT)   # noisy-OR with a=b=1
+    xi    = 1.0 + lambda_max * (1.0 - cp.exp(-kappa * G))
+    xi    = cp.clip(xi, 1.0, 1.0 + lambda_max)
+    return cp.where(cp.isfinite(xi), xi, 1.0)
+
 # ============================================================================
 # MAIN VELOCITY FUNCTION - CuPy Optimized
 # ============================================================================
@@ -1027,8 +1076,8 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
 
     # Prepare tidal proxy only if needed
     T = None
-    if xi_type == 'tidal_band':
-        T = cp.maximum(v_baryon_sq, 0.0) / cp.maximum(R_safe*R_safe, 1e-18)
+    if xi_type in ('tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor'):
+        T = cp.maximum(v_baryon_sq, 0.0) / cp.maximum(R_safe * R_safe, 1e-18)
 
     # Define small wrappers for published xi
     def _xi_gr_published(rho, **kwargs):
@@ -1050,6 +1099,52 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
             register_xi('tidal_band', _xi_tidal_band_published, published=True, doc="ER tidal-band with density screening")
             # Convenience alias: 'nfw' uses xi≡1 but enables an NFW halo via include_halo in the velocity model
             register_xi('nfw', _xi_gr_published, published=True, doc="ΛCDM/NFW baseline (xi≡1) with halo term enabled")
+
+            # --- NEW: experimental tidal-family variants (require --allow_experimental) ---
+            register_xi(
+                'tidal_band2',
+                lambda rho, **kw: xi_tidal_band2_cupy(
+                    rho, kw.get('T'), kw.get('rho_c'),
+                    kw.get('gamma', kw.get('gamma_exp', 3.0)),
+                    kw.get('beta', 0.8),
+                    kw.get('lambda_max', 10.0),
+                    kw.get('T0', 10.0),
+                    kw.get('alpha', 2.0),
+                    kw.get('kappa', 1.0),
+                    kw.get('wmin', 0.02)
+                ),
+                published=False,
+                doc="Experimental: logistic lnT onset + softened density screen"
+            )
+            register_xi(
+                'tidal_ratio',
+                lambda rho, **kw: xi_tidal_ratio_cupy(
+                    rho, kw.get('T'), kw.get('rho_c'),
+                    kw.get('eta', 0.9),
+                    kw.get('lambda_max', 10.0),
+                    kw.get('T0', 10.0),
+                    kw.get('alpha', 2.0),
+                    kw.get('kappa', 1.0),
+                    kw.get('wmin', 0.02)
+                ),
+                published=False,
+                doc="Experimental: ratio trigger U=ln(T/T0)+η ln(ρc/ρ)"
+            )
+            register_xi(
+                'tidal_noisyor',
+                lambda rho, **kw: xi_tidal_noisyor_cupy(
+                    rho, kw.get('T'), kw.get('rho_c'),
+                    kw.get('gamma', kw.get('gamma_exp', 3.0)),
+                    kw.get('lambda_max', 10.0),
+                    kw.get('T0', 10.0),
+                    kw.get('alpha', 2.0),
+                    kw.get('kappa', 1.0),
+                    kw.get('wmin', 0.02)
+                ),
+                published=False,
+                doc="Experimental: noisy-OR combine of Sρ and wT"
+            )
+
             # Experimental examples (available only if allow_experimental=True)
             register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: exponential screening")
             register_xi('grav_color_void_safe', lambda rho, **kw: xi_gravitational_color_void_safe_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: void-safe color")
@@ -1081,6 +1176,31 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         xi_kwargs['T0'] = float(xi_kwargs.get('T0', 10.0))
         xi_kwargs['sigma_lnT'] = float(xi_kwargs.get('sigma_lnT', 0.8))
         xi_kwargs['wmin'] = float(xi_kwargs.get('wmin', 0.02))
+
+    elif xi_type == 'tidal_band2':
+        xi_kwargs['gamma']      = float(xi_kwargs.get('gamma', xi_kwargs.get('gamma_exp', 3.0)))
+        xi_kwargs['beta']       = float(xi_kwargs.get('beta', 0.8))
+        xi_kwargs['lambda_max'] = float(xi_kwargs.get('lambda_max', 10.0))
+        xi_kwargs['T0']         = float(xi_kwargs.get('T0', 10.0))
+        xi_kwargs['alpha']      = float(xi_kwargs.get('alpha', 2.0))
+        xi_kwargs['kappa']      = float(xi_kwargs.get('kappa', 1.0))
+        xi_kwargs['wmin']       = float(xi_kwargs.get('wmin', 0.02))
+
+    elif xi_type == 'tidal_ratio':
+        xi_kwargs['eta']        = float(xi_kwargs.get('eta', 0.9))
+        xi_kwargs['lambda_max'] = float(xi_kwargs.get('lambda_max', 10.0))
+        xi_kwargs['T0']         = float(xi_kwargs.get('T0', 10.0))
+        xi_kwargs['alpha']      = float(xi_kwargs.get('alpha', 2.0))
+        xi_kwargs['kappa']      = float(xi_kwargs.get('kappa', 1.0))
+        xi_kwargs['wmin']       = float(xi_kwargs.get('wmin', 0.02))
+
+    elif xi_type == 'tidal_noisyor':
+        xi_kwargs['gamma']      = float(xi_kwargs.get('gamma', xi_kwargs.get('gamma_exp', 3.0)))
+        xi_kwargs['lambda_max'] = float(xi_kwargs.get('lambda_max', 10.0))
+        xi_kwargs['T0']         = float(xi_kwargs.get('T0', 10.0))
+        xi_kwargs['alpha']      = float(xi_kwargs.get('alpha', 2.0))
+        xi_kwargs['kappa']      = float(xi_kwargs.get('kappa', 1.0))
+        xi_kwargs['wmin']       = float(xi_kwargs.get('wmin', 0.02))
 
     xi = xi_fn(rho=rho_total, **xi_kwargs)
 

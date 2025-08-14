@@ -151,9 +151,9 @@ def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
         
         # Import analyzer (do it here to avoid circular imports)
         try:
-            from analyze_results import DynestyAnalyzer
+            from analysis.analyze_results import DynestyAnalyzer
         except ImportError:
-            logger.warning("analyze_results.py not found - skipping periodic analysis")
+            logger.warning("analysis.analyze_results not found - skipping periodic analysis")
             return
         
         # Create timestamped analysis subdirectory
@@ -182,7 +182,7 @@ def run_periodic_analysis(output_dir, xi_type, logger, suppress_plots=True):
             sys.stdout = old_stdout
         
         # Save JSON summary
-        from analyze_results import export_summary
+        from analysis.analyze_results import export_summary
         json_summary = export_summary(analyzer, stats_dict)
         json_file = analysis_subdir / "summary.json"
         with open(json_file, 'w') as f:
