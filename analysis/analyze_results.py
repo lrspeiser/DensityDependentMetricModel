@@ -278,9 +278,18 @@ class DynestyAnalyzer:
         print("="*80)
         
         if self.logz is not None:
-            print(f"\nModel Evidence: log(Z) = {self.logz[-1]:.3f}")
+            # Support both scalar and array logZ/logZerr
+            try:
+                logz_last = float(self.logz if np.ndim(self.logz) == 0 else self.logz[-1])
+            except Exception:
+                logz_last = float(self.logz)
+            print(f"\nModel Evidence: log(Z) = {logz_last:.3f}")
             if self.logzerr is not None:
-                print(f"                        ± {self.logzerr[-1]:.3f}")
+                try:
+                    logzerr_last = float(self.logzerr if np.ndim(self.logzerr) == 0 else self.logzerr[-1])
+                    print(f"                        ± {logzerr_last:.3f}")
+                except Exception:
+                    pass
         
         if self.rmse_values is not None:
             rmse_median = np.median(self.rmse_values)
@@ -633,8 +642,8 @@ def export_summary(analyzer, stats_dict: Dict[str, dict]) -> dict:
     summary = {
         "model": {
             "xi_type": analyzer.xi_type,
-            "logZ": float(analyzer.logz[-1]) if analyzer.logz is not None else None,
-            "logZerr": float(analyzer.logzerr[-1]) if analyzer.logzerr is not None else None,
+            "logZ": (float(analyzer.logz) if (analyzer.logz is not None and np.ndim(analyzer.logz) == 0) else (float(analyzer.logz[-1]) if analyzer.logz is not None else None)),
+            "logZerr": (float(analyzer.logzerr) if (analyzer.logzerr is not None and np.ndim(analyzer.logzerr) == 0) else (float(analyzer.logzerr[-1]) if analyzer.logzerr is not None else None)),
             "rmse_median": float(np.median(analyzer.rmse_values)) if analyzer.rmse_values is not None else None,
             "total_mass": sum(stats_dict[k]['median'] for k in stats_dict if 'M_' in k)
         },
