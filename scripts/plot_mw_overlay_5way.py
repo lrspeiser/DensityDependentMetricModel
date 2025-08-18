@@ -173,9 +173,11 @@ def main():
     t_ratio_params = _extract_params_from_run(args.t_ratio)
     t_noisyor_params = _extract_params_from_run(args.t_noisyor)
 
-    v_t_band2 = v_total_kms(R_grid, {**bary, **t_band2_params}, xi_type='tidal_band2')
-    v_t_ratio = v_total_kms(R_grid, {**bary, **t_ratio_params}, xi_type='tidal_ratio')
-    v_t_noisyor = v_total_kms(R_grid, {**bary, **t_noisyor_params}, xi_type='tidal_noisyor')
+    # Mark experimental xi allowances explicitly for plotting
+    exp_flag = {'allow_experimental': True}
+    v_t_band2 = v_total_kms(R_grid, {**bary, **t_band2_params, **exp_flag}, xi_type='tidal_band2')
+    v_t_ratio = v_total_kms(R_grid, {**bary, **t_ratio_params, **exp_flag}, xi_type='tidal_ratio')
+    v_t_noisyor = v_total_kms(R_grid, {**bary, **t_noisyor_params, **exp_flag}, xi_type='tidal_noisyor')
 
     # Plot
     plt.figure(figsize=(12, 8))
