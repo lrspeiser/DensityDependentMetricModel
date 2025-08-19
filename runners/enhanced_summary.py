@@ -79,18 +79,23 @@ class DynestyRunSummary:
             metrics['current_logz'] = float(logz_array[-1])
             
             if len(logz_array) > 1:
-                metrics['dlogz_current'] = float(logz_array[-1] - logz_array[-2])
+                # Incremental change in evidence between last two updates
+                metrics['dlogz_increment'] = float(logz_array[-1] - logz_array[-2])
+                # Back-compat alias (old name used in some tools)
+                metrics['dlogz_current'] = metrics['dlogz_increment']
                 
-                # Moving average of dlogz over last 10 iterations
+                # Moving average of incremental dlogz over last 10 iterations
                 if len(logz_array) > 10:
                     recent_dlogz = np.diff(logz_array[-11:])
                     metrics['dlogz_avg_10'] = float(np.mean(recent_dlogz))
                     metrics['dlogz_std_10'] = float(np.std(recent_dlogz))
                     metrics['converging'] = metrics['dlogz_avg_10'] < 0.1
         
-        # LogZ error estimate
+        # Dynesty's remaining-evidence estimate (stopping metric)
         if hasattr(results, 'logzerr') and len(results.logzerr) > 0:
-            metrics['logz_error'] = float(results.logzerr[-1])
+            metrics['remaining_dlogz'] = float(results.logzerr[-1])
+            # Keep original key for compatibility
+            metrics['logz_error'] = metrics['remaining_dlogz']
         
         # Number of iterations
         metrics['iterations'] = len(results.logz) if hasattr(results, 'logz') else 0
@@ -328,8 +333,9 @@ class DynestyRunSummary:
         conv = summary['convergence_metrics']
         lines.append(f"\nConvergence Metrics:")
         lines.append(f"  Current LogZ: {conv.get('current_logz', 'N/A'):.2f}")
-        lines.append(f"  Current dLogZ: {conv.get('dlogz_current', 'N/A'):.4f}")
-        lines.append(f"  Avg dLogZ (10): {conv.get('dlogz_avg_10', 'N/A'):.4f}")
+        lines.append(f"  Remaining dLogZ (Dynesty): {conv.get('remaining_dlogz', 'N/A'):.4f}")
+        lines.append(f"  Incremental dLogZ (last step): {conv.get('dlogz_increment', 'N/A'):.4f}")
+        lines.append(f"  Avg incremental dLogZ (last 10): {conv.get('dlogz_avg_10', 'N/A'):.4f}")
         lines.append(f"  Converged: {conv.get('converging', False)}")
         lines.append(f"  Samples: {conv.get('n_samples', 0)}")
         lines.append(f"  Effective Samples: {conv.get('eff_samples', 0):.0f}")
@@ -415,7 +421,8 @@ def create_final_summary(sampler, param_names, args, start_time, status="complet
         'timestamp': summary['metadata']['timestamp'],
         'xi_type': summary['metadata']['xi_type'],
         'logz': summary['convergence_metrics'].get('current_logz'),
-        'dlogz': summary['convergence_metrics'].get('dlogz_current'),
+        'remaining_dlogz': summary['convergence_metrics'].get('remaining_dlogz'),
+        'dlogz_increment': summary['convergence_metrics'].get('dlogz_increment'),
         'converged': summary['convergence_metrics'].get('converging'),
         'best_fit_rho_c': summary['parameter_estimates'].get('best_fit', {}).get('rho_c_solar_kpc3'),
         'delta_logz_vs_gr': summary['model_comparison'].get('vs_gr', {}).get('delta_logz'),
