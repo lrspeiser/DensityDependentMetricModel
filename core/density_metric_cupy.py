@@ -1076,8 +1076,35 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
 
     # Prepare tidal proxy only if needed
     T = None
-    if xi_type in ('tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor'):
+    if xi_type in ('tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor', 'rar_gate', 'rar_blend'):
         T = cp.maximum(v_baryon_sq, 0.0) / cp.maximum(R_safe * R_safe, 1e-18)
+        # Auto T0 from baryons at ~2.2 Rd when enabled
+        if bool(p.get('auto_T0', False)):
+            try:
+                # 2.2 R_d of the dominant disk; fall back to single-disk Rd if simple model
+                R_d = float(p.get('R_thin_disk_kpc', p.get('R_d_kpc', 3.0)))
+                R_peak = max(0.5, 2.2 * R_d)
+                Rp = cp.asarray([R_peak], dtype=DEFAULT_DTYPE)
+                T0_auto = None
+                if 'M_thin_disk_solar' in p:
+                    # Comprehensive baryonic model
+                    v_peak = v_baryon_comprehensive_kms_cupy(Rp, p)
+                    T0_auto = float((v_peak**2 / (R_peak**2)).item())
+                else:
+                    # Simple disk+bulge+gas composition via total-newtonian helper
+                    v_peak = v_baryon_total_newtonian_kms_cupy(
+                        Rp,
+                        p.get('M_disk_solar', 0.0), p.get('R_d_kpc', 3.0),
+                        p.get('M_bulge_solar', 0.0), p.get('R_b_kpc', 0.5), p.get('include_bulge', False),
+                        p.get('M_gas_solar', 0.0), p.get('R_gas_kpc', 7.0), p.get('include_gas', False)
+                    )
+                    T0_auto = float((v_peak**2 / (R_peak**2)).item())
+                if T0_auto is not None and np.isfinite(T0_auto):
+                    # Stash for xi function override via xi_kwargs
+                    p['T0'] = T0_auto
+            except Exception:
+                # If auto-T0 fails, continue with provided/sampled T0
+                pass
 
     # Define small wrappers for published xi
     def _xi_gr_published(rho, **kwargs):
@@ -1087,6 +1114,48 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         if T is None:
             raise ValueError("tidal_band requires tidal proxy T; computed internally when xi_type='tidal_band'")
         return xi_tidal_bandpass_cupy(rho, T, rho_c, gamma, lambda_max, T0, sigma_lnT, wmin)
+
+    # --- Constants for unit conversion for RAR-anchored xi ---
+    # Acceleration in m/s^2 per [(km/s)^2 / kpc]
+    ACC_M_S2_PER_KMS2_PER_KPC = 3.240779289e-14
+
+    def _tidal_window(T, T0, sigma_lnT, wmin):
+        """Lognormal band-pass window with floor wmin."""
+        T_safe = cp.maximum(T, 1e-30)
+        T0_safe = cp.maximum(cp.asarray(T0, dtype=DEFAULT_DTYPE), 1e-30)
+        sig = cp.maximum(cp.asarray(sigma_lnT, dtype=DEFAULT_DTYPE), 1e-6)
+        u = (cp.log(T_safe) - cp.log(T0_safe)) / sig
+        W = cp.exp(-0.5 * u * u)
+        wmin_safe = cp.asarray(wmin, dtype=DEFAULT_DTYPE)
+        return wmin_safe + (1.0 - wmin_safe) * W
+
+    # -------- Option B: RAR-anchored gating on g_bar ----------
+    def xi_rar_gate_cupy(*, rho, T, R, a0_m_s2, gamma_exp, lambda_max, T0, sigma_lnT, wmin):
+        """
+        xi = 1 + lambda_max * S_g(g_bar) * W(T),
+        with S_g = 1 / [1 + (g_bar / a0)^{gamma}]
+        """
+        gbar_m_s2 = ACC_M_S2_PER_KMS2_PER_KPC * cp.maximum(T, 0.0) * cp.maximum(R, 1e-12)
+        x = gbar_m_s2 / cp.maximum(cp.asarray(a0_m_s2, dtype=DEFAULT_DTYPE), 1e-30)
+        Sg = 1.0 / (1.0 + cp.power(x, cp.asarray(gamma_exp, dtype=DEFAULT_DTYPE)))
+        W = _tidal_window(T, T0, sigma_lnT, wmin)
+        xi = 1.0 + cp.asarray(lambda_max, dtype=DEFAULT_DTYPE) * Sg * W
+        return cp.clip(xi, 1.0, 1.0 + cp.asarray(lambda_max, dtype=DEFAULT_DTYPE))
+
+    # -------- “Blend RAR” diagnostic: amplitude × RAR excess ----------
+    def xi_rar_blend_cupy(*, rho, T, R, a0_m_s2, A_excess, lambda_cap, T0, sigma_lnT, wmin):
+        """
+        xi = 1 + A_excess * (D_RAR(g_bar) - 1) * W(T) , clipped at 1 + lambda_cap
+        where D_RAR = 1 / [1 - exp(-sqrt(g_bar/a0))].
+        """
+        gbar_m_s2 = ACC_M_S2_PER_KMS2_PER_KPC * cp.maximum(T, 0.0) * cp.maximum(R, 1e-12)
+        x = cp.sqrt(cp.maximum(gbar_m_s2 / cp.maximum(cp.asarray(a0_m_s2, dtype=DEFAULT_DTYPE), 1e-30), 0.0))
+        denom = cp.maximum(1.0 - cp.exp(-x), 1e-6)
+        D = 1.0 / denom
+        excess = D - 1.0
+        W = _tidal_window(T, T0, sigma_lnT, wmin)
+        xi = 1.0 + cp.asarray(A_excess, dtype=DEFAULT_DTYPE) * excess * W
+        return cp.clip(xi, 1.0, 1.0 + cp.asarray(lambda_cap, dtype=DEFAULT_DTYPE))
 
     # Helper to ensure xi registry has published defaults available early
     def ensure_xi_registry_defaults():
@@ -1149,6 +1218,27 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
             register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: exponential screening")
             register_xi('grav_color_void_safe', lambda rho, **kw: xi_gravitational_color_void_safe_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: void-safe color")
             register_xi('balanced_screening', lambda rho, **kw: xi_balanced_screening_cupy(rho, kw.get('rho_c'), kw.get('R'), kw.get('R_screen', 50.0), kw.get('n_exp', 1.0), kw.get('A_max', 2.0)), published=False, doc="Experimental: bounded enhancement with R cutoff")
+            # NEW: RAR-anchored tidal variants
+            register_xi('rar_gate', lambda rho, **kw: xi_rar_gate_cupy(rho=rho,
+                                                                       T=kw.get('T'), R=kw.get('R'),
+                                                                       a0_m_s2=kw.get('a0_m_s2', 1.2e-10),
+                                                                       gamma_exp=kw.get('gamma_exp', 3.0),
+                                                                       lambda_max=kw.get('lambda_max', 3.0),
+                                                                       T0=kw.get('T0', 10.0),
+                                                                       sigma_lnT=kw.get('sigma_lnT', 0.8),
+                                                                       wmin=kw.get('wmin', 0.02)),
+                        published=False,
+                        doc="Experimental: RAR-anchored gating on g_bar with tidal window")
+            register_xi('rar_blend', lambda rho, **kw: xi_rar_blend_cupy(rho=rho,
+                                                                         T=kw.get('T'), R=kw.get('R'),
+                                                                         a0_m_s2=kw.get('a0_m_s2', 1.2e-10),
+                                                                         A_excess=kw.get('A_excess', 1.0),
+                                                                         lambda_cap=kw.get('lambda_cap', 6.0),
+                                                                         T0=kw.get('T0', 10.0),
+                                                                         sigma_lnT=kw.get('sigma_lnT', 0.8),
+                                                                         wmin=kw.get('wmin', 0.02)),
+                        published=False,
+                        doc="Experimental: amplitude × (RAR excess) with tidal window and cap")
         except Exception:
             # Ignore if already registered in a prior call
             pass
@@ -1200,6 +1290,22 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         xi_kwargs['T0']         = float(xi_kwargs.get('T0', 10.0))
         xi_kwargs['alpha']      = float(xi_kwargs.get('alpha', 2.0))
         xi_kwargs['kappa']      = float(xi_kwargs.get('kappa', 1.0))
+        xi_kwargs['wmin']       = float(xi_kwargs.get('wmin', 0.02))
+
+    elif xi_type == 'rar_gate':
+        xi_kwargs['a0_m_s2']    = float(xi_kwargs.get('a0_m_s2', 1.2e-10))
+        xi_kwargs['gamma_exp']  = float(xi_kwargs.get('gamma_exp', 3.0))
+        xi_kwargs['lambda_max'] = float(xi_kwargs.get('lambda_max', 3.0))
+        xi_kwargs['T0']         = float(xi_kwargs.get('T0', 10.0))
+        xi_kwargs['sigma_lnT']  = float(xi_kwargs.get('sigma_lnT', 0.8))
+        xi_kwargs['wmin']       = float(xi_kwargs.get('wmin', 0.02))
+
+    elif xi_type == 'rar_blend':
+        xi_kwargs['a0_m_s2']    = float(xi_kwargs.get('a0_m_s2', 1.2e-10))
+        xi_kwargs['A_excess']   = float(xi_kwargs.get('A_excess', 1.0))
+        xi_kwargs['lambda_cap'] = float(xi_kwargs.get('lambda_cap', 6.0))
+        xi_kwargs['T0']         = float(xi_kwargs.get('T0', 10.0))
+        xi_kwargs['sigma_lnT']  = float(xi_kwargs.get('sigma_lnT', 0.8))
         xi_kwargs['wmin']       = float(xi_kwargs.get('wmin', 0.02))
 
     xi = xi_fn(rho=rho_total, **xi_kwargs)

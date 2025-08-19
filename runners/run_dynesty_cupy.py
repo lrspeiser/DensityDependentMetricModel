@@ -67,6 +67,53 @@ BASELINE_LOGZ_GR = -1490897.5250096943  # From GR-only with no dark matter
 # Lightweight NumPy utilities to avoid importing heavier analysis modules
 PCTS = (0.16, 0.50, 0.84)
 
+# ---------------------------------------------------------------------------
+# Robust weighted sampling utility for tuner/snapshots
+# ---------------------------------------------------------------------------
+import numpy as _np_local
+
+def _stable_weighted_choice(idx, p, size, replace=False, rng=None, context="tuning"):
+    """
+    Robustly sample indices with probability weights p.
+    - Ensures p is finite & nonnegative, renormalizes.
+    - If fewer positive weights than requested size and replace=False,
+      it downgrades to replace=True with a clear log message.
+    - If all weights are zero or nan, falls back to uniform.
+
+    Returns: np.ndarray of chosen indices (shape: [size])
+    """
+    if rng is None:
+        rng = _np_local.random.default_rng()
+
+    p = _np_local.asarray(p, dtype=float)
+
+    # Clean weights: finite & nonnegative
+    bad = ~_np_local.isfinite(p) | (p < 0)
+    if _np_local.any(bad):
+        # Zero-out bad probs
+        p[bad] = 0.0
+
+    # Renormalize (with epsilon to avoid divide-by-zero)
+    s = float(_np_local.sum(p))
+    if (not _np_local.isfinite(s)) or s <= 0.0:
+        # Fallback: uniform over all idx
+        p = _np_local.full_like(p, 1.0 / p.size)
+    else:
+        p = p / s
+
+    # Count strictly-positive entries
+    nz = int(_np_local.count_nonzero(p > 0))
+
+    # If not enough positive mass for without-replacement, switch strategy
+    if (not replace) and (nz < size):
+        print(f"[WARN {_stable_weighted_choice.__name__}] {context}: requested size={size} but only nz={nz} positive weights. Switching to replace=True and clipping size to max(1, nz).")
+        replace = True
+        if nz > 0:
+            size = max(1, nz)
+
+    # Finally draw
+    return rng.choice(idx, size=size, replace=replace, p=p)
+
 def _recent_slice(n_total: int, n_recent: int) -> slice:
     start = max(0, n_total - n_recent)
     return slice(start, n_total)
@@ -143,11 +190,18 @@ def _round_list(arr: np.ndarray, decimals: int = 6) -> List[float]:
 
 def _sample_seed_points(X: np.ndarray, w: np.ndarray, K: int = 256, decimals: int = 6) -> List[List[float]]:
     N = X.shape[0]
+    if N == 0:
+        return []
+    # Use robust chooser directly on row indices
+    idx_all = np.arange(N)
     K_eff = min(K, N)
-    # Sample with replacement to respect weights if N < K
-    idx = np.random.choice(N, size=K_eff, replace=(N < K_eff), p=w)
-    pts = X[idx]
-    return [ _round_list(p, decimals) for p in pts ]
+    try:
+        sel = _stable_weighted_choice(idx=idx_all, p=w, size=K_eff, replace=False, rng=np.random.default_rng(), context="tuning-snapshot/seed")
+    except Exception as e:
+        print(f"[ERROR tuning-snapshot] fallback due to {e!r}; using uniform with replacement.")
+        sel = _stable_weighted_choice(idx=idx_all, p=np.ones(N), size=K_eff, replace=True, rng=np.random.default_rng(), context="tuning-snapshot-uniform-fallback")
+    pts = X[sel]
+    return [_round_list(p, decimals) for p in pts]
 
 
 def _suggest_bounds(p16: np.ndarray, p84: np.ndarray, expand: float = 1.5) -> np.ndarray:
@@ -252,7 +306,11 @@ def _build_tuning_snapshot(
             diffs = np.abs(np.diff(vals))
             dlogz_avg_10 = float(np.mean(diffs))
 
-    # Seed points
+    # Seed points (robust logging around weights)
+    try:
+        print(f"[INFO tuning-snapshot] n_live={X.shape[0]} k={seed_K} w_min={float(np.min(w)):.3e} w_max={float(np.max(w)):.3e} nz={int(np.count_nonzero(np.asarray(w)>0))}")
+    except Exception:
+        pass
     seeds = _sample_seed_points(X, w, K=seed_K, decimals=decimals)
 
     # Optional blob-derived chi2
@@ -999,13 +1057,21 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
             params['include_halo'] = True
         # Forward experimental gate into physics layer so experimental xi can resolve
         params['allow_experimental'] = bool(getattr(args, 'allow_experimental', False))
+        # Forward auto T0 choice into physics layer for tidal xi (default True)
+        if getattr(args, 'xi', None) in ['tidal_band','tidal_band2','tidal_ratio','tidal_noisyor','rar_gate','rar_blend']:
+            params['auto_T0'] = bool(getattr(args, 'auto_T0', True))
 
         v_model = v_total_kms_cupy(R_data_cupy, params, xi_type=args.xi)
         if not cp.all(cp.isfinite(v_model)):
             return -np.inf
 
+        # Harden sigma to avoid division-by-zero
+        sigma_data_cupy = cp.maximum(sigma_data_cupy, cp.asarray(1e-12, dtype=sigma_data_cupy.dtype))
         chi2 = cp.sum(((v_data_cupy - v_model) / sigma_data_cupy)**2)
         logl = -0.5 * float(chi2)
+        # Ensure finite logl
+        if not np.isfinite(logl):
+            return -np.inf
 
         # ADD SOFT PRIOR PENALTY for unreasonable mass ratios (instead of hard rejection)
         log_prior_penalty = 0.0
@@ -1028,7 +1094,8 @@ def log_likelihood_dynesty_cupy(theta, param_names, args, R_data, v_data, sigma_
         
         # ============== ADD CASSINI CONSTRAINT CHECK ==============
         # Check Cassini constraint for spacetime_grain and other DDMM models
-        if args.xi in ['spacetime_grain', 'peak', 'sigmoid', 'hybrid', 'broken', 'yukawa']:
+        if args.xi in ['tidal_band','tidal_band2','tidal_ratio','tidal_noisyor','rar_gate','rar_blend',
+                        'spacetime_grain', 'peak', 'sigmoid', 'hybrid', 'broken', 'yukawa']:
             try:
                 # Calculate xi at Solar System location (8.5 kpc)
                 R_sun_kpc = cp.array([8.5])
@@ -1779,36 +1846,27 @@ def setup_parameter_bounds(xi_type):
         ])
     
     elif xi_type == 'tidal_band':
-        # Tidal band-pass model parameters
+        # Tidal band-pass model parameters (auto_T0 can override T0 at runtime)
         param_names = [
-            'M_thin_disk_solar', 'R_thin_disk_kpc', 'hz_thin_disk_kpc',
-            'M_thick_disk_solar', 'R_thick_disk_kpc', 'hz_thick_disk_kpc', 
-            'M_bulge_solar', 'R_bulge_kpc',
-            'M_gas_solar', 'R_gas_kpc', 'hz_gas_kpc',
-            'rho_c_solar_kpc3', 'gamma_exp', 'lambda_max', 'T0', 'sigma_lnT', 'wmin'
+            'M_thin_disk_solar','R_thin_disk_kpc','hz_thin_disk_kpc',
+            'M_thick_disk_solar','R_thick_disk_kpc','hz_thin_disk_kpc' if False else 'hz_thick_disk_kpc',
+            'M_bulge_solar','R_bulge_kpc',
+            'M_gas_solar','R_gas_kpc','hz_gas_kpc',
+            'rho_c_solar_kpc3','gamma_exp','lambda_max','T0','sigma_lnT','wmin'
         ]
-        # Bounds: log for masses and rho_c, linear for the rest
+        # Physically anchored bounds (Solar neighborhood scale) and tame amplitudes
         bounds_low = np.array([
-            1e10, 2.0, 0.2,
-            1e9, 3.0, 0.6,
-            1e9, 0.5,
-            1e9, 5.0, 0.1,
-            1e15, 2.0, 2.0, 1e0, 0.2, 0.0
-        ])
+            1e10,2.0,0.2,  1e9,3.0,0.6,  1e9,0.5,  1e9,5.0,0.1,
+            5e7,  3.0,     0.5,         1e-2, 0.3, 0.0
+        ], dtype=float)
         bounds_high = np.array([
-            1e11, 4.0, 0.4,
-            1e10, 5.0, 1.0,
-            1e10, 2.0,
-            1e10, 10.0, 0.3,
-            1e17, 4.0, 5.0, 1e4, 1.5, 0.05
-        ])
+            1e11,4.0,0.4,  1e10,5.0,1.0, 1e10,2.0, 1e10,10.0,0.3,
+            5e8,  3.0,     4.0,          1e3,  1.0, 0.02
+        ], dtype=float)
         use_log_prior = np.array([
-            True, False, False,
-            True, False, False,
-            True, False,
-            True, False, False,
-            True, False, False, True, False, False
-        ])
+            True,False,False, True,False,False, True,False, True,False,False,
+            True,False,False, True,False,False
+        ], dtype=bool)
 
     elif xi_type == 'tidal_band2':
         # logistic lnT onset + softened screening (β) + soft cap (κ)
@@ -1844,16 +1902,16 @@ def setup_parameter_bounds(xi_type):
             'lambda_max','T0','alpha','kappa','wmin'
         ]
         bounds_low = np.array([
-            1e10,2.0,0.2,   1e9,3.0,0.6,   1e9,0.5,  1e9,5.0,0.1,
-            1e14,0.0,       0.0, 1e-3,0.5,0.5,0.0
+            1e10,2.0,0.2,  1e9,3.0,0.6, 1e9,0.5,  1e9,5.0,0.1,
+            5e7,  0.6,     0.5,  1e-2,  2.0, 1.0, 0.0
         ], dtype=float)
         bounds_high = np.array([
-            1e11,4.0,0.4,   1e10,5.0,1.0,  1e10,2.0, 1e10,10.0,0.3,
-            1e17,2.5,       20.0,1e3, 6.0,3.0,0.05
+            1e11,4.0,0.4,  1e10,5.0,1.0,1e10,2.0, 1e10,10.0,0.3,
+            5e8,  1.4,     4.0,  1e3,   2.0, 1.0, 0.02
         ], dtype=float)
         use_log_prior = np.array([
-            True,False,False,  True,False,False,  True,False,  True,False,False,
-            True,False,        False,True,False,False,False
+            True,False,False, True,False,False, True,False, True,False,False,
+            True,False,       False,True, False,False,False
         ], dtype=bool)
 
     elif xi_type == 'tidal_noisyor':
@@ -1877,6 +1935,50 @@ def setup_parameter_bounds(xi_type):
         use_log_prior = np.array([
             True,False,False,  True,False,False,  True,False,  True,False,False,
             True,False,        False,True,False,False,False
+        ], dtype=bool)
+    
+    elif xi_type == 'rar_gate':
+        # RAR-anchored gating on g_bar with tidal window (auto_T0 may override T0)
+        param_names = [
+            'M_thin_disk_solar','R_thin_disk_kpc','hz_thin_disk_kpc',
+            'M_thick_disk_solar','R_thick_disk_kpc','hz_thick_disk_kpc',
+            'M_bulge_solar','R_bulge_kpc',
+            'M_gas_solar','R_gas_kpc','hz_gas_kpc',
+            'a0_m_s2','gamma_exp','lambda_max','T0','sigma_lnT','wmin'
+        ]
+        bounds_low = np.array([
+            1e10,2.0,0.2,  1e9,3.0,0.6,  1e9,0.5,  1e9,5.0,0.1,
+            5e-11, 1.0,    0.2,         1e-2, 0.3, 0.0
+        ], dtype=float)
+        bounds_high = np.array([
+            1e11,4.0,0.4,  1e10,5.0,1.0, 1e10,2.0, 1e10,10.0,0.3,
+            3e-10, 5.0,    5.0,          1e3,  1.0, 0.05
+        ], dtype=float)
+        use_log_prior = np.array([
+            True,False,False, True,False,False, True,False, True,False,False,
+            True,False,False, True,False,False
+        ], dtype=bool)
+
+    elif xi_type == 'rar_blend':
+        # Blend of RAR excess with amplitude and cap, modulated by tidal window
+        param_names = [
+            'M_thin_disk_solar','R_thin_disk_kpc','hz_thin_disk_kpc',
+            'M_thick_disk_solar','R_thick_disk_kpc','hz_thick_disk_kpc',
+            'M_bulge_solar','R_bulge_kpc',
+            'M_gas_solar','R_gas_kpc','hz_gas_kpc',
+            'a0_m_s2','A_excess','lambda_cap','T0','sigma_lnT','wmin'
+        ]
+        bounds_low = np.array([
+            1e10,2.0,0.2,  1e9,3.0,0.6,  1e9,0.5,  1e9,5.0,0.1,
+            5e-11, 0.0,    1.0,          1e-2, 0.3, 0.0
+        ], dtype=float)
+        bounds_high = np.array([
+            1e11,4.0,0.4,  1e10,5.0,1.0, 1e10,2.0, 1e10,10.0,0.3,
+            3e-10, 5.0,    10.0,         1e3,  1.0, 0.05
+        ], dtype=float)
+        use_log_prior = np.array([
+            True,False,False, True,False,False, True,False, True,False,False,
+            True,False,False, True,False,False
         ], dtype=bool)
     
     else: # Fallback to simple model
@@ -2028,37 +2130,21 @@ def _seed_live_points(samples, weights, K=128, decimals=6):
         return {"K": 0, "decimals": decimals, "sample_from": "posterior_recent_weighted", "points": []}
     n = samples.shape[0]
     K = int(min(K, 256, n))
-    W = np.asarray(weights)
-    if W.size == 0 or not np.isfinite(np.sum(W)) or np.sum(W) <= 0:
-        W = np.ones(n) / n
+    W = np.asarray(weights, dtype=float)
+    if W.size != n:
+        W = np.ones(n, dtype=float)
+    W = np.clip(W, 0.0, np.inf)
+    total = float(np.sum(W))
+    if not np.isfinite(total) or total <= 0.0:
+        W = np.ones(n, dtype=float) / float(n)
     else:
-        W = W / np.sum(W)
-    
-    # Count non-zero weights
-    n_nonzero = np.sum(W > 0)
-    
+        W = W / total
+    # Use robust chooser on indices directly
     try:
-        if n_nonzero < K:
-            # If fewer non-zero weights than K, either:
-            # 1) Sample with replacement
-            # 2) Only sample from non-zero indices
-            if n_nonzero > 0:
-                # Option 2: Sample only from non-zero indices
-                nonzero_idx = np.where(W > 0)[0]
-                W_nonzero = W[nonzero_idx]
-                W_nonzero = W_nonzero / np.sum(W_nonzero)  # Re-normalize
-                # Sample with replacement from non-zero indices
-                sampled_nonzero = np.random.choice(len(nonzero_idx), size=K, replace=True, p=W_nonzero)
-                idxs = nonzero_idx[sampled_nonzero]
-            else:
-                # All weights are zero, fall back to uniform sampling
-                idxs = np.random.choice(n, size=K, replace=True)
-        else:
-            # Normal case: enough non-zero weights
-            idxs = np.random.choice(n, size=K, replace=False if K <= n else True, p=W)
-    except Exception:
-        # Fallback to uniform sampling without weights
-        idxs = np.random.choice(n, size=K, replace=True)
+        idxs = _stable_weighted_choice(idx=np.arange(n), p=W, size=K, replace=False, rng=np.random.default_rng(), context="tuning-seed-live")
+    except Exception as e:
+        print(f"[ERROR tuning-seed-live] fallback due to {e!r}; using uniform with replacement.")
+        idxs = _stable_weighted_choice(idx=np.arange(n), p=np.ones(n), size=K, replace=True, rng=np.random.default_rng(), context="tuning-seed-live-uniform-fallback")
     
     pts = np.round(samples[idxs], decimals=decimals).tolist()
     return {"K": K, "decimals": decimals, "sample_from": "posterior_recent_weighted", "points": pts}
@@ -2269,6 +2355,10 @@ def main_cupy():
                        help='Number of threads')
     parser.add_argument('--dlogz_target', type=float, default=0.01,
                        help='Target dlogz for convergence')
+    parser.add_argument('--auto_T0', action='store_true', default=True,
+                       help='Derive T0 from baryons at ~2.2 Rd (dimensionless tidal trigger).')
+    parser.add_argument('--no-auto_T0', dest='auto_T0', action='store_false',
+                       help='Disable automatic T0 override to reproduce older runs.')
     parser.add_argument('--checkpoint_every', type=int, default=900,
                        help='Seconds between automatic checkpoints')
     
