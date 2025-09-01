@@ -118,17 +118,21 @@ def v_total_kms_cupy(R_kpc, params, xi_type='power', allow_experimental=False):
         xi = cp.ones_like(R_gpu)
         # Add NFW contribution if parameters present
         if 'M_vir' in params:
-            M_vir = params['M_vir']
-            c_vir = params.get('c_vir', 10.0)
-            # Simple NFW implementation
-            R_vir = (M_vir / (100 * 4.3e6))**(1/3)
+            M_vir = cp.asarray(params['M_vir'], dtype=DEFAULT_DTYPE)
+            c_vir = cp.asarray(params.get('c_vir', 12.0), dtype=DEFAULT_DTYPE)
+            # Literature-consistent NFW implementation
+            # R_vir where mean density = 200 * rho_crit; rho_crit ~ 100 Msun/kpc^3
+            rho_crit = cp.asarray(100.0, dtype=DEFAULT_DTYPE)  # Msun/kpc^3 (approx)
+            R_vir = cp.power(M_vir / (200.0 * rho_crit * (4.0 * cp.pi / 3.0)), 1.0/3.0)
             r_s = R_vir / c_vir
-            x = R_gpu / r_s
-            g_x = cp.log(1 + x) - x / (1 + x)
-            g_c = cp.log(1 + c_vir) - c_vir / (1 + c_vir)
+            x = cp.maximum(R_gpu / cp.maximum(r_s, cp.asarray(1e-6, dtype=DEFAULT_DTYPE)), 1e-8)
+            # Enclosed mass ratio functions
+            g_x = cp.log1p(x) - x / (1.0 + x)
+            g_c = cp.log1p(c_vir) - c_vir / (1.0 + c_vir)
+            g_c = cp.maximum(g_c, cp.asarray(1e-12, dtype=DEFAULT_DTYPE))
             M_enc = M_vir * g_x / g_c
-            v_nfw_sq = G_ASTRO_UNITS * M_enc / R_gpu
-            v_total_sq = v_newton**2 * xi + v_nfw_sq
+            v_nfw_sq = G_ASTRO_UNITS * M_enc / cp.maximum(R_gpu, cp.asarray(1e-6, dtype=DEFAULT_DTYPE))
+            v_total_sq = v_newton**2 * xi + cp.maximum(v_nfw_sq, 0.0)
             return cp.sqrt(cp.maximum(v_total_sq, 0.0))
     elif xi_type == 'power':
         n_exp = params.get('n_exp', 2.0)
@@ -183,8 +187,13 @@ def log_likelihood_stellar_cupy(params, R_data_gpu, v_data_gpu, sigma_data_gpu, 
     residuals_gpu = (v_data_gpu - v_model_gpu) / sigma_data_gpu
     chi2_gpu = cp.sum(residuals_gpu**2)
     
+    # Check for extreme values that would cause overflow
+    chi2_value = float(chi2_gpu)
+    if not np.isfinite(chi2_value) or chi2_value > 1e10:
+        return -np.inf
+    
     # Base likelihood
-    log_L = -0.5 * float(chi2_gpu)
+    log_L = -0.5 * chi2_value
     
     # Regional breakdown for detailed fitting
     radial_bins = cp.array([0, 3, 5, 7, 8.5, 10, 12, 15, 20, 30], dtype=DEFAULT_DTYPE)
@@ -202,7 +211,9 @@ def log_likelihood_stellar_cupy(params, R_data_gpu, v_data_gpu, sigma_data_gpu, 
             # Solar neighborhood needs excellent fit
             if r_min <= 8.5 and r_max >= 7.5:
                 if chi2_per_star > 2.0:
-                    penalties -= 100.0 * (chi2_per_star - 2.0)**2
+                    # Clamp to prevent overflow
+                    penalty_val = min(chi2_per_star - 2.0, 100.0)
+                    penalties -= 100.0 * penalty_val**2
             
             # Outer regions should have reasonable velocities
             if r_min >= 12:
@@ -247,7 +258,9 @@ def log_likelihood_stellar_cupy(params, R_data_gpu, v_data_gpu, sigma_data_gpu, 
     
     # Apply overall penalty for poor fit
     if rmse_total > 30.0:
-        penalties -= 100.0 * ((rmse_total - 30.0) / 30.0)**2
+        # Clamp to prevent overflow
+        penalty_val = min((rmse_total - 30.0) / 30.0, 10.0)
+        penalties -= 100.0 * penalty_val**2
     
     # Total likelihood
     log_L_total = log_L + shape_score + penalties
@@ -280,33 +293,89 @@ def prior_transform(u, param_bounds):
             params[i] = low + u[i] * (high - low)
     return params
 
-def load_gaia_data(sample_max=10000):
+def load_gaia_data(sample_max=10000, use_144k_data=False):
     """
-    Load Gaia data or create mock data for testing.
+    Load Gaia data from processed or raw sources.
+    
+    Parameters:
+    -----------
+    sample_max : int
+        Maximum number of stars to sample
+    use_144k_data : bool
+        If True, prioritize loading the 144k star dataset
     
     Returns:
     --------
     R_data, v_data, sigma_data : numpy arrays
         Radius, velocity, and uncertainty arrays
     """
-    # Try to load real data
-    data_paths = [
-        Path("data/mw_binned_velocities.csv"),
-        Path("external_data/mw_binned_velocities.csv"),
-        Path("gaia_sky_slices/all_sky_gaia.csv")
-    ]
+    # Data paths - prioritize based on use_144k_data flag
+    if use_144k_data:
+        # Prioritize the 144k dataset
+        data_paths = [
+            Path("../external_data/gaia_sky_slices/all_sky_gaia.csv"),
+            Path("external_data/gaia_sky_slices/all_sky_gaia.csv"),
+            Path("../gaia_query_cache_DR3_processed_for_fit.parquet"),
+            Path("gaia_query_cache_DR3_processed_for_fit.parquet")
+        ]
+    else:
+        # Default: prioritize smaller processed dataset
+        data_paths = [
+            Path("../gaia_query_cache_DR3_processed_for_fit.parquet"),
+            Path("gaia_query_cache_DR3_processed_for_fit.parquet"),
+            Path("../external_data/gaia_sky_slices/all_sky_gaia.csv"),
+            Path("external_data/gaia_sky_slices/all_sky_gaia.csv")
+        ]
     
     for path in data_paths:
         if path.exists():
             try:
                 import pandas as pd
-                df = pd.read_csv(path)
                 
-                # Check for required columns
-                if 'R_kpc' in df.columns and 'v_obs' in df.columns:
-                    R_data = df['R_kpc'].values
-                    v_data = df['v_obs'].values
-                    sigma_data = df.get('sigma_v', np.ones_like(v_data) * 10).values
+                # Handle different file formats
+                if path.suffix == '.parquet':
+                    df = pd.read_parquet(path)
+                    logger.info(f"Loading parquet file: {path}")
+                else:
+                    df = pd.read_csv(path)
+                    logger.info(f"Loading CSV file: {path}")
+                
+                # Log available columns
+                logger.info(f"Available columns: {list(df.columns)[:10]}...")  # Show first 10 columns
+                
+                # Check for various possible column names
+                r_col = None
+                v_col = None
+                sigma_col = None
+                
+                # Radius column
+                for col in ['R_kpc', 'r_kpc', 'R', 'radius', 'galactocentric_distance']:
+                    if col in df.columns:
+                        r_col = col
+                        break
+                
+                # Velocity column
+                for col in ['v_obs', 'v_circ', 'v_rot', 'velocity', 'v_gsr', 'circular_velocity']:
+                    if col in df.columns:
+                        v_col = col
+                        break
+                
+                # Uncertainty column
+                for col in ['sigma_v', 'v_err', 'velocity_error', 'sigma', 'v_gsr_error']:
+                    if col in df.columns:
+                        sigma_col = col
+                        break
+                
+                if r_col and v_col:
+                    R_data = df[r_col].values
+                    v_data = df[v_col].values
+                    
+                    # Handle uncertainties
+                    if sigma_col:
+                        sigma_data = df[sigma_col].values
+                    else:
+                        # Use 10% of velocity as default uncertainty if not provided
+                        sigma_data = np.maximum(np.abs(v_data) * 0.1, 10.0)
                     
                     # Clean data
                     mask = np.isfinite(R_data) & np.isfinite(v_data) & (R_data > 0) & (R_data < 30)
@@ -323,6 +392,42 @@ def load_gaia_data(sample_max=10000):
                     
                     logger.info(f"✓ Loaded {len(R_data)} stars from {path}")
                     return R_data, v_data, sigma_data
+                
+                # If we don't have R_kpc and v_obs, check if we have raw Gaia data to process
+                elif ('parallax' in df.columns and 'pmra' in df.columns and 
+                      'pmdec' in df.columns and 'radial_velocity' in df.columns):
+                    logger.info("Raw Gaia data detected - processing to galactocentric coordinates...")
+                    
+                    # Import processing function
+                    try:
+                        from core.data_io import process_gaia_data
+                        
+                        # Process the raw data
+                        df_processed = process_gaia_data(df)
+                        
+                        if 'R_kpc' in df_processed.columns and 'v_obs' in df_processed.columns:
+                            R_data = df_processed['R_kpc'].values
+                            v_data = df_processed['v_obs'].values
+                            sigma_data = df_processed.get('sigma_v', np.ones_like(v_data) * 10).values
+                            
+                            # Clean data
+                            mask = np.isfinite(R_data) & np.isfinite(v_data) & (R_data > 0) & (R_data < 30)
+                            R_data = R_data[mask]
+                            v_data = v_data[mask]
+                            sigma_data = sigma_data[mask]
+                            
+                            # Sample if needed
+                            if len(R_data) > sample_max:
+                                indices = np.random.choice(len(R_data), sample_max, replace=False)
+                                R_data = R_data[indices]
+                                v_data = v_data[indices]
+                                sigma_data = sigma_data[indices]
+                            
+                            logger.info(f"✓ Processed and loaded {len(R_data)} stars from raw Gaia data")
+                            return R_data, v_data, sigma_data
+                    except Exception as proc_e:
+                        logger.warning(f"Could not process raw Gaia data: {proc_e}")
+                
             except Exception as e:
                 logger.warning(f"Could not load {path}: {e}")
     
@@ -358,7 +463,7 @@ def run_stellar_fit_cupy(args):
         logger.warning("⚠ GPU info not available")
     
     # Load data
-    R_data, v_data, sigma_data = load_gaia_data(args.sample_max)
+    R_data, v_data, sigma_data = load_gaia_data(args.sample_max, use_144k_data=args.use_144k)
     
     # Transfer to GPU
     R_data_gpu = cp.asarray(R_data, dtype=DEFAULT_DTYPE)
@@ -377,9 +482,10 @@ def run_stellar_fit_cupy(args):
     elif args.xi == 'nfw':
         # NFW dark matter halo
         param_names = ['M_vir', 'c_vir']
+        # Literature-informed priors (MW-like)
         param_bounds = [
-            (1e11, 5e12),  # Virial mass in M_sun
-            (5.0, 25.0)    # Concentration parameter
+            (3e11, 2e12),  # Virial mass in M_sun
+            (6.0, 20.0)    # Concentration parameter
         ]
     elif args.xi == 'grav_color':
         param_names = ['rho_c_solar_kpc3', 'gamma_exp', 'lambda_g']
@@ -542,7 +648,10 @@ def run_stellar_fit_cupy(args):
                                    allow_experimental=args.allow_experimental)
     chi2_gpu = cp.sum(((v_data_gpu - v_model_gpu) / sigma_data_gpu)**2)
     chi2_total = float(chi2_gpu)
-    rmse_total = np.sqrt(chi2_total / len(R_data))
+    # Dimensionless per-star chi (sqrt of reduced chi^2 with dof ~ N)
+    chi_per_star = np.sqrt(chi2_total / len(R_data))
+    # RMSE in km/s (unweighted)
+    rmse_kms = float(cp.sqrt(cp.mean((v_data_gpu - v_model_gpu)**2)))
     
     # Results summary
     logger.info("\n" + "="*80)
@@ -554,7 +663,8 @@ def run_stellar_fit_cupy(args):
     
     logger.info(f"\nFit quality:")
     logger.info(f"  Chi²: {chi2_total:.1f}")
-    logger.info(f"  RMSE: {rmse_total:.1f} km/s")
+    logger.info(f"  sqrt(Chi²/N): {chi_per_star:.2f} (dimensionless)")
+    logger.info(f"  RMSE: {rmse_kms:.1f} km/s")
     logger.info(f"  Log(L): {best_logl:.1f}")
     
     # Save results
@@ -571,7 +681,8 @@ def run_stellar_fit_cupy(args):
         best_params=best_params,
         param_names=param_names,
         chi2=chi2_total,
-        rmse=rmse_total
+        chi_per_star=chi_per_star,
+        rmse_kms=rmse_kms
     )
     
     logger.info(f"\nResults saved to: {output_file}")
@@ -593,14 +704,14 @@ def run_stellar_fit_cupy(args):
             ax1.set_ylabel('Velocity (km/s)')
             ax1.legend()
             ax1.grid(True, alpha=0.3)
-            ax1.set_title(f'Stellar Fit - χ² = {chi2_total:.1f}, RMSE = {rmse_total:.1f} km/s')
+            ax1.set_title(f'Stellar Fit - χ² = {chi2_total:.1f}, RMSE = {rmse_kms:.1f} km/s')
             
             # Residuals
             residuals = v_data - v_model_cpu
             ax2.scatter(R_data, residuals, c='k', s=1, alpha=0.3)
             ax2.axhline(0, color='r', linestyle='--')
-            ax2.axhline(rmse_total, color='b', linestyle=':', alpha=0.5)
-            ax2.axhline(-rmse_total, color='b', linestyle=':', alpha=0.5)
+            ax2.axhline(rmse_kms, color='b', linestyle=':', alpha=0.5)
+            ax2.axhline(-rmse_kms, color='b', linestyle=':', alpha=0.5)
             ax2.set_xlabel('R (kpc)')
             ax2.set_ylabel('Residuals (km/s)')
             ax2.grid(True, alpha=0.3)
@@ -636,6 +747,8 @@ def main():
     # Data options
     parser.add_argument('--sample_max', type=int, default=5000,
                        help='Maximum number of stars to use')
+    parser.add_argument('--use_144k', action='store_true',
+                       help='Use the full 144k Gaia dataset (will process raw data if needed)')
     
     # Fitting options
     parser.add_argument('--fit_baryons', action='store_true',
