@@ -1,0 +1,25 @@
+[
+  {
+    "galaxy_id": "NGC2403",
+    "n_points": 73,
+    "model": "rar_gate",
+    "gate": "gbar",
+    "rho_c": 348000000.0,
+    "sigma_c": 270.0,
+    "gamma_exp": 1.0,
+    "lambda_g": 1.0,
+    "a0": 1.2e-10,
+    "chi2_gr": 1348.9110631186645,
+    "chi2dof_gr": 18.47823374135157,
+    "rmse_gr": 37.895599436401874,
+    "chi2_mod": 641.4467374022131,
+    "chi2dof_mod": 8.786941608249494,
+    "rmse_mod": 26.032446663152246,
+    "nfw_V200": 399.9999867597992,
+    "nfw_c": 1.8141700934405458,
+    "chi2_nfw": 126.0522540442643,
+    "chi2dof_nfw": 1.7267432060858123,
+    "rmse_nfw": 11.008200394673878,
+    "plot": "C:\\Users\\henry\\Documents\\GitHub\\DensityDependentMetricModel\\sparc_rargate_gold_plots\\debug_smoketest\\plots\\NGC2403_rar_gate.png"
+  }
+]
