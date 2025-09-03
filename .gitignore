@@ -202,3 +202,5 @@ runs/
 # Allow tracked plots and summaries for SPARC gate sweeps (PNG via Git LFS)
 !sparc_rargate_gold_plots/**/*.png
 !sparc_rargate_gold_plots/**/*.csv
+!sparc_gr_only_plots/**/*.png
+!sparc_gr_only_plots/**/*.csv
