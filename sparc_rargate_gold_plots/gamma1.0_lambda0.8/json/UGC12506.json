@@ -1,0 +1,27 @@
+{
+  "galaxy_id": "UGC12506",
+  "model": "rar_gate_grid",
+  "params": {
+    "a0_m_s2": 1.2e-10,
+    "gamma_exp": 1.0,
+    "lambda_max": 0.8,
+    "T0": 10.0,
+    "sigma_lnT": 0.8,
+    "wmin": 0.02,
+    "ups_disk": 0.5,
+    "ups_bulge": 0.7,
+    "sigma_floor": 5.0,
+    "hz_star_kpc": 0.3,
+    "hz_gas_kpc": 0.1,
+    "hz_alpha": 0.0
+  },
+  "chi2": 1509.9759204326785,
+  "chi2_dof": 52.068135187333745,
+  "n_points": 31,
+  "R_data_max_kpc": 49.99,
+  "xi_stats": {
+    "xi_min": 1.011068159859651,
+    "xi_med": 1.3777807786164817,
+    "xi_max": 1.7293290735150015
+  }
+}

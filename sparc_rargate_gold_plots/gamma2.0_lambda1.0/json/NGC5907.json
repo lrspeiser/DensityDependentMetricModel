@@ -1,0 +1,27 @@
+{
+  "galaxy_id": "NGC5907",
+  "model": "rar_gate_grid",
+  "params": {
+    "a0_m_s2": 1.2e-10,
+    "gamma_exp": 2.0,
+    "lambda_max": 1.0,
+    "T0": 10.0,
+    "sigma_lnT": 0.8,
+    "wmin": 0.02,
+    "ups_disk": 0.5,
+    "ups_bulge": 0.7,
+    "sigma_floor": 5.0,
+    "hz_star_kpc": 0.3,
+    "hz_gas_kpc": 0.1,
+    "hz_alpha": 0.0
+  },
+  "chi2": 1888.0795274738823,
+  "chi2_dof": 111.06350161611073,
+  "n_points": 19,
+  "R_data_max_kpc": 50.33,
+  "xi_stats": {
+    "xi_min": 1.0115123587924666,
+    "xi_med": 1.5251639150087564,
+    "xi_max": 1.9866528971036366
+  }
+}

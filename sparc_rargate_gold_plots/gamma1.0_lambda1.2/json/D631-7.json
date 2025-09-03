@@ -1,0 +1,27 @@
+{
+  "galaxy_id": "D631-7",
+  "model": "rar_gate_grid",
+  "params": {
+    "a0_m_s2": 1.2e-10,
+    "gamma_exp": 1.0,
+    "lambda_max": 1.2,
+    "T0": 10.0,
+    "sigma_lnT": 0.8,
+    "wmin": 0.02,
+    "ups_disk": 0.5,
+    "ups_bulge": 0.7,
+    "sigma_floor": 5.0,
+    "hz_star_kpc": 0.3,
+    "hz_gas_kpc": 0.1,
+    "hz_alpha": 0.0
+  },
+  "chi2": 205.83659084950327,
+  "chi2_dof": 14.702613632107376,
+  "n_points": 16,
+  "R_data_max_kpc": 7.19,
+  "xi_stats": {
+    "xi_min": 1.022038221812093,
+    "xi_med": 1.3183191284597982,
+    "xi_max": 2.179600158975937
+  }
+}

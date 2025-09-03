@@ -1,0 +1,27 @@
+{
+  "galaxy_id": "F571-V1",
+  "model": "rar_gate_grid",
+  "params": {
+    "a0_m_s2": 1.2e-10,
+    "gamma_exp": 1.0,
+    "lambda_max": 1.2,
+    "T0": 10.0,
+    "sigma_lnT": 0.8,
+    "wmin": 0.02,
+    "ups_disk": 0.5,
+    "ups_bulge": 0.7,
+    "sigma_floor": 5.0,
+    "hz_star_kpc": 0.3,
+    "hz_gas_kpc": 0.1,
+    "hz_alpha": 0.0
+  },
+  "chi2": 85.74052379059029,
+  "chi2_dof": 17.14810475811806,
+  "n_points": 7,
+  "R_data_max_kpc": 13.59,
+  "xi_stats": {
+    "xi_min": 1.0479447949802354,
+    "xi_med": 1.8131773363228425,
+    "xi_max": 2.1629641857466453
+  }
+}
