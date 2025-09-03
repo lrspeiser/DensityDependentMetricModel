@@ -196,6 +196,21 @@ def default_tidal_band_params() -> dict:
         'wmin': 0.01,              # minimum band weight
     }
 
+
+def default_rar_gate_params() -> dict:
+    """Reasonable defaults for the RAR-gate xi(g_bar) model."""
+    return {
+        'a0_m_s2': 1.2e-10,   # MOND-like acceleration scale
+        'gamma_exp': 2.0,     # slope of suppression
+        'lambda_max': 1.0,    # max enhancement amplitude
+        # The following are used in tidal-family only; keep for compatibility
+        'T0': 1e2,
+        'sigma_lnT': 0.8,
+        'wmin': 0.01,
+        # Ensure experimental xi is allowed when using CuPy backend
+        'allow_experimental': True,
+    }
+
 def build_param_dict(baryon_params: dict, xi_params: dict) -> dict:
     p = dict(baryon_params)
     p.update(xi_params)
@@ -326,6 +341,8 @@ def main():
     ap.add_argument("--er_run", type=str, default=None, help="Path to ER (tidal_band) run directory (to read fitted params)")
     ap.add_argument("--no_split_extrapolation", action="store_true", help="Do not split ER curve; draw as one line")
     ap.add_argument("--no_shade_extrapolation", action="store_true", help="Do not shade extrapolation region")
+    ap.add_argument("--include_rar", action="store_true", help="Also plot RAR-gate curve (xi = 1 + λ/[1+(g_bar/a0)^γ])")
+    ap.add_argument("--out", type=str, default=None, help="Output PNG path")
     args = ap.parse_args()
 
     # Output directory
@@ -350,6 +367,7 @@ def main():
 
     baryon = default_baryon_params()
     tidal_band = default_tidal_band_params()
+    rar_gate = default_rar_gate_params() if args.include_rar else None
 
     # Optionally override with fitted parameters from runs
     baryon, tidal_band = _maybe_update_params_from_runs(baryon, tidal_band, args.gr_run, args.er_run)
@@ -359,16 +377,26 @@ def main():
     print("Computing GR (baryon-only) curve...")
     v_gr = v_baryon_total_newtonian_kms(R_grid, baryon)
 
+    # Tidal-band curve
     xi_type = "tidal_band"
     if XI_FUNCTION_MAP is not None and xi_type not in XI_FUNCTION_MAP:
         raise RuntimeError(f"xi_type '{xi_type}' not available. Available: {list(XI_FUNCTION_MAP.keys())}")
 
     print(f"Computing TFR curve with xi_type='{xi_type}' (backend: {'CuPy' if _use_cupy_backend else 'CPU'})...")
     v_ddmm = v_total_kms(R_grid, ddmm_params, xi_type=xi_type)
-    # Report theoretical enhancement cap based on lambda_max, if present
     lam = float(ddmm_params.get('lambda_max', 0.0))
     xi_cap = 1.0 + lam
     print(f"Theoretical TFR enhancement cap xi_max = 1 + lambda_max = {xi_cap:.3f} (cannot reach 100x).")
+
+    # Optional RAR-gate curve
+    v_rar = None
+    if args.include_rar and rar_gate is not None:
+        rar_params = build_param_dict(baryon, rar_gate)
+        try:
+            v_rar = v_total_kms(R_grid, rar_params, xi_type='rar_gate')
+        except Exception as e:
+            print(f"WARN: RAR curve computation failed: {e}")
+            v_rar = None
 
     # 4) Plot
     print("Plotting...")
@@ -391,9 +419,15 @@ def main():
         if np.any(m_out):
             plt.plot(R_grid[m_out], v_ddmm[m_out], color="#FF8C00", ls="--", lw=2.5, label=f"TFR ({xi_type}) — extrapolation")
 
+    if v_rar is not None:
+        plt.plot(R_grid, v_rar, color="#8B0000", lw=2.2, ls='-', label="RAR gate")
+
     plt.xlabel("Galactocentric radius R (kpc)")
     plt.ylabel("Circular speed v (km/s)")
-    plt.title("Milky Way Rotation Curve: Data vs GR vs TFR (tidal_band)")
+    title = "Milky Way Rotation Curve: Data vs GR vs TFR (tidal_band)"
+    if v_rar is not None:
+        title = "Milky Way Rotation Curve: Data vs GR vs TFR (tidal_band) vs RAR gate"
+    plt.title(title)
     plt.grid(True, alpha=0.3)
     # Mark and optionally shade extrapolation region beyond Gaia data
     if not args.no_split_extrapolation and R_data_max > 0:
@@ -405,7 +439,7 @@ def main():
     plt.ylim(0, max(300, float(ymax) + 40))
     plt.legend(frameon=False)
 
-    out_file = out_dir / "rotation_comparison_tidal_band.png"
+    out_file = Path(args.out) if args.out else out_dir / ("rotation_comparison_rar_tidal.png" if args.include_rar else "rotation_comparison_tidal_band.png")
     plt.tight_layout()
     plt.savefig(out_file, dpi=150)
     print(f"Saved: {out_file}")
