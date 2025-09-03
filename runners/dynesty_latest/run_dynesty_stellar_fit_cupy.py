@@ -23,8 +23,13 @@ warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add repository root (two levels up from 'dynesty_latest') to path reliably
+try:
+    repo_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo_root))
+except Exception:
+    # Fallback to previous behavior
+    sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import CuPy model functions
 try:
@@ -157,10 +162,14 @@ def v_total_kms_cupy(R_kpc, params, xi_type='power', allow_experimental=False):
     elif xi_type == 'mond':
         n_exp = params.get('n_exp', 2.0)
         xi = xi_mond_like_cupy(rho, rho_c, n_exp)
-    elif xi_type in ['tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor', 'rar_gate', 'rar_blend']:
+    elif xi_type in ['tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor', 'rar_gate', 'rar_blend', 'rar_plateau']:
         # For tidal/RAR models, use the comprehensive function from density_metric_cupy
         from core.density_metric_cupy import v_total_kms_cupy as v_total_comprehensive
-        return v_total_comprehensive(R_kpc, params, xi_type=xi_type, allow_experimental=allow_experimental)
+        # Pass experimental flag via params dict as expected by core
+        if allow_experimental:
+            params = dict(params)
+            params['allow_experimental'] = True
+        return v_total_comprehensive(R_kpc, params, xi_type=xi_type)
     else:
         # Default to GR
         xi = cp.ones_like(R_gpu)
@@ -562,6 +571,12 @@ def run_stellar_fit_cupy(args):
             param_bounds[1] = (0.1, 3.0)  # A_excess
             param_names.insert(2, 'lambda_cap')
             param_bounds.insert(2, (1.0, 10.0))  # lambda_cap
+    elif args.xi == 'rar_plateau':
+        # Acceleration-based RAR plateau: fit only a0 by default
+        param_names = ['a0_m_s2']
+        param_bounds = [
+            (6e-11, 3e-10)   # a0 in m/s^2 (log-uniform handled by prior_transform)
+        ]
     else:
         # Default for other xi types (power, exponential, etc.)
         param_names = ['rho_c_solar_kpc3', 'n_exp', 'A']
@@ -750,7 +765,7 @@ def main():
     # Model options
     parser.add_argument('--xi', type=str, default='power',
                        choices=['gr', 'nfw', 'power', 'exponential', 'grav_color', 'logistic', 'gaussian', 'mond',
-                               'tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor', 'rar_gate', 'rar_blend'],
+                               'tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor', 'rar_gate', 'rar_blend', 'rar_plateau'],
                        help='Xi function type')
     
     # Sampler options

@@ -244,11 +244,17 @@ def xi_exponential_cupy(rho, rho_c, n_exp, A=1.0):
 
 @cp.fuse()
 def xi_gravitational_color_cupy(rho, rho_c, gamma, lambda_g):
-    """Gravitational color xi function - CuPy optimized (exponential screening)."""
+    """Gravitational color xi function - CuPy optimized (rational screening).
+    
+    Previous form used an exponential tail: 1 + lambda_g * exp(-(rho/rho_c)^gamma).
+    This variant uses a slower-decaying rational tail to sustain outer-disk support:
+        xi = 1 + lambda_g / (1 + (rho/rho_c)^gamma)
+    It preserves Solar-System safety (xi -> 1 as rho >> rho_c) and caps at 1+lambda_g.
+    """
     rho_safe = cp.maximum(rho, 1e-30)
     rho_c_safe = cp.maximum(rho_c, 1e-30)
-    ratio = rho_safe / rho_c_safe
-    xi = 1.0 + lambda_g * cp.exp(-cp.power(ratio, gamma))
+    ratio_gamma = cp.power(rho_safe / rho_c_safe, gamma)
+    xi = 1.0 + lambda_g / (1.0 + ratio_gamma)
     # Cap to [1, 1+lambda_g]
     xi = cp.clip(xi, 1.0, 1.0 + lambda_g)
     return xi
@@ -1076,7 +1082,7 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
 
     # Prepare tidal proxy only if needed
     T = None
-    if xi_type in ('tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor', 'rar_gate', 'rar_blend'):
+    if xi_type in ('tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor', 'rar_gate', 'rar_blend', 'rar_plateau'):
         T = cp.maximum(v_baryon_sq, 0.0) / cp.maximum(R_safe * R_safe, 1e-18)
         # Auto T0 from baryons at ~2.2 Rd when enabled
         if bool(p.get('auto_T0', False)):
@@ -1157,6 +1163,39 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         xi = 1.0 + cp.asarray(A_excess, dtype=DEFAULT_DTYPE) * excess * W
         return cp.clip(xi, 1.0, 1.0 + cp.asarray(lambda_cap, dtype=DEFAULT_DTYPE))
 
+    # -------- NEW: RAR-Plateau acceleration-based bridge -----------------------
+    def xi_rar_plateau_cupy(*, rho, T, R, a0_m_s2, zeta_env=0.0, rho_c=None, gamma_exp=3.0, T0=None, sigma_lnT=None, wmin=0.0):
+        """
+        Acceleration-space RAR bridge: D = g_eff/g_bar = 0.5 + sqrt(0.25 + a0_eff/g_bar).
+        Returns D to be applied as a multiplicative factor on v_baryon^2.
+        Environment (optional) modulates a0_eff via low-density gate s_rho and optional tidal window W(T).
+        """
+        # Ensure inputs
+        rho_c_val = 7e7 if (rho_c is None) else float(rho_c)
+        a0 = cp.asarray(a0_m_s2, dtype=DEFAULT_DTYPE)
+        # Compute low-density gate s_rho if enabled
+        if float(zeta_env) > 0.0:
+            rho_safe = cp.maximum(rho, 1e-30)
+            s_rho = 1.0 / (1.0 + cp.power(rho_safe / max(rho_c_val, 1e-30), float(gamma_exp)))
+        else:
+            s_rho = 0.0
+        # Optional tidal window
+        if (T0 is not None) and (sigma_lnT is not None):
+            W = _tidal_window(T, T0, sigma_lnT, wmin if wmin is not None else 0.0)
+        else:
+            W = 1.0
+        # Effective a0
+        a0_eff = a0 * (1.0 + float(zeta_env) * s_rho * W)
+        # Compute g_bar from T and R: g_bar = (v^2/R) in km^2/s^2 per kpc, convert to m/s^2
+        gbar_m_s2 = ACC_M_S2_PER_KMS2_PER_KPC * cp.maximum(T, 0.0) * cp.maximum(R, 1e-12)
+        # RAR simple nu: 0.5 + sqrt(0.25 + a0_eff/gbar)
+        y = cp.maximum(gbar_m_s2, 1e-30)
+        D = 0.5 + cp.sqrt(0.25 + cp.maximum(a0_eff, 0.0) / y)
+        # Safety guards
+        D = cp.where(cp.isfinite(D), D, 1.0)
+        D = cp.maximum(D, 1.0)
+        return D
+
     # Helper to ensure xi registry has published defaults available early
     def ensure_xi_registry_defaults():
         """
@@ -1215,7 +1254,7 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
             )
 
             # Experimental examples (available only if allow_experimental=True)
-            register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: exponential screening")
+            register_xi('grav_color', lambda rho, **kw: xi_gravitational_color_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: rational screening")
             register_xi('grav_color_void_safe', lambda rho, **kw: xi_gravitational_color_void_safe_cupy(rho, kw.get('rho_c'), kw.get('gamma_exp', 2.7), kw.get('lambda_g', 8.0)), published=False, doc="Experimental: void-safe color")
             register_xi('balanced_screening', lambda rho, **kw: xi_balanced_screening_cupy(rho, kw.get('rho_c'), kw.get('R'), kw.get('R_screen', 50.0), kw.get('n_exp', 1.0), kw.get('A_max', 2.0)), published=False, doc="Experimental: bounded enhancement with R cutoff")
             # NEW: RAR-anchored tidal variants
@@ -1239,6 +1278,16 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
                                                                          wmin=kw.get('wmin', 0.02)),
                         published=False,
                         doc="Experimental: amplitude × (RAR excess) with tidal window and cap")
+            # NEW: RAR-Plateau acceleration-based xi (experimental)
+            register_xi('rar_plateau', lambda rho, **kw: xi_rar_plateau_cupy(
+                rho=rho,
+                T=kw.get('T'), R=kw.get('R'),
+                a0_m_s2=kw.get('a0_m_s2', 1.2e-10),
+                zeta_env=kw.get('zeta_env', 0.0),
+                rho_c=kw.get('rho_c'),
+                gamma_exp=kw.get('gamma_exp', 3.0),
+                T0=kw.get('T0'), sigma_lnT=kw.get('sigma_lnT'), wmin=kw.get('wmin', 0.0)
+            ), published=False, doc="Experimental: Acceleration-space RAR bridge D=0.5+sqrt(0.25+a0_eff/g_bar)")
         except Exception:
             # Ignore if already registered in a prior call
             pass
@@ -1307,6 +1356,23 @@ def v_total_kms_cupy(R_kpc, p, xi_type='power'):
         xi_kwargs['T0']         = float(xi_kwargs.get('T0', 10.0))
         xi_kwargs['sigma_lnT']  = float(xi_kwargs.get('sigma_lnT', 0.8))
         xi_kwargs['wmin']       = float(xi_kwargs.get('wmin', 0.02))
+
+    elif xi_type == 'rar_plateau':
+        xi_kwargs['a0_m_s2']    = float(xi_kwargs.get('a0_m_s2', 1.2e-10))
+        xi_kwargs['zeta_env']   = float(xi_kwargs.get('zeta_env', 0.0))
+        xi_kwargs['gamma_exp']  = float(xi_kwargs.get('gamma_exp', 3.0))
+        # rho_c already set above; include optional tidal window params if provided
+        if 'T0' in xi_kwargs:
+            try:
+                xi_kwargs['T0'] = float(xi_kwargs.get('T0'))
+            except Exception:
+                xi_kwargs['T0'] = None
+        if 'sigma_lnT' in xi_kwargs:
+            try:
+                xi_kwargs['sigma_lnT'] = float(xi_kwargs.get('sigma_lnT'))
+            except Exception:
+                xi_kwargs['sigma_lnT'] = None
+        xi_kwargs['wmin'] = float(xi_kwargs.get('wmin', 0.0))
 
     xi = xi_fn(rho=rho_total, **xi_kwargs)
 
