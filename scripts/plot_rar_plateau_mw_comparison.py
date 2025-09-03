@@ -29,6 +29,13 @@ from core.density_metric_cupy import (
     v_total_kms_cupy,
 )
 
+# Gaia processing (local-only)
+import pandas as pd
+try:
+    from core.data_io import process_gaia_data
+except Exception as e:
+    raise RuntimeError(f"Could not import core.data_io.process_gaia_data: {e}")
+
 
 def _load_best_from_npz(npz_path: Path) -> dict:
     data = np.load(str(npz_path))
@@ -92,6 +99,38 @@ def build_params_for_model(a0_params: dict) -> dict:
     return p
 
 
+def _load_gaia_local_df(repo_root: Path) -> pd.DataFrame:
+    # Prefer merged CSV if available
+    candidates = [
+        repo_root / 'external_data' / 'gaia_sky_slices' / 'all_sky_gaia.csv',
+        repo_root / 'gaia_sky_slices' / 'all_sky_gaia.csv',
+    ]
+    for c in candidates:
+        if c.exists():
+            df = pd.read_csv(c)
+            return process_gaia_data(df)
+    raise FileNotFoundError('Could not find local Gaia cache all_sky_gaia.csv')
+
+
+def _star_stats_at_integers(df: pd.DataFrame, r_min=1, r_max=30, half_width=0.25):
+    Rk = df['R_kpc'].values
+    V = df['v_obs'].values
+    radii = np.arange(r_min, r_max + 1, dtype=float)
+    v_med = np.full_like(radii, np.nan)
+    v_lo = np.full_like(radii, np.nan)
+    v_hi = np.full_like(radii, np.nan)
+    n = np.zeros_like(radii)
+    for i, R0 in enumerate(radii):
+        m = (Rk >= R0 - half_width) & (Rk < R0 + half_width)
+        if np.any(m):
+            vv = V[m]
+            v_med[i] = np.median(vv)
+            v_lo[i] = np.percentile(vv, 16)
+            v_hi[i] = np.percentile(vv, 84)
+            n[i] = np.sum(m)
+    return radii, v_med, v_lo, v_hi, n
+
+
 def make_plot(params: dict, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -105,25 +144,42 @@ def make_plot(params: dict, out_path: Path) -> None:
     # rar_plateau (experimental)
     v_rar = cp.asnumpy(v_total_kms_cupy(R_cp, dict(params), xi_type='rar_plateau'))
 
+    # Load Gaia and compute star medians at integer radii
+    df = _load_gaia_local_df(REPO_ROOT)
+    R_int, v_med_obs, v_lo_obs, v_hi_obs, n_obs = _star_stats_at_integers(df, r_min=1, r_max=30, half_width=0.25)
+
     # Build figure
     fig = plt.figure(figsize=(12, 9))
 
     # Panel 1: velocities
     ax1 = plt.subplot(2, 1, 1)
+    # Observational medians at integers with error bars
+    ok = np.isfinite(v_med_obs)
+    ax1.errorbar(R_int[ok], v_med_obs[ok], yerr=[v_med_obs[ok]-v_lo_obs[ok], v_hi_obs[ok]-v_med_obs[ok]], 
+                 fmt='ko', ms=4, mec='k', mfc='k', alpha=0.8, ecolor='gray', elinewidth=1.0, capsize=3, label='Gaia medians @ integers')
+
     ax1.plot(R, v_gr, 'b--', lw=2.5, alpha=0.85, label='GR (baryons only)')
     ax1.plot(R, v_rar, 'r-', lw=2.8, alpha=0.95, label='RAR-Plateau')
     ax1.axvline(8.5, color='orange', ls='--', alpha=0.5, lw=2)
     ax1.text(8.5, max(v_rar.max(), v_gr.max())*0.95, '☉', ha='center', va='top', color='orange')
     ax1.set_ylabel('Circular velocity (km/s)')
     ax1.set_xlim(0, 31)
-    ax1.set_ylim(0, max(v_rar.max(), v_gr.max())*1.10)
-    ax1.set_title('Milky Way: RAR-Plateau vs GR')
+    ax1.set_ylim(0, max(v_rar.max(), v_gr.max(), np.nanmax(v_hi_obs))*1.10)
+    ax1.set_title('Milky Way: RAR-Plateau vs GR with Gaia medians @ integer radii')
     ax1.grid(True, alpha=0.3)
     ax1.legend(loc='best')
 
     # Panel 2: delta vs GR
     ax2 = plt.subplot(2, 1, 2, sharex=ax1)
     ax2.plot(R, v_rar - v_gr, 'r-', lw=2.5, alpha=0.95, label='RAR-Plateau - GR')
+    # Observed minus GR at integer radii
+    # Interpolate GR at integer radii for delta
+    v_gr_int = np.interp(R_int, R, v_gr)
+    ok2 = ok & np.isfinite(v_gr_int)
+    ax2.errorbar(R_int[ok2], (v_med_obs - v_gr_int)[ok2], 
+                 yerr=[(v_med_obs - v_gr_int - (v_lo_obs - v_gr_int))[ok2], (v_hi_obs - v_gr_int - (v_med_obs - v_gr_int))[ok2]],
+                 fmt='ks', ms=3.5, alpha=0.8, ecolor='gray', elinewidth=1.0, capsize=3, label='Gaia median - GR @ integers')
+
     ax2.axhline(0.0, color='k', lw=0.8)
     ax2.set_xlabel('Radius (kpc)')
     ax2.set_ylabel('Δv (km/s)')
