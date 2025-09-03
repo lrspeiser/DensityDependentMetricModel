@@ -198,3 +198,7 @@ cli_command.txt
 runs/
 *.npz
 *.pkl
+
+# Allow tracked plots and summaries for SPARC gate sweeps (PNG via Git LFS)
+!sparc_rargate_gold_plots/**/*.png
+!sparc_rargate_gold_plots/**/*.csv
