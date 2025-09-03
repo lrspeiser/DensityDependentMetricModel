@@ -494,6 +494,21 @@ def run_stellar_fit_cupy(args):
             (0.5, 4.0),  # gamma
             (0.1, 10.0)  # lambda_g
         ]
+    elif args.xi == 'gaussian':
+        # Gaussian enhancement in log-density space
+        param_names = ['rho_c_solar_kpc3', 'sigma_log', 'A']
+        param_bounds = [
+            (PHYSICAL_BOUNDS['rho_c_solar_kpc3']['min'], PHYSICAL_BOUNDS['rho_c_solar_kpc3']['max']),
+            (0.3, 2.0),  # sigma_log (log10-width)
+            (0.1, 5.0)   # amplitude
+        ]
+    elif args.xi == 'mond':
+        # MOND-like modification uses only (rho_c, n_exp)
+        param_names = ['rho_c_solar_kpc3', 'n_exp']
+        param_bounds = [
+            (PHYSICAL_BOUNDS['rho_c_solar_kpc3']['min'], PHYSICAL_BOUNDS['rho_c_solar_kpc3']['max']),
+            (PHYSICAL_BOUNDS['n_exp']['min'], PHYSICAL_BOUNDS['n_exp']['max'])
+        ]
     elif args.xi in ['tidal_band', 'tidal_band2', 'tidal_ratio', 'tidal_noisyor']:
         # Tidal models
         param_names = ['rho_c', 'lambda_max', 'T0', 'sigma_lnT', 'wmin']

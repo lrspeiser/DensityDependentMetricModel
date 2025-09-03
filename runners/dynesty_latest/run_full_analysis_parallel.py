@@ -104,7 +104,7 @@ def run_model_worker(args):
         'run_dynesty_stellar_fit_cupy.py',
         '--xi', model_name,
         '--sample_max', str(cmd_args.n_samples if cmd_args.n_samples else config['sample_max']),
-        '--maxcall', str(config['maxcall']),
+'--maxcall', str(cmd_args.maxcall if cmd_args.maxcall else config['maxcall']),
         '--nlive', str(cmd_args.n_live if cmd_args.n_live else config['nlive']),
         '--use_144k',  # Always use full dataset
         '--output_dir', str(model_dir),
@@ -376,6 +376,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_samples', type=int, help='Override sample_max for all models')
     parser.add_argument('--n_live', type=int, help='Override number of live points')
     parser.add_argument('--dlogz', type=float, help='Stopping criterion for nested sampling')
+    parser.add_argument('--maxcall', type=int, help='Override maxcall for all models')
     
     args = parser.parse_args()
     output_dir = main(args)
