@@ -108,6 +108,26 @@ Sample size: N = 144,000 stars after all cuts.
 
 - 3–4: 4, 4–5: 57, 5–6: 688, 6–7: 7,479, 7–8: 47,742, 8–9: 74,900, 9–10: 10,476, 10–11: 2,137, 11–12: 379, 12–13: 114, 13–14: 21, 14–15: 2, others ~0.
 
+### 3.4 Gaia 144k Milky Way baseline: GR and NFW
+
+We construct a paper-grade Milky Way baseline directly from the Gaia DR3 144k-star dataset (sky-slice CSVs), processed to galactocentric coordinates (R_kpc, v_obs) using our pipeline function process_gaia_data (core/data_io.py). We then perform matched nested-sampling fits with the CuPy-accelerated runner on the same selection:
+
+- GR (baryons only): xi ≡ 1; velocity = V_bar(R) from thin disk, bulge, and gas with literature parameters (M_disk=4.0×10^{10} M_⊙, R_d=2.6 kpc; M_bulge=1.2×10^{10} M_⊙, a_b=0.7 kpc; M_gas=3.0×10^{10} M_⊙, R_gas=7.0 kpc).
+- ΛCDM/NFW: adds an NFW halo with free (M_vir, c_vir), uniform priors M_vir∈[3×10^{11}, 2×10^{12}] M_⊙, c_vir∈[6, 20].
+
+Sampling setup (confirmation runs from this repo):
+- Data: 144k raw Gaia slice CSV (processed in-memory), subsampled to N=20,000 for runtime while preserving radial coverage.
+- Sampler: dynesty dynamic nested sampling (CuPy likelihood), n_live=150 (GR) / 200 (NFW), maxcall=8000 (GR) / 12000 (NFW).
+- Objective: minimize χ² to stellar v_obs; we report RMSE in km s^{−1} separately from √(χ²/N) (dimensionless).
+- Artifacts: confirm_gr/stellar_fit_cupy_gr_results.npz and confirm_nfw/stellar_fit_cupy_nfw_results.npz (contain param_names, best_params, chi2, chi_per_star, rmse_kms).
+
+Results on the Gaia baseline (this run):
+- GR: RMSE = 64.5 km s^{−1}; √(χ²/N) = 12.89. As expected, baryons-only underpredicts the outer disk.
+- NFW: best-fit M_vir = 6.16×10^{11} M_⊙, c_vir = 20.00; RMSE = 22.8 km s^{−1}. Predicted circular speeds: v(8 kpc) = 227.2 km s^{−1}, v(20 kpc) = 210.1 km s^{−1}.
+
+Figure 1c (baseline, this work). Binned Gaia DR3 stellar velocities at integer radii (±0.5 kpc bins) with GR (dashed) and NFW (solid) curves from the matched runs.
+
+![GR/NFW baseline vs Gaia (1 kpc bins)](../images/gr_nfw_baseline_vs_gaia.png)
 
 ---
 
