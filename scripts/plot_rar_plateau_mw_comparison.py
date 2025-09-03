@@ -29,6 +29,22 @@ from core.density_metric_cupy import (
     v_total_kms_cupy,
 )
 
+# Simple NFW helper (uses baryon curve for total)
+import numpy as _np
+
+def compute_nfw_velocity(R_kpc: _np.ndarray, v_bar: _np.ndarray, M_200=1.5e12, c=12.0, R_200=230.0) -> _np.ndarray:
+    G = 4.301e-6  # km^2 kpc / (M_sun s^2)
+    Rs = float(R_200) / float(c)
+    R = _np.asarray(R_kpc, dtype=float)
+    def M_enc(r):
+        x = r / Rs
+        denom = _np.log(1.0 + c) - c/(1.0 + c)
+        return M_200 * (_np.log(1.0 + x) - x/(1.0 + x)) / denom
+    M_enclosed = _np.array([M_enc(r) if r > 0 else 0.0 for r in R])
+    R_safe = _np.maximum(R, 1e-6)
+    v_dm = _np.sqrt(_np.maximum(G * M_enclosed / R_safe, 0.0))
+    return _np.sqrt(_np.maximum(v_bar, 0.0)**2 + _np.maximum(v_dm, 0.0)**2)
+
 # Gaia processing (local-only)
 import pandas as pd
 try:
@@ -144,6 +160,9 @@ def make_plot(params: dict, out_path: Path) -> None:
     # rar_plateau (experimental)
     v_rar = cp.asnumpy(v_total_kms_cupy(R_cp, dict(params), xi_type='rar_plateau'))
 
+    # NFW (ΛCDM baseline) on top of baryons
+    v_nfw = compute_nfw_velocity(R, v_gr, M_200=1.5e12, c=12.0, R_200=230.0)
+
     # Load Gaia and compute star medians at integer radii
     df = _load_gaia_local_df(REPO_ROOT)
     R_int, v_med_obs, v_lo_obs, v_hi_obs, n_obs = _star_stats_at_integers(df, r_min=1, r_max=30, half_width=0.25)
@@ -159,19 +178,24 @@ def make_plot(params: dict, out_path: Path) -> None:
                  fmt='ko', ms=4, mec='k', mfc='k', alpha=0.8, ecolor='gray', elinewidth=1.0, capsize=3, label='Gaia medians @ integers')
 
     ax1.plot(R, v_gr, 'b--', lw=2.5, alpha=0.85, label='GR (baryons only)')
+    ax1.plot(R, v_nfw, 'g:', lw=2.8, alpha=0.9, label='GR + NFW')
     ax1.plot(R, v_rar, 'r-', lw=2.8, alpha=0.95, label='RAR-Plateau')
     ax1.axvline(8.5, color='orange', ls='--', alpha=0.5, lw=2)
     ax1.text(8.5, max(v_rar.max(), v_gr.max())*0.95, '☉', ha='center', va='top', color='orange')
     ax1.set_ylabel('Circular velocity (km/s)')
     ax1.set_xlim(0, 31)
-    ax1.set_ylim(0, max(v_rar.max(), v_gr.max(), np.nanmax(v_hi_obs))*1.10)
-    ax1.set_title('Milky Way: RAR-Plateau vs GR with Gaia medians @ integer radii')
+    ax1.set_ylim(0, max(v_rar.max(), v_nfw.max(), v_gr.max(), np.nanmax(v_hi_obs))*1.10)
+    # Mark 14 kpc and shade beyond as extrapolation region (if desired)
+    ax1.axvline(14.0, color='#444444', ls=':', alpha=0.6)
+    ax1.axvspan(14.0, 31.0, color='#FFD580', alpha=0.10, label='Extrapolation beyond 14 kpc')
+    ax1.set_title('Milky Way: GR vs NFW vs RAR-Plateau with Gaia medians @ integer radii')
     ax1.grid(True, alpha=0.3)
     ax1.legend(loc='best')
 
     # Panel 2: delta vs GR
     ax2 = plt.subplot(2, 1, 2, sharex=ax1)
     ax2.plot(R, v_rar - v_gr, 'r-', lw=2.5, alpha=0.95, label='RAR-Plateau - GR')
+    ax2.plot(R, v_nfw - v_gr, 'g:', lw=2.2, alpha=0.9, label='(GR+NFW) - GR')
     # Observed minus GR at integer radii
     # Interpolate GR at integer radii for delta
     v_gr_int = np.interp(R_int, R, v_gr)
