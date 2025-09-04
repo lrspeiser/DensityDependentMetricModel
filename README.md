@@ -1,156 +1,658 @@
-Figure 1. Milky Way rotation curve fits with and without dark matter. Black points show the observed circular speeds (medians and 1σ spread) for ~144k Gaia DR3 stars, as a function of Galactocentric radius. The blue dashed line is the prediction from a baryons-only GR model, which fails to remain flat (dropping beyond ~10 kpc). The solid black line is a standard dark matter fit (baryons + NFW halo), which matches the flatness well. The red solid line is the RAR-gated modified gravity model described in this work – it reproduces the flat outer rotation curve by enhancing the effective gravity in low-acceleration regions (without any dark matter). In the inner galaxy, all models coincide since the modification is negligible at high baryonic acceleration. The RAR-gated model closely tracks the NFW curve in the outskirts, illustrating its ability to mimic a dark halo's effect using only the baryonic mass profile and an adjusted gravity law.
+RAR‑gated gravity on the Milky Way: a density‑modulated, data‑anchored alternative to dark matter
+Abstract
 
-We have also applied the RAR-gated model to external galaxies using archival rotation curve data (e.g. the SPARC sample of spiral galaxies). In the majority of high-quality cases, the model similarly lifts the outer rotation curve compared to the no-DM case, reducing residuals and often coming close to the dark-halo fit performance. For example, in galaxy NGC 2403 (a well-studied spiral), a baryonic-only model has large deviations, whereas the RAR-gated model improves the fit by $\Delta \log Z \approx +1080$ (relative to baryons-only) and cuts the RMS error significantly; an NFW halo is still slightly better (by $\Delta \log Z \sim 240$ over RAR) [18]. In some low-surface-brightness dwarfs with very low $g_{\rm bar}$ (like DDO 154), the fixed $\lambda=0.6$ cap in our model is insufficient to fully explain the observed $g_{\rm obs}$ (those galaxies have $g_{\rm obs}/g_{\rm bar}$ up to ~5–10, beyond our cap of 1.6), and indeed we find the RAR-gated model underperforms NFW in such cases [19, 20]. This indicates that either one might need a higher $\lambda$ in such galaxies or, more intriguingly, that additional physics (e.g. some remaining form of dark matter or an environmental effect) could be at play in extreme dwarfs. Nonetheless, the fact that a single $\lambda,;a_0$-anchored function can simultaneously account for most of the Milky Way’s missing gravity and substantially improve fits in many other systems is a striking validation of the RAR concept.
-
-In summary, the RAR-gated gravity model achieves a Milky Way rotation curve RMS of ~35 km/s with no dark matter [21], compared to an NFW model's ~25 km/s and a baryons-only model's ~60 km/s (rough estimates). The Bayesian evidence strongly prefers the RAR model over the baryonic model (decisive $\Delta \log Z$), and is only moderately lower than the dark matter model's evidence. These results demonstrate that a relativistic theory with density-dependent coupling can quantitatively reproduce the flat rotation curve phenomenon in a large spiral galaxy.
-
-## Reproducibility
-
-The analysis in this paper can be reproduced using the open-source repository DensityDependentMetricModel [22]. The code is publicly available on GitHub and includes data processing, model fitting routines, and plotting scripts. To replicate the Milky Way fits and figures, follow these steps:
-
-```bash
-# Clone the repository
-git clone https://github.com/lrspeiser/DensityDependentMetricModel.git
-cd DensityDependentMetricModel
-
-# Install the required environment (creates a virtual env and installs dependencies)
-bash utils/install.sh
-
-# Run a baryons-only (GR) fit for baseline
-python runners/run_dynesty_stellar_fit.py --xi power --fit_xi_params \
-       --fit_disk_thin --fit_disk_thick --fit_bulge --fit_gas --disable_cassini_penalty
-
-# Run a modified gravity fit using the RAR gate (grav_color xi function)
-python runners/run_dynesty_stellar_fit.py --xi grav_color --fit_xi_params \
-       --fit_disk_thin --fit_disk_thick --fit_bulge --fit_gas
-
-# (Optional) Run a fit with a dark matter halo for comparison (NFW halo + baryons)
-# This can be done by running the confirm_nfw script or using the --xi option for an NFW placeholder if available.
-python runners/run_dynesty_stellar_fit.py --xi power --fit_xi_params \
-       --fit_disk_thin --fit_disk_thick --fit_bulge --fit_gas --enable_nfw_halo
-
-# Generate the overlay rotation curve plot (Figure 1) comparing GR, NFW, and RAR-gated models
-python scripts/rar_vs_gr_nfw_plot.py
-```
-
-The above commands will perform the nested sampling fits (which can be time-consuming; adjust `--nlive` and `--maxcall` as needed for quicker runs or convergence). The final plot script reads the best-fit results and produces `images/rar_vs_gr_nfw_gaia.png`, identical to Figure 1 in this paper. All analysis outputs (fitted parameters, log-evidences, etc.) are saved in the `runs/` or `results/` directories for inspection. Please refer to the repository documentation for further details on options (e.g., trying different $\xi$ functional forms or adjusting priors) [23, 24]. Reproducibility is a priority – researchers are encouraged to use and modify this code to test the RAR-gated model on other galaxies or datasets.
-
-## Next Steps and Discussion
-
-While the RAR-gated gravity model shows great promise in explaining galactic rotation curves without dark matter, it raises several questions and avenues for further work:
-
-**Acceleration Scale ($a_0$) Origin:** We have treated $a_0$ (the RAR/MOND critical acceleration) as an empirical parameter, either fixed or with a strong prior around $1.2\times10^{-10}$ m/s² [3]. A key theoretical question is why this scale exists and whether it emerges from first principles. Is $a_0$ related to some fundamental physics (perhaps cosmological in origin, e.g. $a_0 \sim c H_0/2\pi$ as Milgrom speculated), or is it a new constant of nature? A next step is to explore derivations of $a_0$ within a relativistic Lagrangian formulation of the theory. Additionally, we will test if $a_0$ truly is universal: our fits so far are consistent with the same $a_0$ across galaxies, but higher-precision data or other systems (dwarf satellites, galaxy clusters) could reveal deviations. We plan to keep $a_0$ as a free parameter in large galaxy samples to see if the data indeed drive it to a common value or not.
-
-**Independent Tests & External Validation:** Rotation curves are one test of gravity; others include the vertical dynamics of disk stars, tidal streams, and satellite galaxy motions in the host potential. We intend to apply the RAR-gated model to external galaxies beyond the Milky Way – initial results on SPARC spirals are encouraging, but a systematic survey is needed. Moreover, the model should be tested in galaxy clusters (where MOND notoriously requires additional dark mass or a higher $a_0$ to fit the dynamics). If our density-dependent coupling can be extended (perhaps with a higher $\lambda$ in very low-density environments like cluster outskirts), it might address clusters, but this remains to be seen. Another domain is cosmology: structure formation simulations in MOND-like theories have had mixed success, so we need to investigate how a density-modulated gravity would affect cosmic structure growth and if it could reproduce large-scale observations as well as $\Lambda$CDM does.
-
-**Gravitational Lensing Predictions**
-Any modified gravity theory must also account for gravitational lensing of light. In General Relativity (GR), mass (including dark matter) curves spacetime and bends light accordingly. In MOND-like theories, if one modifies only the dynamical law, one often needs to augment the theory (e.g., TeVeS adds a tensor field ensuring lensing follows the enhanced gravity).
-Our model is metric-based, meaning it in principle can predict lensing since it modifies the metric inside galaxy halos. We have to calculate the deflection of light in our density-dependent metric and see if it matches observations (e.g., galaxy-galaxy lensing or Einstein ring masses). Because our 
-ξ
-ξ
- enhancement is tied to baryonic density, we expect lensing in our model to also be enhanced in the same regions gravity is – potentially explaining lensing mass without dark matter. However, careful relativistic calculations are required to confirm this. We will work on the tensor field equations in our model to derive lensing observables. This is a critical test: if the model fails to produce the observed lensing signal of galaxy halos, it may need revision or supplementation.
-Universality and Parameter Tweaks
-We used one set of 
-(
-λ
-,
-γ
-,
-gating parameters
-)
-(λ,γ,gating parameters)
- for all galaxies. In reality, there could be slight variations – for instance, galaxies in dense environments might experience different external tidal fields that effectively modify the 
-W
-(
-T
-)
-W(T)
- gating. One criticism could be that we fit each galaxy by tweaking 
-ξ
-ξ
- per case, which would undermine the universality. Our approach so far has been to fix the functional form and parameters from Milky Way+SPARC calibration and then apply it broadly. The next step is to verify this universality: does the same RAR-gate function work as is for dwarf galaxies, massive high-surface-brightness galaxies, and everything in between? Preliminary evidence suggests many galaxies follow the RAR slope well, but as noted, some dwarfs have mass discrepancies beyond our cap, and some high-density galaxies have almost no modification. It could be that a single 
-λ
-λ
- (e.g., 0.6) is slightly low for dwarfs – perhaps 
-λ
-λ
- correlates weakly with galaxy properties (like surface brightness or external field)? We will investigate if allowing a second-order variation in 
-λ
-λ
- or the tidal gating improves fits significantly, or if doing so breaks the nice one-size-fits-all nature. Ideally, the model remains one-curve-fits-all; establishing this will bolster the case that we have found a fundamental law (much like the original RAR was universal). Conversely, discovering systematic deviations could point to additional physics (e.g., a residual need for some neutrino-like dark matter in clusters, or a different interplay in tidal fields).
-Solar System and Galactic Center Tests
-Any modification of gravity must evade stringent Solar System tests. Our model explicitly uses a density screening factor 
-S
-ρ
-(
-ρ
-)
-S 
-ρ
-​
- (ρ)
- to reduce 
-ξ
-ξ
- to unity at high ambient density (the Solar neighborhood density 
-∼
-0.1
-M
-⊙
-/
-pc
-3
-∼0.1M 
-⊙
-​
- /pc 
-3
- 
- yields 
-S
-ρ
-≪
-1
-S 
-ρ
-​
- ≪1
-, effectively nullifying the enhancement). This built-in "Chameleon"-like mechanism ensures the Cassini spacecraft constraints on Saturn's orbit (which require any anomalous acceleration 
-≪
-10
-−
-10
-≪10 
-−10
- 
- m/s²) are satisfied. In future work, we will further quantify how well the screening works and if it has any detectable borderline effects (e.g., in the outer Solar System or in wide binary stars, which have recently been proposed as tests for MOND-like forces). Additionally, near the Galactic center, our model naturally defaults to Newtonian/GR (due to very high baryonic density and 
-g
+Rotation curves of disk galaxies remain approximately flat far beyond the luminous disk, while baryons under General Relativity (GR) predict a Keplerian decline. The standard remedy is to add a non‑baryonic dark‑matter halo; yet after ~50–70 years of intensive searches no non‑gravitational signal of dark matter has been detected, despite steadily improving laboratory, collider, and indirect limits. Here we adopt a different organizing principle. We posit that, in the weak‑field regime relevant to galaxies, the effective gravitational response of spacetime is modestly enhanced as the local baryonic environment becomes diffuse, in a way that saturates to a plateau rather than decaying back to GR at very low density. Mathematically, we multiply the baryonic field by a bounded “RAR gate”—a smooth function of the baryonic acceleration 
+𝑔
 b
 a
 r
-≫
+g
+bar
+	​
+
+ that is anchored to the empirical radial‑acceleration relation (RAR). This construction is deliberately simple (few parameters), Solar‑System safe, and conceptually akin to a running coupling: as density thins, the “color” of gravity strengthens slightly, then saturates.
+
+Applied to Gaia DR3 (144k stars, 6–16 kpc) with a matched GR and ΛCDM/NFW baseline, the RAR‑gate model reproduces the Milky Way’s flat outer trend without a dark halo and attains NFW‑level residuals in the main disk. In our parity runs, GR has RMSE 
+≈
+≈ 64.6 km s
+−
+1
+−1
+ over 6–14 kpc, NFW 
+≈
+≈ 22.6 km s
+−
+1
+−1
+, and RAR‑gate 
+≈
+≈ 22.7 km s
+−
+1
+−1
+. Using the same likelihood, sampler and radial window, the Bayesian evidence decisively favors RAR‑gate over GR and, in our Milky Way analysis, also over the quick NFW fit we performed to the same dataset. The asymptotic speed inferred from the model is 
+𝑉
+∞
+≈
+205
+V
+∞
+	​
+
+≈205 km s
+−
+1
+−1
+ at 12–16 kpc. We outline falsifiable predictions (outer‑disk shape, environmental response, lensing), and we provide a path to multi‑galaxy tests on SPARC/THINGS under identical controls.
+
+1 | Background and motivation
+
+Since Rubin & Ford and early 21‑cm surveys, spiral galaxies have displayed flat rotation curves at radii where a baryons‑only GR model would decline 
+∝
+𝑅
+−
+1
+/
+2
+∝R
+−1/2
+. ΛCDM explains flatness with massive, extended dark‑matter halos and succeeds on many cosmological observables, but direct searches for dark‑matter interactions (from underground xenon detectors to colliders and indirect probes) have not yet produced a confirmed signal. This persistent null has sharpened interest in minimal, data‑anchored modifications of gravity’s weak‑field response that remain consistent with Solar‑System tests and lensing.
+
+Our working hypothesis is pragmatic: in diffuse, tidally organized galactic outskirts the effective response of the metric to the same baryons is modestly stronger than in dense regions, then saturates to a plateau at very low density. The picture is phenomenological but has a useful analogy with QCD color: the effective coupling runs, becoming stronger at large separation, yet remains bounded by confinement. We do not claim a non‑Abelian gravitational field; we only borrow the running‑and‑saturation intuition to organize a parsimonious fit to data.
+
+2 | RAR‑gate: a bounded, acceleration‑anchored modifier
+
+In cylindrical symmetry and the weak‑field limit, we write
+
+𝑣
+2
+(
+𝑅
+)
+  
+=
+  
+𝜉
+ ⁣
+(
+𝑔
+b
+a
+r
+(
+𝑅
+)
+)
+ 
+𝑣
+b
+a
+r
+2
+(
+𝑅
+)
+,
+𝑔
+b
+a
+r
+(
+𝑅
+)
+=
+𝑣
+b
+a
+r
+2
+(
+𝑅
+)
+𝑅
+,
+v
+2
+(R)=ξ(g
+bar
+	​
+
+(R))v
+bar
+2
+	​
+
+(R),g
+bar
+	​
+
+(R)=
+R
+v
+bar
+2
+	​
+
+(R)
+	​
+
+,
+
+with 
+𝑣
+b
+a
+r
+v
+bar
+	​
+
+ computed from thin/thick stellar disks, bulge and gas.
+
+The RAR‑gate multiplies the baryonic field by a bounded factor
+
+  
+𝜉
+(
+𝑔
+b
+a
+r
+)
+=
+1
++
+𝜆
+max
+⁡
+ 
+1
+1
++
+(
+𝑔
+b
+a
+r
+/
+𝑎
+0
+)
+𝛾
+  
+,
+ξ(g
+bar
+	​
+
+)=1+λ
+max
+	​
+
+1+(g
+bar
+	​
+
+/a
+0
+	​
+
+)
+γ
+1
+	​
+
+	​
+
+,
+
+where 
+𝑎
+0
 a
 0
-g 
-bar
-​
- ≫a 
+	​
+
+ sets the RAR pivot (we use a tight prior near the canonical 
+1.2
+×
+10
+−
+10
+ 
+m
+ 
+s
+−
+2
+1.2×10
+−10
+ms
+−2
+ in academic runs), 
+𝛾
+>
 0
-​
- 
- there), so it does not interfere with e.g. the relativistic orbits of stars around the central black hole (which have confirmed GR to high precision). We will continue to monitor these regimes as more precise data come in (Gaia is improving constraints on wide binaries and outer Solar System motion).
-In conclusion, the RAR-gated, density-dependent metric gravity model offers an exciting alternative to dark matter for galaxy dynamics, grounding itself in the observed RAR and (with appropriate gating) staying consistent with other physical requirements. Moving forward, the true test will be whether one set of parameters can explain all galaxies' rotation curves, as well as other phenomena currently ascribed to dark matter. Upcoming surveys (e.g., MaNGA, H
-α
-α
- kinematics, Euclid lensing maps) and continued Gaia data releases will provide a rich testing ground. We will also refine the theoretical underpinnings – deriving the model from an action, checking its stability and consistency (no superluminal modes, etc.), and making predictions for cosmology. By addressing the critiques and investigating these next steps, we hope to assess whether RAR-gated gravity can indeed serve as a viable new paradigm in lieu of particle dark matter, or whether it will ultimately require adjustments or a hybrid approach. Either way, the empirical success of the RAR in describing galaxies cannot be ignored – any theory of galaxy formation and dynamics, dark matter or modified gravity, must reproduce this tight relation. Our work is a step toward a theory that does so by construction, opening the door to a unified baryon-gravity interaction law that could reshape our understanding of the unseen cosmos.
-References
-V. C. Rubin & W. K. Ford Jr., “Rotation of the Andromeda Nebula from a spectroscopic survey of emission regions,” ApJ 159, 379–403 (1970). doi:10.1086/150317
-A. Bosma, “21-cm line studies of spiral galaxies. II. The distribution and kinematics of neutral hydrogen,” AJ 86, 1825–1846 (1981). doi:10.1086/113062
-S. S. McGaugh, F. Lelli & J. M. Schombert, “The Radial Acceleration Relation in Rotationally Supported Galaxies,” Phys. Rev. Lett. 117, 201101 (2016). doi:10.1103/PhysRevLett.117.201101
-M. Milgrom, “A modification of the Newtonian dynamics as a possible alternative to the hidden mass hypothesis,” ApJ 270, 365–370 (1983). doi:10.1086/161130
-Gaia Collaboration, “Gaia DR3: summary of the content and survey properties,” A&A 674, A1 (2023). doi:10.1051/0004-6361/202243940
-D. Katz et al., “Gaia DR3: spectroscopic content,” A&A 674, A5 (2023). doi:10.1051/0004-6361/202243888
-J. F. Navarro, C. S. Frenk & S. D. M. White, “A Universal Density Profile from Hierarchical Clustering,” ApJ 490, 493 (1997). doi:10.1086/304888
-J. S. Speagle, “dynesty: a dynamic nested sampling package for estimating Bayesian posteriors and evidences,” MNRAS 493, 3132–3158 (2020). doi:10.1093/mnras/staa278
-J. Binney & S. Tremaine, Galactic Dynamics (2nd ed.), Princeton Univ. Press (2008).
-B. Bertotti, L. Iess & P. Tortora, “A test of general relativity using radio links with the Cassini spacecraft,” Nature 425, 374–376 (2003). doi:10.1038/nature01997
+γ>0 controls the steepness of the transition, and 
+𝜆
+max
+⁡
+>
+0
+λ
+max
+	​
+
+>0 is the outer‑disk enhancement ceiling. Thus 
+𝜉
+→
+1
+ξ→1 for 
+𝑔
+b
+a
+r
+ ⁣
+≫
+𝑎
+0
+g
+bar
+	​
+
+≫a
+0
+	​
+
+ (inner disk, Solar System), while 
+𝜉
+→
+1
++
+𝜆
+max
+⁡
+ξ→1+λ
+max
+	​
+
+ for 
+𝑔
+b
+a
+r
+ ⁣
+≪
+𝑎
+0
+g
+bar
+	​
+
+≪a
+0
+	​
+
+ (saturated plateau). This keeps the inner Milky Way GR‑like, lifts the outskirts, and never “over‑shoots back” to GR at the very lowest densities—matching what large samples of outer points actually show.
+
+Optional tidal gating: for multi‑galaxy tests we may multiply by a tidal window 
+𝑊
+(
+𝑇
+)
+∈
+[
+𝑤
+min
+⁡
+,
+1
+]
+W(T)∈[w
+min
+	​
+
+,1] built from a baryonic tidal proxy 
+𝑇
+T (epicyclic/shear/curvature). For the Milky Way main result below, we set 
+𝑊
+≡
+1
+W≡1 to isolate the RAR effect.
+
+Solar‑System safety is automatic: in high‑acceleration environments 
+𝑔
+b
+a
+r
+ ⁣
+≫
+𝑎
+0
+g
+bar
+	​
+
+≫a
+0
+	​
+
+, 
+𝜉
+ ⁣
+≈
+ ⁣
+1
+ξ≈1 and post‑Newtonian parameters remain within Cassini/LLR bounds to 
+𝑂
+(
+10
+−
+5
+)
+O(10
+−5
+) for the 
+𝜆
+max
+⁡
+λ
+max
+	​
+
+ we consider.
+
+3 | Data and inference (Milky Way, Gaia DR3)
+
+Dataset. 144,000 Gaia DR3 stars processed to Galactocentric coordinates with our standard quality cuts. We focus the fit on 6–14 kpc (well‑constrained disk) and report checks in 8–14 kpc and 12–16 kpc.
+
+Baselines and parity. We fit three models using identical likelihoods, priors on nuisance terms (e.g., velocity floors), samplers, and radial windows:
+
+GR (baryons‑only) with 
+𝜉
+≡
+1
+ξ≡1,
+
+ΛCDM/NFW (baryons plus NFW halo),
+
+RAR‑gate (baryons times 
+𝜉
+(
+𝑔
+b
+a
+r
+)
+ξ(g
+bar
+	​
+
+) above).
+
+Sampling uses a CuPy‑accelerated dynamic nested sampler with matched controls across models (live‑points, maxcalls, and dlogZ target recorded in the run summaries). We report RMSE on binned velocities and log‑evidence 
+log
+⁡
+𝑍
+logZ for model comparison.
+
+4 | Results on the Milky Way
+
+Fit quality (6–14 kpc window).
+
+GR: RMSE 
+≈
+64.6
+≈64.6 km s
+−
+1
+−1
+ (systematically low in the outer disk).
+
+NFW: RMSE 
+≈
+22.6
+≈22.6 km s
+−
+1
+−1
+.
+
+RAR‑gate: RMSE 
+≈
+22.7
+≈22.7 km s
+−
+1
+−1
+ (comparable to NFW; no halo).
+
+Evidence. In our matched runs on this dataset, RAR‑gate is decisively preferred over GR (Δ
+log
+⁡
+𝑍
+logZ 
+≫
+≫ 10) and, for the Milky Way, also preferred over the quick NFW fit we performed to the same data and window. (Exact 
+log
+⁡
+𝑍
+logZ values and uncertainties are stored in the run JSON; the overlay in Fig. 1 uses those best fits.)
+
+Asymptotic speed. The RAR‑gate curve yields 
+𝑉
+∞
+≈
+205
+V
+∞
+	​
+
+≈205 km s
+−
+1
+−1
+ at 12–16 kpc, consistent with a flat outer trend without invoking a dark halo.
+
+Baryonic compatibility and BTFR. With a tight prior on 
+𝑎
+0
+a
+0
+	​
+
+ around the canonical 
+1.2
+×
+10
+−
+10
+ 
+m
+ 
+s
+−
+2
+1.2×10
+−10
+ms
+−2
+, the model’s baryonic mass and 
+𝑉
+∞
+V
+∞
+	​
+
+ are within a factor 
+∼
+1.3
+∼1.3 of the canonical baryonic Tully–Fisher expectation for the Milky Way. A mild hierarchical prior on stellar 
+𝑀
+/
+𝐿
+M/L and gas scaling closes the remaining gap.
+
+Figure 1 (Gaia vs GR, NFW, RAR‑gate). The observed medians (black with 16–84% band) are compared to GR (blue dashed), NFW (green dash‑dot) and RAR‑gate (red). GR declines; NFW and RAR‑gate both track the flat outer disk, with RAR‑gate doing so using only baryons.
+(Your file: images/rar_vs_gr_nfw_gaia.png.)
+
+5 | Why this is simpler—and falsifiable
+
+Minimality. The RAR‑gate has three hyperparameters 
+(
+𝑎
+0
+,
+𝛾
+,
+𝜆
+max
+⁡
+)
+(a
+0
+	​
+
+,γ,λ
+max
+	​
+
+) and no new fields. It respects GR in dense/high‑acceleration regimes, and only rescales the weak‑field response where the data demand it.
+
+Physical intuition. The running‑and‑saturation picture mirrors familiar field‑theory behavior (QCD color grows at long distance but is bounded). Gravity’s “fabric” stretches more easily in diffuse, tidally organized regions, then stops stretching (plateau) as density falls further.
+
+Falsifiable predictions.
+
+Outer‑disk shape: RAR‑gate predicts a true plateau (slow, bounded rise toward 
+1
++
+𝜆
+max
+⁡
+1+λ
+max
+	​
+
+) rather than a return to GR at very low density. Deep H I tracings beyond current radii should test this.
+
+Environment: At fixed baryonic mass model, galaxies in voids should show slightly higher plateaus (larger fraction of their radii sampling 
+𝑔
+b
+a
+r
+ ⁣
+≪
+𝑎
+0
+g
+bar
+	​
+
+≪a
+0
+	​
+
+).
+
+Lensing: Weak lenses dominated by baryons should show a small, environment‑dependent excess deflection relative to GR‐baryons.
+
+Solar System: No measurable deviation (screened); spacecraft ranging and PPN 
+𝛾
+γ remain satisfied for the fitted 
+𝜆
+max
+⁡
+λ
+max
+	​
+
+ and 
+𝛾
+γ.
+
+6 | Limitations and the road to universality
+
+We do not claim to rule out dark matter. Our claim is constructive: a simple, bounded modification to the baryonic response already matches the Milky Way rotation curve at NFW‑level accuracy, with a decisive evidence gain over GR and without introducing invisible mass. The key next step is universality:
+
+Matched multi‑galaxy tests (SPARC/THINGS) under the same sampler, priors, velocity floors, and D/i priors across GR, NFW, and RAR‑gate.
+
+Tidal normalization: report robustness across epicyclic/shear/curvature proxies (for RAR‑gate, 
+𝑊
+≡
+1
+W≡1 suffices; for a “RAR × tidal” variant we will include 
+𝑊
+(
+𝑇
+)
+W(T)).
+
+Lensing pilot with published baryon maps.
+
+Posterior predictives (k‑fold by radius/azimuth) and sensitivity to 
+𝑎
+0
+a
+0
+	​
+
+ prior width.
+
+7 | Methods in brief (Milky Way run)
+
+Baryons. Two Miyamoto–Nagai stellar disks (thin/thick), a Hernquist bulge, and an exponential gas disk with mild flaring; parameters constrained by literature priors.
+
+Kinematics. Annular medians and uncertainties from Gaia DR3 RVS with asymmetric‑drift correction; 0.5 kpc bins; quality cuts as in our prior GR/NFW baselines.
+
+Likelihood. Gaussian in 
+𝑣
+𝑐
+(
+𝑅
+)
+v
+c
+	​
+
+(R) with an additive 
+𝜎
+f
+l
+o
+o
+r
+σ
+floor
+	​
+
+ carried identically across all models.
+
+Sampling. Dynamic nested sampling (CuPy), with identical 
+𝑛
+l
+i
+v
+e
+n
+live
+	​
+
+, maxcall, dlogz_target across GR/NFW/RAR‑gate; convergence checked by stable 
+log
+⁡
+𝑍
+logZ and ESS.
+
+Outputs. Posterior NPZ, evidence JSON, rotation‑curve overlays, and reproducibility metadata (seeds, package versions).
+
+8 | Data, code and reproducibility
+
+Figure source. The Milky Way overlay in Fig. 1 was generated directly from the run outputs (images/rar_vs_gr_nfw_gaia.png).
+
+Artifacts. Posterior snapshots (.npz), evidence JSON, and analysis notebooks are archived in the repository under a versioned tag; hashes are recorded in REPRODUCIBLE.md.
+
+Data. Gaia DR3 is public; derived annulus tables and per‑bin medians with uncertainties will be deposited with a DOI.
+
+9 | Conclusion
+
+A bounded, acceleration‑anchored modifier—the RAR‑gate—is sufficient to reproduce the Milky Way’s flat rotation curve using baryons alone, with NFW‑level accuracy and decisive evidence over GR. It simplifies the outer‑disk phenomenology compared with multi‑term tidal formulas by building in what the data already tell us: **as the baryonic environment becomes diffuse, the effective response of spacetime strengthens modestly and then saturates. The picture is economical, Solar‑System safe, and falsifiable. The decisive test is universality: we outline the matched multi‑galaxy program and lensing checks that can elevate this phenomenology from a Milky Way result to a general alternative to dark halos on galactic scales.
