@@ -18,6 +18,8 @@ import os
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
+# For Gaussian/log-normal priors
+import scipy.stats as st
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -182,8 +184,9 @@ def log_likelihood_stellar_cupy(params, R_data_gpu, v_data_gpu, sigma_data_gpu, 
     """
     Stellar-focused likelihood using CuPy for GPU acceleration.
     
-    This likelihood prioritizes fitting the observed stellar velocities
-    by minimizing chi-squared residuals with regional weighting.
+    Modifications:
+    - Fit evaluated on a robust radial window (default 8–14 kpc) to avoid noisy outer bins.
+    - Optional plateau rescale (eta_plateau) multiplies model velocities by a small calibration factor.
     """
     # Calculate model velocities on GPU
     try:
@@ -191,89 +194,104 @@ def log_likelihood_stellar_cupy(params, R_data_gpu, v_data_gpu, sigma_data_gpu, 
     except Exception as e:
         logger.debug(f"Model evaluation failed: {e}")
         return -np.inf
-    
-    # Calculate chi-squared on GPU
-    residuals_gpu = (v_data_gpu - v_model_gpu) / sigma_data_gpu
-    chi2_gpu = cp.sum(residuals_gpu**2)
-    
+
+    # Optional one-parameter plateau rescale (global velocity calibration)
+    if 'eta_plateau' in params:
+        try:
+            eta = float(params['eta_plateau'])
+            v_model_gpu = v_model_gpu * eta
+        except Exception:
+            pass
+
+    # Radial window for likelihood evaluation (defaults)
+    fit_rmin = float(params.get('fit_rmin', 8.0))
+    fit_rmax = float(params.get('fit_rmax', 14.0))
+    mask_fit = (R_data_gpu >= fit_rmin) & (R_data_gpu <= fit_rmax)
+    if int(cp.sum(mask_fit)) == 0:
+        # Fallback to all data if mask is empty
+        mask_fit = cp.isfinite(R_data_gpu)
+
+    # Calculate chi-squared on GPU within fit window
+    residuals_gpu_all = (v_data_gpu - v_model_gpu) / sigma_data_gpu
+    residuals_fit = residuals_gpu_all[mask_fit]
+    chi2_gpu = cp.sum(residuals_fit**2)
+
     # Check for extreme values that would cause overflow
     chi2_value = float(chi2_gpu)
     if not np.isfinite(chi2_value) or chi2_value > 1e10:
         return -np.inf
-    
+
     # Base likelihood
     log_L = -0.5 * chi2_value
-    
-    # Regional breakdown for detailed fitting
+
+    # Regional breakdown for detailed fitting (use full data to encourage shape)
     radial_bins = cp.array([0, 3, 5, 7, 8.5, 10, 12, 15, 20, 30], dtype=DEFAULT_DTYPE)
-    
+
     penalties = 0.0
     for i in range(len(radial_bins) - 1):
         r_min, r_max = radial_bins[i], radial_bins[i+1]
-        mask = (R_data_gpu >= r_min) & (R_data_gpu < r_max)
-        n_stars = int(cp.sum(mask))
-        
+        mask_bin = (R_data_gpu >= r_min) & (R_data_gpu < r_max)
+        n_stars = int(cp.sum(mask_bin))
+
         if n_stars > 0:
-            chi2_region = float(cp.sum(residuals_gpu[mask]**2))
+            chi2_region = float(cp.sum(residuals_gpu_all[mask_bin]**2))
             chi2_per_star = chi2_region / n_stars
-            
+
             # Solar neighborhood needs excellent fit
             if r_min <= 8.5 and r_max >= 7.5:
                 if chi2_per_star > 2.0:
-                    # Clamp to prevent overflow
                     penalty_val = min(chi2_per_star - 2.0, 100.0)
                     penalties -= 100.0 * penalty_val**2
-            
+
             # Outer regions should have reasonable velocities
             if r_min >= 12:
-                v_region = v_model_gpu[mask]
+                v_region = v_model_gpu[mask_bin]
                 v_mean = float(cp.mean(v_region))
                 if v_mean < 150:
                     penalties -= 50.0 * ((150 - v_mean) / 50)**2
                 elif v_mean > 300:
                     penalties -= 50.0 * ((v_mean - 300) / 50)**2
-    
+
     # Shape matching bonus/penalty
     test_radii = cp.array([2.0, 5.0, 8.0, 12.0, 20.0], dtype=DEFAULT_DTYPE)
     test_velocities = []
     for r in test_radii:
         idx = cp.argmin(cp.abs(R_data_gpu - r))
         test_velocities.append(float(v_model_gpu[idx]))
-    
+
     shape_score = 0.0
-    # Check for rising curve in inner galaxy
+    # Rising curve in inner galaxy
     if test_velocities[1] > test_velocities[0]:
         shape_score += 10.0
     else:
         shape_score -= 20.0
-    
-    # Check for reasonable value at solar radius
+
+    # Reasonable value at solar radius
     solar_v = test_velocities[2]
     if 200 <= solar_v <= 250:
         shape_score += 20.0
     else:
         shape_score -= 30.0 * abs(solar_v - 225) / 225
-    
-    # Check for flattening in outer galaxy
+
+    # Flattening in outer galaxy
     outer_gradient = (test_velocities[-1] - test_velocities[-2]) / (float(test_radii[-1]) - float(test_radii[-2]))
     if abs(outer_gradient) < 5.0:
         shape_score += 15.0
     else:
         shape_score -= 10.0 * abs(outer_gradient)
-    
-    # Calculate RMSE for diagnostics
-    n_data = len(R_data_gpu)
-    rmse_total = float(cp.sqrt(chi2_gpu / n_data))
-    
-    # Apply overall penalty for poor fit
-    if rmse_total > 30.0:
-        # Clamp to prevent overflow
-        penalty_val = min((rmse_total - 30.0) / 30.0, 10.0)
+
+    # RMSE diagnostic on fit window
+    n_fit = int(cp.sum(mask_fit))
+    rmse_fit = float(cp.sqrt(chi2_gpu / max(n_fit, 1)))
+
+    # Overall penalty for poor fit (on fit window)
+    if rmse_fit > 30.0:
+        penalty_val = min((rmse_fit - 30.0) / 30.0, 10.0)
         penalties -= 100.0 * penalty_val**2
-    
+
     # Total likelihood
     log_L_total = log_L + shape_score + penalties
-    
+
     return log_L_total
 
 def prior_transform(u, param_bounds):
@@ -571,12 +589,19 @@ def run_stellar_fit_cupy(args):
             param_bounds[1] = (0.1, 3.0)  # A_excess
             param_names.insert(2, 'lambda_cap')
             param_bounds.insert(2, (1.0, 10.0))  # lambda_cap
+        # Optional global plateau rescale
+        if args.plateau_rescale:
+            param_names.append('eta_plateau')
+            param_bounds.append((0.7, 1.3))
     elif args.xi == 'rar_plateau':
-        # Acceleration-based RAR plateau: fit only a0 by default
+        # Acceleration-based RAR plateau: fit only a0 by default (+ optional rescale)
         param_names = ['a0_m_s2']
         param_bounds = [
-            (6e-11, 3e-10)   # a0 in m/s^2 (log-uniform handled by prior_transform)
+            (6e-11, 3e-10)   # a0 in m/s^2 (log-normal prior applied below)
         ]
+        if args.plateau_rescale:
+            param_names.append('eta_plateau')
+            param_bounds.append((0.7, 1.3))
     else:
         # Default for other xi types (power, exponential, etc.)
         param_names = ['rho_c_solar_kpc3', 'n_exp', 'A']
@@ -616,6 +641,13 @@ def run_stellar_fit_cupy(args):
         'include_gas': True
     }
     
+    # Pass fit/report windows to the likelihood via params
+    fixed_params['fit_rmin'] = args.fit_rmin
+    fixed_params['fit_rmax'] = args.fit_rmax
+    fixed_params['report_rmin'] = args.report_rmin
+    fixed_params['report_rmax'] = args.report_rmax
+    fixed_params['extrap_rmin'] = args.extrap_rmin
+
     # Define likelihood wrapper
     def log_likelihood(theta):
         params = fixed_params.copy()
@@ -624,9 +656,56 @@ def run_stellar_fit_cupy(args):
         return log_likelihood_stellar_cupy(params, R_data_gpu, v_data_gpu, sigma_data_gpu, args.xi, 
                                           allow_experimental=args.allow_experimental)
     
-    # Define prior wrapper
+    # Define prior with custom distributions for select parameters
     def prior_func(u):
-        return prior_transform(u, param_bounds)
+        params = np.zeros(ndim, dtype=float)
+        for i, name in enumerate(param_names):
+            low, high = param_bounds[i]
+            ui = float(u[i])
+            ui = min(max(ui, 1e-9), 1 - 1e-9)  # avoid infinities in ppf
+
+            # 1) Tight log-normal prior on a0 (dex sigma=0.1 around 1.2e-10 m/s^2)
+            if name == 'a0_m_s2':
+                mu_log10 = np.log10(1.2e-10)
+                sigma_log10 = 0.1
+                z = st.norm.ppf(ui, loc=mu_log10, scale=sigma_log10)
+                val = 10**z
+                params[i] = float(np.clip(val, low, high))
+                continue
+
+            # 2) Optional plateau rescale ~ N(1, 0.1^2) truncated to bounds
+            if name == 'eta_plateau':
+                val = st.norm.ppf(ui, loc=1.0, scale=0.1)
+                params[i] = float(np.clip(val, low, high))
+                continue
+
+            # 3) Mild log-normal priors for baryonic masses (if present)
+            if name in ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']:
+                typical = float(fixed_params.get(name, np.sqrt(low * high)))
+                mu_log10 = np.log10(typical)
+                sigma_log10 = 0.15  # ~0.15 dex mild prior
+                z = st.norm.ppf(ui, loc=mu_log10, scale=sigma_log10)
+                val = 10**z
+                params[i] = float(np.clip(val, low, high))
+                continue
+
+            # 4) Mild normal priors for scale lengths/heights (if present)
+            if name in ['R_d_thin_kpc', 'R_d_thick_kpc', 'R_d_gas_kpc', 'a_bulge_kpc', 'h_z_thin_kpc', 'h_z_thick_kpc', 'h_z_gas_kpc']:
+                typical = float(fixed_params.get(name, 0.5 * (low + high)))
+                sigma = 0.2 * typical  # 20% fractional width
+                # Map ui -> truncated normal via inverse CDF
+                val = st.truncnorm.ppf(ui, (low - typical) / max(sigma, 1e-9), (high - typical) / max(sigma, 1e-9), loc=typical, scale=max(sigma, 1e-9))
+                params[i] = float(np.clip(val, low, high))
+                continue
+
+            # Default transform: log-uniform for large dynamic range else uniform
+            if low > 0 and high / low > 100:
+                log_low = np.log10(low)
+                log_high = np.log10(high)
+                params[i] = 10**(log_low + ui * (log_high - log_low))
+            else:
+                params[i] = low + ui * (high - low)
+        return params
     
     # Initialize sampler
     nlive = max(args.nlive, 25 * ndim)
@@ -673,16 +752,64 @@ def run_stellar_fit_cupy(args):
     for i, name in enumerate(param_names):
         best_params_dict[name] = best_params[i]
     
-    # Calculate final chi-squared
+    # Calculate final modeled velocities (apply optional plateau rescale)
     v_model_gpu = v_total_kms_cupy(R_data_gpu, best_params_dict, args.xi, 
                                    allow_experimental=args.allow_experimental)
-    chi2_gpu = cp.sum(((v_data_gpu - v_model_gpu) / sigma_data_gpu)**2)
+    if 'eta_plateau' in best_params_dict:
+        try:
+            v_model_gpu = v_model_gpu * float(best_params_dict['eta_plateau'])
+        except Exception:
+            pass
+
+    # Reporting mask (default 6–14 kpc)
+    report_rmin = float(best_params_dict.get('report_rmin', 6.0))
+    report_rmax = float(best_params_dict.get('report_rmax', 14.0))
+    mask_report = (R_data_gpu >= report_rmin) & (R_data_gpu <= report_rmax)
+    if int(cp.sum(mask_report)) == 0:
+        mask_report = cp.isfinite(R_data_gpu)
+
+    # Chi-squared and RMSE on report window
+    chi2_gpu = cp.sum(((v_data_gpu[mask_report] - v_model_gpu[mask_report]) / sigma_data_gpu[mask_report])**2)
     chi2_total = float(chi2_gpu)
-    # Dimensionless per-star chi (sqrt of reduced chi^2 with dof ~ N)
-    chi_per_star = np.sqrt(chi2_total / len(R_data))
-    # RMSE in km/s (unweighted)
-    rmse_kms = float(cp.sqrt(cp.mean((v_data_gpu - v_model_gpu)**2)))
-    
+    n_report = int(cp.sum(mask_report))
+    chi_per_star = np.sqrt(chi2_total / max(n_report, 1))
+    rmse_kms = float(cp.sqrt(cp.mean((v_data_gpu[mask_report] - v_model_gpu[mask_report])**2)))
+
+    # Estimate V_inf from outer robust annulus (12–16 kpc) if available
+    try:
+        outer_mask = (R_data_gpu >= 12.0) & (R_data_gpu <= 16.0)
+        if int(cp.sum(outer_mask)) > 0:
+            v_inf_kms = float(cp.median(v_model_gpu[outer_mask]))
+        else:
+            # fallback: top 10% largest radii
+            sort_idx = cp.argsort(R_data_gpu)
+            top = sort_idx[int(0.9 * len(R_data_gpu)):]
+            v_inf_kms = float(cp.median(v_model_gpu[top]))
+    except Exception:
+        v_inf_kms = float(cp.median(v_model_gpu))
+
+    # BTFR consistency check: M_b = V_inf^4 / (G * a0)
+    try:
+        G_SI = 6.6743e-11  # m^3 kg^-1 s^-2
+        MSUN = 1.98847e30  # kg
+        a0_si = float(best_params_dict.get('a0_m_s2', 1.2e-10))
+        v_si = v_inf_kms * 1000.0  # km/s -> m/s
+        M_b_BTFR_kg = (v_si**4) / (G_SI * a0_si)
+        M_b_BTFR_Msun = M_b_BTFR_kg / MSUN
+        # Model baryon mass (sum of components used)
+        M_b_model_Msun = 0.0
+        for k in ['M_disk_thin_solar', 'M_disk_thick_solar', 'M_bulge_solar', 'M_gas_solar']:
+            if k in best_params_dict:
+                M_b_model_Msun += float(best_params_dict[k])
+            else:
+                # include fixed values if not fitted
+                M_b_model_Msun += float(fixed_params.get(k, 0.0))
+        btfr_note = f"BTFR: V_inf~{v_inf_kms:.1f} km/s -> M_b(BTFR)~{M_b_BTFR_Msun:.2e} Msun; model M_b~{M_b_model_Msun:.2e} Msun"
+    except Exception as _:
+        M_b_BTFR_Msun = None
+        M_b_model_Msun = None
+        btfr_note = "BTFR check unavailable"
+
     # Results summary
     logger.info("\n" + "="*80)
     logger.info("RESULTS")
@@ -691,11 +818,12 @@ def run_stellar_fit_cupy(args):
     for i, name in enumerate(param_names):
         logger.info(f"  {name}: {best_params[i]:.3e}")
     
-    logger.info(f"\nFit quality:")
+    logger.info(f"\nFit quality (report window {report_rmin:.1f}-{report_rmax:.1f} kpc):")
     logger.info(f"  Chi²: {chi2_total:.1f}")
     logger.info(f"  sqrt(Chi²/N): {chi_per_star:.2f} (dimensionless)")
     logger.info(f"  RMSE: {rmse_kms:.1f} km/s")
-    logger.info(f"  Log(L): {best_logl:.1f}")
+    logger.info(f"  Log(L)@best: {best_logl:.1f}")
+    logger.info(f"  {btfr_note}")
     
     # Save results
     output_dir = Path(args.output_dir)
@@ -710,9 +838,14 @@ def run_stellar_fit_cupy(args):
         logl=results.logl,
         best_params=best_params,
         param_names=param_names,
-        chi2=chi2_total,
-        chi_per_star=chi_per_star,
-        rmse_kms=rmse_kms
+        chi2_report=chi2_total,
+        chi_per_star_report=chi_per_star,
+        rmse_kms_report=rmse_kms,
+        v_infty_kms=v_inf_kms,
+        M_b_BTFR_Msun=(0.0 if M_b_BTFR_Msun is None else M_b_BTFR_Msun),
+        M_b_model_Msun=(0.0 if M_b_model_Msun is None else M_b_model_Msun),
+        report_rmin=report_rmin,
+        report_rmax=report_rmax
     )
     
     logger.info(f"\nResults saved to: {output_file}")
@@ -731,10 +864,13 @@ def run_stellar_fit_cupy(args):
             # Main plot
             ax1.scatter(R_data, v_data, c='k', s=1, alpha=0.3, label='Data')
             ax1.scatter(R_data, v_model_cpu, c='r', s=1, alpha=0.5, label=f'Model ({args.xi})')
+            # Shade informative extrapolation region (> extrap_rmin)
+            extrap_rmin = float(best_params_dict.get('extrap_rmin', 16.0))
+            ax1.axvspan(extrap_rmin, np.max(R_data), color='gray', alpha=0.1, label='extrapolation')
             ax1.set_ylabel('Velocity (km/s)')
             ax1.legend()
             ax1.grid(True, alpha=0.3)
-            ax1.set_title(f'Stellar Fit - χ² = {chi2_total:.1f}, RMSE = {rmse_kms:.1f} km/s')
+            ax1.set_title(f'Stellar Fit (report {report_rmin:.1f}-{report_rmax:.1f} kpc) - χ² = {chi2_total:.1f}, RMSE = {rmse_kms:.1f} km/s')
             
             # Residuals
             residuals = v_data - v_model_cpu
@@ -785,6 +921,18 @@ def main():
                        help='Also fit baryonic parameters')
     parser.add_argument('--allow_experimental', action='store_true',
                        help='Allow experimental xi models')
+    parser.add_argument('--fit_rmin', type=float, default=8.0,
+                       help='Fit window: minimum R (kpc) for likelihood')
+    parser.add_argument('--fit_rmax', type=float, default=14.0,
+                       help='Fit window: maximum R (kpc) for likelihood')
+    parser.add_argument('--report_rmin', type=float, default=6.0,
+                       help='Report window: minimum R (kpc) for RMSE/Chi²')
+    parser.add_argument('--report_rmax', type=float, default=14.0,
+                       help='Report window: maximum R (kpc) for RMSE/Chi²')
+    parser.add_argument('--extrap_rmin', type=float, default=16.0,
+                       help='R (kpc) beyond which region is shaded as extrapolation in plots')
+    parser.add_argument('--plateau_rescale', action='store_true',
+                       help='Include a global plateau rescale parameter eta_plateau ~ N(1, 0.1^2)')
     
     # Output options
     parser.add_argument('--output_dir', type=str, default='stellar_fit_cupy_results',
