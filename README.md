@@ -50,9 +50,7 @@ Properties:
 
 In our relativistic implementation,
 
-```math
-\xi(g_{\rm bar},T,\rho) = 1 + (D_{\rm sat}(g_{\rm bar})-1) \cdot W(T) \cdot S_\rho(\rho) \tag{1}
-```
+<img src="https://latex.codecogs.com/svg.image?\xi(g_{\rm&space;bar},T,\rho)&space;=&space;1&space;+&space;(D_{\rm&space;sat}(g_{\rm&space;bar})-1)&space;\cdot&space;W(T)&space;\cdot&space;S_\rho(\rho)" title="\xi(g_{\rm bar},T,\rho) = 1 + (D_{\rm sat}(g_{\rm bar})-1) \cdot W(T) \cdot S_\rho(\rho)" /> (1)
 
 where:
 
