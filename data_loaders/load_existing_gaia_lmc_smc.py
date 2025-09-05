@@ -56,6 +56,13 @@ try:
 except Exception:
     _HAS_ASTROPY = False
 
+# Optional: TAP client for live Gaia Archive queries (no credentials needed for public data)
+try:
+    import pyvo
+    _HAS_PYVO = True
+except Exception:
+    _HAS_PYVO = False
+
 
 def setup_logger(debug: bool = False) -> None:
     logging.basicConfig(level=logging.DEBUG if debug else logging.INFO, format='[%(levelname)s] %(message)s')
@@ -81,18 +88,76 @@ def write_parquet(df: pd.DataFrame, out_path: Path) -> None:
     df.to_parquet(out_path, index=False)
 
 
+def _preset_adql(name: str) -> str:
+    name = name.upper().strip()
+    if name == 'LMC':
+        return (
+            "SELECT source_id, ra, dec, parallax, pmra, pmdec, "
+            "phot_g_mean_mag, bp_rp, radial_velocity, radial_velocity_error "
+            "FROM gaiadr3.gaia_source "
+            "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 80.894, -69.756, 12))"
+        )
+    if name == 'SMC':
+        return (
+            "SELECT source_id, ra, dec, parallax, pmra, pmdec, "
+            "phot_g_mean_mag, bp_rp, radial_velocity, radial_velocity_error "
+            "FROM gaiadr3.gaia_source "
+            "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 13.186, -72.828, 7))"
+        )
+    raise ValueError(f'Unknown preset: {name}')
+
+
+def _run_tap_query(adql: str) -> pd.DataFrame:
+    if not _HAS_PYVO:
+        raise RuntimeError('pyvo is required for API mode. Install pyvo to proceed.')
+    svc = pyvo.dal.TAPService("https://gea.esac.esa.int/tap-server/tap")
+    # Use synchronous query for simplicity; for large results consider async
+    logging.info('Submitting TAP sync query…')
+    res = svc.run_sync(adql)
+    tab = res.to_table()
+    df = tab.to_pandas()
+    logging.info(f'TAP rows={len(df):,} cols={len(df.columns)}')
+    return df
+
+
 def main():
-    ap = argparse.ArgumentParser(description='Convert downloaded Gaia DR3 LMC/SMC CSV/FITS to Parquet')
-    ap.add_argument('--input', required=True, help='Glob or file path(s) of Gaia outputs (CSV/FITS)')
-    ap.add_argument('--object', choices=['LMC', 'SMC'], required=True, help='Target cloud for metadata tagging')
+    ap = argparse.ArgumentParser(description='Gaia DR3 LMC/SMC: (A) convert local CSV/FITS to Parquet, or (B) fetch via TAP API and write Parquet')
+    mode = ap.add_mutually_exclusive_group(required=True)
+    mode.add_argument('--input', help='Glob or file path(s) of Gaia outputs (CSV/FITS)')
+    mode.add_argument('--api', action='store_true', help='Use Gaia TAP API to fetch data')
+    ap.add_argument('--object', choices=['LMC', 'SMC'], required=True, help='Target cloud (also enables preset ADQL if --api and no --adql-file)')
+    ap.add_argument('--adql-file', help='Path to a .sql ADQL file to run instead of preset')
     ap.add_argument('--out-dir', default='data/gaia_slices', help='Parquet output directory')
+    ap.add_argument('--limit', type=int, default=None, help='Optional TOP N limiter injected into ADQL (API mode)')
     ap.add_argument('--debug', action='store_true')
     args = ap.parse_args()
 
     setup_logger(args.debug)
 
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.api:
+        # Build ADQL
+        if args.adql_file:
+            adql = Path(args.adql_file).read_text(encoding='utf-8')
+        else:
+            adql = _preset_adql(args.object)
+        if args.limit and 'TOP' not in adql.upper():
+            # Insert TOP N after SELECT for quick tests
+            adql = adql.replace('SELECT', f'SELECT TOP {int(args.limit)}', 1)
+        logging.info('Running TAP query (no credentials needed for public data)…')
+        logging.debug(f'ADQL:\n{adql}')
+        df = _run_tap_query(adql)
+        df['cloud'] = args.object
+        out_path = out_dir / f'gaia_{args.object.lower()}_tap.parquet'
+        write_parquet(df, out_path)
+        logging.info(f'Wrote {out_path}')
+        return
+
+    # Local conversion mode
     files: List[str] = []
-    if any(ch in args.input for ch in ['*', '?', '[']):
+    if any(ch in args.input or '' for ch in ['*', '?', '[']):
         files = glob.glob(args.input)
     else:
         files = [args.input]
@@ -101,15 +166,11 @@ def main():
         logging.error('No input files matched')
         return
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
     for fp in files:
         p = Path(fp)
         try:
             df = read_any(p)
             df['cloud'] = args.object
-            # Minimal schema sanity
             logging.info(f"Read {p.name}: rows={len(df):,} cols={len(df.columns)}")
             out_path = out_dir / (p.stem + '.parquet')
             write_parquet(df, out_path)

@@ -31,3 +31,15 @@ Notes
 - If a future workflow requires credentials, keep them outside source control
   and export them into your environment (never echo them). Document the steps
   here without placing any secrets in plain text.
+
+Optional: fetch via Gaia TAP API (no credentials for public data)
+- Requires pyvo: pip install pyvo
+- Example (preset LMC query with TOP limiter):
+```
+python -m data_loaders.load_existing_gaia_lmc_smc --api --object LMC --limit 100000 --out-dir data/gaia_slices
+```
+- Or use your own ADQL file:
+```
+python -m data_loaders.load_existing_gaia_lmc_smc --api --object LMC --adql-file my_lmc.sql --out-dir data/gaia_slices
+```
+- The tool will write a Parquet file under data/gaia_slices.
