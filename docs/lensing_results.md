@@ -1,3 +1,11 @@
+# Lensing pilot (RAR-gated metric)
+
+This document is a pilot summary. The orchestrator attempts a simple mapping
+from the rar_plateau xi(R) profile to a φ_env(r) parametrization and evaluates
+Einstein radii using tools/lensing_predict.py.
+
+For a full theoretical treatment and caveats, see docs/lensing.md.
+
 # Lensing pilot (SLACS-like)
 
 Parameters:
