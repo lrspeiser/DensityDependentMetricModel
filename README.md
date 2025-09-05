@@ -4,7 +4,7 @@
 
 Galactic rotation curves remain nearly flat at large radii, which contradicts the falling expectation from visible baryonic mass in Newtonian/GR dynamics.[^rubin70][^bosma81] This “flattening” is usually attributed to massive dark matter halos (often modeled with NFW profiles),[^nfw97] yet decades of searches have found no **direct** evidence for dark matter particles.[^schumann19] Here we summarize a **RAR‑gated gravity** model – a relativistic, density/acceleration‑dependent modification of gravity – that aims to explain flat rotation curves without dark matter. The model ties the effective gravitational strength to the local baryonic acceleration through the empirically observed **Radial Acceleration Relation (RAR)**.[^mcgaugh16]
 
-We present the governing formula for this **bounded** gravity modification, and apply it to the Milky Way’s rotation curve using Gaia DR3 data (∼144k stars). The RAR‑gated model fits the Milky Way rotation curve **nearly as well** as a dark‑matter NFW halo, reducing residuals by roughly half compared to a baryons‑only (GR) model, while remaining Solar‑System safe. We report Bayesian evidence and RMS residuals against both a no‑DM baseline and an NFW fit. We also outline the assumed baryonic mass components (disk, bulge, gas) and fitting methodology. A **command‑line replication guide** is provided to reproduce our results with the public code. Finally, we discuss next steps and potential concerns— including the adopted acceleration scale $a_0$, testing the theory in external galaxies and lensing observations, and the universality of the relation— as directions for further investigation.
+We present the governing formula for this **bounded** gravity modification, and apply it to the Milky Way’s rotation curve using Gaia DR3 data (∼144k stars). The RAR‑gated model fits the Milky Way rotation curve **nearly as well** as a dark‑matter NFW halo, reducing residuals by roughly half compared to a baryons‑only (GR) model, while remaining Solar‑System safe. We report Bayesian evidence and RMS residuals against both a no‑DM baseline and an NFW fit. We also outline the assumed baryonic mass components (disk, bulge, gas) and fitting methodology. A **command‑line replication guide** is provided to reproduce our results with the public code. Finally, we discuss future directions and potential concerns— including the adopted acceleration scale $a_0$, testing the theory in external galaxies and lensing observations, and the universality of the relation— as directions for further investigation.
 
 ---
 
@@ -89,6 +89,32 @@ We model the Milky Way with thin/thick stellar disks, a Hernquist bulge, and an 
 
 ---
 
+## Empirical Validation: Embedded Results
+
+Below we embed representative outputs produced by the analysis orchestrator (scripts/next_steps_from_run.py) using the latest Milky Way rar_plateau run. Plots link directly to tracked artifacts in this repository.
+
+- SPARC overlays with per‑galaxy a0 refits (rar_plateau parameters fixed except for a0):
+
+![M31 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_M31.png)
+
+![NGC 3198 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC3198.png)
+
+![NGC 2403 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC2403.png)
+
+![NGC 2841 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC2841.png)
+
+![NGC 5055 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC5055.png)
+
+Summary table: results/next_steps/rar_plateau_mw_full/sparc_a0_summary.csv
+
+- Solar‑System constraints (ΔG/G ≈ ξ−1):
+
+![Solar‑System constraints from rar_plateau parameters](images/paper/rar_plateau_mw_full/solar_rar_plateau.png)
+
+At Saturn (~10 AU), the predicted |ΔG/G| is consistent with the Cassini bound (|γ−1| < 2.3×10⁻⁵). See results/next_steps/rar_plateau_mw_full/solar_system_table.csv for values.
+
+---
+
 ## Reproducibility (repo & CLI)
 
 **Repo:** [https://github.com/lrspeiser/DensityDependentMetricModel](https://github.com/lrspeiser/DensityDependentMetricModel)
@@ -132,9 +158,9 @@ python generate_comparison_plots.py \
 
 ---
 
-## Next Steps & Discussion (what reviewers will ask)
+## Extended Analyses and Discussion
 
-### New analyses (this work)
+### Additional analyses (this work)
 
 We executed the next‑step tests outlined above using the latest rar_plateau Milky Way run (see results/next_steps/rar_plateau_mw_full/run_metadata.json for parameter snapshot). Artifacts are linked below. No placeholder data were used: SPARC rotation curves are the public Lelli et al. (2016) rotmod files under external_data/Rotmod_LTG; Solar‑System checks use physical constants; the lensing table is a model prediction (pilot) using our metric, not a fit to a lensing dataset.
 
@@ -163,7 +189,7 @@ We executed the next‑step tests outlined above using the latest rar_plateau Mi
 - The lensing table is a pilot model prediction using a simple φ_env(r) proxy derived from 
   ξ(R); it is not a fit to observed lenses—intended as a sanity check on predicted θ_E magnitudes in our metric.
 
-### Replication (beyond reproach)
+### Reproducibility and Replication Protocol
 
 1) Environment
 - Python ≥3.10; packages: numpy, matplotlib, pandas, dynesty; optional: cupy (GPU), pyarrow (Parquet), astropy (FITS), pyvo (Gaia TAP API).
@@ -175,7 +201,7 @@ We executed the next‑step tests outlined above using the latest rar_plateau Mi
 3) Milky Way run (rar_plateau)
 - Use runners/dynesty_latest/run_dynesty_stellar_fit_cupy.py with xi=rar_plateau (as in our runs/rar_plateau_mw_full). The run produces NPZ/JSON outputs consumed by the orchestrator. Example flags are documented in runners/dynesty_latest/README.md.
 
-4) Next‑step analyses
+4) Extended analyses
 - Execute the orchestrator (pure NumPy; no GPU required):
 
 ```bash
