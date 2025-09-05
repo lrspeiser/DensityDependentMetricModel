@@ -62,6 +62,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+import importlib.util
+import sys
 
 # Constants
 G_SI = 6.6743e-11              # m^3 kg^-1 s^-2
@@ -228,15 +230,37 @@ def xi_rar_plateau_numpy(
 
 # ---------- SPARC loader wrapper --------------------------------------------------------
 
+def _import_by_path(module_name: str, file_path: Path):
+    spec = importlib.util.spec_from_file_location(module_name, str(file_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load spec for {file_path}")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = mod
+    spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    return mod
+
+
 def load_sparc_galaxy(galaxy_id: str, sparc_dir: Path) -> Optional[Dict[str, np.ndarray]]:
     """Use the repo’s SPARC loader to fetch a galaxy's rotation curve and components.
     Returns dict with arrays: R_kpc, V_obs, e_V_obs, V_gas, V_disk, V_bulge.
     """
+    load_single_sparc_galaxy = None
     try:
-        # Prefer Utilities path used in repo
-        from utils.Utilities.sparc_io import load_single_sparc_galaxy
+        # Prefer package-style import if package init exists
+        from utils.Utilities.sparc_io import load_single_sparc_galaxy as _ls
+        load_single_sparc_galaxy = _ls
     except Exception:
-        logging.error("SPARC loader not found (utils/Utilities/sparc_io). Ensure data and loader exist.")
+        # Fallback: import by file path
+        repo_root = Path.cwd()
+        candidate = repo_root / 'utils' / 'Utilities' / 'sparc_io.py'
+        if candidate.exists():
+            try:
+                mod = _import_by_path('sparc_io_runtime', candidate)
+                load_single_sparc_galaxy = getattr(mod, 'load_single_sparc_galaxy', None)
+            except Exception as e:
+                logging.debug(f"Path import failed for sparc_io: {e}")
+    if load_single_sparc_galaxy is None:
+        logging.error("SPARC loader not available. Expected utils/Utilities/sparc_io.py")
         return None
 
     data = load_single_sparc_galaxy(galaxy_id, sparc_dir=str(sparc_dir))
@@ -378,11 +402,24 @@ def solar_system_table(
 
 def run_lensing_pilot(out_dir: Path, rar_params: Dict[str, float]) -> None:
     """Use tools/lensing_predict in a pilot mode by calibrating a crude φ_env.
-    If the module is unavailable, log a warning and skip.
+    If the module is unavailable, attempt file-path import; otherwise skip.
     """
+    Hernquist = PhiEnv = einstein_radius_arcsec = None
     try:
-        from tools.lensing_predict import Hernquist, PhiEnv, einstein_radius_arcsec
+        from tools.lensing_predict import Hernquist as _H, PhiEnv as _P, einstein_radius_arcsec as _E
+        Hernquist, PhiEnv, einstein_radius_arcsec = _H, _P, _E
     except Exception:
+        repo_root = Path.cwd()
+        cand = repo_root / 'tools' / 'lensing_predict.py'
+        if cand.exists():
+            try:
+                mod = _import_by_path('lensing_predict_runtime', cand)
+                Hernquist = getattr(mod, 'Hernquist', None)
+                PhiEnv = getattr(mod, 'PhiEnv', None)
+                einstein_radius_arcsec = getattr(mod, 'einstein_radius_arcsec', None)
+            except Exception as e:
+                logging.debug(f"Path import failed for lensing_predict: {e}")
+    if any(x is None for x in (Hernquist, PhiEnv, einstein_radius_arcsec)):
         logging.warning("Lensing tools not available (tools/lensing_predict.py). Skipping lensing pilot.")
         return
 
@@ -535,7 +572,18 @@ def main():
             f.write('galaxy,log10_Mb,log10_Vflat,selection_note\n')
     try:
         # Re-iterate galaxies and compute a crude V_flat and M_b from SPARC metadata if available via sparc_io.
-        from utils.Utilities.sparc_io import load_single_sparc_galaxy
+        load_single_sparc_galaxy = None
+        try:
+            from utils.Utilities.sparc_io import load_single_sparc_galaxy as _ls
+            load_single_sparc_galaxy = _ls
+        except Exception:
+            repo_root = Path.cwd()
+            candidate = repo_root / 'utils' / 'Utilities' / 'sparc_io.py'
+            if candidate.exists():
+                mod = _import_by_path('sparc_io_runtime_btfr', candidate)
+                load_single_sparc_galaxy = getattr(mod, 'load_single_sparc_galaxy', None)
+        if load_single_sparc_galaxy is None:
+            raise ImportError('sparc_io not available')
         for gid in (args.galaxies or sample):
             data = load_single_sparc_galaxy(gid, sparc_dir=str(sparc_dir))
             if not data:
