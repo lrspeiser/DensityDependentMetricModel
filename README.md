@@ -134,6 +134,70 @@ python generate_comparison_plots.py \
 
 ## Next Steps & Discussion (what reviewers will ask)
 
+### New analyses (this work)
+
+We executed the next‑step tests outlined above using the latest rar_plateau Milky Way run (see results/next_steps/rar_plateau_mw_full/run_metadata.json for parameter snapshot). Artifacts are linked below. No placeholder data were used: SPARC rotation curves are the public Lelli et al. (2016) rotmod files under external_data/Rotmod_LTG; Solar‑System checks use physical constants; the lensing table is a model prediction (pilot) using our metric, not a fit to a lensing dataset.
+
+- SPARC overlays and per‑galaxy a0 fits (rar_plateau with MW‑tuned params; only a0 varied):
+  - images/next_steps/rar_plateau_mw_full/sparc_overlay_M31.png
+  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC3198.png
+  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC2403.png
+  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC2841.png
+  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC5055.png
+  - Summary table: results/next_steps/rar_plateau_mw_full/sparc_a0_summary.csv
+
+- Solar‑System constraints (ΔG/G ≈ ξ−1):
+  - Plot: images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png
+  - Table: results/next_steps/rar_plateau_mw_full/solar_system_table.csv
+  - At Saturn (≈10 AU) with our MW best‑fit a0 ≈ 3.0×10⁻¹⁰ m/s² and zeta_env=0, we obtain |ΔG/G| ≈ 5.1×10⁻⁶, well within the Cassini bound 2.3×10⁻⁵.
+
+- Lensing pilot (model prediction; see docs/lensing.md):
+  - results/next_steps/rar_plateau_mw_full/lensing_table.csv (GR vs TFR‑pilot θ_E for a SLACS‑like case)
+
+- BTFR subset (simple outer‑third median V_flat; gas mass proxy from SPARC metadata when present):
+  - results/next_steps/rar_plateau_mw_full/btfr_summary.csv
+
+#### Data provenance and assumptions
+- SPARC rotation curves, component velocities (V_gas, V_disk, V_bulge), and MasterSheet metadata are from Lelli et al. (2016). In several cases, standalone H I surface‑density files (_HIrad.dat) were not present; we used the rotmod gas curve and SB columns for stellar surface brightness, consistent with SPARC practice. These choices are logged during processing and reflected in the outputs.
+- The Solar‑System ΔG/G calculation uses G, M_⊙, and AU in SI units. Gating (zeta_env>0, ρ_c) was not active in this MW run, so ξ_gated=ξ_worst; future runs with nonzero gating will reflect screening differences.
+- The lensing table is a pilot model prediction using a simple φ_env(r) proxy derived from 
+  ξ(R); it is not a fit to observed lenses—intended as a sanity check on predicted θ_E magnitudes in our metric.
+
+### Replication (beyond reproach)
+
+1) Environment
+- Python ≥3.10; packages: numpy, matplotlib, pandas, dynesty; optional: cupy (GPU), pyarrow (Parquet), astropy (FITS), pyvo (Gaia TAP API).
+
+2) Data
+- SPARC: place Lelli et al. (2016) rotmod files under external_data/Rotmod_LTG. If you prefer, run the project’s SPARC fetchers (see scripts/fetch_sparc_hirad_sb_v2.py) to populate the directory; the orchestrator will consume rotmod/SB content directly.
+- Gaia (optional for LMC/SMC slices): see docs/gaia_slices_readme.md for ADQL and API options; convert to Parquet via data_loaders/load_existing_gaia_lmc_smc.py.
+
+3) Milky Way run (rar_plateau)
+- Use runners/dynesty_latest/run_dynesty_stellar_fit_cupy.py with xi=rar_plateau (as in our runs/rar_plateau_mw_full). The run produces NPZ/JSON outputs consumed by the orchestrator. Example flags are documented in runners/dynesty_latest/README.md.
+
+4) Next‑step analyses
+- Execute the orchestrator (pure NumPy; no GPU required):
+
+```bash
+python scripts/next_steps_from_run.py \
+  --run-dir runs/rar_plateau_mw_full \
+  --sparc-dir external_data/Rotmod_LTG \
+  --posterior-samples 0
+```
+
+This writes CSVs under results/next_steps/rar_plateau_mw_full and plots under images/next_steps/rar_plateau_mw_full. An index page is also written to docs/next_steps.md.
+
+5) Gaia LMC/SMC (optional, API)
+
+```bash
+# Requires: pip install pyvo
+python -m data_loaders.load_existing_gaia_lmc_smc \
+  --api --object LMC --limit 100000 \
+  --out-dir data/gaia_slices
+```
+
+All steps emit verbose logs and snapshot metadata (run parameters) for traceability. If a file is missing (e.g., _HIrad.dat), the loader behavior is logged and a consistent fallback is applied; we do not fabricate inputs.
+
 1. **Origin & universality of $a_0$.** Treat $a_0$ as a global parameter with tight prior around the canonical value[^mcgaugh16] and test **hierarchically** across galaxies. Does one $a_0$ work for MW, HSBs, LSBs, and dwarfs? Is there evidence for weak environment‑dependence?
 2. **Solar‑System & lab constraints.** Quantify $|\xi-1|$ at planetary/lab densities with the **density gate** $S_\rho$. Show consistency with **Cassini** PPN $|\gamma-1|<2.3\times10^{-5}$.[^bertotti03] Provide a compact $\Delta GM/GM$ table (1–30 AU).
 3. **Gravitational lensing.** As a **metric** model, lensing is computable. Derive $\Phi+\Psi$ in the weak field and test against galaxy–galaxy lensing and Einstein rings. Compare with relativistic MOND frameworks (e.g., **TeVeS**; **Skordis & Złośnik**).[^bekenstein04][^skordis21]
