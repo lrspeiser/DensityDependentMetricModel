@@ -45,13 +45,14 @@ Properties:
 * $\xi\to 1+\lambda$ for $g_{\rm bar}\ll a_0$ (bounded boost),
 * smooth transition controlled by $\gamma$.
 
+
 ### Environmental Screening (relativistic gate)
 
 In our relativistic implementation,
 
-$$
-\xi(g_{\rm bar},T,\rho)\;=\;1+\big(D_{\rm sat}(g_{\rm bar})-1\big)\,W(T)\,S_\rho(\rho), \tag{1}
-$$
+```math
+\xi(g_{\rm bar},T,\rho) = 1 + (D_{\rm sat}(g_{\rm bar})-1) \cdot W(T) \cdot S_\rho(\rho) \tag{1}
+```
 
 where:
 
