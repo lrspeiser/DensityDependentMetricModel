@@ -1,7 +1,14 @@
-# Next-Step Analyses (Index)
+# Next-Step Analyses Index
 
-This page is generated/updated by scripts/next_steps_from_run.py.
+Run: `rar_plateau_mw_full`
 
-After running the orchestrator, links to results, images, and brief methods
-appear here. See docs/cassini.md for Solar-System constraints and docs/lensing.md
-for the lensing prescription used in the pilot.
+Artifacts:
+- SPARC summary: `results/next_steps/rar_plateau_mw_full/sparc_a0_summary.csv`
+- Solar table: `results/next_steps/rar_plateau_mw_full/solar_system_table.csv`, plot: `images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png`
+- Lensing pilot table: `results/next_steps/rar_plateau_mw_full/lensing_table.csv` (if present)
+- BTFR subset: `results/next_steps/rar_plateau_mw_full/btfr_summary.csv`
+
+Method Notes:
+- RAR-plateau: D = 0.5 + sqrt(0.25 + a0_eff/g_bar); xi == D multiplies Vbar^2
+- g_bar = (Vbar^2 / R) × 3.240779289e-14 in SI (m/s^2) for V in km/s and R in kpc
+- a0_eff = a0 × (1 + zeta_env × s_rho × W(T)); see docs/cassini.md and docs/lensing.md
