@@ -139,15 +139,15 @@ python generate_comparison_plots.py \
 We executed the next‑step tests outlined above using the latest rar_plateau Milky Way run (see results/next_steps/rar_plateau_mw_full/run_metadata.json for parameter snapshot). Artifacts are linked below. No placeholder data were used: SPARC rotation curves are the public Lelli et al. (2016) rotmod files under external_data/Rotmod_LTG; Solar‑System checks use physical constants; the lensing table is a model prediction (pilot) using our metric, not a fit to a lensing dataset.
 
 - SPARC overlays and per‑galaxy a0 fits (rar_plateau with MW‑tuned params; only a0 varied):
-  - images/next_steps/rar_plateau_mw_full/sparc_overlay_M31.png
-  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC3198.png
-  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC2403.png
-  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC2841.png
-  - images/next_steps/rar_plateau_mw_full/sparc_overlay_NGC5055.png
+- images/paper/rar_plateau_mw_full/sparc_overlay_M31.png
+- images/paper/rar_plateau_mw_full/sparc_overlay_NGC3198.png
+- images/paper/rar_plateau_mw_full/sparc_overlay_NGC2403.png
+- images/paper/rar_plateau_mw_full/sparc_overlay_NGC2841.png
+- images/paper/rar_plateau_mw_full/sparc_overlay_NGC5055.png
   - Summary table: results/next_steps/rar_plateau_mw_full/sparc_a0_summary.csv
 
 - Solar‑System constraints (ΔG/G ≈ ξ−1):
-  - Plot: images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png
+- Plot: images/paper/rar_plateau_mw_full/solar_rar_plateau.png
   - Table: results/next_steps/rar_plateau_mw_full/solar_system_table.csv
   - At Saturn (≈10 AU) with our MW best‑fit a0 ≈ 3.0×10⁻¹⁰ m/s² and zeta_env=0, we obtain |ΔG/G| ≈ 5.1×10⁻⁶, well within the Cassini bound 2.3×10⁻⁵.
 
