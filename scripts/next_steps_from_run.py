@@ -740,9 +740,16 @@ def _theta_E_from_sersic_with_xi(log10M_star: float, Re_kpc: float, z_l: float, 
     return R_E_kpc, theta_arcsec
 
 
-def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, rar_params: Dict[str, float]) -> None:
+def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, rar_params: Dict[str, float],
+                              alpha_lens_ph: float = 1.0,
+                              zeta_env_lens: float = 0.0,
+                              env_profile: str = 'constant') -> None:
     """Compute lensing for a CSV lens list using Sersic baryons and RAR 'phantom mass'.
     CSV columns (header required): lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
+    Phantom-lensing scalars (lensing-only):
+    - alpha_lens_ph: scales Σ_ph in lensing only (default 1.0).
+    - zeta_env_lens: additional amplitude on Σ_ph via (1 + zeta_env_lens f(R)).
+    - env_profile: 'constant' (f=1) or 'tapered' (f = [1 + (R/Re)^2]^(-1/2)).
     Outputs results/…/lensing_rar_table.csv and per-lens plots under images/…
     """
     if not csv_path.exists():
@@ -751,7 +758,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
     images_dir.mkdir(parents=True, exist_ok=True)
     out_csv = out_dir / 'lensing_rar_table.csv'
     with out_csv.open('w', encoding='utf-8') as f:
-        f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+        f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_RAR_phscaled_arcsec,alpha_lens_ph_used,zeta_env_lens_used,env_profile,alpha_req_at_thetaE_obs,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
 
     # Read CSV quickly (no pandas dependency)
     rows = []
@@ -784,19 +791,14 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             th_sis_200 = theta_E_sis_arcsec(200.0, z_l, z_s)
             th_sis_250 = theta_E_sis_arcsec(250.0, z_l, z_s)
 
-            # Write row
-            with out_csv.open('a', encoding='utf-8') as f:
-                f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
-
-            # Plot mean Σ and Σ_cr intersection for GR vs RAR
-            # Build profiles once for plotting
+            # Build profiles to compute phantom-weighted lensing and α_req
             M_star = 10**log10M
             r = np.logspace(np.log10(max(Re/200.0, 0.01)), np.log10(max(50.0*Re, Re+100.0)), 600)
             rho_b = _sersic_deprojected_density_prugniel_simien(r, M_star, Re, n=n)
             M_b = _enclosed_mass_from_density(r, rho_b)
-            # GR projection
+            # GR projection (stars only)
             Rg, Sig_g = _project_surface_density_abel(r, rho_b)
-            # RAR projection
+            # RAR projection (stars + phantom via xi)
             KPC_M = 3.085677581491367e19
             V_ms = np.sqrt(np.maximum(G_SI * (M_b * M_SUN) / (r * KPC_M), 0.0)); V_kms = V_ms/1000.0
             xi = xi_rar_plateau_numpy(V_kms, r, a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
@@ -809,19 +811,67 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             dM = np.gradient(M_eff, r, edge_order=2)
             rho_eff = np.maximum(dM, 0.0) / (4.0 * math.pi * np.maximum(r, 1e-9)**2)
             Rr, Sig_r = _project_surface_density_abel(r, rho_eff)
-            # Σ_cr for plotting
+            # Σ_cr and mean profiles
             D_l, D_s, D_ls = _ang_dists(z_l, z_s)
             Sigma_cr_SI = (299792458.0**2) / (4.0 * math.pi * G_SI) * (D_s / (D_l * D_ls))
             Sigma_cr = Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN
-            # Mean Σ⟨R⟩ profiles
             M2D_g = 2.0 * math.pi * _cumtrapz(Sig_g * Rg, Rg)
             M2D_r = 2.0 * math.pi * _cumtrapz(Sig_r * Rr, Rr)
             mean_g = np.where(Rg>0, M2D_g/(math.pi*Rg*Rg), np.nan)
             mean_r = np.where(Rr>0, M2D_r/(math.pi*Rr*Rr), np.nan)
+            # Phantom components
+            # Ensure grids match; if not, resample Sig_g to Rr grid for difference
+            if not np.allclose(Rg, Rr):
+                # Simple linear interpolation
+                Sig_g_r = np.interp(Rr, Rg, Sig_g)
+                M2D_g_r = 2.0 * math.pi * _cumtrapz(Sig_g_r * Rr, Rr)
+                mean_g_r = np.where(Rr>0, M2D_g_r/(math.pi*Rr*Rr), np.nan)
+                mean_star = mean_g_r
+                Sigma_star = Sig_g_r
+                Rgrid = Rr
+            else:
+                mean_star = mean_g
+                Sigma_star = Sig_g
+                Rgrid = Rg
+            mean_tot = mean_r
+            Sigma_tot = Sig_r
+            mean_ph = np.maximum(mean_tot - mean_star, 0.0)
+            Sigma_ph = np.maximum(Sigma_tot - Sigma_star, 0.0)
+            # Environment profile f(R)
+            if env_profile == 'tapered':
+                fR = 1.0 / np.sqrt(1.0 + (np.maximum(Rgrid, 1e-9)/max(Re, 1e-9))**2)
+            else:
+                fR = np.ones_like(Rgrid)
+            # Lensing-only combination
+            Sigma_lens = Sigma_star + np.maximum(alpha_lens_ph, 0.0) * (1.0 + float(zeta_env_lens) * fR) * Sigma_ph
+            # Solve θE for phantom-weighted lensing
+            R_E_mod_kpc, th_mod = _einstein_radius_from_surface_density(Rgrid, Sigma_lens, z_l, z_s)
 
+            # alpha_req at observed θE if provided
+            alpha_req = ''
+            if np.isfinite(th_obs_f):
+                R_E_obs_kpc = th_obs_f/206265.0 * D_l / KPC_M
+                # Interpolate mean_* and mean_ph at R_E_obs
+                mg_obs = np.interp(R_E_obs_kpc, Rgrid, mean_star)
+                mph_obs = np.interp(R_E_obs_kpc, Rgrid, mean_ph)
+                if mph_obs > 1e-30:
+                    alpha_req_val = max((Sigma_cr - mg_obs) / mph_obs, 0.0)
+                    alpha_req = f"{alpha_req_val:.3f}"
+                else:
+                    alpha_req = 'nan'
+
+            # Write row including scaled result and knobs used
+            with out_csv.open('a', encoding='utf-8') as f:
+                f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_mod if np.isfinite(th_mod) else 'nan')},{alpha_lens_ph:.3f},{zeta_env_lens:.3f},{env_profile},{alpha_req},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+
+            # Plot mean profiles and Σ_cr; mark GR, RAR, and scaled intersections
             plt.figure(figsize=(7.0, 4.6))
-            plt.loglog(Rg, mean_g, 'b--', lw=2, label='⟨Σ⟩(R) GR')
-            plt.loglog(Rr, mean_r, 'r-', lw=2, label='⟨Σ⟩(R) RAR')
+            # Build mean_lens corresponding to Sigma_lens
+            M2D_l = 2.0 * math.pi * _cumtrapz(Sigma_lens * Rgrid, Rgrid)
+            mean_l = np.where(Rgrid>0, M2D_l/(math.pi*Rgrid*Rgrid), np.nan)
+            plt.loglog(Rgrid, mean_star, 'b--', lw=2, label='⟨Σ⟩(R) stars (GR)')
+            plt.loglog(Rgrid, mean_tot, 'r-', lw=2, alpha=0.7, label='⟨Σ⟩(R) RAR total')
+            plt.loglog(Rgrid, mean_l, 'g-', lw=2, label='⟨Σ⟩(R) RAR lens (scaled)')
             plt.axhline(Sigma_cr, color='k', ls=':', label='Σ_cr')
             if np.isfinite(th_gr):
                 R_E_gr = th_gr/206265.0 * D_l / KPC_M
@@ -829,14 +879,20 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             if np.isfinite(th_rar):
                 R_E_r = th_rar/206265.0 * D_l / KPC_M
                 plt.axvline(R_E_r, color='r', ls='-', alpha=0.5)
+            if np.isfinite(th_mod):
+                R_E_m = th_mod/206265.0 * D_l / KPC_M
+                plt.axvline(R_E_m, color='g', ls='-', alpha=0.6)
             plt.xlabel('R (kpc)')
             plt.ylabel('Mean surface density ⟨Σ⟩ (Msun/kpc^2)')
-            plt.title(f"{lens_id}: θ_E (GR={th_gr:.3f}″, RAR={th_rar:.3f}″)")
+            ttl = f"{lens_id}: θ_E (GR={th_gr:.3f}″, RAR={th_rar:.3f}″, scaled={th_mod:.3f}″)"
+            if alpha_req:
+                ttl += f"\nα_req@θE_obs={alpha_req} (α={alpha_lens_ph:.2f}, ζ_env={zeta_env_lens:.2f}, {env_profile})"
+            plt.title(ttl)
             plt.grid(alpha=0.3, which='both')
             plt.legend(frameon=False)
             figp = images_dir / f"lensing_rar_{lens_id}.png"
             plt.tight_layout(); plt.savefig(figp, dpi=140); plt.close()
-            logging.info(f"RAR lensing: {lens_id} θE_GR={th_gr:.3f} arcsec, θE_RAR={th_rar:.3f} arcsec → {figp}")
+            logging.info(f"RAR lensing: {lens_id} θE_GR={th_gr:.3f} arcsec, θE_RAR={th_rar:.3f} arcsec, θE_scaled={th_mod:.3f} arcsec → {figp}")
         except Exception as e:
             logging.warning(f"RAR lensing: failed for row {row}: {e}")
 
@@ -860,6 +916,9 @@ def main():
     ap.add_argument('--out-root', default=None, help='Output results root, default results/next_steps/<run_name>')
     ap.add_argument('--images-root', default=None, help='Images root, default images/next_steps/<run_name>')
     ap.add_argument('--lensing-sample-csv', default=None, help='CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec] for RAR lensing prediction')
+    ap.add_argument('--alpha-lens-ph', type=float, default=1.0, help='Lensing-only scale on Σ_ph (phantom)')
+    ap.add_argument('--zeta-env-lens', type=float, default=0.0, help='Lensing-only environment amplitude on Σ_ph via (1+ζ_env f(R))')
+    ap.add_argument('--env-profile', choices=['constant','tapered'], default='constant', help='Environment radial profile f(R) for lensing-only phantom scaling')
     ap.add_argument('--debug', action='store_true')
     args = ap.parse_args()
 
@@ -990,7 +1049,12 @@ def main():
     # 4b) RAR lensing from CSV sample (phantom mass mapping)
     if args.lensing_sample_csv:
         try:
-            run_lensing_rar_from_csv(results_root, images_root, Path(args.lensing_sample_csv), rar_params)
+            run_lensing_rar_from_csv(
+                results_root, images_root, Path(args.lensing_sample_csv), rar_params,
+                alpha_lens_ph=float(args.alpha_lens_ph),
+                zeta_env_lens=float(args.zeta_env_lens),
+                env_profile=str(args.env_profile)
+            )
         except Exception as e:
             logging.warning(f"RAR lensing step skipped: {e}")
 
