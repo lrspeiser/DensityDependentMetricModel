@@ -59,6 +59,7 @@ import math
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -290,6 +291,77 @@ def compute_Vbar(V_gas: np.ndarray, V_disk: np.ndarray, V_bulge: np.ndarray, ML_
     return np.sqrt(np.maximum(Vd, 0.0)**2 + np.maximum(Vb, 0.0)**2 + np.maximum(Vg, 0.0)**2)
 
 
+# ---------- SPARC selection helpers ------------------------------------------------------
+
+@dataclass
+class SparcSelection:
+    min_npts: int = 12
+    min_rmax_kpc: float = 8.0
+    max_quality: int = 2  # if metadata exists; otherwise ignored
+
+
+def list_sparc_galaxies(sparc_dir: Path) -> List[str]:
+    """List galaxy IDs discoverable under SPARC rotmod folder."""
+    glx = set()
+    for p in Path(sparc_dir).glob("**/*_rotmod.dat"):
+        name = p.name
+        g = name.split("_rotmod")[0]
+        if g:
+            glx.add(g)
+    return sorted(glx)
+
+
+def _std_id(gid: str) -> str:
+    import re
+    gid_std = gid.lower().replace(" ", "")
+    gid_std = re.sub(r"([a-zA-Z]+)0+(\d+)", r"\1\2", gid_std)
+    return gid_std
+
+
+def filter_sparc_galaxies(sparc_dir: Path, selection: SparcSelection) -> List[str]:
+    """Filter by simple heuristics: min_npts, min_rmax, and optional metadata quality (Q)."""
+    # Try to get metadata for Q if available
+    meta_df = None
+    try:
+        # import via file path to avoid import-time deps
+        repo_root = Path.cwd()
+        candidate = repo_root / 'utils' / 'Utilities' / 'sparc_io.py'
+        if candidate.exists():
+            mod = _import_by_path('sparc_io_runtime_sel', candidate)
+            load_meta = getattr(mod, 'load_sparc_metadata', None)
+            if load_meta is not None:
+                meta_df = load_meta(sparc_dir=str(sparc_dir))
+                if meta_df is not None and 'Name' in meta_df.columns:
+                    meta_df = meta_df.copy()
+                    meta_df['StdName'] = meta_df['Name'].apply(_std_id)
+    except Exception:
+        meta_df = None
+
+    out: List[str] = []
+    for gid in list_sparc_galaxies(sparc_dir):
+        data = load_sparc_galaxy(gid, sparc_dir)
+        if not data:
+            continue
+        R = np.asarray(data['R_kpc'], float)
+        npts = int(np.isfinite(R).sum())
+        rmax = float(np.nanmax(R)) if npts else 0.0
+        if npts < int(selection.min_npts) or rmax < float(selection.min_rmax_kpc):
+            continue
+        # Optional Q filter if metadata present
+        if meta_df is not None:
+            std = _std_id(gid)
+            row = meta_df[meta_df['StdName'] == std]
+            if len(row) == 1 and 'Q' in row.columns:
+                try:
+                    Q = int(row.iloc[0]['Q'])
+                    if Q > int(selection.max_quality):
+                        continue
+                except Exception:
+                    pass
+        out.append(gid)
+    return out
+
+
 # ---------- Fitting and metrics ---------------------------------------------------------
 
 def chi2_velocity(V_obs: np.ndarray, V_model: np.ndarray, e_V_obs: np.ndarray, sigma_floor: float = 0.0) -> float:
@@ -334,6 +406,57 @@ def fit_a0_grid(
         chi2_vals.append(chi2)
     idx = int(np.argmin(chi2_vals))
     return float(a0_vals[idx]), float(chi2_vals[idx])
+
+
+def scan_a0_grid(
+    R_kpc: np.ndarray,
+    Vbar_kms: np.ndarray,
+    V_obs: np.ndarray,
+    e_V_obs: np.ndarray,
+    rar_params: Dict[str, float],
+    grid_log10: Tuple[float, float] = (-10.5, -9.3),
+    ngrid: int = 60,
+    sigma_floor: float = 0.0,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return arrays (a0_vals, chi2_vals) for the scan."""
+    a0_vals = 10 ** np.linspace(grid_log10[0], grid_log10[1], ngrid)
+    chi2_vals: List[float] = []
+    for a0 in a0_vals:
+        xi = xi_rar_plateau_numpy(
+            Vbar_kms, R_kpc,
+            a0_m_s2=float(a0),
+            zeta_env=float(rar_params.get('zeta_env', 0.0)),
+            rho=None,
+            rho_c=(None if rar_params.get('rho_c', None) in (None, 0.0) else float(rar_params['rho_c'])),
+            gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
+            T0=rar_params.get('T0', None),
+            sigma_lnT=rar_params.get('sigma_lnT', None),
+            wmin=float(rar_params.get('wmin', 0.0)),
+        )
+        V_model = np.sqrt(np.maximum(Vbar_kms, 0.0)**2 * xi)
+        chi2_vals.append(chi2_velocity(V_obs, V_model, e_V_obs, sigma_floor=sigma_floor))
+    return a0_vals, np.asarray(chi2_vals, dtype=float)
+
+
+def fit_a0_err_from_grid(a0_vals: np.ndarray, chi2_vals: np.ndarray) -> Tuple[float, float]:
+    """Quadratic approx near the min to get best a0 and 1σ error from Δχ²=1."""
+    i = int(np.argmin(chi2_vals))
+    a0_best = float(a0_vals[i])
+    # Use neighbors if available
+    lo = max(i-1, 0)
+    hi = min(i+1, len(a0_vals)-1)
+    x = a0_vals[lo:hi+1]
+    y = chi2_vals[lo:hi+1]
+    if len(x) >= 3:
+        A = np.vstack([x**2, x, np.ones_like(x)]).T
+        try:
+            a, b, c = np.linalg.lstsq(A, y, rcond=None)[0]
+            if a > 0:
+                da = float(np.sqrt(1.0/a))
+                return a0_best, da
+        except Exception:
+            pass
+    return a0_best, float('nan')
 
 
 # ---------- Solar System analysis -------------------------------------------------------
@@ -398,53 +521,73 @@ def solar_system_table(
     return rows
 
 
-# ---------- Lensing pilot (optional) ---------------------------------------------------
+# ---------- Lensing baseline (anchored GR + SIS) ---------------------------------------
 
-def run_lensing_pilot(out_dir: Path, rar_params: Dict[str, float]) -> None:
-    """Use tools/lensing_predict in a pilot mode by calibrating a crude φ_env.
-    If the module is unavailable, attempt file-path import; otherwise skip.
+def _ang_dists(z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> Tuple[float, float, float]:
+    """Angular diameter distances (Dl, Ds, Dls) in meters.
+    Tries astropy; falls back to a simple flat-ΛCDM integral if not available.
+    See docs/lensing.md and README (lensing baselines and cosmology setup).
     """
-    Hernquist = PhiEnv = einstein_radius_arcsec = None
     try:
-        from tools.lensing_predict import Hernquist as _H, PhiEnv as _P, einstein_radius_arcsec as _E
-        Hernquist, PhiEnv, einstein_radius_arcsec = _H, _P, _E
+        from astropy.cosmology import FlatLambdaCDM
+        import astropy.units as u
+        cosmo = FlatLambdaCDM(H0=H0, Om0=Om0)
+        D_l = cosmo.angular_diameter_distance(z_l).to(u.m).value
+        D_s = cosmo.angular_diameter_distance(z_s).to(u.m).value
+        D_ls = cosmo.angular_diameter_distance_z1z2(z_l, z_s).to(u.m).value
+        return D_l, D_s, D_ls
     except Exception:
-        repo_root = Path.cwd()
-        cand = repo_root / 'tools' / 'lensing_predict.py'
-        if cand.exists():
-            try:
-                mod = _import_by_path('lensing_predict_runtime', cand)
-                Hernquist = getattr(mod, 'Hernquist', None)
-                PhiEnv = getattr(mod, 'PhiEnv', None)
-                einstein_radius_arcsec = getattr(mod, 'einstein_radius_arcsec', None)
-            except Exception as e:
-                logging.debug(f"Path import failed for lensing_predict: {e}")
-    if any(x is None for x in (Hernquist, PhiEnv, einstein_radius_arcsec)):
-        logging.warning("Lensing tools not available (tools/lensing_predict.py). Skipping lensing pilot.")
-        return
+        c = 299792.458  # km/s
+        H0s = H0 / 3.085677581e19  # s^-1
+        def Ez(z): return math.sqrt(Om0*(1+z)**3 + (1-Om0))
+        def Dc(z, N=4096):
+            zz = np.linspace(0.0, z, N)
+            return (c*1000.0/H0s) * np.trapz(1.0/np.vectorize(Ez)(zz), zz)
+        D_l = Dc(z_l)/(1+z_l)
+        D_s = Dc(z_s)/(1+z_s)
+        D_ls = (Dc(z_s)-Dc(z_l))/(1+z_s)
+        return D_l, D_s, D_ls
 
-    # Crude calibration: define xi at 10 kpc using a nominal Vbar=180 km/s, and map to φ_env amplitude
-    R0 = 10.0  # kpc
-    Vbar0 = 180.0  # km/s (nominal)
-    xi0 = float(xi_rar_plateau_numpy(np.array([Vbar0]), np.array([R0]), **rar_params)[0])
-    A_env = max(min(0.5 * math.log(max(xi0, 1.0)), 0.6), 0.05)  # keep amplitude modest
+ndef theta_E_pointmass_arcsec(M_Msun: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
+    c = 299792458.0
+    D_l, D_s, D_ls = _ang_dists(z_l, z_s, H0, Om0)
+    if not (D_l > 0 and D_s > 0 and D_ls > 0):
+        return 0.0
+    M = float(M_Msun) * M_SUN
+    term = (4.0 * G_SI * M / c**2) * (D_ls / (D_l * D_s))
+    theta = math.sqrt(max(term, 0.0))  # radians
+    return float(theta * 206265.0)
 
-    penv = PhiEnv(A_env=A_env, p=1.2, r0_kpc=5.0)
-    # Simple SLACS-like lens
+ndef theta_E_sis_arcsec(Vflat_kms: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
+    # SIS: theta_E = 4π (σ^2 / c^2) D_ls / D_s with V_c ≈ sqrt(2) σ
+    c_kms = 299792.458
+    sigma = max(float(Vflat_kms), 0.0) / math.sqrt(2.0)
+    D_l, D_s, D_ls = _ang_dists(z_l, z_s, H0, Om0)
+    if not (D_l > 0 and D_s > 0 and D_ls > 0):
+        return 0.0
+    theta = 4.0 * math.pi * (sigma/c_kms)**2 * (D_ls / D_s)
+    return float(theta * 206265.0)
+
+ndef run_lensing_pilot(out_dir: Path, rar_params: Dict[str, float]) -> None:
+    """Anchored lensing baselines: GR point-mass and SIS yardsticks.
+    We intentionally avoid environment-coupling here and provide a physical GR baseline
+    that cannot zero-out spuriously.
+    """
     z_l, z_s = 0.2, 0.6
     Re_kpc = 5.0
-    a_kpc = Re_kpc / 1.8153
-    M_star = 10**11.2
-    lens = Hernquist(M_star=M_star, a_kpc=a_kpc)
-
-    th_gr = einstein_radius_arcsec(lens, penv, z_l, z_s, mode="gr")
-    th_env = einstein_radius_arcsec(lens, penv, z_l, z_s, mode="tfr", a_env=1.0, b_env=1.0)
+    M_star = 10**11.2  # Msun (conservative stellar lens mass)
+    th_gr = theta_E_pointmass_arcsec(M_star, z_l, z_s)
+    th_sis_200 = theta_E_sis_arcsec(200.0, z_l, z_s)
+    th_sis_250 = theta_E_sis_arcsec(250.0, z_l, z_s)
 
     table = out_dir / 'lensing_table.csv'
     table.parent.mkdir(parents=True, exist_ok=True)
     with table.open('w', encoding='utf-8') as f:
-        f.write('z_l,z_s,Re_kpc,log10M,theta_E_GR_arcsec,theta_E_TFR_arcsec,A_env,p,r0_kpc\n')
-        f.write(f"{z_l},{z_s},{Re_kpc},11.2,{th_gr:.3f},{th_env:.3f},{A_env:.3f},1.2,5.0\n")
+        f.write('z_l,z_s,Re_kpc,log10M,theta_E_GR_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+        f.write(f"{z_l},{z_s},{Re_kpc},11.2,{th_gr:.3f},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+
+    if th_gr < 0.05:
+        logging.warning(f"GR baryon-only θ_E unexpectedly tiny ({th_gr:.3f}") – check distances/units.")
     logging.info(f"Lensing pilot written: {table}")
 
 
@@ -455,6 +598,12 @@ def main():
     ap.add_argument('--run-dir', required=True, help='Path to the run folder (e.g., runs/rar_plateau_mw_full)')
     ap.add_argument('--sparc-dir', required=True, help='Path to SPARC rotmod folder (e.g., external_data/Rotmod_LTG)')
     ap.add_argument('--galaxies', nargs='*', default=None, help='Subset of SPARC galaxies to analyze (e.g., NGC3198 NGC2403)')
+    ap.add_argument('--sample', default='gold', choices=['gold','all','q2plus'], help='SPARC sample selection if --galaxies not provided')
+    ap.add_argument('--min-npts', type=int, default=12, help='Minimum RC points for inclusion')
+    ap.add_argument('--min-rmax-kpc', type=float, default=8.0, help='Minimum R_max (kpc) for inclusion')
+    ap.add_argument('--max-quality', type=int, default=2, help='Use Q <= max-quality if SPARC metadata is available')
+    ap.add_argument('--sigma-floor', type=float, default=5.0, help='Velocity error floor (km/s) in chi2')
+    ap.add_argument('--fit-global-a0', action='store_true', help='Also compute a global a0 across the sample')
     ap.add_argument('--posterior-samples', type=int, default=0, help='Optional number of posterior samples to propagate (0=best-fit only)')
     ap.add_argument('--out-root', default=None, help='Output results root, default results/next_steps/<run_name>')
     ap.add_argument('--images-root', default=None, help='Images root, default images/next_steps/<run_name>')
@@ -481,17 +630,22 @@ def main():
     # Save a metadata snapshot for reproducibility
     (results_root / 'run_metadata.json').write_text(json.dumps({'run_dir': str(run_dir), 'rar_plateau_params': rar_params}, indent=2), encoding='utf-8')
 
-    # 2) SPARC a0 universality (initial subset)
+    # 2) SPARC a0 universality (initial or filtered subset)
     if args.galaxies:
         sample = args.galaxies
     else:
-        # Prefer Andromeda if present; else a small robust subset
-        sample = ['M31', 'NGC3198', 'NGC2403', 'NGC2841', 'NGC5055']
+        if args.sample == 'gold':
+            sample = ['M31', 'NGC3198', 'NGC2403', 'NGC2841', 'NGC5055']
+        else:
+            sel = SparcSelection(min_npts=args.min_npts, min_rmax_kpc=args.min_rmax_kpc, max_quality=args.max_quality)
+            sample = filter_sparc_galaxies(sparc_dir, sel)
+    logging.info(f"SPARC sample size: {len(sample)}")
 
     csv_path = results_root / 'sparc_a0_summary.csv'
     with csv_path.open('w', encoding='utf-8') as f:
         f.write('galaxy,a0_best_m_s2,chi2_rar,chi2_gr,dof,notes\n')
 
+    galaxy_store: List[Tuple[str, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]] = []
     for gid in sample:
         logging.info(f"SPARC: {gid}")
         data = load_sparc_galaxy(gid, sparc_dir)
@@ -503,15 +657,32 @@ def main():
         eV = data['e_V_obs']
         Vbar = compute_Vbar(data['V_gas'], data['V_disk'], data['V_bulge'], ML_disk=1.0, ML_bulge=1.0)
 
-        a0_best, chi2_rar = fit_a0_grid(R, Vbar, Vobs, eV, rar_params, sigma_floor=5.0)
-        V_model = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi_rar_plateau_numpy(Vbar, R, a0_m_s2=a0_best, zeta_env=rar_params.get('zeta_env', 0.0), rho=None, rho_c=rar_params.get('rho_c', None), gamma_exp=rar_params.get('gamma_exp', 3.0), T0=rar_params.get('T0', None), sigma_lnT=rar_params.get('sigma_lnT', None), wmin=rar_params.get('wmin', 0.0)))
-        chi2_gr = chi2_velocity(Vobs, np.maximum(Vbar, 0.0), eV, sigma_floor=5.0)
+        a0_vals, chi2_vals = scan_a0_grid(R, Vbar, Vobs, eV, rar_params, sigma_floor=float(args.sigma_floor))
+        j = int(np.argmin(chi2_vals))
+        a0_best = float(a0_vals[j])
+        chi2_rar = float(chi2_vals[j])
+        a0_best_fit, a0_err = fit_a0_err_from_grid(a0_vals, chi2_vals)
+        V_model = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi_rar_plateau_numpy(
+            Vbar, R,
+            a0_m_s2=a0_best,
+            zeta_env=rar_params.get('zeta_env', 0.0),
+            rho=None,
+            rho_c=rar_params.get('rho_c', None),
+            gamma_exp=rar_params.get('gamma_exp', 3.0),
+            T0=rar_params.get('T0', None),
+            sigma_lnT=rar_params.get('sigma_lnT', None),
+            wmin=rar_params.get('wmin', 0.0)
+        ))
+        chi2_gr = chi2_velocity(Vobs, np.maximum(Vbar, 0.0), eV, sigma_floor=float(args.sigma_floor))
         dof = max(len(R) - 1, 1)
-        notes = ''
+        notes = f"a0_pm={a0_err:.2e}" if np.isfinite(a0_err) else ''
 
         # Save CSV row
         with csv_path.open('a', encoding='utf-8') as f:
-            f.write(f"{gid},{a0_best:.6e},{chi2_rar:.3f},{chi2_gr:.3f},{dof},{notes}\n")
+            f.write(f"{gid},{a0_best_fit:.6e},{chi2_rar:.3f},{chi2_gr:.3f},{dof},{notes}\n")
+
+        # Stash for possible global a0
+        galaxy_store.append((gid, R, Vbar, Vobs, eV, a0_best))
 
         # Overlay plot
         plt.figure(figsize=(7.2, 5.0))
@@ -563,52 +734,72 @@ def main():
     # 4) Lensing pilot
     run_lensing_pilot(results_root, rar_params)
 
-    # 5) BTFR subset (simple)
-    # For now, reuse last loaded galaxy per loop to compute V_flat; aggregate if files exist.
-    # A simple implementation: parse overlays and compute V_flat as median model velocity for R>=0.8*R_max where R_max from data.
+    # 5) BTFR subset (baryonic mass + observed V_flat)
     btfr_csv = results_root / 'btfr_summary.csv'
     if not btfr_csv.exists():
         with btfr_csv.open('w', encoding='utf-8') as f:
-            f.write('galaxy,log10_Mb,log10_Vflat,selection_note\n')
+            f.write('galaxy,log10_Mb,log10_Vflat,source,notes\n')
+
+    def estimate_vflat(R, Vobs):
+        n = len(R)
+        if n < 6:
+            return float('nan'), 'too_few_points'
+        idx0 = int(0.7*n)
+        r = R[idx0:]
+        v = Vobs[idx0:]
+        if len(v) < 4:
+            return float('nan'), 'too_few_outer'
+        A = np.vstack([r, np.ones_like(r)]).T
+        m, c = np.linalg.lstsq(A, v, rcond=None)[0]
+        slope = abs(m) / max(np.nanmedian(v), 1e-6)
+        note = f'slope_rel={slope:.2f}'
+        if slope <= 0.10:
+            note = 'flat_outer'
+        return float(np.nanmedian(v)), note
+
     try:
-        # Re-iterate galaxies and compute a crude V_flat and M_b from SPARC metadata if available via sparc_io.
-        load_single_sparc_galaxy = None
-        try:
-            from utils.Utilities.sparc_io import load_single_sparc_galaxy as _ls
-            load_single_sparc_galaxy = _ls
-        except Exception:
-            repo_root = Path.cwd()
-            candidate = repo_root / 'utils' / 'Utilities' / 'sparc_io.py'
-            if candidate.exists():
-                mod = _import_by_path('sparc_io_runtime_btfr', candidate)
-                load_single_sparc_galaxy = getattr(mod, 'load_single_sparc_galaxy', None)
-        if load_single_sparc_galaxy is None:
-            raise ImportError('sparc_io not available')
         for gid in (args.galaxies or sample):
-            data = load_single_sparc_galaxy(gid, sparc_dir=str(sparc_dir))
-            if not data:
+            d = load_sparc_galaxy(gid, sparc_dir)
+            if not d:
                 continue
-            R = np.asarray(data['R_kpc'], dtype=float)
-            Vbar = compute_Vbar(np.asarray(data['V_gas_comp_kms']), np.asarray(data['V_disk_comp_kms']), np.asarray(data['V_bulge_comp_kms']))
-            a0 = load_run_params(run_dir).get('a0_m_s2', 1.2e-10)  # reload to avoid mutation
-            xi = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=a0)
-            Vmod = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi)
-            # V_flat: outermost third
-            n = len(R)
-            sel = slice(max(0, int(2*n/3)), n)
-            Vflat = float(np.median(Vmod[sel])) if n > 0 else float('nan')
-            # M_b (crude): sum of stellar+gas masses from metadata when available
-            Mb = 0.0
-            try:
-                Mb += float(data.get('M_HI_Msun', 0.0)) * 1.33  # include He
-            except Exception:
-                pass
-            # Rough stellar mass proxy from SB integrals is not readily available; leave as NaN if absent
-            Mb = Mb if Mb > 0 else float('nan')
+            R = np.asarray(d['R_kpc'], float)
+            Vobs = np.asarray(d['V_obs'], float)
+            Vflat, note = estimate_vflat(R, Vobs)
+            # gas mass (HI+He)
+            MHI = float(d.get('M_HI_Msun', float('nan')))
+            Mgas = 1.33 * MHI if np.isfinite(MHI) else float('nan')
+            # stellar mass via Σ_* integration (base M/L)
+            Sig_star = d.get('Sigma_star_Msun_pc2_baseML', None)
+            Mstar = float('nan')
+            if Sig_star is not None:
+                R_pc = np.asarray(R) * 1000.0
+                Sig_star = np.asarray(Sig_star, float)
+                if np.all(np.isfinite(R_pc)) and np.all(np.isfinite(Sig_star)) and len(R_pc) > 2:
+                    # M = 2π ∫ Σ(R) R dR (with R, dR in pc)
+                    integrand = Sig_star * R_pc
+                    Mstar = 2.0 * math.pi * float(np.trapz(integrand, R_pc))
+            Mb = np.nansum([Mstar, Mgas])
             with btfr_csv.open('a', encoding='utf-8') as f:
-                f.write(f"{gid},{(math.log10(Mb) if Mb>0 else 'nan')},{(math.log10(Vflat) if Vflat>0 else 'nan')},outer_third_median\n")
+                f.write(f"{gid},{(np.log10(Mb) if np.isfinite(Mb) and Mb>0 else 'nan')},{(np.log10(Vflat) if np.isfinite(Vflat) and Vflat>0 else 'nan')},obs_outer,{note}\n")
     except Exception as e:
         logging.warning(f"BTFR subset step skipped: {e}")
+
+    # Optional: 5b) Global a0 across sample
+    if args.fit_global_a0 and len(galaxy_store) > 0:
+        a0_grid = 10 ** np.linspace(-10.5, -9.3, 80)
+        totals: List[float] = []
+        for a0 in a0_grid:
+            tot = 0.0
+            for (_gid, R, Vbar, Vobs, eV, _a0best) in galaxy_store:
+                xi = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=float(a0))
+                Vmod = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi)
+                tot += chi2_velocity(Vobs, Vmod, eV, sigma_floor=float(args.sigma_floor))
+            totals.append(tot)
+        a0_grid = np.asarray(a0_grid, float)
+        totals = np.asarray(totals, float)
+        a0_global, a0_sigma = fit_a0_err_from_grid(a0_grid, totals)
+        (results_root/'global_a0.json').write_text(json.dumps({'a0_m_s2': a0_global, 'sigma': a0_sigma, 'n_gal': len(galaxy_store)}, indent=2), encoding='utf-8')
+        logging.info(f"Global a0 ~ {a0_global:.3e} ± {a0_sigma if np.isfinite(a0_sigma) else float('nan'):.1e} m/s^2 over {len(galaxy_store)} galaxies")
 
     # 6) Write docs index stub
     ndx = Path('docs') / 'next_steps.md'
@@ -621,13 +812,15 @@ def main():
         lines.append('Artifacts:')
         lines.append(f"- SPARC summary: `{csv_path.as_posix()}`")
         lines.append(f"- Solar table: `{solar_csv.as_posix()}`, plot: `{(images_root / 'solar_rar_plateau.png').as_posix()}`")
-        lines.append(f"- Lensing pilot table: `{(results_root / 'lensing_table.csv').as_posix()}` (if present)")
+        lines.append(f"- Lensing baseline table: `{(results_root / 'lensing_table.csv').as_posix()}` (if present)")
         lines.append(f"- BTFR subset: `{btfr_csv.as_posix()}`")
+        lines.append(f"- Global a0: `{(results_root / 'global_a0.json').as_posix()}` (if present)")
         lines.append('')
         lines.append('Method Notes:')
         lines.append('- RAR-plateau: D = 0.5 + sqrt(0.25 + a0_eff/g_bar); xi == D multiplies Vbar^2')
         lines.append('- g_bar = (Vbar^2 / R) × 3.240779289e-14 in SI (m/s^2) for V in km/s and R in kpc')
         lines.append('- a0_eff = a0 × (1 + zeta_env × s_rho × W(T)); see docs/cassini.md and docs/lensing.md')
+        lines.append('- Lensing baselines (GR point-mass, SIS) use Planck-like flat-ΛCDM distances; see docs/lensing.md')
         ndx.write_text('\n'.join(lines), encoding='utf-8')
         logging.info(f"Wrote {ndx}")
     except Exception as e:
