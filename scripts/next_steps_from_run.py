@@ -558,7 +558,7 @@ def theta_E_pointmass_arcsec(M_Msun: float, z_l: float, z_s: float, H0: float = 
     theta = math.sqrt(max(term, 0.0))  # radians
     return float(theta * 206265.0)
 
-ndef theta_E_sis_arcsec(Vflat_kms: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
+def theta_E_sis_arcsec(Vflat_kms: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
     # SIS: theta_E = 4π (σ^2 / c^2) D_ls / D_s with V_c ≈ sqrt(2) σ
     c_kms = 299792.458
     sigma = max(float(Vflat_kms), 0.0) / math.sqrt(2.0)
