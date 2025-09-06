@@ -548,7 +548,7 @@ def _ang_dists(z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> Tu
         D_ls = (Dc(z_s)-Dc(z_l))/(1+z_s)
         return D_l, D_s, D_ls
 
-ndef theta_E_pointmass_arcsec(M_Msun: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
+def theta_E_pointmass_arcsec(M_Msun: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
     c = 299792458.0
     D_l, D_s, D_ls = _ang_dists(z_l, z_s, H0, Om0)
     if not (D_l > 0 and D_s > 0 and D_ls > 0):
