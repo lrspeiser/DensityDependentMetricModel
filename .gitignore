@@ -211,3 +211,4 @@ runs/
 
 # Allow paper-ready figures (images)
 !images/paper/**/*.png
+!images/rar_plateau_analysis/**/*.png
