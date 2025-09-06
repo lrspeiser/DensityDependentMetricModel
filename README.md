@@ -1,4 +1,4 @@
-# RAR‐Gated Gravity: A Predictive Alternative to Dark Matter in Galaxies
+# Density-Gated Gravity: A Density-Dependent Alternative to Dark Matter
 
 ## Introduction
 
