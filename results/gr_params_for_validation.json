@@ -1,21 +1,3 @@
-{
-  "rho_c_solar_kpc3": 1e30,
-  "n_exp": 1.0,
-  "A": 1e-20,
-  "xi_type": "power",
-  "M_disk_thin_solar": 6e10,
-  "R_d_thin_kpc": 2.6,
-  "h_z_thin_kpc": 0.3,
-  "M_disk_thick_solar": 0,
-  "R_d_thick_kpc": 3.6,
-  "h_z_thick_kpc": 0.9,
-  "M_bulge_solar": 2e10,
-  "a_bulge_kpc": 0.9,
-  "M_gas_solar": 0,
-  "R_d_gas_kpc": 7.0,
-  "h_z_gas_kpc": 0.08,
-  "include_disk_thin": true,
-  "include_disk_thick": false,
-  "include_bulge": true,
-  "include_gas": false
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:ab1a9d95a8fd5423195fc66e528246bcee49b27f65a94800e283eddc0b59d887
+size 473

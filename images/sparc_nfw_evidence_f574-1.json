@@ -1,34 +1,3 @@
-{
-  "galaxy_id": "F574-1",
-  "model": "nfw",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": false,
-    "V200": {
-      "min": 40.0,
-      "max": 400.0
-    },
-    "c": {
-      "min": 2.0,
-      "max": 40.0
-    }
-  },
-  "evidence": {
-    "logZ": -6.919598538313641,
-    "logZ_err": 0.033220464325782455,
-    "nlive": 1000,
-    "maxcall": 200000,
-    "dlogz_target": 0.01,
-    "seed": 42,
-    "priors_gaussian": {
-      "V200": {
-        "mean": null,
-        "sigma": null
-      },
-      "c": {
-        "mean": null,
-        "sigma": null
-      }
-    }
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:0ec49c20249a8fc37a3003686d0199be0ccc81f8c2130b764e530bb3024797ae
+size 603

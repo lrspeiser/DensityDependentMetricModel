@@ -1,9 +1,3 @@
-{
-  "nvidia_smi": true,
-  "pynvml": false,
-  "gputil": true,
-  "jax": true,
-  "torch": true,
-  "tensorflow": false,
-  "system_info": true
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:6b05865b47eff917f66000c94e3b6a87cd1dba2b7488750a41adcf06bc3a9585
+size 147

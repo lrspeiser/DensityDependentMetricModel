@@ -1,18 +1,3 @@
-{
-  "galaxy_id": "UGC05918",
-  "model": "gr",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": true
-  },
-  "chi2": 66.80918792406732,
-  "loglike_no_const": -33.40459396203366,
-  "evidence": {
-    "logZ": -33.40473681577554,
-    "logZ_err": 0.0003549341463976969,
-    "nlive": 1000,
-    "maxcall": 200000,
-    "dlogz_target": 0.01,
-    "seed": 42
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:ac0f0d67c663431405251d96ee47b7a780252e1012790aea756674315599125f
+size 380

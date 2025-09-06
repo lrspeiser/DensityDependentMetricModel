@@ -1,14 +1,3 @@
-{
-  "galaxy": "NGC 3198",
-  "file": "C:\\Users\\henry\\Documents\\GitHub\\DensityDependentMetricModel\\external_data\\Rotmod_LTG\\NGC3198_rotmod.dat",
-  "params": {
-    "lambda_max": 4.927453552732823,
-    "R0_kpc": 40.0,
-    "sigma_lnR": 1.5,
-    "w_min": 0.004791270178610084,
-    "ups_disk": 0.3026102523622175,
-    "ups_bul": 0.1
-  },
-  "chi2": 230.20735632229324,
-  "chi2_dof": 6.221820441143061
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:011c55eb471ab87f4128df3889b915a73a51c0f9ea7a6f572d9004e28e8cc633
+size 415

@@ -1,18 +1,3 @@
-{
-  "galaxy_id": "F571-V1",
-  "model": "gr",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": false
-  },
-  "chi2": 124.0388671206633,
-  "loglike_no_const": -62.01943356033165,
-  "evidence": {
-    "logZ": -62.019576414073526,
-    "logZ_err": 0.00035493418385248104,
-    "nlive": 1000,
-    "maxcall": 200000,
-    "dlogz_target": 0.01,
-    "seed": 42
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:0def5741735fc6a3a94a983f4c774ac7e0f90246a65bd3ab80317bcbcfd3dd02
+size 382

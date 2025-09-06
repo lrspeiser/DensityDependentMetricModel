@@ -1,18 +1,3 @@
-{
-  "galaxy_id": "NGC3521",
-  "model": "gr",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": true
-  },
-  "chi2": 888.3013536888271,
-  "loglike_no_const": -444.15067684441357,
-  "evidence": {
-    "logZ": -444.1508196981549,
-    "logZ_err": 0.0003549485328919661,
-    "nlive": 2000,
-    "maxcall": 400000,
-    "dlogz_target": 0.01,
-    "seed": 42
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:b2ceefca27e037ea1856c31d1d8f01578bb5bca43c4b851a0cf7a0a04e98f419
+size 380

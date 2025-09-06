@@ -1,18 +1,3 @@
-{
-  "galaxy_id": "F563-V2",
-  "model": "gr",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": false
-  },
-  "chi2": 129.09093609189011,
-  "loglike_no_const": -64.54546804594506,
-  "evidence": {
-    "logZ": -64.54561089968685,
-    "logZ_err": 0.00035493460892087965,
-    "nlive": 1000,
-    "maxcall": 200000,
-    "dlogz_target": 0.01,
-    "seed": 42
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:30a103c575ea73102eecce93769f1f1335cad91c944901783ae4a7df26256b5f
+size 382

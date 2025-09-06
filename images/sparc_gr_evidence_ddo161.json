@@ -1,18 +1,3 @@
-{
-  "galaxy_id": "DDO161",
-  "model": "gr",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": false
-  },
-  "chi2": 511.61078519321194,
-  "loglike_no_const": -255.80539259660597,
-  "evidence": {
-    "logZ": -255.80553545034766,
-    "logZ_err": 0.0003549283939652828,
-    "nlive": 1000,
-    "maxcall": 200000,
-    "dlogz_target": 0.01,
-    "seed": 42
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:44fe9ef43d2feb7497c95ede8292b749194ca16ed82d0760e10ae19abf9d3f49
+size 382

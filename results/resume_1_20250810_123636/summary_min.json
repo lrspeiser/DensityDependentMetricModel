@@ -1,14 +1,3 @@
-{
-  "timestamp": "2025-08-11T05:47:27.214805",
-  "xi_type": "tidal_band",
-  "logz": -526998.8721332423,
-  "logz_error": 0.14091547503629248,
-  "rho_c_solar_kpc3_best": 9808612503110016.0,
-  "gamma_exp_best": 3.922348455713345,
-  "lambda_max_best": 3.0549788219517944,
-  "n_samples": 103165,
-  "efficiency": 0.983830148564885,
-  "delta_logz_vs_gr": 963898.652876452,
-  "bayes_factor_log10": 418615.866058221,
-  "status": "converged"
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:69c630ceb3dd01ff7d8ddee38615602a2a1f94096d8d24e9bdf617f83b0148a3
+size 446

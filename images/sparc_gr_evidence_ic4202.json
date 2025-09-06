@@ -1,18 +1,3 @@
-{
-  "galaxy_id": "IC4202",
-  "model": "gr",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": false
-  },
-  "chi2": 774.3407413037512,
-  "loglike_no_const": -387.1703706518756,
-  "evidence": {
-    "logZ": -387.1705135056169,
-    "logZ_err": 0.0003549465568036698,
-    "nlive": 1000,
-    "maxcall": 200000,
-    "dlogz_target": 0.01,
-    "seed": 42
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:c7bedf76f667aa35a08de76ce3eeb47fd26c3439b94f3ba7b99873c059a80b2e
+size 379

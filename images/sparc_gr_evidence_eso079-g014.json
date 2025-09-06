@@ -1,18 +1,3 @@
-{
-  "galaxy_id": "ESO079-G014",
-  "model": "gr",
-  "sigma_floor": 5.0,
-  "priors": {
-    "use_master_priors": false
-  },
-  "chi2": 333.7548606971112,
-  "loglike_no_const": -166.8774303485556,
-  "evidence": {
-    "logZ": -166.87757320229724,
-    "logZ_err": 0.00035493050709676404,
-    "nlive": 1000,
-    "maxcall": 200000,
-    "dlogz_target": 0.01,
-    "seed": 42
-  }
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:b7012e65e394501891cfeff6c0e1fec6c048e7a0adbb319bbc9926db3d43ca7f
+size 386
