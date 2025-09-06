@@ -5,7 +5,7 @@ Run: `rar_plateau_mw_full`
 Artifacts:
 - SPARC summary: `results/next_steps/rar_plateau_mw_full/sparc_a0_summary.csv`
 - Solar table: `results/next_steps/rar_plateau_mw_full/solar_system_table.csv`, plot: `images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png`
-- Lensing pilot table: `results/next_steps/rar_plateau_mw_full/lensing_table.csv` (if present)
+- Lensing baseline table: `results/next_steps/rar_plateau_mw_full/lensing_table.csv` (if present)
 - BTFR subset: `results/next_steps/rar_plateau_mw_full/btfr_summary.csv`
 
 Method Notes:

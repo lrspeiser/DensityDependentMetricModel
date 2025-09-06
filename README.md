@@ -205,10 +205,10 @@ We executed the next‑step tests outlined above using the latest rar_plateau Mi
   - Table: results/next_steps/rar_plateau_mw_full/solar_system_table.csv
   - At Saturn (≈10 AU) with our MW best‑fit a0 ≈ 3.0×10⁻¹⁰ m/s² and zeta_env=0, we obtain |ΔG/G| ≈ 5.1×10⁻⁶, well within the Cassini bound 2.3×10⁻⁵.
 
-- Lensing pilot (model prediction; see docs/lensing.md):
-  - results/next_steps/rar_plateau_mw_full/lensing_table.csv (GR vs TFR‑pilot θ_E for a SLACS‑like case)
+- Lensing baselines (GR point‑mass + SIS; see docs/lensing.md):
+  - results/next_steps/rar_plateau_mw_full/lensing_table.csv (anchored GR θ_E and SIS yardsticks)
 
-- BTFR subset (simple outer‑third median V_flat; gas mass proxy from SPARC metadata when present):
+- BTFR subset (observed outer‑curve V_flat; M_b = M_star + 1.33·M_HI when available):
   - results/next_steps/rar_plateau_mw_full/btfr_summary.csv
 
 #### Data provenance and assumptions
@@ -233,7 +233,12 @@ We executed the next‑step tests outlined above using the latest rar_plateau Mi
 - Execute the orchestrator (pure NumPy; no GPU required):
 
 ```bash
-python scripts/next_steps_from_run.py   --run-dir runs/rar_plateau_mw_full   --sparc-dir external_data/Rotmod_LTG   --posterior-samples 0
+# Scaled SPARC + BTFR + lensing baselines with global a0 (q2plus subset)
+python scripts/next_steps_from_run.py \
+  --run-dir runs/rar_plateau_mw_full \
+  --sparc-dir external_data/Rotmod_LTG \
+  --sample q2plus --min-npts 12 --min-rmax-kpc 8 --max-quality 2 \
+  --sigma-floor 6.0 --fit-global-a0
 ```
 
 This writes CSVs under results/next_steps/rar_plateau_mw_full and plots under images/next_steps/rar_plateau_mw_full. An index page is also written to docs/next_steps.md.
@@ -246,6 +251,11 @@ python -m data_loaders.load_existing_gaia_lmc_smc   --api --object LMC --limit 1
 ```
 
 All steps emit verbose logs and snapshot metadata (run parameters) for traceability. If a file is missing (e.g., _HIrad.dat), the loader behavior is logged and a consistent fallback is applied; we do not fabricate inputs.
+
+### Recent fixes (orchestration)
+- Mistake: (i) SPARC selection hard‑coded to 5 galaxies; (ii) BTFR used H I‑only mass and model V_flat; (iii) lensing pilot could report 0.000″ θ_E for massive lenses; (iv) no global a0 summary.
+- Fix: (i) added sample filters (Q≤2, min RC points, min R_max) and "q2plus"/"all" modes; (ii) BTFR now uses M_b = M_star + 1.33·M_HI and observed outer‑curve V_flat with flatness checks; (iii) lensing switched to anchored GR point‑mass and SIS baselines (see docs/lensing.md); (iv) added global‑a0 scan with Δχ²=1 uncertainties.
+- Test: ran smoke orchestration and verified non‑zero GR θ_E for 10^11.2 M_⊙ at z_l=0.2,z_s=0.6; BTFR populated with stellar+gas masses; SPARC sample size logged > 5; global a0 JSON written.
 
 1. **Origin & universality of $a_0$.** Treat $a_0$ as a global parameter with tight prior around the canonical value[^mcgaugh16] and test **hierarchically** across galaxies. Does one $a_0$ work for MW, HSBs, LSBs, and dwarfs? Is there evidence for weak environment‑dependence?
 2. **Solar‑System & lab constraints.** Quantify $|\xi-1|$ at planetary/lab densities with the **density gate** $S_\rho$. Show consistency with **Cassini** PPN $|\gamma-1|<2.3\times10^{-5}$.[^bertotti03] Provide a compact $\Delta GM/GM$ table (1–30 AU).
