@@ -568,7 +568,7 @@ def theta_E_sis_arcsec(Vflat_kms: float, z_l: float, z_s: float, H0: float = 70.
     theta = 4.0 * math.pi * (sigma/c_kms)**2 * (D_ls / D_s)
     return float(theta * 206265.0)
 
-ndef run_lensing_pilot(out_dir: Path, rar_params: Dict[str, float]) -> None:
+def run_lensing_pilot(out_dir: Path, rar_params: Dict[str, float]) -> None:
     """Anchored lensing baselines: GR point-mass and SIS yardsticks.
     We intentionally avoid environment-coupling here and provide a physical GR baseline
     that cannot zero-out spuriously.
