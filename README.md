@@ -126,7 +126,7 @@ https://commons.case.edu/cgi/viewcontent.cgi?article=1767&context=facultyworks
 ## Figures and Charts (added)
 
 **Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**
-![Milky Way: GR vs NFW vs RAR‑gate](images/rar_plateau_analysis/rar_plateau_mw_comparison_final.png)
+![Milky Way: GR vs NFW vs RAR‑gate](images/rar_plateau_analysis/rar_plateau_mw_comparison_3way.png)
 *Caption: Comparison of GR (baryons‑only), NFW halo, and RAR‑gate predictions for the Milky Way rotation curve (Gaia DR3); image links to repository artifact.*
 
 Below we embed representative outputs produced by the analysis orchestrator (scripts/next_steps_from_run.py) using the latest Milky Way rar_plateau run. Plots link directly to tracked artifacts in this repository.
