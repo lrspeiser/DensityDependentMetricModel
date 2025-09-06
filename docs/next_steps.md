@@ -1,13 +1,13 @@
 # Next-Step Analyses Index
 
-Run: `gr_20250804_163255`
+Run: `btfr_fix_20250906`
 
 Artifacts:
-- SPARC summary: `results/next_steps/gr_20250804_163255/sparc_a0_summary.csv`
-- Solar table: `results/next_steps/gr_20250804_163255/solar_system_table.csv`, plot: `images/next_steps/gr_20250804_163255/solar_rar_plateau.png`
-- Lensing baseline table: `results/next_steps/gr_20250804_163255/lensing_table.csv` (if present)
-- BTFR subset: `results/next_steps/gr_20250804_163255/btfr_summary.csv`
-- Global a0: `results/next_steps/gr_20250804_163255/global_a0.json` (if present)
+- SPARC summary: `results/next_steps/btfr_fix_20250906/sparc_a0_summary.csv`
+- Solar table: `results/next_steps/btfr_fix_20250906/solar_system_table.csv`, plot: `images/next_steps/btfr_fix_20250906/solar_rar_plateau.png`
+- Lensing baseline table: `results/next_steps/btfr_fix_20250906/lensing_table.csv` (if present)
+- BTFR subset: `results/next_steps/btfr_fix_20250906/btfr_summary.csv`
+- Global a0: `results/next_steps/btfr_fix_20250906/global_a0.json` (if present)
 
 Method Notes:
 - RAR-plateau: D = 0.5 + sqrt(0.25 + a0_eff/g_bar); xi == D multiplies Vbar^2

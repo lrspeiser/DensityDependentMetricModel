@@ -734,11 +734,10 @@ def main():
     # 4) Lensing pilot
     run_lensing_pilot(results_root, rar_params)
 
-    # 5) BTFR subset (baryonic mass + observed V_flat)
+    # 5) BTFR: baryonic mass (M_star + 1.33 M_HI) and observed V_flat with flatness checks
     btfr_csv = results_root / 'btfr_summary.csv'
-    if not btfr_csv.exists():
-        with btfr_csv.open('w', encoding='utf-8') as f:
-            f.write('galaxy,log10_Mb,log10_Vflat,source,notes\n')
+    with btfr_csv.open('w', encoding='utf-8') as f:
+        f.write('galaxy,log10_Mb,log10_Vflat,source,notes\n')
 
     def estimate_vflat(R, Vobs):
         n = len(R)
@@ -757,9 +756,24 @@ def main():
             note = 'flat_outer'
         return float(np.nanmedian(v)), note
 
+    # Use the full sparc_io loader to access Sigma_* and M_HI metadata
+    full_loader = None
     try:
-        for gid in (args.galaxies or sample):
-            d = load_sparc_galaxy(gid, sparc_dir)
+        from utils.Utilities.sparc_io import load_single_sparc_galaxy as _ls_full
+        full_loader = _ls_full
+    except Exception:
+        repo_root = Path.cwd()
+        candidate = repo_root / 'utils' / 'Utilities' / 'sparc_io.py'
+        if candidate.exists():
+            mod = _import_by_path('sparc_io_runtime_btfr_full', candidate)
+            full_loader = getattr(mod, 'load_single_sparc_galaxy', None)
+
+    used = []
+    x = []  # log10 V_flat
+    y = []  # log10 M_b
+    for gid in (args.galaxies or sample):
+        try:
+            d = full_loader(gid, sparc_dir=str(sparc_dir)) if full_loader else None
             if not d:
                 continue
             R = np.asarray(d['R_kpc'], float)
@@ -775,14 +789,72 @@ def main():
                 R_pc = np.asarray(R) * 1000.0
                 Sig_star = np.asarray(Sig_star, float)
                 if np.all(np.isfinite(R_pc)) and np.all(np.isfinite(Sig_star)) and len(R_pc) > 2:
-                    # M = 2π ∫ Σ(R) R dR (with R, dR in pc)
-                    integrand = Sig_star * R_pc
+                    integrand = Sig_star * R_pc  # Σ * R
                     Mstar = 2.0 * math.pi * float(np.trapz(integrand, R_pc))
             Mb = np.nansum([Mstar, Mgas])
+            logV = (np.log10(Vflat) if np.isfinite(Vflat) and Vflat > 0 else float('nan'))
+            logM = (np.log10(Mb) if np.isfinite(Mb) and Mb > 0 else float('nan'))
             with btfr_csv.open('a', encoding='utf-8') as f:
-                f.write(f"{gid},{(np.log10(Mb) if np.isfinite(Mb) and Mb>0 else 'nan')},{(np.log10(Vflat) if np.isfinite(Vflat) and Vflat>0 else 'nan')},obs_outer,{note}\n")
-    except Exception as e:
-        logging.warning(f"BTFR subset step skipped: {e}")
+                f.write(f"{gid},{(logM if np.isfinite(logM) else 'nan')},{(logV if np.isfinite(logV) else 'nan')},obs_outer,{note}\n")
+            if np.isfinite(logV) and np.isfinite(logM):
+                x.append(logV); y.append(logM); used.append(gid)
+        except Exception as e:
+            logging.debug(f"BTFR: {gid} error: {e}")
+            continue
+
+    n_btfr = len(x)
+    logging.info(f"BTFR: usable galaxies = {n_btfr}")
+
+    # Fit log M_b = a + b log V; report slope, R^2, RMS scatter; test curvature
+    btfr_png = images_root / 'btfr_baryonic.png'
+    if n_btfr >= 10:
+        xv = np.asarray(x, float); yv = np.asarray(y, float)
+        p, cov = np.polyfit(xv, yv, 1, cov=True)
+        a_lin, b_lin = p[1], p[0]
+        b_err = float(np.sqrt(cov[0,0])) if cov.shape == (2,2) else float('nan')
+        yhat = a_lin + b_lin * xv
+        resid = yv - yhat
+        rss = float(np.sum(resid**2))
+        tss = float(np.sum((yv - np.mean(yv))**2))
+        r2 = 1.0 - rss / tss if tss > 0 else float('nan')
+        rms = float(np.sqrt(np.mean(resid**2)))
+        # Curvature test via quadratic fit
+        pq = np.polyfit(xv, yv, 2)
+        a2, b2, c2 = pq[0], pq[1], pq[2]
+        yhat2 = a2 * xv**2 + b2 * xv + c2
+        rss2 = float(np.sum((yv - yhat2)**2))
+        n = len(xv)
+        bic_lin = n * np.log(rss / n + 1e-30) + 2 * np.log(n)
+        bic_quad = n * np.log(rss2 / n + 1e-30) + 3 * np.log(n)
+        delta_bic = bic_quad - bic_lin  # > 0 favors linear
+        # Save a small JSON summary
+        btfr_summary = {
+            'N': n_btfr,
+            'slope': b_lin,
+            'slope_err': b_err,
+            'intercept': a_lin,
+            'R2': r2,
+            'rms_dex': rms,
+            'quad_c': a2,
+            'delta_BIC_quad_minus_lin': delta_bic,
+        }
+        (results_root / 'btfr_fit_summary.json').write_text(json.dumps(btfr_summary, indent=2), encoding='utf-8')
+        logging.info(f"BTFR fit: slope={b_lin:.3f}±{(b_err if np.isfinite(b_err) else float('nan')):.3f}, R2={r2:.3f}, rms={rms:.3f} dex, ΔBIC={delta_bic:.2f}")
+
+        # Figure
+        plt.figure(figsize=(7.2, 5.0))
+        plt.scatter(xv, yv, s=16, alpha=0.7, label=f'BTFR sample (N={n_btfr})')
+        xs = np.linspace(min(xv)-0.05, max(xv)+0.05, 200)
+        plt.plot(xs, a_lin + b_lin*xs, 'r-', lw=2, label=f'fit: slope={b_lin:.2f}±{(b_err if np.isfinite(b_err) else float('nan')):.2f}')
+        plt.xlabel('log10 V_flat [km/s]')
+        plt.ylabel('log10 M_b [M_sun]')
+        plt.title('Baryonic Tully–Fisher Relation (observed V_flat)')
+        plt.grid(alpha=0.3)
+        plt.legend(frameon=False)
+        plt.tight_layout(); plt.savefig(btfr_png, dpi=150); plt.close()
+        logging.info(f"Saved {btfr_png}")
+    else:
+        logging.warning("BTFR: insufficient usable galaxies (<10); figure and fit not generated.")
 
     # Optional: 5b) Global a0 across sample
     if args.fit_global_a0 and len(galaxy_store) > 0:
