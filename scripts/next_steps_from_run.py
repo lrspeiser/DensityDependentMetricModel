@@ -57,6 +57,7 @@ import json
 import logging
 import math
 import os
+import csv
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
@@ -591,6 +592,257 @@ def run_lensing_pilot(out_dir: Path, rar_params: Dict[str, float]) -> None:
     logging.info(f"Lensing pilot written: {table}")
 
 
+# ---------- RAR lensing via 'phantom mass' mapping -------------------------------------
+
+def _sersic_deprojected_density_prugniel_simien(r_kpc: np.ndarray, M_star_Msun: float, Re_kpc: float, n: float = 4.0) -> np.ndarray:
+    """Approximate 3D density for a Sersic profile using Prugniel & Simien (1997) form.
+    ρ(r) = ρ0 (r/Re)^(-p_n) exp(-b_n (r/Re)^(1/n)), with p_n ≈ 1 - 0.6097/n + 0.05463/n^2.
+    ρ0 is fixed by requiring 4π∫ ρ r^2 dr = M_star.
+    Returns ρ in Msun/kpc^3 for r_kpc grid.
+    """
+    r = np.asarray(r_kpc, float)
+    n = float(n)
+    Re = max(float(Re_kpc), 1e-6)
+    # Coefficients (Ciotti & Bertin/Prugniel & Simien approximations)
+    p_n = 1.0 - 0.6097/n + 0.05463/(n*n)
+    b_n = 2.0*n - 1.0/3.0 + 0.009876/n
+    x = np.maximum(r / Re, 1e-9)
+    # Unnormalized shape
+    rho_shape = np.power(x, -p_n) * np.exp(-b_n * np.power(x, 1.0/n))
+    # Normalize ρ0 so that total mass matches M_star over a wide radial extent
+    # Integrate from ~0 to ~100 Re for practical convergence
+    r_int = np.logspace(np.log10(Re/200.0), np.log10(100.0*Re), 1200)
+    x_int = r_int / Re
+    rho_shape_int = np.power(x_int, -p_n) * np.exp(-b_n * np.power(x_int, 1.0/n))
+    M_shape = 4.0 * math.pi * np.trapz(rho_shape_int * (r_int**2), r_int)
+    if M_shape <= 0:
+        return np.full_like(r, np.nan)
+    rho0 = float(M_star_Msun) / float(M_shape)
+    return rho0 * rho_shape
+
+
+def _cumtrapz(y: np.ndarray, x: np.ndarray) -> np.ndarray:
+    y = np.asarray(y, float)
+    x = np.asarray(x, float)
+    out = np.zeros_like(x, dtype=float)
+    if len(x) >= 2:
+        out[1:] = np.cumsum(0.5 * (y[1:] + y[:-1]) * (x[1:] - x[:-1]))
+    return out
+
+
+def _enclosed_mass_from_density(r_kpc: np.ndarray, rho_Msun_per_kpc3: np.ndarray) -> np.ndarray:
+    r = np.asarray(r_kpc, float)
+    rho = np.asarray(rho_Msun_per_kpc3, float)
+    # Cumulative integral 4π ∫ ρ r^2 dr
+    return 4.0 * math.pi * _cumtrapz(rho * (r**2), r)
+
+
+def _project_surface_density_abel(r_kpc: np.ndarray, rho_Msun_per_kpc3: np.ndarray, R_eval_kpc: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+    """Project a spherical density via Abel integral: Σ(R) = 2∫_R^∞ ρ(r) r dr / sqrt(r^2 - R^2).
+    Returns (R_grid, Sigma_Msun_per_kpc2).
+    """
+    r = np.asarray(r_kpc, float)
+    rho = np.asarray(rho_Msun_per_kpc3, float)
+    if R_eval_kpc is None:
+        R_eval = r.copy()
+    else:
+        R_eval = np.asarray(R_eval_kpc, float)
+    Sigma = np.zeros_like(R_eval)
+    for i, R in enumerate(R_eval):
+        mask = r > max(R, 1e-12)
+        rr = r[mask]
+        if len(rr) < 2:
+            Sigma[i] = 0.0
+            continue
+        rh = rho[mask]
+        kern = rr / np.sqrt(np.maximum(rr*rr - R*R, 1e-30))
+        Sigma[i] = 2.0 * float(np.trapz(rh * kern, rr))
+    return R_eval, Sigma
+
+
+def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2: np.ndarray, z_l: float, z_s: float) -> Tuple[float, float]:
+    """Solve for R_E (kpc) where mean surface density <Σ>(<R) = Σ_cr. Returns (R_E_kpc, theta_E_arcsec).
+    If no solution found, returns (nan, nan).
+    """
+    # Critical surface density Σ_cr in Msun/kpc^2
+    D_l, D_s, D_ls = _ang_dists(z_l, z_s)
+    if not (D_l > 0 and D_s > 0 and D_ls > 0):
+        return float('nan'), float('nan')
+    KPC_M = 3.085677581491367e19
+    c = 299792458.0
+    Sigma_cr_SI = (c*c) / (4.0 * math.pi * G_SI) * (D_s / (D_l * D_ls))  # kg/m^2
+    Sigma_cr = Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN  # Msun/kpc^2
+
+    R = np.asarray(R_kpc, float)
+    Sig = np.asarray(Sigma_Msun_per_kpc2, float)
+    # Cumulative projected mass M_2D(<R) = 2π ∫ Σ(R') R' dR'
+    M2D = 2.0 * math.pi * _cumtrapz(Sig * R, R)
+    mean_Sig = np.where(R > 0, M2D / (math.pi * R * R), np.nan)
+    f = mean_Sig - Sigma_cr
+    # Find crossing where f changes sign
+    idx = np.where(np.signbit(f[:-1]) != np.signbit(f[1:]))[0]
+    if len(idx) == 0:
+        return float('nan'), float('nan')
+    j = int(idx[0])
+    # Linear interpolate between R[j], R[j+1]
+    x0, x1 = R[j], R[j+1]
+    y0, y1 = f[j], f[j+1]
+    if (y1 - y0) == 0:
+        R_E = x0
+    else:
+        R_E = x0 - y0 * (x1 - x0) / (y1 - y0)
+    theta_rad = (R_E * KPC_M) / D_l
+    theta_arcsec = theta_rad * 206265.0
+    return float(R_E), float(theta_arcsec)
+
+
+def _theta_E_from_sersic_with_xi(log10M_star: float, Re_kpc: float, z_l: float, z_s: float, rar_params: Dict[str, float], n: float = 4.0, use_rar: bool = True) -> Tuple[float, float]:
+    """Compute Einstein radius for a sphericalized Sersic stellar lens.
+    If use_rar=True, builds an effective 'phantom' mass via xi(R) from xi_rar_plateau_numpy.
+    If False, returns GR (baryons-only) result using the same Sersic baryons.
+    Returns (R_E_kpc, theta_E_arcsec).
+    """
+    M_star = 10.0 ** float(log10M_star)
+    Re = float(Re_kpc)
+    # Radial grid covering deep core to large halo extent
+    rmin = max(Re/200.0, 0.01)
+    rmax = max(50.0*Re, Re + 100.0)
+    r = np.logspace(np.log10(rmin), np.log10(rmax), 600)
+    rho_b = _sersic_deprojected_density_prugniel_simien(r, M_star, Re, n=n)
+    if not np.all(np.isfinite(rho_b)):
+        return float('nan'), float('nan')
+    M_b_encl = _enclosed_mass_from_density(r, rho_b)
+
+    # Compute effective enclosed mass
+    if use_rar:
+        # Build Vbar_kms from M_b(<r): V^2 = G M(<r) / r
+        KPC_M = 3.085677581491367e19
+        V_ms = np.sqrt(np.maximum(G_SI * (M_b_encl * M_SUN) / (r * KPC_M), 0.0))
+        V_kms = V_ms / 1000.0
+        xi = xi_rar_plateau_numpy(V_kms, r, a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
+                                  zeta_env=float(rar_params.get('zeta_env', 0.0)),
+                                  rho=None, rho_c=rar_params.get('rho_c', None),
+                                  gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
+                                  T0=rar_params.get('T0', None),
+                                  sigma_lnT=rar_params.get('sigma_lnT', None),
+                                  wmin=float(rar_params.get('wmin', 0.0)))
+        M_eff_encl = np.maximum(xi, 0.0) * np.maximum(M_b_encl, 0.0)
+    else:
+        M_eff_encl = np.maximum(M_b_encl, 0.0)
+
+    # 3D density from dM/dr: ρ = (1/(4π r^2)) dM/dr
+    dM_dr = np.gradient(M_eff_encl, r, edge_order=2)
+    rho_eff = np.maximum(dM_dr, 0.0) / (4.0 * math.pi * np.maximum(r, 1e-9)**2)
+
+    # Project and solve for Einstein radius
+    R_eval, Sigma = _project_surface_density_abel(r, rho_eff)
+    R_E_kpc, theta_arcsec = _einstein_radius_from_surface_density(R_eval, Sigma, z_l, z_s)
+    return R_E_kpc, theta_arcsec
+
+
+def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, rar_params: Dict[str, float]) -> None:
+    """Compute lensing for a CSV lens list using Sersic baryons and RAR 'phantom mass'.
+    CSV columns (header required): lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
+    Outputs results/…/lensing_rar_table.csv and per-lens plots under images/…
+    """
+    if not csv_path.exists():
+        logging.warning(f"RAR lensing: CSV not found: {csv_path}")
+        return
+    images_dir.mkdir(parents=True, exist_ok=True)
+    out_csv = out_dir / 'lensing_rar_table.csv'
+    with out_csv.open('w', encoding='utf-8') as f:
+        f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+
+    # Read CSV quickly (no pandas dependency)
+    rows = []
+    with csv_path.open('r', encoding='utf-8') as f:
+        header = f.readline().strip().split(',')
+        cols = [h.strip() for h in header]
+        for line in f:
+            if not line.strip():
+                continue
+            fr = [s.strip() for s in line.strip().split(',')]
+            if len(fr) < 5:
+                continue
+            data = {cols[i]: fr[i] if i < len(fr) else '' for i in range(len(cols))}
+            rows.append(data)
+
+    for row in rows:
+        try:
+            lens_id = row.get('lens_id', 'lens')
+            z_l = float(row['z_l']); z_s = float(row['z_s'])
+            log10M = float(row['log10M_star'])
+            Re = float(row['Re_kpc'])
+            n = float(row.get('n_sersic', '4') or 4.0)
+            th_obs = row.get('theta_E_obs_arcsec', '')
+            th_obs_f = float(th_obs) if th_obs not in ('', 'nan', 'NaN') else float('nan')
+
+            # GR and RAR (spherical Sersic)
+            _, th_gr = _theta_E_from_sersic_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=False)
+            _, th_rar = _theta_E_from_sersic_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=True)
+            # SIS yardsticks
+            th_sis_200 = theta_E_sis_arcsec(200.0, z_l, z_s)
+            th_sis_250 = theta_E_sis_arcsec(250.0, z_l, z_s)
+
+            # Write row
+            with out_csv.open('a', encoding='utf-8') as f:
+                f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+
+            # Plot mean Σ and Σ_cr intersection for GR vs RAR
+            # Build profiles once for plotting
+            M_star = 10**log10M
+            r = np.logspace(np.log10(max(Re/200.0, 0.01)), np.log10(max(50.0*Re, Re+100.0)), 600)
+            rho_b = _sersic_deprojected_density_prugniel_simien(r, M_star, Re, n=n)
+            M_b = _enclosed_mass_from_density(r, rho_b)
+            # GR projection
+            Rg, Sig_g = _project_surface_density_abel(r, rho_b)
+            # RAR projection
+            KPC_M = 3.085677581491367e19
+            V_ms = np.sqrt(np.maximum(G_SI * (M_b * M_SUN) / (r * KPC_M), 0.0)); V_kms = V_ms/1000.0
+            xi = xi_rar_plateau_numpy(V_kms, r, a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
+                                      zeta_env=float(rar_params.get('zeta_env', 0.0)),
+                                      rho=None, rho_c=rar_params.get('rho_c', None),
+                                      gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
+                                      T0=rar_params.get('T0', None), sigma_lnT=rar_params.get('sigma_lnT', None),
+                                      wmin=float(rar_params.get('wmin', 0.0)))
+            M_eff = np.maximum(xi, 0.0) * np.maximum(M_b, 0.0)
+            dM = np.gradient(M_eff, r, edge_order=2)
+            rho_eff = np.maximum(dM, 0.0) / (4.0 * math.pi * np.maximum(r, 1e-9)**2)
+            Rr, Sig_r = _project_surface_density_abel(r, rho_eff)
+            # Σ_cr for plotting
+            D_l, D_s, D_ls = _ang_dists(z_l, z_s)
+            Sigma_cr_SI = (299792458.0**2) / (4.0 * math.pi * G_SI) * (D_s / (D_l * D_ls))
+            Sigma_cr = Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN
+            # Mean Σ⟨R⟩ profiles
+            M2D_g = 2.0 * math.pi * _cumtrapz(Sig_g * Rg, Rg)
+            M2D_r = 2.0 * math.pi * _cumtrapz(Sig_r * Rr, Rr)
+            mean_g = np.where(Rg>0, M2D_g/(math.pi*Rg*Rg), np.nan)
+            mean_r = np.where(Rr>0, M2D_r/(math.pi*Rr*Rr), np.nan)
+
+            plt.figure(figsize=(7.0, 4.6))
+            plt.loglog(Rg, mean_g, 'b--', lw=2, label='⟨Σ⟩(R) GR')
+            plt.loglog(Rr, mean_r, 'r-', lw=2, label='⟨Σ⟩(R) RAR')
+            plt.axhline(Sigma_cr, color='k', ls=':', label='Σ_cr')
+            if np.isfinite(th_gr):
+                R_E_gr = th_gr/206265.0 * D_l / KPC_M
+                plt.axvline(R_E_gr, color='b', ls='--', alpha=0.5)
+            if np.isfinite(th_rar):
+                R_E_r = th_rar/206265.0 * D_l / KPC_M
+                plt.axvline(R_E_r, color='r', ls='-', alpha=0.5)
+            plt.xlabel('R (kpc)')
+            plt.ylabel('Mean surface density ⟨Σ⟩ (Msun/kpc^2)')
+            plt.title(f"{lens_id}: θ_E (GR={th_gr:.3f}″, RAR={th_rar:.3f}″)")
+            plt.grid(alpha=0.3, which='both')
+            plt.legend(frameon=False)
+            figp = images_dir / f"lensing_rar_{lens_id}.png"
+            plt.tight_layout(); plt.savefig(figp, dpi=140); plt.close()
+            logging.info(f"RAR lensing: {lens_id} θE_GR={th_gr:.3f} arcsec, θE_RAR={th_rar:.3f} arcsec → {figp}")
+        except Exception as e:
+            logging.warning(f"RAR lensing: failed for row {row}: {e}")
+
+    logging.info(f"RAR lensing table: {out_csv}")
+
+
 # ---------- Main orchestrator ----------------------------------------------------------
 
 def main():
@@ -607,6 +859,7 @@ def main():
     ap.add_argument('--posterior-samples', type=int, default=0, help='Optional number of posterior samples to propagate (0=best-fit only)')
     ap.add_argument('--out-root', default=None, help='Output results root, default results/next_steps/<run_name>')
     ap.add_argument('--images-root', default=None, help='Images root, default images/next_steps/<run_name>')
+    ap.add_argument('--lensing-sample-csv', default=None, help='CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec] for RAR lensing prediction')
     ap.add_argument('--debug', action='store_true')
     args = ap.parse_args()
 
@@ -733,6 +986,13 @@ def main():
 
     # 4) Lensing pilot
     run_lensing_pilot(results_root, rar_params)
+
+    # 4b) RAR lensing from CSV sample (phantom mass mapping)
+    if args.lensing_sample_csv:
+        try:
+            run_lensing_rar_from_csv(results_root, images_root, Path(args.lensing_sample_csv), rar_params)
+        except Exception as e:
+            logging.warning(f"RAR lensing step skipped: {e}")
 
     # 5) BTFR: baryonic mass (M_star + 1.33 M_HI) and observed V_flat with flatness checks
     btfr_csv = results_root / 'btfr_summary.csv'
@@ -885,6 +1145,7 @@ def main():
         lines.append(f"- SPARC summary: `{csv_path.as_posix()}`")
         lines.append(f"- Solar table: `{solar_csv.as_posix()}`, plot: `{(images_root / 'solar_rar_plateau.png').as_posix()}`")
         lines.append(f"- Lensing baseline table: `{(results_root / 'lensing_table.csv').as_posix()}` (if present)")
+        lines.append(f"- Lensing RAR table: `{(results_root / 'lensing_rar_table.csv').as_posix()}` (if present)")
         lines.append(f"- BTFR subset: `{btfr_csv.as_posix()}`")
         lines.append(f"- Global a0: `{(results_root / 'global_a0.json').as_posix()}` (if present)")
         lines.append('')
