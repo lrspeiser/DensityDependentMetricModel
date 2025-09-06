@@ -587,7 +587,7 @@ def _ang_dists(z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> Tu
         f.write(f"{z_l},{z_s},{Re_kpc},11.2,{th_gr:.3f},{th_sis_200:.3f},{th_sis_250:.3f}\n")
 
     if th_gr < 0.05:
-        logging.warning(f"GR baryon-only θ_E unexpectedly tiny ({th_gr:.3f}") – check distances/units.")
+        logging.warning(f"GR baryon-only θ_E unexpectedly tiny ({th_gr:.3f} arcsec) - check distances/units.")
     logging.info(f"Lensing pilot written: {table}")
 
 
