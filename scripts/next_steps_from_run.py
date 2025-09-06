@@ -867,7 +867,10 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             else:
                 fR = np.ones_like(Rgrid)
             # Lensing-only combination
-            Sigma_lens = Sigma_star + np.maximum(alpha_lens_ph, 0.0) * (1.0 + float(zeta_env_lens) * fR) * Sigma_ph
+            # Allow signed zeta_env_lens but do not subtract phantom mass: clamp (1 + zeta f(R)) >= 0
+            # See docs/lensing.md for notes on lensing-only scaling and environment profiles.
+            scale_env = np.maximum(1.0 + float(zeta_env_lens) * fR, 0.0)
+            Sigma_lens = Sigma_star + np.maximum(alpha_lens_ph, 0.0) * scale_env * Sigma_ph
             # Solve θE for phantom-weighted lensing
             R_E_mod_kpc, th_mod = _einstein_radius_from_surface_density(Rgrid, Sigma_lens, z_l, z_s)
 
