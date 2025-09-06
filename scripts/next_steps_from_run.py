@@ -675,22 +675,46 @@ def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2
 
     R = np.asarray(R_kpc, float)
     Sig = np.asarray(Sigma_Msun_per_kpc2, float)
-    # Cumulative projected mass M_2D(<R) = 2π ∫ Σ(R') R' dR'
+
+    # 2D cumulative mass and mean surface density
     M2D = 2.0 * math.pi * _cumtrapz(Sig * R, R)
     mean_Sig = np.where(R > 0, M2D / (math.pi * R * R), np.nan)
-    f = mean_Sig - Sigma_cr
-    # Find crossing where f changes sign
-    idx = np.where(np.signbit(f[:-1]) != np.signbit(f[1:]))[0]
-    if len(idx) == 0:
+
+    # --- NEW: enforce monotone decrease to kill tiny-bin wiggles ---
+    # (max-accumulate on the reversed array -> monotone non-increasing)
+    mean_Sig_mon = np.maximum.accumulate(mean_Sig[::-1])[::-1]
+    if np.any(np.diff(mean_Sig) > 0):
+        logging.warning("Einstein solver: non-monotone <Sigma>(R) detected; applying monotone envelope.")
+
+    f = mean_Sig_mon - Sigma_cr
+
+    # Guardrails
+    if not np.all(np.isfinite(f)):
         return float('nan'), float('nan')
-    j = int(idx[0])
-    # Linear interpolate between R[j], R[j+1]
+    if f[0] < 0:
+        # Even the innermost mean Σ is below Σ_cr -> no strong-lensing solution on this grid
+        return float('nan'), float('nan')
+    if f[-1] > 0:
+        # Still above at outer edge -> extend the grid outward and retry (caller may handle)
+        return float('nan'), float('nan')
+
+    # --- NEW: bracket using the LAST index where f >= 0 ---
+    idx_nonneg = np.where(f >= 0)[0]
+    if len(idx_nonneg) == 0:
+        return float('nan'), float('nan')
+    j = int(idx_nonneg[-1])
+    # Ensure we have a bracket (j, j+1) with f[j] >= 0 and f[j+1] <= 0
+    if j >= len(R) - 1:
+        return float('nan'), float('nan')
     x0, x1 = R[j], R[j+1]
     y0, y1 = f[j], f[j+1]
+    # Linear interpolation (f is smooth and monotone after the step above)
     if (y1 - y0) == 0:
         R_E = x0
     else:
         R_E = x0 - y0 * (x1 - x0) / (y1 - y0)
+
+    # Convert to arcsec
     theta_rad = (R_E * KPC_M) / D_l
     theta_arcsec = theta_rad * 206265.0
     return float(R_E), float(theta_arcsec)
