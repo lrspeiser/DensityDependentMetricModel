@@ -62,6 +62,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
+# Relativistic scaffolding (PPN export, c_T guardrail)
+try:
+    from theory.relativistic import evaluate_ppn, check_c_T_guardrail
+except Exception:
+    evaluate_ppn = None
+    check_c_T_guardrail = None
+
 import numpy as np
 import matplotlib.pyplot as plt
 import importlib.util
@@ -975,12 +982,13 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
 
             # Plot mean profiles and Σ_cr; mark GR, RAR, and scaled intersections
             plt.figure(figsize=(7.0, 4.6))
-            # Build mean_lens corresponding to Sigma_lens
-            M2D_l = 2.0 * math.pi * _cumtrapz(Sigma_lens * Rgrid, Rgrid)
-            mean_l = np.where(Rgrid>0, M2D_l/(math.pi*Rgrid*Rgrid), np.nan)
             plt.loglog(Rgrid, mean_star, 'b--', lw=2, label='⟨Σ⟩(R) stars (GR)')
             plt.loglog(Rgrid, mean_tot, 'r-', lw=2, alpha=0.7, label='⟨Σ⟩(R) RAR total')
-            plt.loglog(Rgrid, mean_l, 'g-', lw=2, label='⟨Σ⟩(R) RAR lens (scaled)')
+            if not metric_only:
+                # Build mean_lens corresponding to Sigma_lens
+                M2D_l = 2.0 * math.pi * _cumtrapz(Sigma_lens * Rgrid, Rgrid)
+                mean_l = np.where(Rgrid>0, M2D_l/(math.pi*Rgrid*Rgrid), np.nan)
+                plt.loglog(Rgrid, mean_l, 'g-', lw=2, label='⟨Σ⟩(R) RAR lens (scaled)')
             plt.axhline(Sigma_cr, color='k', ls=':', label='Σ_cr')
             if np.isfinite(th_gr):
                 R_E_gr = th_gr/206265.0 * D_l / KPC_M
@@ -1038,6 +1046,7 @@ def main():
     ap.add_argument('--sigma-cr-scale', type=float, default=1.0, help='Multiplicative factor on Σ_cr (lensing-only, distances sensitivity)')
     ap.add_argument('--metric-lensing-only', action='store_true', help='If set, compute lensing strictly from the metric (Φ+Ψ via xi) and disable any α_lens_ph or ζ_env_lens scaling in outputs (paper build path).')
     ap.add_argument('--debug', action='store_true')
+    ap.add_argument('--write-ppn-table', action='store_true', help='If set, write a PPN table (γ, β, α1, α2) under results/next_steps/<run>/ppn_table.csv based on the adopted relativistic subclass (Φ=Ψ, c_T=1).')
     args = ap.parse_args()
 
     setup_logger(args.debug)
@@ -1132,7 +1141,7 @@ def main():
 
     logging.info(f"SPARC summary: {csv_path}")
 
-    # 3) Solar-System ΔG/G
+    # 3) Solar-System ΔG/G and optional PPN table
     solar_rows = solar_system_table(rar_params)
     solar_csv = results_root / 'solar_system_table.csv'
     with solar_csv.open('w', encoding='utf-8') as f:
@@ -1160,6 +1169,23 @@ def main():
     plt.savefig(outpng, dpi=140)
     plt.close()
     logging.info(f"Saved {outpng}")
+
+    # Optional PPN export for Solar-System radii (γ, β, α1, α2 with explicit theory assumption)
+    if args.write_ppn_table:
+        if check_c_T_guardrail is not None and not check_c_T_guardrail(rar_params):
+            logging.error('PPN export aborted: c_T guardrail failed (c_T != 1).')
+        elif evaluate_ppn is None:
+            logging.warning('PPN export unavailable: theory.relativistic not importable.')
+        else:
+            radii_AU = [r['AU'] for r in solar_rows]
+            ppn_list = evaluate_ppn(rar_params, radii_AU)
+            ppn_csv = results_root / 'ppn_table.csv'
+            with ppn_csv.open('w', encoding='utf-8') as f:
+                f.write('AU,gamma,beta,alpha1,alpha2,theory_assumption,note\n')
+                for AU, res in zip(radii_AU, ppn_list):
+                    f.write(f"{AU:.1f},{res.gamma:.6f},{res.beta:.6f},{res.alpha1:.6f},{res.alpha2:.6f}," \
+                            f"{res.theory_assumption.replace(',', ';')},{res.note.replace(',', ';')}\n")
+            logging.info(f"PPN table: {ppn_csv}")
 
     # 4) Lensing pilot
     run_lensing_pilot(results_root, rar_params)
@@ -1210,8 +1236,12 @@ def main():
         repo_root = Path.cwd()
         candidate = repo_root / 'utils' / 'Utilities' / 'sparc_io.py'
         if candidate.exists():
-            mod = _import_by_path('sparc_io_runtime_btfr_full', candidate)
-            full_loader = getattr(mod, 'load_single_sparc_galaxy', None)
+            try:
+                mod = _import_by_path('sparc_io_runtime_btfr_full', candidate)
+                full_loader = getattr(mod, 'load_single_sparc_galaxy', None)
+            except Exception as e:
+                logging.warning(f"BTFR: could not import SPARC loader by path ({e}); skipping BTFR metadata join.")
+                full_loader = None
 
     used = []
     x = []  # log10 V_flat
