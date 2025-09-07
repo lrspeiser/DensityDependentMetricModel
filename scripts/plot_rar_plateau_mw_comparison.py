@@ -115,8 +115,12 @@ def build_params_for_model(a0_params: dict) -> dict:
     return p
 
 
-def _load_gaia_local_df(repo_root: Path) -> pd.DataFrame:
-    # Prefer merged CSV if available
+def _load_gaia_local_df(repo_root: Path, override: Path | None = None) -> pd.DataFrame:
+    # Prefer override path if provided
+    if override is not None and override.exists():
+        df = pd.read_csv(override)
+        return process_gaia_data(df)
+    # Fall back to common locations
     candidates = [
         repo_root / 'external_data' / 'gaia_sky_slices' / 'all_sky_gaia.csv',
         repo_root / 'gaia_sky_slices' / 'all_sky_gaia.csv',
@@ -125,13 +129,13 @@ def _load_gaia_local_df(repo_root: Path) -> pd.DataFrame:
         if c.exists():
             df = pd.read_csv(c)
             return process_gaia_data(df)
-    raise FileNotFoundError('Could not find local Gaia cache all_sky_gaia.csv')
+    raise FileNotFoundError('Could not find local Gaia cache all_sky_gaia.csv; pass --gaia-csv to specify a file.')
 
 
-def _star_stats_at_integers(df: pd.DataFrame, r_min=1, r_max=30, half_width=0.25):
+def _star_stats_at_grid(df: pd.DataFrame, grid: np.ndarray, half_width: float = 0.25):
     Rk = df['R_kpc'].values
     V = df['v_obs'].values
-    radii = np.arange(r_min, r_max + 1, dtype=float)
+    radii = np.asarray(grid, dtype=float)
     v_med = np.full_like(radii, np.nan)
     v_lo = np.full_like(radii, np.nan)
     v_hi = np.full_like(radii, np.nan)
@@ -147,11 +151,11 @@ def _star_stats_at_integers(df: pd.DataFrame, r_min=1, r_max=30, half_width=0.25
     return radii, v_med, v_lo, v_hi, n
 
 
-def make_plot(params: dict, out_path: Path) -> None:
+def make_plot(params: dict, out_path: Path, *, gaia_csv: Path | None = None, median_start: float = 1.0, median_step: float = 1.0, median_halfwidth: float = 0.25, rmax_cap: float = 30.0) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Radii (1..30 kpc log grid)
-    R = np.logspace(0.0, np.log10(30.0), 240).astype(np.float32)
+    R = np.logspace(0.0, np.log10(float(rmax_cap)), 320).astype(np.float32)
     R_cp = cp.asarray(R, dtype=cp.float32)
 
     # GR (baryons-only)
@@ -163,16 +167,21 @@ def make_plot(params: dict, out_path: Path) -> None:
     # NFW (ΛCDM baseline) on top of baryons
     v_nfw = compute_nfw_velocity(R, v_gr, M_200=1.5e12, c=12.0, R_200=230.0)
 
-    # Load Gaia and compute star medians at integer radii
-    df = _load_gaia_local_df(REPO_ROOT)
-    R_int, v_med_obs, v_lo_obs, v_hi_obs, n_obs = _star_stats_at_integers(df, r_min=1, r_max=30, half_width=0.25)
+    # Load Gaia and compute star medians at requested grid
+    df = _load_gaia_local_df(REPO_ROOT, override=gaia_csv)
+    Rk = df['R_kpc'].values
+    # Build grid up to observed max, capped by rmax_cap
+    rmax_obs = float(np.nanmax(Rk)) if Rk.size else float(rmax_cap)
+    r_hi = min(float(rmax_cap), rmax_obs)
+    grid = np.arange(float(median_start), float(r_hi) + 0.5*float(median_step), float(median_step))
+    R_int, v_med_obs, v_lo_obs, v_hi_obs, n_obs = _star_stats_at_grid(df, grid, half_width=float(median_halfwidth))
 
     # Build figure
     fig = plt.figure(figsize=(12, 9))
 
     # Panel 1: velocities
     ax1 = plt.subplot(2, 1, 1)
-    # Observational medians at integers with error bars
+    # Observational medians at grid radii with error bars
     ok = np.isfinite(v_med_obs)
     ax1.errorbar(R_int[ok], v_med_obs[ok], yerr=[v_med_obs[ok]-v_lo_obs[ok], v_hi_obs[ok]-v_med_obs[ok]], 
                  fmt='ko', ms=4, mec='k', mfc='k', alpha=0.8, ecolor='gray', elinewidth=1.0, capsize=3, label='Gaia medians @ integers')
@@ -220,6 +229,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--run_dir', type=str, default='runs/rar_plateau_mw_full', help='Path to rar_plateau run directory')
     ap.add_argument('--out', type=str, default='images/rar_plateau_analysis/rar_plateau_mw_comparison.png', help='Output PNG path')
+    ap.add_argument('--gaia-csv', type=str, default='', help='Optional explicit path to merged Gaia CSV (all_sky_gaia.csv)')
+    ap.add_argument('--median-start', type=float, default=1.0, help='Start radius (kpc) for Gaia median bins')
+    ap.add_argument('--median-step', type=float, default=1.0, help='Step (kpc) for Gaia median bins (use 0.1 for fine)')
+    ap.add_argument('--median-halfwidth', type=float, default=0.25, help='Half-width (kpc) of the bin around each grid radius')
+    ap.add_argument('--rmax-cap', type=float, default=30.0, help='Maximum radius (kpc) for model curves and plotting')
     args = ap.parse_args()
 
     run_dir = Path(args.run_dir)
@@ -237,7 +251,16 @@ def main():
     best = _load_best_from_npz(npz)
     params = build_params_for_model(best)
 
-    make_plot(params, out_path)
+    gaia_path = Path(args.gaia_csv) if args.gaia_csv else None
+    make_plot(
+        params,
+        out_path,
+        gaia_csv=gaia_path,
+        median_start=float(args.median_start),
+        median_step=float(args.median_step),
+        median_halfwidth=float(args.median_halfwidth),
+        rmax_cap=float(args.rmax_cap),
+    )
 
 
 if __name__ == '__main__':
