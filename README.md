@@ -133,6 +133,40 @@ https://commons.case.edu/cgi/viewcontent.cgi?article=1767&context=facultyworks
 
 ## Figures and Charts (added)
 
+## Reproducibility (paper figures and tables)
+
+Use scripts/reproduce_paper.py to regenerate the analysis artifacts used in the paper (SPARC overlays, Solar/PPN table + plot, lensing tables/figures, and hierarchical a0). Environment:
+- Python 3.11
+- pip install ./utils
+- pip install dynesty
+
+Example (gold sample):
+
+```bash
+python scripts/reproduce_paper.py \
+  --run-dir runs/enhanced_20250805_115400 \
+  --sparc-dir external_data/Rotmod_LTG \
+  --lensing-csv docs/lensing_targets.csv \
+  --hierarchical-a0 \
+  --hierarchical-a0-bayes
+```
+
+Larger SPARC sample (Q<=2):
+
+```bash
+python scripts/reproduce_paper.py \
+  --run-dir runs/enhanced_20250805_115400 \
+  --sparc-dir external_data/Rotmod_LTG \
+  --lensing-csv docs/lensing_targets.csv \
+  --sample q2plus \
+  --hierarchical-a0 \
+  --hierarchical-a0-bayes
+```
+
+Outputs are written under results/next_steps/<run>/ and images/next_steps/<run>/. A summary index is at docs/next_steps.md and a concise report is written to docs/repro_report.md.
+
+Note: figures and large tables are tracked via Git LFS; if you want to commit newly generated artifacts, ensure LFS is installed (git lfs install).
+
 **Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**
 ![Milky Way: GR vs NFW vs RAR‑gate](images/rar_plateau_mw_full/mw_rotation_rar_plateau.png)
 *Caption: Comparison of GR (baryons‑only), NFW halo, and RAR‑gate predictions for the Milky Way rotation curve (Gaia DR3); figure regenerated from the latest pipeline outputs for this repo.*
