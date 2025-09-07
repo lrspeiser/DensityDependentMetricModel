@@ -1108,6 +1108,7 @@ def main():
     ap.add_argument('--posterior-samples', type=int, default=0, help='Optional number of posterior samples to propagate (0=best-fit only)')
     ap.add_argument('--out-root', default=None, help='Output results root, default results/next_steps/<run_name>')
     ap.add_argument('--images-root', default=None, help='Images root, default images/next_steps/<run_name>')
+    ap.add_argument('--hierarchical-a0', action='store_true', help='After per-galaxy scans, perform a two-stage hierarchical fit for a0 across the sample (lognormal prior).')
     ap.add_argument('--lensing-sample-csv', default=None, help='CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec] for RAR lensing prediction')
     ap.add_argument('--alpha-lens-ph', type=float, default=1.0, help='Lensing-only scale on Σ_ph (phantom)')
     ap.add_argument('--zeta-env-lens', type=float, default=0.0, help='Lensing-only environment amplitude on Σ_ph via (1+ζ_env f(R))')
@@ -1153,6 +1154,8 @@ def main():
     csv_path = results_root / 'sparc_a0_summary.csv'
     with csv_path.open('w', encoding='utf-8') as f:
         f.write('galaxy,a0_best_m_s2,chi2_rar,chi2_gr,dof,notes\n')
+    grids_dir = results_root / 'sparc_a0_grids'
+    grids_dir.mkdir(parents=True, exist_ok=True)
 
     galaxy_store: List[Tuple[str, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]] = []
     for gid in sample:
@@ -1167,6 +1170,12 @@ def main():
         Vbar = compute_Vbar(data['V_gas'], data['V_disk'], data['V_bulge'], ML_disk=1.0, ML_bulge=1.0)
 
         a0_vals, chi2_vals = scan_a0_grid(R, Vbar, Vobs, eV, rar_params, sigma_floor=float(args.sigma_floor))
+        # Save per-galaxy grid for hierarchical stage (CSV with log10a0, chi2)
+        grid_csv = grids_dir / f"{gid.replace(' ','_')}.csv"
+        with grid_csv.open('w', encoding='utf-8') as gf:
+            gf.write('log10_a0,chi2\n')
+            for a0v, c2 in zip(a0_vals, chi2_vals):
+                gf.write(f"{np.log10(a0v):.9f},{float(c2):.6f}\n")
         j = int(np.argmin(chi2_vals))
         a0_best = float(a0_vals[j])
         chi2_rar = float(chi2_vals[j])
@@ -1417,6 +1426,85 @@ def main():
         a0_global, a0_sigma = fit_a0_err_from_grid(a0_grid, totals)
         (results_root/'global_a0.json').write_text(json.dumps({'a0_m_s2': a0_global, 'sigma': a0_sigma, 'n_gal': len(galaxy_store)}, indent=2), encoding='utf-8')
         logging.info(f"Global a0 ~ {a0_global:.3e} ± {a0_sigma if np.isfinite(a0_sigma) else float('nan'):.1e} m/s^2 over {len(galaxy_store)} galaxies")
+
+    # Optional: two-stage hierarchical a0 across sample
+    if args.hierarchical_a0 and len(list((results_root/'sparc_a0_grids').glob('*.csv'))) > 0:
+        try:
+            grids = sorted((results_root/'sparc_a0_grids').glob('*.csv'))
+            # Build a common ln a0 grid from min/max across galaxies
+            lnmins = []
+            lnmaxs = []
+            per = []
+            for g in grids:
+                xs = []
+                with g.open('r', encoding='utf-8') as f:
+                    header = f.readline()
+                    for line in f:
+                        parts = line.strip().split(',')
+                        xs.append(float(parts[0]))
+                if len(xs) > 3:
+                    lnmins.append(min(xs)); lnmaxs.append(max(xs))
+            if lnmins and lnmaxs:
+                lnlo = max(lnmins); lnhi = min(lnmaxs)
+                if lnhi > lnlo:
+                    ln_a0 = np.linspace(lnlo, lnhi, 160)
+                    # For each galaxy, read chi2 and compute log-likelihood over ln_a0 via interp
+                    ll_list = []
+                    for g in grids:
+                        xa = []
+                        c2 = []
+                        with g.open('r', encoding='utf-8') as f:
+                            f.readline()
+                            for line in f:
+                                a, v = line.strip().split(',')
+                                xa.append(float(a)); c2.append(float(v))
+                        xa = np.asarray(xa, float); c2 = np.asarray(c2, float)
+                        # Interpolate chi2 onto ln_a0; guard large values
+                        c2i = np.interp(ln_a0, xa, c2, left=np.nan, right=np.nan)
+                        mask = np.isfinite(c2i)
+                        # log likelihood up to additive const: -0.5 * chi2
+                        lli = -0.5 * c2i[mask]
+                        # normalize by subtracting max to avoid underflow later
+                        lli = lli - np.nanmax(lli)
+                        # Store as array matching ln_a0 size (nan where not covered)
+                        ll = np.full_like(ln_a0, -np.inf)
+                        ll[mask] = lli
+                        ll_list.append(ll)
+                    # Hyperparameter grid for µ, σ
+                    mu_grid = np.linspace(lnlo, lnhi, 80)
+                    sigma_grid = np.linspace(0.05, 1.2, 60)
+                    log_like = np.full((len(mu_grid), len(sigma_grid)), -np.inf)
+                    dln = (ln_a0[1]-ln_a0[0]) if len(ln_a0)>1 else 1.0
+                    for i, mu in enumerate(mu_grid):
+                        for j, sg in enumerate(sigma_grid):
+                            # prior over ln a0: Normal(mu, sg)
+                            prior = np.exp(-0.5*((ln_a0-mu)/sg)**2) / (sg*np.sqrt(2*np.pi))
+                            # For each galaxy, integral over a0: sum exp(ll_i) * prior * dln
+                            tot = 0.0
+                            for lli in ll_list:
+                                y = lli + np.log(np.maximum(prior, 1e-300))
+                                m = np.nanmax(y)
+                                # log integral using log-sum-exp for stability
+                                s = np.sum(np.exp(y - m)) * dln
+                                tot += (m + np.log(max(s, 1e-300)))
+                            log_like[i, j] = tot
+                    # Find max and report
+                    idx = np.unravel_index(int(np.nanargmax(log_like)), log_like.shape)
+                    mu_hat = float(mu_grid[idx[0]]); sigma_hat = float(sigma_grid[idx[1]])
+                    hier_json = results_root / 'hierarchical_a0_summary.json'
+                    hier_json.write_text(json.dumps({'mu': mu_hat, 'sigma': sigma_hat, 'n_gal': len(ll_list)}, indent=2), encoding='utf-8')
+                    # Heatmap plot
+                    plt.figure(figsize=(6.4, 5.0))
+                    plt.imshow(log_like.T - np.nanmax(log_like), origin='lower', aspect='auto',
+                               extent=[mu_grid[0], mu_grid[-1], sigma_grid[0], sigma_grid[-1]], cmap='viridis')
+                    plt.colorbar(label='log ℒ(µ,σ) − max')
+                    plt.scatter([mu_hat], [sigma_hat], c='r', s=40, label='MLE')
+                    plt.xlabel('µ = ln a0'); plt.ylabel('σ (lognormal)'); plt.legend(frameon=False)
+                    hm = images_root / 'hierarchical_a0_heatmap.png'
+                    plt.tight_layout(); plt.savefig(hm, dpi=140); plt.close()
+                    logging.info(f"Hierarchical a0 MLE: mu={mu_hat:.3f}, sigma={sigma_hat:.3f} → {hier_json}; heatmap: {hm}")
+        except Exception as e:
+            logging.warning(f"Hierarchical a0 step skipped: {e}")
 
     # 6) Write docs index stub
     ndx = Path('docs') / 'next_steps.md'
