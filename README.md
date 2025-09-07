@@ -420,3 +420,13 @@ Anything you want tweaked? If you’d like this merged directly into the existin
   - Path: images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png
   - ![B1608+656 — lensing panel](images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png)
   - Caption: Stars (GR), RAR total, and scaled lens curves with Σ_cr; vertical lines mark GR/RAR/scaled θ_E after the monotone envelope + last‑crossing rule.
+
+---
+
+## Editorial review and repo status
+
+- Editorial checklist and proposed actions: see feedback.md (project root). This document captures the Nature Physics-oriented checklist (indispensable results, reviewer pre-empts, presentation/policy) plus a prioritized to-do list.
+- Editor-style review and definition-of-done: see feedback_editor_review.md. This adds a traffic-light status snapshot, concrete upgrades A–I, and a definition-of-done list used to gate submission readiness.
+- Snapshot: Solar-System constraints and PPN/Cassini coverage are implemented; lensing from a single relativistic completion (without any α_lens_ph in the manuscript), hierarchical a0 over a large SPARC/BIG-SPARC sample, wide-binary tests, and Milky Way K_z/Σ_1.1 are the main remaining items.
+
+These files are part of the repo and maintained alongside code to keep the paper and implementation aligned.
