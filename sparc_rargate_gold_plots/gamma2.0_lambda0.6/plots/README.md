@@ -1,0 +1,197 @@
+﻿# DensityDependentMetricModel\sparc_rargate_gold_plots\gamma2.0_lambda0.6\plots
+
+This folder contains generated images. Fill in the sections below to document the generation parameters and what each image depicts.
+
+## Parameters
+- mode: rar
+- dataset: sparc
+- gamma: 2.0
+- lambda: 0.6
+
+## What these images are
+- TODO: Describe the subject and purpose of these images.
+
+## Image list
+- CamB.png - TODO: description
+- D512-2.png - TODO: description
+- D564-8.png - TODO: description
+- D631-7.png - TODO: description
+- DDO064.png - TODO: description
+- DDO154.png - TODO: description
+- DDO161.png - TODO: description
+- DDO168.png - TODO: description
+- DDO170.png - TODO: description
+- ESO079-G014.png - TODO: description
+- ESO116-G012.png - TODO: description
+- ESO444-G084.png - TODO: description
+- ESO563-G021.png - TODO: description
+- F561-1.png - TODO: description
+- F563-1.png - TODO: description
+- F563-V1.png - TODO: description
+- F563-V2.png - TODO: description
+- F565-V2.png - TODO: description
+- F567-2.png - TODO: description
+- F568-1.png - TODO: description
+- F568-3.png - TODO: description
+- F568-V1.png - TODO: description
+- F571-8.png - TODO: description
+- F571-V1.png - TODO: description
+- F574-1.png - TODO: description
+- F574-2.png - TODO: description
+- F579-V1.png - TODO: description
+- F583-1.png - TODO: description
+- F583-4.png - TODO: description
+- IC2574.png - TODO: description
+- IC4202.png - TODO: description
+- KK98-251.png - TODO: description
+- NGC0024.png - TODO: description
+- NGC0055.png - TODO: description
+- NGC0100.png - TODO: description
+- NGC0247.png - TODO: description
+- NGC0289.png - TODO: description
+- NGC0300.png - TODO: description
+- NGC0801.png - TODO: description
+- NGC0891.png - TODO: description
+- NGC1003.png - TODO: description
+- NGC1090.png - TODO: description
+- NGC1705.png - TODO: description
+- NGC2366.png - TODO: description
+- NGC2403.png - TODO: description
+- NGC2683.png - TODO: description
+- NGC2841.png - TODO: description
+- NGC2903.png - TODO: description
+- NGC2915.png - TODO: description
+- NGC2955.png - TODO: description
+- NGC2976.png - TODO: description
+- NGC2998.png - TODO: description
+- NGC3109.png - TODO: description
+- NGC3198.png - TODO: description
+- NGC3521.png - TODO: description
+- NGC3726.png - TODO: description
+- NGC3741.png - TODO: description
+- NGC3769.png - TODO: description
+- NGC3877.png - TODO: description
+- NGC3893.png - TODO: description
+- NGC3917.png - TODO: description
+- NGC3949.png - TODO: description
+- NGC3953.png - TODO: description
+- NGC3972.png - TODO: description
+- NGC3992.png - TODO: description
+- NGC4010.png - TODO: description
+- NGC4013.png - TODO: description
+- NGC4051.png - TODO: description
+- NGC4068.png - TODO: description
+- NGC4085.png - TODO: description
+- NGC4088.png - TODO: description
+- NGC4100.png - TODO: description
+- NGC4138.png - TODO: description
+- NGC4157.png - TODO: description
+- NGC4183.png - TODO: description
+- NGC4214.png - TODO: description
+- NGC4217.png - TODO: description
+- NGC4389.png - TODO: description
+- NGC4559.png - TODO: description
+- NGC5005.png - TODO: description
+- NGC5033.png - TODO: description
+- NGC5055.png - TODO: description
+- NGC5371.png - TODO: description
+- NGC5585.png - TODO: description
+- NGC5907.png - TODO: description
+- NGC5985.png - TODO: description
+- NGC6015.png - TODO: description
+- NGC6195.png - TODO: description
+- NGC6503.png - TODO: description
+- NGC6674.png - TODO: description
+- NGC6789.png - TODO: description
+- NGC6946.png - TODO: description
+- NGC7331.png - TODO: description
+- NGC7793.png - TODO: description
+- NGC7814.png - TODO: description
+- PGC51017.png - TODO: description
+- UGC00128.png - TODO: description
+- UGC00191.png - TODO: description
+- UGC00634.png - TODO: description
+- UGC00731.png - TODO: description
+- UGC00891.png - TODO: description
+- UGC01230.png - TODO: description
+- UGC01281.png - TODO: description
+- UGC02023.png - TODO: description
+- UGC02259.png - TODO: description
+- UGC02455.png - TODO: description
+- UGC02487.png - TODO: description
+- UGC02885.png - TODO: description
+- UGC02916.png - TODO: description
+- UGC02953.png - TODO: description
+- UGC03205.png - TODO: description
+- UGC03546.png - TODO: description
+- UGC03580.png - TODO: description
+- UGC04278.png - TODO: description
+- UGC04305.png - TODO: description
+- UGC04325.png - TODO: description
+- UGC04483.png - TODO: description
+- UGC04499.png - TODO: description
+- UGC05005.png - TODO: description
+- UGC05253.png - TODO: description
+- UGC05414.png - TODO: description
+- UGC05716.png - TODO: description
+- UGC05721.png - TODO: description
+- UGC05750.png - TODO: description
+- UGC05764.png - TODO: description
+- UGC05829.png - TODO: description
+- UGC05918.png - TODO: description
+- UGC05986.png - TODO: description
+- UGC05999.png - TODO: description
+- UGC06399.png - TODO: description
+- UGC06446.png - TODO: description
+- UGC06614.png - TODO: description
+- UGC06628.png - TODO: description
+- UGC06667.png - TODO: description
+- UGC06786.png - TODO: description
+- UGC06787.png - TODO: description
+- UGC06818.png - TODO: description
+- UGC06917.png - TODO: description
+- UGC06923.png - TODO: description
+- UGC06930.png - TODO: description
+- UGC06973.png - TODO: description
+- UGC06983.png - TODO: description
+- UGC07089.png - TODO: description
+- UGC07125.png - TODO: description
+- UGC07151.png - TODO: description
+- UGC07232.png - TODO: description
+- UGC07261.png - TODO: description
+- UGC07323.png - TODO: description
+- UGC07399.png - TODO: description
+- UGC07524.png - TODO: description
+- UGC07559.png - TODO: description
+- UGC07577.png - TODO: description
+- UGC07603.png - TODO: description
+- UGC07608.png - TODO: description
+- UGC07690.png - TODO: description
+- UGC07866.png - TODO: description
+- UGC08286.png - TODO: description
+- UGC08490.png - TODO: description
+- UGC08550.png - TODO: description
+- UGC08699.png - TODO: description
+- UGC08837.png - TODO: description
+- UGC09037.png - TODO: description
+- UGC09133.png - TODO: description
+- UGC09992.png - TODO: description
+- UGC10310.png - TODO: description
+- UGC11455.png - TODO: description
+- UGC11557.png - TODO: description
+- UGC11820.png - TODO: description
+- UGC11914.png - TODO: description
+- UGC12506.png - TODO: description
+- UGC12632.png - TODO: description
+- UGC12732.png - TODO: description
+- UGCA281.png - TODO: description
+- UGCA442.png - TODO: description
+- UGCA444.png - TODO: description
+
+## Reproduction
+- Run metadata: not found - TODO: add the exact command and config used.
+- Image file modified (local time): first=09/03/2025 08:32:08, last=09/03/2025 08:32:33
+
+## Notes
+- TODO: Any caveats or additional details.
+
