@@ -1,5 +1,7 @@
 Great question—and an exciting submission. Wearing my Nature Physics editor hat, here’s a concrete, prioritized checklist of what we would still need to see to seriously consider an editorially handled article about Density‑Gated Gravity (DGG) / “RAR‑gated gravity.” I’ve broken this into (A) indispensable technical results that must be in the manuscript, (B) likely reviewer requests that you can pre‑empt, and (C) presentation & policy requirements specific to Nature Portfolio.
 
+Note: An extended editor-style review with a traffic-light status snapshot, concrete upgrades A–I, and a definition-of-done checklist is available in feedback_editor_review.md.
+
 ---
 
 ## A) Indispensable technical results (must be in the paper)
