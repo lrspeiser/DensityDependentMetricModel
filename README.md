@@ -473,6 +473,66 @@ python scripts/next_steps_from_run.py \
   --metric-lensing-only --density-profile sersic --write-ppn-table
 ```
 
+---
+
+## Reproducibility protocol (exact commands & parameters)
+
+Environment (per WARP.md)
+- Python: 3.11
+- Create a venv, then install:
+  ```bash
+  pip install ./utils
+  pip install dynesty scipy pandas astropy
+  # Optional GPU path: pip install cupy-cuda12x  (or cupy-cuda11x for CUDA 11)
+  ```
+
+Data in-repo
+- SPARC rotmod: external_data/Rotmod_LTG (rotmod files, optional MasterSheet)
+- Lens target list: docs/lensing_targets.csv (fill measured log10M_star and Re_kpc)
+
+Exact command used to generate the figures and tables referenced above
+- Run directory used in this README: runs/enhanced_20250805_115400
+- Command:
+  ```bash
+  python scripts/next_steps_from_run.py \
+    --run-dir runs/enhanced_20250805_115400 \
+    --sparc-dir external_data/Rotmod_LTG \
+    --lensing-sample-csv docs/lensing_targets.csv \
+    --metric-lensing-only --density-profile sersic \
+    --nfw-enable --nfw-mass-ratio 50 --nfw-c 8 \
+    --write-ppn-table
+  ```
+
+Outputs produced (paths in repo)
+- Lensing tables & figures
+  - results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv
+  - results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
+  - images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+  - images/next_steps/enhanced_20250805_115400/lensing_rar_<lens_id>.png
+  - results/next_steps/enhanced_20250805_115400/lensing_metric_stack.csv
+  - images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png
+- Solar-System & PPN
+  - results/next_steps/enhanced_20250805_115400/solar_system_table.csv
+  - images/next_steps/enhanced_20250805_115400/solar_rar_plateau.png
+  - results/next_steps/enhanced_20250805_115400/ppn_table.csv
+- SPARC overlays & BTFR
+  - results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
+  - images/next_steps/enhanced_20250805_115400/sparc_overlay_<galaxy>.png
+  - results/next_steps/enhanced_20250805_115400/btfr_summary.csv
+  - results/next_steps/enhanced_20250805_115400/btfr_fit_summary.json
+- Hierarchical a0 (optional; add --hierarchical-a0)
+  - results/next_steps/enhanced_20250805_115400/sparc_a0_grids/*.csv
+  - results/next_steps/enhanced_20250805_115400/hierarchical_a0_summary.json
+  - images/next_steps/enhanced_20250805_115400/hierarchical_a0_heatmap.png
+
+Source-Data mapping for paper figures
+- Per-lens lensing plots: results/next_steps/enhanced_20250805_115400/lensing_metric_profiles/<lens>_profiles.csv
+- θE scatter: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json and lensing_metric_table.csv
+- ΔΣ stack: results/next_steps/enhanced_20250805_115400/lensing_metric_stack.csv
+- Solar constraints: results/next_steps/enhanced_20250805_115400/solar_system_table.csv
+- SPARC overlays: results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
+- BTFR: results/next_steps/enhanced_20250805_115400/btfr_summary.csv and btfr_fit_summary.json
+
 - Editorial checklist and proposed actions: see feedback.md (project root). This document captures the Nature Physics-oriented checklist (indispensable results, reviewer pre-empts, presentation/policy) plus a prioritized to-do list.
 - Editor-style review and definition-of-done: see feedback_editor_review.md. This adds a traffic-light status snapshot, concrete upgrades A–I, and a definition-of-done list used to gate submission readiness.
 - Snapshot: Solar-System constraints and PPN/Cassini coverage are implemented; lensing from a single relativistic completion (without any α_lens_ph in the manuscript), hierarchical a0 over a large SPARC/BIG-SPARC sample, wide-binary tests, and Milky Way K_z/Σ_1.1 are the main remaining items.
