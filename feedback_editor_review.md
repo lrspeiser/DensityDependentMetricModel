@@ -191,5 +191,5 @@ Your plan targets exactly the gaps that would block editorial triage: relativist
 - 2025-09-07: Added cross-links and status surfacing
   - Linked from feedback.md (checklist) to this editor-style review (already noted at the top of feedback.md).
   - Appended an “Editorial review and repo status” section to README.md referencing feedback.md and feedback_editor_review.md.
-  - Commit: <to be filled after push>
+  - Commit: b8e34d3
 
