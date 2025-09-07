@@ -240,13 +240,27 @@ def main():
     out_path = Path(args.out)
 
     npz = run_dir / 'stellar_fit_cupy_rar_plateau_results.npz'
+    best = None
     if not npz.exists():
         # Fallback to dryrun
         alt = REPO_ROOT / 'runs' / 'rar_plateau_mw_dryrun' / 'stellar_fit_cupy_rar_plateau_results.npz'
         if alt.exists():
             npz = alt
         else:
-            raise FileNotFoundError(f"No results npz found in {run_dir} or fallback {alt}")
+            # Graceful default: use standard baryon params and a0 if no NPZ is available
+            print(f"[WARN] No results npz found in {run_dir} or fallback {alt}; using default baryon params and a0=1.2e-10 m/s^2.")
+            params = build_params_for_model({})
+            gaia_path = Path(args.gaia_csv) if args.gaia_csv else None
+            make_plot(
+                params,
+                out_path,
+                gaia_csv=gaia_path,
+                median_start=float(args.median_start),
+                median_step=float(args.median_step),
+                median_halfwidth=float(args.median_halfwidth),
+                rmax_cap=float(args.rmax_cap),
+            )
+            return
 
     best = _load_best_from_npz(npz)
     params = build_params_for_model(best)
