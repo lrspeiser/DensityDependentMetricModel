@@ -526,6 +526,39 @@ Outputs produced (paths in repo)
   - images/next_steps/enhanced_20250805_115400/hierarchical_a0_heatmap.png
 
 Source-Data mapping for paper figures
+
+---
+
+## Evidence snapshots (from current repo artifacts)
+
+Lensing — θE metrics (RAR vs observed)
+- Results JSON: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
+- N = 3, RMSE_abs_arcsec ≈ 1.226, MAE_abs_arcsec ≈ 0.884, Bias_abs_arcsec ≈ −0.884
+- RMSE_rel ≈ 0.487, MAE_rel ≈ 0.398, Bias_rel ≈ −0.398
+- Scatter: images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+
+Solar System — ΔG/G at selected AU (gated path)
+- Table: results/next_steps/enhanced_20250805_115400/solar_system_table.csv
+- Excerpt:
+  - 10 AU: |ΔG/G| ≈ 2.02×10⁻⁶ (≪ Cassini |γ−1| < 2.3×10⁻⁵)
+  - 20 AU: |ΔG/G| ≈ 8.09×10⁻⁶; 30 AU: ≈ 1.82×10⁻⁵
+
+SPARC — per-galaxy a0 scan (best a0 and χ²)
+- Table: results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
+- Excerpt:
+
+| Galaxy   | a0_best [m s⁻²] | χ²_RAR | χ²_GR | dof |
+|----------|------------------:|-------:|------:|----:|
+| M31      | 8.86e−11         | 31.734 | 477.097 | 11 |
+| NGC3198  | 3.47e−11         | 132.051 | 1903.006 | 42 |
+| NGC2403  | 5.81e−11         | 439.470 | 2906.038 | 72 |
+| NGC2841  | 1.35e−10         | 42.769 | 8073.565 | 49 |
+| NGC5055  | 3.16e−11         | 3035.600 | 2800.328 | 27 |
+
+Hierarchical a0 (pilot)
+- Summary JSON: results/next_steps/enhanced_20250805_115400/hierarchical_a0_summary.json
+  - μ = −10.227 (for ln a0), σ = 0.245, n_gal = 5
+- Heatmap: images/next_steps/enhanced_20250805_115400/hierarchical_a0_heatmap.png
 - Per-lens lensing plots: results/next_steps/enhanced_20250805_115400/lensing_metric_profiles/<lens>_profiles.csv
 - θE scatter: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json and lensing_metric_table.csv
 - ΔΣ stack: results/next_steps/enhanced_20250805_115400/lensing_metric_stack.csv
