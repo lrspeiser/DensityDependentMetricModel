@@ -682,8 +682,42 @@ def _project_surface_density_abel(r_kpc: np.ndarray, rho_Msun_per_kpc3: np.ndarr
             continue
         rh = rho[mask]
         kern = rr / np.sqrt(np.maximum(rr*rr - R*R, 1e-30))
-        Sigma[i] = 2.0 * float(np.trapz(rh * kern, rr))
+        Sigma[i] = 2.0 * float(np.trapezoid(rh * kern, rr))
     return R_eval, Sigma
+
+# ---------- NFW (DM baseline) -----------------------------------------------------------
+
+def _H_of_z(H0: float, Om0: float, z: float) -> float:
+    H0s = H0 / 3.085677581e19  # s^-1
+    Ez = math.sqrt(Om0*(1.0+z)**3 + (1.0-Om0))
+    return H0s * Ez
+
+def _rho_crit_z(H0: float, Om0: float, z: float) -> float:
+    G = G_SI
+    Hz = _H_of_z(H0, Om0, z)  # s^-1
+    return 3.0 * Hz*Hz / (8.0 * math.pi * G)  # kg/m^3
+
+def _nfw_rho_kpc(M200_Msun: float, c: float, z_l: float, r_kpc: np.ndarray, H0: float = 70.0, Om0: float = 0.3) -> np.ndarray:
+    """Return ρ_NFW(r) in Msun/kpc^3 for given M200, c at redshift z_l."""
+    M200 = float(M200_Msun) * M_SUN  # kg
+    c = max(float(c), 1.0)
+    # ρ_crit at z_l
+    rho_crit = _rho_crit_z(H0, Om0, z_l)  # kg/m^3
+    # r200 where mean density is 200 ρ_crit
+    r200_m = (3.0 * M200 / (4.0 * math.pi * 200.0 * rho_crit)) ** (1.0/3.0)  # meters
+    KPC_M = 3.085677581491367e19
+    r200_kpc = r200_m / KPC_M
+    rs_kpc = r200_kpc / c
+    # NFW normalization ρ_s from M200 = 4π ρ_s r_s^3 [ln(1+c) - c/(1+c)]
+    g_c = math.log(1.0 + c) - c / (1.0 + c)
+    rho_s_kg_m3 = M200 / (4.0 * math.pi * (rs_kpc*KPC_M)**3 * g_c)
+    # ρ(r) = ρ_s / [(r/r_s)(1+r/r_s)^2]
+    r = np.asarray(r_kpc, float)
+    x = np.maximum(r / max(rs_kpc, 1e-12), 1e-9)
+    rho_si = rho_s_kg_m3 / (x * (1.0 + x)**2)  # kg/m^3
+    # Convert to Msun/kpc^3
+    rho_msun_kpc3 = rho_si * (KPC_M**3) / M_SUN
+    return rho_msun_kpc3
 
 
 def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2: np.ndarray, z_l: float, z_s: float, *, sigma_cr_scale: float = 1.0) -> Tuple[float, float]:
@@ -869,9 +903,9 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
     out_csv = out_dir / ('lensing_metric_table.csv' if metric_only else 'lensing_rar_table.csv')
     with out_csv.open('w', encoding='utf-8') as f:
         if metric_only:
-            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_NFW_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
         else:
-            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_RAR_phscaled_arcsec,alpha_lens_ph_used,zeta_env_lens_used,env_profile,alpha_req_at_thetaE_obs,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_RAR_phscaled_arcsec,alpha_lens_ph_used,zeta_env_lens_used,env_profile,alpha_req_at_thetaE_obs,theta_E_NFW_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
 
     # Read CSV quickly (no pandas dependency)
     rows = []
@@ -894,6 +928,9 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             log10M = float(row['log10M_star'])
             Re = float(row['Re_kpc'])
             n = float(row.get('n_sersic', '4') or 4.0)
+            # Optional halo inputs for NFW baseline
+            halo_logM = row.get('halo_M200_log10', '')
+            halo_c = row.get('halo_c', '')
             profile_override = (row.get('profile', '') or '').strip().lower()
             th_obs = row.get('theta_E_obs_arcsec', '')
             th_obs_f = float(th_obs) if th_obs not in ('', 'nan', 'NaN') else float('nan')
@@ -907,6 +944,26 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # SIS yardsticks
             th_sis_200 = theta_E_sis_arcsec(200.0, z_l, z_s)
             th_sis_250 = theta_E_sis_arcsec(250.0, z_l, z_s)
+
+            # NFW yardstick (DM baseline)
+            th_nfw = float('nan')
+            if getattr(args, 'nfw_enable', False):
+                # Determine M200 and c
+                try:
+                    if halo_logM not in ('', 'nan', 'NaN') and halo_c not in ('', 'nan', 'NaN'):
+                        M200 = 10**float(halo_logM); cval = float(halo_c)
+                    else:
+                        # Yardstick from stellar mass
+                        Mstar = 10**log10M
+                        M200 = max(float(getattr(args, 'nfw_mass_ratio', 50.0)) * Mstar, 1e10)
+                        cval = float(getattr(args, 'nfw_c', 8.0))
+                    # Build NFW profile and project
+                    Rk = np.logspace(np.log10(max(Re/200.0, 0.01)), np.log10(max(50.0*Re, Re+100.0)), 600)
+                    rho_nfw = _nfw_rho_kpc(M200, cval, z_l, Rk)
+                    Rn, Sig_nfw = _project_surface_density_abel(Rk, rho_nfw)
+                    _, th_nfw = _einstein_radius_from_surface_density(Rn, Sig_nfw, z_l, z_s, sigma_cr_scale=float(sigma_cr_scale))
+                except Exception:
+                    th_nfw = float('nan')
 
             # Build profiles and metric-consistent lensing quantities (no scaling)
             M_star = 10**log10M
@@ -985,9 +1042,9 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # Write row
             with out_csv.open('a', encoding='utf-8') as f:
                 if metric_only:
-                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_nfw if np.isfinite(th_nfw) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
                 else:
-                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_mod if np.isfinite(th_mod) else 'nan')},{alpha_lens_ph:.3f},{zeta_env_lens:.3f},{env_profile},{alpha_req},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_mod if np.isfinite(th_mod) else 'nan')},{alpha_lens_ph:.3f},{zeta_env_lens:.3f},{env_profile},{alpha_req},{(th_nfw if np.isfinite(th_nfw) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
 
             # Save radial profiles (metric) and plot
             # ΔΣ(R) = ⟨Σ⟩(R) - Σ(R) for total (RAR) and stars (GR)
@@ -1013,13 +1070,20 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             plt.axhline(Sigma_cr, color='k', ls=':', label='Σ_cr')
             if np.isfinite(th_gr):
                 R_E_gr = th_gr/206265.0 * D_l / KPC_M
-                plt.axvline(R_E_gr, color='b', ls='--', alpha=0.5)
+                plt.axvline(R_E_gr, color='b', ls='--', alpha=0.5, label='θ_E, GR')
             if np.isfinite(th_rar):
                 R_E_r = th_rar/206265.0 * D_l / KPC_M
-                plt.axvline(R_E_r, color='r', ls='-', alpha=0.5)
+                plt.axvline(R_E_r, color='r', ls='-', alpha=0.5, label='θ_E, RAR')
             if np.isfinite(th_mod):
                 R_E_m = th_mod/206265.0 * D_l / KPC_M
-                plt.axvline(R_E_m, color='g', ls='-', alpha=0.6)
+                plt.axvline(R_E_m, color='g', ls='-', alpha=0.6, label='θ_E, scaled (pilot)')
+            if np.isfinite(th_nfw):
+                R_E_n = th_nfw/206265.0 * D_l / KPC_M
+                plt.axvline(R_E_n, color='tab:green', ls='--', alpha=0.6, label='θ_E, NFW yardstick')
+            # Observed θE marker if available
+            if np.isfinite(th_obs_f):
+                R_E_obs = th_obs_f/206265.0 * D_l / KPC_M
+                plt.axvline(R_E_obs, color='k', ls='-.', alpha=0.7, label='θ_E, obs')
             plt.xlabel('R (kpc)')
             plt.ylabel('Mean surface density ⟨Σ⟩ (Msun/kpc^2)')
             if metric_only:
@@ -1030,7 +1094,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     ttl += f"\nα_req@θE_obs={alpha_req} (α={alpha_lens_ph:.2f}, ζ_env={zeta_env_lens:.2f}, {env_profile})"
             plt.title(ttl)
             plt.grid(alpha=0.3, which='both')
-            plt.legend(frameon=False)
+            plt.legend(frameon=False, loc='best')
             figp = images_dir / f"lensing_rar_{lens_id}.png"
             plt.tight_layout(); plt.savefig(figp, dpi=140); plt.close()
             if metric_only:
@@ -1041,6 +1105,89 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             logging.warning(f"RAR lensing: failed for row {row}: {e}")
 
     logging.info(f"Lensing table written: {out_csv}")
+
+    # If observed θE are provided, compute quantitative metrics and a scatter plot
+    try:
+        # Read the table we just wrote
+        obs = []
+        pred_rar = []
+        pred_gr = []
+        rows2 = []
+        with out_csv.open('r', encoding='utf-8') as f:
+            header = f.readline().strip().split(',')
+            cm = {h:i for i,h in enumerate(header)}
+            for line in f:
+                if not line.strip():
+                    continue
+                parts = [s.strip() for s in line.strip().split(',')]
+                def getf(col):
+                    try:
+                        return float(parts[cm[col]]) if parts[cm[col]] not in ('', 'nan', 'NaN') else float('nan')
+                    except Exception:
+                        return float('nan')
+                th_obs = getf('theta_E_obs_arcsec') if 'theta_E_obs_arcsec' in cm else float('nan')
+                th_gr = getf('theta_E_GR_arcsec') if 'theta_E_GR_arcsec' in cm else float('nan')
+                th_rar = getf('theta_E_RAR_arcsec') if 'theta_E_RAR_arcsec' in cm else float('nan')
+                if np.isfinite(th_obs) and np.isfinite(th_rar):
+                    obs.append(th_obs); pred_rar.append(th_rar)
+                if np.isfinite(th_obs) and np.isfinite(th_gr):
+                    pred_gr.append(th_gr)
+                rows2.append((parts[cm.get('lens_id',0)], th_obs, th_gr, th_rar))
+        if len(obs) >= 2:
+            obs = np.asarray(obs, float)
+            pr = np.asarray(pred_rar, float)
+            # Metrics
+            resid = pr - obs
+            rel = resid / np.where(obs!=0, obs, np.nan)
+            metrics = {
+                'N': int(np.isfinite(resid).sum()),
+                'RMSE_abs_arcsec': float(np.sqrt(np.nanmean(resid**2))),
+                'MAE_abs_arcsec': float(np.nanmean(np.abs(resid))),
+                'Bias_abs_arcsec': float(np.nanmean(resid)),
+                'RMSE_rel': float(np.sqrt(np.nanmean(rel**2))),
+                'MAE_rel': float(np.nanmean(np.abs(rel))),
+                'Bias_rel': float(np.nanmean(rel)),
+            }
+            (out_dir / 'lensing_thetaE_metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf-8')
+            logging.info(f"θE metrics (RAR vs obs): {metrics}")
+            # Scatter plot
+            plt.figure(figsize=(5.2, 5.2))
+            lim = [0.0, max(1.05*np.nanmax(obs), 1.05*np.nanmax(pr), 0.5)]
+            plt.plot(lim, lim, 'k:', label='1:1')
+            plt.scatter(obs, pr, c='tab:red', label='RAR metric', s=45, alpha=0.8)
+            # If we have GR and NFW preds for same rows, scatter those too
+            # Re-read to align arrays
+            ogr = []
+            gpr = []
+            onfw = []
+            pnfw = []
+            with out_csv.open('r', encoding='utf-8') as f:
+                header = f.readline().strip().split(',')
+                cm = {h:i for i,h in enumerate(header)}
+                for line in f:
+                    parts = [s.strip() for s in line.strip().split(',')]
+                    try:
+                        tobs = float(parts[cm['theta_E_obs_arcsec']]) if parts[cm['theta_E_obs_arcsec']] not in ('','nan','NaN') else float('nan')
+                        tgr = float(parts[cm['theta_E_GR_arcsec']]) if parts[cm['theta_E_GR_arcsec']] not in ('','nan','NaN') else float('nan')
+                        tnfw = float(parts[cm['theta_E_NFW_arcsec']]) if 'theta_E_NFW_arcsec' in cm and parts[cm['theta_E_NFW_arcsec']] not in ('','nan','NaN') else float('nan')
+                    except Exception:
+                        tobs, tgr, tnfw = float('nan'), float('nan'), float('nan')
+                    if np.isfinite(tobs) and np.isfinite(tgr):
+                        ogr.append(tobs); gpr.append(tgr)
+                    if np.isfinite(tobs) and np.isfinite(tnfw):
+                        onfw.append(tobs); pnfw.append(tnfw)
+            if len(ogr) >= 2:
+                plt.scatter(np.asarray(ogr,float), np.asarray(gpr,float), c='tab:blue', label='GR (baryons)', s=45, alpha=0.8)
+            if len(onfw) >= 2:
+                plt.scatter(np.asarray(onfw,float), np.asarray(pnfw,float), c='tab:green', label='NFW yardstick', s=45, alpha=0.8)
+            plt.xlabel('θ_E observed [arcsec]'); plt.ylabel('θ_E predicted [arcsec]')
+            plt.title('Einstein radius: predicted vs observed')
+            plt.grid(alpha=0.3); plt.legend(frameon=False)
+            sp = images_dir / 'lensing_thetaE_pred_vs_obs.png'
+            plt.tight_layout(); plt.savefig(sp, dpi=140); plt.close()
+            logging.info(f"Scatter plot written: {sp}")
+    except Exception as e:
+        logging.warning(f"θE metrics step skipped: {e}")
 
     # Aggregate ΔΣ stack (metric-only inputs are always available regardless of flag)
     try:
@@ -1118,8 +1265,12 @@ def main():
     ap.add_argument('--density-profile', choices=['sersic','hernquist','jaffe'], default='sersic', help='Stellar 3D profile for lensing deprojection (lensing-only)')
     ap.add_argument('--sigma-cr-scale', type=float, default=1.0, help='Multiplicative factor on Σ_cr (lensing-only, distances sensitivity)')
     ap.add_argument('--metric-lensing-only', action='store_true', help='If set, compute lensing strictly from the metric (Φ+Ψ via xi) and disable any α_lens_ph or ζ_env_lens scaling in outputs (paper build path).')
+    # NFW yardstick (DM baseline)
+    ap.add_argument('--nfw-enable', action='store_true', help='If set, compute an NFW yardstick per lens (dark-matter baseline) and include θE_NFW and ΔΣ_NFW overlays.')
+    ap.add_argument('--nfw-mass-ratio', type=float, default=50.0, help='If no halo mass provided in CSV, set M200 = ratio * M_star (yardstick).')
+    ap.add_argument('--nfw-c', type=float, default=8.0, help='If no halo concentration provided in CSV, use this c for NFW yardstick.')
+    ap.add_argument('--write-ppn-table', action='store_true', help='Write PPN table (γ, β, α1, α2) for Solar-System radii under adopted subclass (Φ=Ψ, c_T=1).')
     ap.add_argument('--debug', action='store_true')
-    ap.add_argument('--write-ppn-table', action='store_true', help='If set, write a PPN table (γ, β, α1, α2) under results/next_steps/<run>/ppn_table.csv based on the adopted relativistic subclass (Φ=Ψ, c_T=1).')
     args = ap.parse_args()
 
     setup_logger(args.debug)
