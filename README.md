@@ -475,6 +475,23 @@ python scripts/next_steps_from_run.py \
 
 ---
 
+## Key figure call-outs (paper figures)
+
+Milky Way — rotation curves (GR vs RAR vs NFW)
+- ![Milky Way rotation triplet](images/mw_rotation_triplet.png)
+- Evidence deltas summary: ![Milky Way ΔlogZ](images/mw_dlogz_triplet.png)
+
+Representative SPARC overlays (observed vs GR vs RAR)
+- ![NGC 3198 overlay](images/next_steps/enhanced_20250805_115400/sparc_overlay_NGC3198.png)
+- ![NGC 2841 overlay](images/next_steps/enhanced_20250805_115400/sparc_overlay_NGC2841.png)
+- ![NGC 2403 overlay](images/next_steps/enhanced_20250805_115400/sparc_overlay_NGC2403.png)
+
+Lensing — ΔΣ stack and θE scatter (RAR metric vs observed; GR/NFW yardsticks shown)
+- ΔΣ stack: images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png
+- θE scatter: images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+
+---
+
 ## Reproducibility protocol (exact commands & parameters)
 
 Environment (per WARP.md)
