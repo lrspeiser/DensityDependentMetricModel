@@ -208,3 +208,34 @@ I) New data to consider downloading/using
 [18]: https://link.aps.org/doi/10.1103/PhysRevLett.117.201101
 [19]: https://arxiv.org/abs/1609.05917
 
+---
+
+## Update (2025-09-07): Item A progress — metric lensing and PPN (no α_lens_ph)
+
+- Metric-only lensing path implemented in the orchestrator. From the same xi-based dynamics (Φ=Ψ, c_T=1), we forward-predict:
+  - Einstein radii θ_E for GR (baryons-only) and RAR metric (baryons + phantom via xi).
+  - Per-lens ΔΣ(R) profiles plus a stacked ΔΣ(R) across lenses.
+  - No lensing-only scaling appears in manuscript outputs (use `--metric-lensing-only`).
+- PPN table and Solar-System: The Solar-System ΔG/G table and plot now ship with an optional PPN export (γ, β, α1, α2) under the adopted covariant subclass (Φ=Ψ, c_T=1); see docs/relativistic_scaffold.md.
+- Galaxy-lens shortlist and CSV: Added a ranked, practical list and a CSV template:
+  - docs/targets_lensing_galaxies.md (why each target, what to compare, data notes)
+  - docs/lensing_targets.csv (fill log10M_star, Re_kpc, optional n_sersic/profile)
+
+Images (examples, from a smoke run; replace with measured M⋆/Re when filled):
+- Stacked ΔΣ from metric predictions: `images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png`
+- Per-lens comparisons (GR vs RAR metric; SIS yardsticks in the table):
+  - `images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`
+  - `images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`
+  - `images/next_steps/enhanced_20250805_115400/lensing_rar_Q0957+561.png`
+
+Notes
+- Dark-matter baseline: We currently include SIS yardsticks in the table as a simple DM-like baseline; an explicit NFW lensing overlay can be added next if desired, but is not required for the “single-theory” closure test.
+- How to run (forward predictions):
+  ```bash
+  python scripts/next_steps_from_run.py \
+    --run-dir runs/<your_run> \
+    --sparc-dir external_data/Rotmod_LTG \
+    --lensing-sample-csv docs/lensing_targets.csv \
+    --metric-lensing-only --density-profile sersic --write-ppn-table
+  ```
+

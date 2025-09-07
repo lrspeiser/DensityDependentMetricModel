@@ -430,3 +430,36 @@ Anything you want tweaked? If you’d like this merged directly into the existin
 - Snapshot: Solar-System constraints and PPN/Cassini coverage are implemented; lensing from a single relativistic completion (without any α_lens_ph in the manuscript), hierarchical a0 over a large SPARC/BIG-SPARC sample, wide-binary tests, and Milky Way K_z/Σ_1.1 are the main remaining items.
 
 These files are part of the repo and maintained alongside code to keep the paper and implementation aligned.
+
+---
+
+## Lensing (GR vs RAR metric vs SIS yardsticks)
+
+- Targets and instructions: docs/targets_lensing_galaxies.md (shortlist: ESO 325-G004, SDSS J2141-0001, Q2237+0305, RX J1131-1231). Fill docs/lensing_targets.csv with measured log10M_star and Re_kpc to reproduce the figures below.
+- Forward-predictions come from a single theory (Φ=Ψ, c_T=1) using the same xi mapping as dynamics. SIS yardsticks are provided as a simple DM-like baseline; an explicit NFW lensing overlay can be added next.
+
+Example outputs (from a smoke run; replace after populating docs/lensing_targets.csv):
+
+- Stacked ΔΣ (RAR metric):
+  - ![ΔΣ stack](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
+
+- Per-lens comparisons (GR vs RAR metric; SIS yardsticks are included in the CSV table):
+  - ![PG1115+080](images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png)
+  - ![B1608+656](images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png)
+  - ![Q0957+561](images/next_steps/enhanced_20250805_115400/lensing_rar_Q0957+561.png)
+
+Re-run to regenerate with measured M⋆ and Re, e.g.:
+
+```bash
+python scripts/next_steps_from_run.py \
+  --run-dir runs/<your_run> \
+  --sparc-dir external_data/Rotmod_LTG \
+  --lensing-sample-csv docs/lensing_targets.csv \
+  --metric-lensing-only --density-profile sersic --write-ppn-table
+```
+
+- Editorial checklist and proposed actions: see feedback.md (project root). This document captures the Nature Physics-oriented checklist (indispensable results, reviewer pre-empts, presentation/policy) plus a prioritized to-do list.
+- Editor-style review and definition-of-done: see feedback_editor_review.md. This adds a traffic-light status snapshot, concrete upgrades A–I, and a definition-of-done list used to gate submission readiness.
+- Snapshot: Solar-System constraints and PPN/Cassini coverage are implemented; lensing from a single relativistic completion (without any α_lens_ph in the manuscript), hierarchical a0 over a large SPARC/BIG-SPARC sample, wide-binary tests, and Milky Way K_z/Σ_1.1 are the main remaining items.
+
+These files are part of the repo and maintained alongside code to keep the paper and implementation aligned.
