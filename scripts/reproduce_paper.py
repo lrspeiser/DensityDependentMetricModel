@@ -48,7 +48,9 @@ def main() -> None:
     ap.add_argument("--run-dir", required=True, help="Run directory used for outputs (e.g., runs/enhanced_20250805_115400)")
     ap.add_argument("--sparc-dir", required=True, help="SPARC rotmod dir (e.g., external_data/Rotmod_LTG)")
     ap.add_argument("--lensing-csv", default="docs/lensing_targets.csv", help="Lens CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]")
+    ap.add_argument("--sample", default="gold", choices=["gold","q2plus","all"], help="SPARC sample for the orchestrator: gold (default), q2plus (Q<=2), or all")
     ap.add_argument("--hierarchical-a0", action="store_true", help="Also compute hierarchical a0 MLE over the SPARC subset")
+    ap.add_argument("--hierarchical-a0-bayes", action="store_true", help="Run full Bayesian hierarchical posterior for a0 (dynesty)")
     args = ap.parse_args()
 
     run_dir = Path(args.run_dir)
@@ -68,9 +70,12 @@ def main() -> None:
         "--nfw-mass-ratio", "50",
         "--nfw-c", "8",
         "--write-ppn-table",
+        "--sample", str(args.sample),
     ]
     if args.hierarchical_a0:
         cmd.append("--hierarchical-a0")
+    if args.hierarchical_a0_bayes:
+        cmd.append("--hierarchical-a0-bayes")
 
     run(cmd)
 

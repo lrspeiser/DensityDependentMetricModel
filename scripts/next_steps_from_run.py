@@ -640,7 +640,7 @@ def _sersic_deprojected_density_prugniel_simien(r_kpc: np.ndarray, M_star_Msun: 
     r_int = np.logspace(np.log10(Re/200.0), np.log10(100.0*Re), 1200)
     x_int = r_int / Re
     rho_shape_int = np.power(x_int, -p_n) * np.exp(-b_n * np.power(x_int, 1.0/n))
-    M_shape = 4.0 * math.pi * np.trapz(rho_shape_int * (r_int**2), r_int)
+    M_shape = 4.0 * math.pi * np.trapezoid(rho_shape_int * (r_int**2), r_int)
     if M_shape <= 0:
         return np.full_like(r, np.nan)
     rho0 = float(M_star_Msun) / float(M_shape)
@@ -1274,6 +1274,11 @@ def main():
     ap.add_argument('--nfw-mass-ratio', type=float, default=50.0, help='If no halo mass provided in CSV, set M200 = ratio * M_star (yardstick).')
     ap.add_argument('--nfw-c', type=float, default=8.0, help='If no halo concentration provided in CSV, use this c for NFW yardstick.')
     ap.add_argument('--write-ppn-table', action='store_true', help='Write PPN table (γ, β, α1, α2) for Solar-System radii under adopted subclass (Φ=Ψ, c_T=1).')
+    # Hierarchical Bayesian posterior (dynesty nested sampling) over (mu, sigma) for ln a0
+    ap.add_argument('--hierarchical-a0-bayes', action='store_true', help='Run full Bayesian hierarchical posterior over (mu, sigma) using dynesty and precomputed per-galaxy chi2 grids.')
+    ap.add_argument('--hierarchical-a0-live', type=int, default=400, help='Number of live points for dynesty nested sampling (Bayesian hierarchical step).')
+    ap.add_argument('--hierarchical-a0-sigma-bounds', type=float, nargs=2, default=(0.05, 1.2), help='Bounds for sigma prior in ln a0 space: [lo, hi].')
+    ap.add_argument('--hierarchical-a0-seed', type=int, default=0, help='Random seed for dynesty (0=auto).')
     ap.add_argument('--debug', action='store_true')
     args = ap.parse_args()
 
@@ -1504,7 +1509,7 @@ def main():
                 Sig_star = np.asarray(Sig_star, float)
                 if np.all(np.isfinite(R_pc)) and np.all(np.isfinite(Sig_star)) and len(R_pc) > 2:
                     integrand = Sig_star * R_pc  # Σ * R
-                    Mstar = 2.0 * math.pi * float(np.trapz(integrand, R_pc))
+            Mstar = 2.0 * math.pi * float(np.trapezoid(integrand, R_pc))
             Mb = np.nansum([Mstar, Mgas])
             logV = (np.log10(Vflat) if np.isfinite(Vflat) and Vflat > 0 else float('nan'))
             logM = (np.log10(Mb) if np.isfinite(Mb) and Mb > 0 else float('nan'))
@@ -1587,7 +1592,7 @@ def main():
         (results_root/'global_a0.json').write_text(json.dumps({'a0_m_s2': a0_global, 'sigma': a0_sigma, 'n_gal': len(galaxy_store)}, indent=2), encoding='utf-8')
         logging.info(f"Global a0 ~ {a0_global:.3e} ± {a0_sigma if np.isfinite(a0_sigma) else float('nan'):.1e} m/s^2 over {len(galaxy_store)} galaxies")
 
-    # Optional: two-stage hierarchical a0 across sample
+    # Optional: two-stage hierarchical a0 across sample (MLE grid search)
     if args.hierarchical_a0 and len(list((results_root/'sparc_a0_grids').glob('*.csv'))) > 0:
         try:
             grids = sorted((results_root/'sparc_a0_grids').glob('*.csv'))
@@ -1665,6 +1670,125 @@ def main():
                     logging.info(f"Hierarchical a0 MLE: mu={mu_hat:.3f}, sigma={sigma_hat:.3f} → {hier_json}; heatmap: {hm}")
         except Exception as e:
             logging.warning(f"Hierarchical a0 step skipped: {e}")
+
+    # Optional: Full Bayesian hierarchical posterior over (mu, sigma) using dynesty
+    if args.hierarchical_a0_bayes and len(list((results_root/'sparc_a0_grids').glob('*.csv'))) > 0:
+        try:
+            # Build ln a0 grid coverage from per-galaxy grids
+            grids = sorted((results_root/'sparc_a0_grids').glob('*.csv'))
+            lnmins = []
+            lnmaxs = []
+            for g in grids:
+                xs = []
+                with g.open('r', encoding='utf-8') as f:
+                    f.readline()
+                    for line in f:
+                        parts = line.strip().split(',')
+                        xs.append(float(parts[0]))
+                if len(xs) > 3:
+                    lnmins.append(min(xs)); lnmaxs.append(max(xs))
+            if lnmins and lnmaxs:
+                lnlo = max(lnmins); lnhi = min(lnmaxs)
+                if lnhi > lnlo:
+                    ln_a0 = np.linspace(lnlo, lnhi, 220)
+                    dln = (ln_a0[1]-ln_a0[0]) if len(ln_a0)>1 else 1.0
+                    # Build per-galaxy log-likelihood arrays ll_i(ln a0)
+                    ll_list = []
+                    for g in grids:
+                        xa = []
+                        c2 = []
+                        with g.open('r', encoding='utf-8') as f:
+                            f.readline()
+                            for line in f:
+                                a, v = line.strip().split(',')
+                                xa.append(float(a)); c2.append(float(v))
+                        xa = np.asarray(xa, float); c2 = np.asarray(c2, float)
+                        c2i = np.interp(ln_a0, xa, c2, left=np.nan, right=np.nan)
+                        lli = -0.5 * c2i
+                        # Normalize each galaxy's ll by subtracting max over available range to aid stability
+                        m = np.nanmax(lli)
+                        ll = np.full_like(ln_a0, -np.inf)
+                        mask = np.isfinite(lli)
+                        if np.any(mask):
+                            ll[mask] = lli[mask] - m
+                        ll_list.append(ll)
+
+                    # Dynesty nested sampling
+                    try:
+                        import dynesty  # type: ignore
+                        from dynesty import utils as dyutils  # type: ignore
+                    except Exception as e:
+                        logging.warning(f"Hierarchical Bayes: dynesty not available ({e}); skipping.")
+                        dynesty = None  # type: ignore
+
+                    if dynesty is not None:
+                        sig_lo, sig_hi = float(args.hierarchical_a0_sigma_bounds[0]), float(args.hierarchical_a0_sigma_bounds[1])
+                        sig_lo = max(sig_lo, 1e-3)
+
+                        def prior_transform(u):
+                            u = np.asarray(u, float)
+                            mu = lnlo + u[0] * (lnhi - lnlo)
+                            sg = sig_lo + u[1] * (max(sig_hi - sig_lo, 1e-6))
+                            return np.array([mu, sg], float)
+
+                        def loglike(theta):
+                            mu, sg = float(theta[0]), float(theta[1])
+                            if not (np.isfinite(mu) and np.isfinite(sg) and sg > 0):
+                                return -np.inf
+                            # Normal prior over ln a0 for each galaxy
+                            prior_pdf = np.exp(-0.5*((ln_a0-mu)/sg)**2) / (sg*np.sqrt(2.0*np.pi))
+                            prior_pdf = np.maximum(prior_pdf, 1e-300)
+                            tot = 0.0
+                            for lli in ll_list:
+                                y = lli + np.log(prior_pdf)
+                                m = np.nanmax(y)
+                                s = np.sum(np.exp(y - m)) * dln
+                                if s <= 0 or not np.isfinite(s):
+                                    return -np.inf
+                                tot += (m + np.log(s))
+                            return float(tot)
+
+                        seed = None if int(args.hierarchical_a0_seed) == 0 else int(args.hierarchical_a0_seed)
+                        sampler = dynesty.NestedSampler(loglike, prior_transform, 2, nlive=int(args.hierarchical_a0_live), sample='rwalk', bound='multi', seed=seed)
+                        sampler.run_nested()
+                        res = sampler.results
+                        # Equal-weight samples
+                        ws = np.exp(res['logwt'] - res['logz'][-1])
+                        smp = res['samples']
+                        try:
+                            eq = dyutils.resample_equal(smp, ws)
+                        except Exception:
+                            # fallback simple normalization
+                            w = ws / np.sum(ws)
+                            idx = np.random.default_rng(seed).choice(np.arange(len(smp)), size=min(2000, len(smp)), replace=True, p=w)
+                            eq = smp[idx]
+                        # Summaries
+                        mu_s = eq[:,0]; sg_s = eq[:,1]
+                        def pct(v):
+                            return float(np.nanpercentile(v, 16)), float(np.nanpercentile(v, 50)), float(np.nanpercentile(v, 84))
+                        mu_p = pct(mu_s); sg_p = pct(sg_s)
+                        post_json = results_root / 'hierarchical_a0_posterior_summary.json'
+                        post_json.write_text(json.dumps({
+                            'mu_ln_a0': {'p16': mu_p[0], 'p50': mu_p[1], 'p84': mu_p[2]},
+                            'sigma_ln_a0': {'p16': sg_p[0], 'p50': sg_p[1], 'p84': sg_p[2]},
+                            'nlive': int(args.hierarchical_a0_live),
+                            'n_gal': len(ll_list),
+                            'ln_a0_grid': {'lo': lnlo, 'hi': lnhi},
+                        }, indent=2), encoding='utf-8')
+                        np.savez(results_root / 'hierarchical_a0_posterior_samples.npz', samples=smp, logwt=res['logwt'], logz=res['logz'])
+                        # Heatmap
+                        plt.figure(figsize=(6.4, 5.0))
+                        H, xedges, yedges = np.histogram2d(mu_s, sg_s, bins=60)
+                        plt.imshow(H.T, origin='lower', aspect='auto', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap='magma')
+                        plt.colorbar(label='posterior density (arb)')
+                        plt.xlabel('μ = ln a0'); plt.ylabel('σ (ln a0)')
+                        ttl = f"Hierarchical a0 posterior (nlive={int(args.hierarchical_a0_live)}, Ngal={len(ll_list)})"
+                        plt.title(ttl)
+                        hm = images_root / 'hierarchical_a0_posterior_heatmap.png'
+                        plt.tight_layout(); plt.savefig(hm, dpi=150); plt.close()
+                        logging.info(f"Hierarchical a0 posterior: {post_json}; heatmap: {hm}")
+        except Exception as e:
+            logging.warning(f"Hierarchical Bayesian step skipped: {e}")
 
     # 6) Write docs index stub
     ndx = Path('docs') / 'next_steps.md'
