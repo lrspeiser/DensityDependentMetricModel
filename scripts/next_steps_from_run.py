@@ -875,7 +875,11 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                               env_profile: str = 'constant',
                               density_profile: str = 'sersic',
                               sigma_cr_scale: float = 1.0,
-                              metric_only: bool = False) -> None:
+                              metric_only: bool = False,
+                              *,
+                              nfw_enable: bool = False,
+                              nfw_mass_ratio: float = 50.0,
+                              nfw_c: float = 8.0) -> None:
     """Compute lensing for a CSV lens list using spherical baryons and RAR 'phantom mass' from xi.
     CSV columns (header required): lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
 
@@ -947,7 +951,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
 
             # NFW yardstick (DM baseline)
             th_nfw = float('nan')
-            if getattr(args, 'nfw_enable', False):
+            if nfw_enable:
                 # Determine M200 and c
                 try:
                     if halo_logM not in ('', 'nan', 'NaN') and halo_c not in ('', 'nan', 'NaN'):
@@ -955,8 +959,8 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     else:
                         # Yardstick from stellar mass
                         Mstar = 10**log10M
-                        M200 = max(float(getattr(args, 'nfw_mass_ratio', 50.0)) * Mstar, 1e10)
-                        cval = float(getattr(args, 'nfw_c', 8.0))
+                        M200 = max(float(nfw_mass_ratio) * Mstar, 1e10)
+                        cval = float(nfw_c)
                     # Build NFW profile and project
                     Rk = np.logspace(np.log10(max(Re/200.0, 0.01)), np.log10(max(50.0*Re, Re+100.0)), 600)
                     rho_nfw = _nfw_rho_kpc(M200, cval, z_l, Rk)
@@ -1432,7 +1436,10 @@ def main():
                 env_profile=str(args.env_profile),
                 density_profile=str(args.density_profile),
                 sigma_cr_scale=float(args.sigma_cr_scale),
-                metric_only=bool(args.metric_lensing_only)
+                metric_only=bool(args.metric_lensing_only),
+                nfw_enable=bool(args.nfw_enable),
+                nfw_mass_ratio=float(args.nfw_mass_ratio),
+                nfw_c=float(args.nfw_c),
             )
         except Exception as e:
             logging.warning(f"Lensing step skipped: {e}")
