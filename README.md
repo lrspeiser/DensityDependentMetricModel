@@ -477,9 +477,13 @@ python scripts/next_steps_from_run.py \
 
 ## Key figure call-outs (paper figures)
 
-Milky Way — rotation curves (GR vs RAR vs NFW)
-- ![Milky Way rotation triplet](images/mw_rotation_triplet.png)
-- Evidence deltas summary: ![Milky Way ΔlogZ](images/mw_dlogz_triplet.png)
+Final model used in figures (consistency)
+- Model: RAR‑plateau (xi_rar_plateau) — this is the model used for SPARC overlays and lensing predictions in this paper.
+- Baselines: GR (baryons‑only) and optional NFW yardstick (DM baseline) as annotated.
+- Run context for figures below: results/next_steps/enhanced_20250805_115400 (see run_metadata.json there).
+
+Milky Way — rotation curves (GR vs RAR‑plateau vs NFW yardstick)
+- ![Milky Way rotation (RAR‑plateau vs GR)](images/rar_plateau_analysis/rar_plateau_mw_comparison_3way.png)
 
 Representative SPARC overlays (observed vs GR vs RAR)
 - ![NGC 3198 overlay](images/next_steps/enhanced_20250805_115400/sparc_overlay_NGC3198.png)
