@@ -396,3 +396,27 @@ Lensing (per‑lens, e.g., B1608+656): images/next_steps/btfr_fix_20250906_lastc
 If you want, I can also auto‑generate a compact “Figures” block (with captions) and append it to the README; just say the word.
 
 Anything you want tweaked? If you’d like this merged directly into the existing “Extended Analyses” section, tell me the exact placement (e.g., after Solar constraints) and I’ll produce a version that’s already interleaved with your current headings.
+
+---
+
+## Figures (quick embed)
+
+- BTFR sanity check (SPARC subset)
+  - Path: images/next_steps/btfr_fix_20250906/btfr_baryonic.png
+  - ![BTFR sanity check](images/next_steps/btfr_fix_20250906/btfr_baryonic.png)
+  - Caption: Observed V_flat vs baryonic mass for the working SPARC subset; a linear fit in log–log yields a BTFR slope consistent with literature. (Fit metrics from btfr_fit_summary.json.)
+
+- Solar‑System constraints — RAR‑plateau vs Cassini
+  - Path: images/next_steps/btfr_fix_20250906/solar_rar_plateau.png
+  - ![Solar‑System constraints](images/next_steps/btfr_fix_20250906/solar_rar_plateau.png)
+  - Caption: Predicted |ΔG/G| ≈ |ξ−1| at 1–30 AU; the model stays below the Cassini bound at Saturn. (Produced by the orchestrator; the plot annotates the Cassini limit.)
+
+- Lensing diagnostics — RMS vs α (hernquist)
+  - Path: images/next_steps/btfr_fix_20250906_lastcross/metrics/rms_rel_vs_alpha_hernquist.png
+  - ![Lensing RMS vs alpha (hernquist)](images/next_steps/btfr_fix_20250906_lastcross/metrics/rms_rel_vs_alpha_hernquist.png)
+  - Caption: Relative RMS error between scaled RAR predictions and observed θ_E across α (zeta=0) for the hernquist profile.
+
+- Lensing per‑lens panel — B1608+656
+  - Path: images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png
+  - ![B1608+656 — lensing panel](images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png)
+  - Caption: Stars (GR), RAR total, and scaled lens curves with Σ_cr; vertical lines mark GR/RAR/scaled θ_E after the monotone envelope + last‑crossing rule.
