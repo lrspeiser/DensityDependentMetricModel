@@ -261,4 +261,138 @@ All steps emit verbose logs and snapshot metadata (run parameters) for traceabil
 2. **Solar‑System & lab constraints.** Quantify $|\xi-1|$ at planetary/lab densities with the **density gate** $S_\rho$. Show consistency with **Cassini** PPN $|\gamma-1|<2.3\times10^{-5}$.[^bertotti03] Provide a compact $\Delta GM/GM$ table (1–30 AU).
 3. **Gravitational lensing.** As a **metric** model, lensing is computable. Derive $\Phi+\Psi$ in the weak field and test against galaxy–galaxy lensing and Einstein rings. Compare with relativistic MOND frameworks (e.g., **TeVeS**; **Skordis & Złośnik**).[^bekenstein04][^skordis21]
 4. **External galaxies (SPARC) at scale.** Run a **matched‑settings** triad (GR/NFW/RAR‑gate) on $\gtrsim$20 high‑quality SPARC systems,[^lelli16] report $\Delta \log Z$ distributions and BTFR consistency.[^mcgaugh12]
-5. **Cosmological consistency.** While ΛCDM remains the standard on large scales,[^planck18] explore whether a **bounded**, environment‑modulated coupling can be embedded without violating expansion history or structure growth constraints.
+[5] **Cosmological consistency.** While ΛCDM remains the standard on large scales,[^planck18] explore whether a **bounded**, environment‑modulated coupling can be embedded without violating expansion history or structure growth constraints.
+
+---
+
+## Strong‑Lensing Pilot (RAR phantom‑mass mapping) — methods, fixes, and snapshot results
+
+Scope. This section documents the lensing‑only pilot we added to the next_steps_from_run.py orchestrator. It leaves the Milky Way and SPARC dynamics pipeline unchanged, and only augments how we predict light bending from the same baryons + RAR “phantom mass.” The goal is to check whether a single scalar applied to the phantom contribution can bring galaxy‑scale Einstein radii into the right ballpark without spoiling the dynamics fits. The orchestrator writes results under results/next_steps/<run_name>/… and PNGs under images/next_steps/<run_name>/…. 
+
+next_steps_from_run
+
+What changed (lensing path only)
+
+Einstein‑radius solver fix. We now enforce a monotone non‑increasing envelope on the mean surface‑density curve ⟨Σ⟩(R) and solve for the last crossing with Σ₍cr₎ (outer, physical θ_E). This removes spurious early crossings caused by numerical wiggles and makes θ_E respond sensibly to scaling. (Plots and titles note GR/RAR/scaled intersections.) 
+
+next_steps_from_run
+
+Environment scaling clamp. For signed environment amplitudes ζ we compute scale_env = max(1 + ζ f(R), 0) and use
+Σ_lens = Σ_★ + α_lens_ph · scale_env · Σ_ph, so the phantom term is never subtracted in lensing.
+(This is lensing‑only; dynamics/rotation‑curve fits are untouched.)
+
+Inputs, knobs, and outputs
+
+Lens CSV schema (one row per lens):
+lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
+Interpretation: total stellar mass and effective radius define a spherical Sérsic lens (optional n_sersic, default 4). The lensing step writes lensing_rar_table.csv and per‑lens plots. 
+
+next_steps_from_run
+
+Lensing‑only scalars (global):
+
+--alpha-lens-ph — multiplies the RAR phantom surface density in lensing only (default 1.0).
+
+--zeta-env-lens — additional amplitude via (1 + ζ f(R)), with --env-profile = constant or tapered (f = [1 + (R/Re)^2]^(-1/2)).
+
+Columns include theta_E_GR_arcsec, theta_E_RAR_arcsec, theta_E_RAR_phscaled_arcsec, SIS yardsticks, and alpha_req_at_thetaE_obs (the scalar that would match the observed θ_E for that lens). 
+
+next_steps_from_run
+
+Repro (example, α = 2.0, ζ sweep with tapered profile):
+
+```bash
+python scripts/next_steps_from_run.py \
+  --run-dir runs/btfr_fix_20250906 \
+  --sparc-dir external_data/Rotmod_LTG \
+  --sample q2plus \
+  --lensing-sample-csv results/next_steps/btfr_fix_20250906/lenses_castles_small_converted.csv \
+  --alpha-lens-ph 2.0 \
+  --zeta-env-lens 0.0 \
+  --env-profile tapered \
+  --out-root results/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p0 \
+  --images-root images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p0
+# Repeat with --zeta-env-lens {-0.25, 0.25, 0.5, 0.75} into sibling out/imag dirs
+```
+
+(The same orchestrator also generates the Solar‑System constraint plot and BTFR subset from SPARC; see the script header for context and usage.) 
+
+next_steps_from_run
+
+What we see on the 3‑lens pilot
+
+With the corrected solver and clamp, θ_E now scales monotonically with α and ζ.
+
+On the CASTLES‑based pilot (PG1115+080, B1608+656, Q0957+561) using Faber–Jackson‑style placeholders for M★ and Re, a single global α_lens_ph ≈ 2.0 is the current best by RMSE; a small, tapered ζ (|ζ|≲0.5) gives comparable MAE but does not yet beat α=2.0 on RMSE with N=3.
+
+These numbers are placeholders until we swap in measured M★ and Re; the pipeline will pick them up from the same CSV and recompute without any code changes. (The per‑lens table/plots are emitted alongside the run.) 
+
+next_steps_from_run
+
+Figures to add (recommended)
+
+BTFR sanity check (SPARC subset) — slope ≈ 3.18 ± 0.12 (N=89).
+Path: images/next_steps/btfr_fix_20250906/btfr_baryonic.png
+Caption: Observed V_flat vs baryonic mass for the working SPARC subset; a linear fit in log–log yields a BTFR slope consistent with literature. (Fit metrics come from btfr_fit_summary.json.) 
+
+btfr_fit_summary
+
+Solar‑System constraints — RAR‑plateau vs Cassini.
+Path: images/next_steps/btfr_fix_20250906/solar_rar_plateau.png
+Caption: Predicted |ΔG/G| ≈ |ξ−1| at 1–30 AU; the model stays below the Cassini bound at Saturn. (Produced by the orchestrator; the plot explicitly annotates the Cassini limit.) 
+
+next_steps_from_run
+
+Lensing: predicted vs observed θ_E (by run) — quick diagnostic.
+Path: images/next_steps/btfr_fix_20250906/combined_global_alpha/lensing_global_alpha_pred_vs_obs.png
+Caption: Scaled RAR lensing predictions (different α/ζ settings) against observed θ_E; illustrates that a single α≈2 already lands in the right order of magnitude on this pilot.
+
+(Optional per‑lens panel) B1608+656 — ⟨Σ⟩(R) with Σ_cr and θ_E markers
+Path: images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png
+Caption: Stars (GR), RAR total, and scaled lens curves with Σ_cr; vertical lines mark GR/RAR/scaled θ_E after applying the monotone envelope + last‑crossing rule. 
+
+next_steps_from_run
+
+Notes on scope and possible biases
+
+No change to dynamics: SPARC fits, MW analysis, and Solar‑System checks are unchanged by these lensing scalars; the “phantom” only enters the lensing convergence here.
+
+Distances: Σ_cr is built from angular‑diameter distances (flat ΛCDM). For pure local‑gravity tests independent of cosmology, rely on Solar‑System deflection constraints (already included) and, when feasible, any suitable near‑field lenses. The Solar‑System calculation/plot is produced by the orchestrator and annotates the Cassini bound. 
+
+next_steps_from_run
+
+Inputs: Until we replace placeholders with measured M★ and Re per lens, treat all α/ζ values as provisional dials for a pilot study. The lensing CSV columns and run outputs are documented in the lensing step of the orchestrator. 
+
+next_steps_from_run
+
+Quick to‑dos
+
+Swap in measured (log10M_star, Re_kpc[, n_sersic]) for the three pilot lenses; re‑run α=2.0 with a small ζ grid.
+
+Add a small table of per‑lens alpha_req_at_thetaE_obs to the paper text (already emitted by the pipeline). 
+
+next_steps_from_run
+
+If desired, test robustness with --density-profile = hernquist or jaffe (spherical) against the Sérsic default. (If you want this selector exposed, I can keep the CLI flag you proposed alongside the existing lensing flags.)
+
+Where these live in the repo
+
+The “Next‑Step Analyses” orchestrator is documented in the script header and writes a short index at docs/next_steps.md linking to generated artifacts. 
+
+next_steps_from_run
+ 
+next_steps
+
+Where to point images (ready to embed)
+
+BTFR: images/next_steps/btfr_fix_20250906/btfr_baryonic.png
+
+Solar: images/next_steps/btfr_fix_20250906/solar_rar_plateau.png
+
+Lensing (scatter): images/next_steps/btfr_fix_20250906/combined_global_alpha/lensing_global_alpha_pred_vs_obs.png
+
+Lensing (per‑lens, e.g., B1608+656): images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png
+
+If you want, I can also auto‑generate a compact “Figures” block (with captions) and append it to the README; just say the word.
+
+Anything you want tweaked? If you’d like this merged directly into the existing “Extended Analyses” section, tell me the exact placement (e.g., after Solar constraints) and I’ll produce a version that’s already interleaved with your current headings.
