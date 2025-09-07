@@ -62,12 +62,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
-# Relativistic scaffolding (PPN export, c_T guardrail)
-try:
-    from theory.relativistic import evaluate_ppn, check_c_T_guardrail
-except Exception:
-    evaluate_ppn = None
-    check_c_T_guardrail = None
+# Placeholders; will populate after helper import function is defined
+evaluate_ppn = None
+check_c_T_guardrail = None
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -247,6 +244,28 @@ def _import_by_path(module_name: str, file_path: Path):
     sys.modules[module_name] = mod
     spec.loader.exec_module(mod)  # type: ignore[attr-defined]
     return mod
+
+# Relativistic scaffolding (PPN export, c_T guardrail)
+try:
+    from theory.relativistic import evaluate_ppn as _eval_ppn_imp, check_c_T_guardrail as _ct_guard_imp
+    evaluate_ppn = _eval_ppn_imp
+    check_c_T_guardrail = _ct_guard_imp
+except Exception:
+    # Fallback: import by file path relative to repo root
+    try:
+        this_dir = Path(__file__).resolve().parent
+        repo_root = this_dir.parent
+        relativistic_path = repo_root / 'theory' / 'relativistic.py'
+        if relativistic_path.exists():
+            mod_rel = _import_by_path('relativistic_runtime', relativistic_path)
+            evaluate_ppn = getattr(mod_rel, 'evaluate_ppn', None)
+            check_c_T_guardrail = getattr(mod_rel, 'check_c_T_guardrail', None)
+        else:
+            evaluate_ppn = None
+            check_c_T_guardrail = None
+    except Exception:
+        evaluate_ppn = None
+        check_c_T_guardrail = None
 
 
 def load_sparc_galaxy(galaxy_id: str, sparc_dir: Path) -> Optional[Dict[str, np.ndarray]]:
@@ -850,7 +869,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
     out_csv = out_dir / ('lensing_metric_table.csv' if metric_only else 'lensing_rar_table.csv')
     with out_csv.open('w', encoding='utf-8') as f:
         if metric_only:
-            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
         else:
             f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_RAR_phscaled_arcsec,alpha_lens_ph_used,zeta_env_lens_used,env_profile,alpha_req_at_thetaE_obs,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
 
@@ -964,7 +983,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # Write row
             with out_csv.open('a', encoding='utf-8') as f:
                 if metric_only:
-                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
                 else:
                     f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_mod if np.isfinite(th_mod) else 'nan')},{alpha_lens_ph:.3f},{zeta_env_lens:.3f},{env_profile},{alpha_req},{th_sis_200:.3f},{th_sis_250:.3f}\n")
 
@@ -1020,6 +1039,57 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             logging.warning(f"RAR lensing: failed for row {row}: {e}")
 
     logging.info(f"Lensing table written: {out_csv}")
+
+    # Aggregate ΔΣ stack (metric-only inputs are always available regardless of flag)
+    try:
+        prof_dir = out_dir / 'lensing_metric_profiles'
+        profiles = sorted([p for p in prof_dir.glob('*_profiles.csv') if p.is_file()])
+        if len(profiles) >= 1:
+            # Read all profiles and build a common R grid
+            Rs = []
+            Ds = []
+            for pth in profiles:
+                Rloc = []
+                DSloc = []
+                with pth.open('r', encoding='utf-8') as pf:
+                    header = pf.readline().strip().split(',')
+                    colmap = {h:i for i,h in enumerate(header)}
+                    for line in pf:
+                        parts = line.strip().split(',')
+                        Rloc.append(float(parts[colmap['R_kpc']]))
+                        DSloc.append(float(parts[colmap['DeltaSigma_tot']]))
+                if len(Rloc) > 8:
+                    Rs.append(np.asarray(Rloc, float))
+                    Ds.append(np.asarray(DSloc, float))
+            if len(Rs) >= 1:
+                Rmin = max([r.min() for r in Rs])
+                Rmax = min([r.max() for r in Rs])
+                if Rmax > Rmin:
+                    Rgrid = np.logspace(np.log10(Rmin), np.log10(Rmax), 80)
+                    DSstack = []
+                    for Rr, Dd in zip(Rs, Ds):
+                        DSstack.append(np.interp(Rgrid, Rr, Dd))
+                    DSarr = np.vstack(DSstack)
+                    mean = np.nanmean(DSarr, axis=0)
+                    p16 = np.nanpercentile(DSarr, 16, axis=0)
+                    p84 = np.nanpercentile(DSarr, 84, axis=0)
+                    stack_csv = out_dir / 'lensing_metric_stack.csv'
+                    with stack_csv.open('w', encoding='utf-8') as sf:
+                        sf.write('R_kpc,DeltaSigma_mean,DeltaSigma_p16,DeltaSigma_p84,N\n')
+                        for Rv, m, l, u in zip(Rgrid, mean, p16, p84):
+                            sf.write(f"{Rv:.6e},{m:.6e},{l:.6e},{u:.6e},{DSarr.shape[0]}\n")
+                    # Plot
+                    plt.figure(figsize=(6.8, 4.4))
+                    plt.loglog(Rgrid, mean, 'k-', lw=2, label='ΔΣ (RAR metric) mean')
+                    plt.fill_between(Rgrid, p16, p84, color='gray', alpha=0.3, label='16–84%')
+                    plt.xlabel('R (kpc)'); plt.ylabel('ΔΣ (Msun/kpc^2)')
+                    plt.title('Stacked ΔΣ from metric predictions (per-lens average)')
+                    plt.grid(alpha=0.3, which='both'); plt.legend(frameon=False)
+                    figp = images_dir / 'lensing_metric_stack.png'
+                    plt.tight_layout(); plt.savefig(figp, dpi=140); plt.close()
+                    logging.info(f"Lensing stack written: {stack_csv} and {figp}")
+    except Exception as e:
+        logging.warning(f"Lensing stack step skipped: {e}")
 
 
 # ---------- Main orchestrator ----------------------------------------------------------

@@ -1,8 +1,9 @@
 [project]
-name = "python-template"
+name = "density-metric-utils"
 version = "0.1.0"
-description = "Gaia rotation curve fitting with density-dependent metric models."
-authors = ["Your Name <you@example.com>"]
+description = "Utilities for density-dependent metric models (SPARC IO, analysis helpers)."
+# PEP 621 author format: array of tables
+authors = [{name = "DensityDependentMetricModel Authors", email = "noreply@example.com"}]
 requires-python = ">=3.11"
 
 dependencies = [
