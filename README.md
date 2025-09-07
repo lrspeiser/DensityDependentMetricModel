@@ -441,20 +441,27 @@ These files are part of the repo and maintained alongside code to keep the paper
 
 ---
 
-## Lensing (GR vs RAR metric vs SIS yardsticks)
+## Lensing (GR vs RAR metric vs SIS/NFW yardsticks)
 
 - Targets and instructions: docs/targets_lensing_galaxies.md (shortlist: ESO 325-G004, SDSS J2141-0001, Q2237+0305, RX J1131-1231). Fill docs/lensing_targets.csv with measured log10M_star and Re_kpc to reproduce the figures below.
-- Forward-predictions come from a single theory (Φ=Ψ, c_T=1) using the same xi mapping as dynamics. SIS yardsticks are provided as a simple DM-like baseline; an explicit NFW lensing overlay can be added next.
+- Forward-predictions come from a single theory (Φ=Ψ, c_T=1) using the same xi mapping as dynamics.
+- Dark-matter baselines:
+  - SIS yardsticks are provided in the table.
+  - Optional NFW yardstick: enable with --nfw-enable (uses either CSV halo_M200_log10/halo_c or a yardstick M200 = (ratio × M⋆), c = c0).
 
-Example outputs (from a smoke run; replace after populating docs/lensing_targets.csv):
+Latest artifacts (smoke run; replace after populating docs/lensing_targets.csv):
 
 - Stacked ΔΣ (RAR metric):
   - ![ΔΣ stack](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
 
-- Per-lens comparisons (GR vs RAR metric; SIS yardsticks are included in the CSV table):
+- Per-lens comparisons (GR vs RAR metric; yardsticks annotated in the table/markers):
   - ![PG1115+080](images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png)
   - ![B1608+656](images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png)
   - ![Q0957+561](images/next_steps/enhanced_20250805_115400/lensing_rar_Q0957+561.png)
+
+- θE predicted vs observed (scatter; includes RAR metric, GR, and NFW yardstick):
+  - ![θE scatter](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
+  - Metrics JSON: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
 
 Re-run to regenerate with measured M⋆ and Re, e.g.:
 
