@@ -894,14 +894,16 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             log10M = float(row['log10M_star'])
             Re = float(row['Re_kpc'])
             n = float(row.get('n_sersic', '4') or 4.0)
+            profile_override = (row.get('profile', '') or '').strip().lower()
             th_obs = row.get('theta_E_obs_arcsec', '')
             th_obs_f = float(th_obs) if th_obs not in ('', 'nan', 'NaN') else float('nan')
 
             # GR and RAR (spherical Sersic)
+            prof_use = profile_override if profile_override in ('sersic','hernquist','jaffe') else density_profile
             _, th_gr = _theta_E_from_profile_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=False,
-                                                      density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
+                                                      density_profile=prof_use, sigma_cr_scale=float(sigma_cr_scale))
             _, th_rar = _theta_E_from_profile_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=True,
-                                                      density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
+                                                      density_profile=prof_use, sigma_cr_scale=float(sigma_cr_scale))
             # SIS yardsticks
             th_sis_200 = theta_E_sis_arcsec(200.0, z_l, z_s)
             th_sis_250 = theta_E_sis_arcsec(250.0, z_l, z_s)
