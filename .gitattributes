@@ -10,3 +10,6 @@ gaia_sky_slices/*.parquet filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 images/** filter=lfs diff=lfs merge=lfs -text
 results/** filter=lfs diff=lfs merge=lfs -text
+# New: ensure future external data goes to LFS (no history rewrite)
+external_data/Rotmod_LTG/** filter=lfs diff=lfs merge=lfs -text
+external_data/gaia_sky_slices/** filter=lfs diff=lfs merge=lfs -text
