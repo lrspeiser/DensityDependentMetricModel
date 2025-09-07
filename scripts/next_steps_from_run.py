@@ -660,9 +660,11 @@ def _project_surface_density_abel(r_kpc: np.ndarray, rho_Msun_per_kpc3: np.ndarr
     return R_eval, Sigma
 
 
-def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2: np.ndarray, z_l: float, z_s: float) -> Tuple[float, float]:
-    """Solve for R_E (kpc) where mean surface density <Σ>(<R) = Σ_cr. Returns (R_E_kpc, theta_E_arcsec).
-    If no solution found, returns (nan, nan).
+def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2: np.ndarray, z_l: float, z_s: float, *, sigma_cr_scale: float = 1.0) -> Tuple[float, float]:
+    """Solve for R_E (kpc) where mean surface density <Σ>(<R) = Σ_cr.
+    Returns (R_E_kpc, theta_E_arcsec). If no solution found, returns (nan, nan).
+
+    sigma_cr_scale: optional multiplicative factor on Σ_cr for controlled distance sensitivity tests.
     """
     # Critical surface density Σ_cr in Msun/kpc^2
     D_l, D_s, D_ls = _ang_dists(z_l, z_s)
@@ -671,7 +673,7 @@ def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2
     KPC_M = 3.085677581491367e19
     c = 299792458.0
     Sigma_cr_SI = (c*c) / (4.0 * math.pi * G_SI) * (D_s / (D_l * D_ls))  # kg/m^2
-    Sigma_cr = Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN  # Msun/kpc^2
+    Sigma_cr = float(sigma_cr_scale) * (Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN)  # Msun/kpc^2
 
     R = np.asarray(R_kpc, float)
     Sig = np.asarray(Sigma_Msun_per_kpc2, float)
@@ -720,10 +722,49 @@ def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2
     return float(R_E), float(theta_arcsec)
 
 
-def _theta_E_from_sersic_with_xi(log10M_star: float, Re_kpc: float, z_l: float, z_s: float, rar_params: Dict[str, float], n: float = 4.0, use_rar: bool = True) -> Tuple[float, float]:
-    """Compute Einstein radius for a sphericalized Sersic stellar lens.
+def _hernquist_deprojected_density(r_kpc: np.ndarray, M_star_Msun: float, Re_kpc: float) -> np.ndarray:
+    """Hernquist 3D density (Msun/kpc^3) with total mass M_star and scale a from Re.
+    a ≈ Re/1.8153 for projected half-light at Re.
+    ρ(r) = (M/(2π)) a / [r (r + a)^3]
+    """
+    r = np.asarray(r_kpc, float)
+    Re = max(float(Re_kpc), 1e-9)
+    a = Re / 1.8153
+    rr = np.maximum(r, 1e-12)
+    rho = (M_star_Msun / (2.0 * math.pi)) * (a / (rr * (rr + a)**3))
+    return rho
+
+
+def _jaffe_deprojected_density(r_kpc: np.ndarray, M_star_Msun: float, Re_kpc: float) -> np.ndarray:
+    """Jaffe 3D density (Msun/kpc^3) with total mass M_star and scale a from Re.
+    a ≈ Re/0.7447 gives Re as projected half-light radius.
+    ρ(r) = (M/(4π)) a / [r^2 (r + a)^2]
+    """
+    r = np.asarray(r_kpc, float)
+    Re = max(float(Re_kpc), 1e-9)
+    a = Re / 0.7447
+    rr = np.maximum(r, 1e-12)
+    rho = (M_star_Msun / (4.0 * math.pi)) * (a / (rr**2 * (rr + a)**2))
+    return rho
+
+
+def _baryon_density_profile(r_kpc: np.ndarray, M_star_Msun: float, Re_kpc: float, profile: str = 'sersic', n: float = 4.0) -> np.ndarray:
+    p = (profile or 'sersic').lower()
+    if p == 'hernquist':
+        return _hernquist_deprojected_density(r_kpc, M_star_Msun, Re_kpc)
+    if p == 'jaffe':
+        return _jaffe_deprojected_density(r_kpc, M_star_Msun, Re_kpc)
+    # default: Sersic (Prugniel–Simien deprojection)
+    return _sersic_deprojected_density_prugniel_simien(r_kpc, M_star_Msun, Re_kpc, n=max(float(n), 0.5))
+
+
+def _theta_E_from_profile_with_xi(log10M_star: float, Re_kpc: float, z_l: float, z_s: float,
+                                  rar_params: Dict[str, float], *,
+                                  n: float = 4.0, use_rar: bool = True,
+                                  density_profile: str = 'sersic',
+                                  sigma_cr_scale: float = 1.0) -> Tuple[float, float]:
+    """Compute Einstein radius for a sphericalized stellar lens with chosen profile.
     If use_rar=True, builds an effective 'phantom' mass via xi(R) from xi_rar_plateau_numpy.
-    If False, returns GR (baryons-only) result using the same Sersic baryons.
     Returns (R_E_kpc, theta_E_arcsec).
     """
     M_star = 10.0 ** float(log10M_star)
@@ -732,7 +773,7 @@ def _theta_E_from_sersic_with_xi(log10M_star: float, Re_kpc: float, z_l: float, 
     rmin = max(Re/200.0, 0.01)
     rmax = max(50.0*Re, Re + 100.0)
     r = np.logspace(np.log10(rmin), np.log10(rmax), 600)
-    rho_b = _sersic_deprojected_density_prugniel_simien(r, M_star, Re, n=n)
+    rho_b = _baryon_density_profile(r, M_star, Re, profile=density_profile, n=n)
     if not np.all(np.isfinite(rho_b)):
         return float('nan'), float('nan')
     M_b_encl = _enclosed_mass_from_density(r, rho_b)
@@ -754,20 +795,26 @@ def _theta_E_from_sersic_with_xi(log10M_star: float, Re_kpc: float, z_l: float, 
     else:
         M_eff_encl = np.maximum(M_b_encl, 0.0)
 
+    # Guardrail: effective mass must not dip below baryonic mass
+    if np.any(M_eff_encl < M_b_encl - 1e-9):
+        logging.warning("RAR lensing guardrail: M_eff(<r) dipped below M_star(<r); check xi/profile.")
+
     # 3D density from dM/dr: ρ = (1/(4π r^2)) dM/dr
     dM_dr = np.gradient(M_eff_encl, r, edge_order=2)
     rho_eff = np.maximum(dM_dr, 0.0) / (4.0 * math.pi * np.maximum(r, 1e-9)**2)
 
     # Project and solve for Einstein radius
     R_eval, Sigma = _project_surface_density_abel(r, rho_eff)
-    R_E_kpc, theta_arcsec = _einstein_radius_from_surface_density(R_eval, Sigma, z_l, z_s)
+    R_E_kpc, theta_arcsec = _einstein_radius_from_surface_density(R_eval, Sigma, z_l, z_s, sigma_cr_scale=float(sigma_cr_scale))
     return R_E_kpc, theta_arcsec
 
 
 def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, rar_params: Dict[str, float],
                               alpha_lens_ph: float = 1.0,
                               zeta_env_lens: float = 0.0,
-                              env_profile: str = 'constant') -> None:
+                              env_profile: str = 'constant',
+                              density_profile: str = 'sersic',
+                              sigma_cr_scale: float = 1.0) -> None:
     """Compute lensing for a CSV lens list using Sersic baryons and RAR 'phantom mass'.
     CSV columns (header required): lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
     Phantom-lensing scalars (lensing-only):
@@ -809,8 +856,10 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             th_obs_f = float(th_obs) if th_obs not in ('', 'nan', 'NaN') else float('nan')
 
             # GR and RAR (spherical Sersic)
-            _, th_gr = _theta_E_from_sersic_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=False)
-            _, th_rar = _theta_E_from_sersic_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=True)
+            _, th_gr = _theta_E_from_profile_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=False,
+                                                      density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
+            _, th_rar = _theta_E_from_profile_with_xi(log10M, Re, z_l, z_s, rar_params, n=n, use_rar=True,
+                                                      density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
             # SIS yardsticks
             th_sis_200 = theta_E_sis_arcsec(200.0, z_l, z_s)
             th_sis_250 = theta_E_sis_arcsec(250.0, z_l, z_s)
@@ -818,7 +867,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # Build profiles to compute phantom-weighted lensing and α_req
             M_star = 10**log10M
             r = np.logspace(np.log10(max(Re/200.0, 0.01)), np.log10(max(50.0*Re, Re+100.0)), 600)
-            rho_b = _sersic_deprojected_density_prugniel_simien(r, M_star, Re, n=n)
+            rho_b = _baryon_density_profile(r, M_star, Re, profile=density_profile, n=n)
             M_b = _enclosed_mass_from_density(r, rho_b)
             # GR projection (stars only)
             Rg, Sig_g = _project_surface_density_abel(r, rho_b)
@@ -838,7 +887,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # Σ_cr and mean profiles
             D_l, D_s, D_ls = _ang_dists(z_l, z_s)
             Sigma_cr_SI = (299792458.0**2) / (4.0 * math.pi * G_SI) * (D_s / (D_l * D_ls))
-            Sigma_cr = Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN
+            Sigma_cr = float(sigma_cr_scale) * (Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN)
             M2D_g = 2.0 * math.pi * _cumtrapz(Sig_g * Rg, Rg)
             M2D_r = 2.0 * math.pi * _cumtrapz(Sig_r * Rr, Rr)
             mean_g = np.where(Rg>0, M2D_g/(math.pi*Rg*Rg), np.nan)
@@ -872,7 +921,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             scale_env = np.maximum(1.0 + float(zeta_env_lens) * fR, 0.0)
             Sigma_lens = Sigma_star + np.maximum(alpha_lens_ph, 0.0) * scale_env * Sigma_ph
             # Solve θE for phantom-weighted lensing
-            R_E_mod_kpc, th_mod = _einstein_radius_from_surface_density(Rgrid, Sigma_lens, z_l, z_s)
+            R_E_mod_kpc, th_mod = _einstein_radius_from_surface_density(Rgrid, Sigma_lens, z_l, z_s, sigma_cr_scale=float(sigma_cr_scale))
 
             # alpha_req at observed θE if provided
             alpha_req = ''
@@ -946,6 +995,8 @@ def main():
     ap.add_argument('--alpha-lens-ph', type=float, default=1.0, help='Lensing-only scale on Σ_ph (phantom)')
     ap.add_argument('--zeta-env-lens', type=float, default=0.0, help='Lensing-only environment amplitude on Σ_ph via (1+ζ_env f(R))')
     ap.add_argument('--env-profile', choices=['constant','tapered'], default='constant', help='Environment radial profile f(R) for lensing-only phantom scaling')
+    ap.add_argument('--density-profile', choices=['sersic','hernquist','jaffe'], default='sersic', help='Stellar 3D profile for lensing deprojection (lensing-only)')
+    ap.add_argument('--sigma-cr-scale', type=float, default=1.0, help='Multiplicative factor on Σ_cr (lensing-only, distances sensitivity)')
     ap.add_argument('--debug', action='store_true')
     args = ap.parse_args()
 
@@ -1080,7 +1131,9 @@ def main():
                 results_root, images_root, Path(args.lensing_sample_csv), rar_params,
                 alpha_lens_ph=float(args.alpha_lens_ph),
                 zeta_env_lens=float(args.zeta_env_lens),
-                env_profile=str(args.env_profile)
+                env_profile=str(args.env_profile),
+                density_profile=str(args.density_profile),
+                sigma_cr_scale=float(args.sigma_cr_scale)
             )
         except Exception as e:
             logging.warning(f"RAR lensing step skipped: {e}")
