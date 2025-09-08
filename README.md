@@ -78,6 +78,26 @@ As a pilot consistency check, we computed galaxy‑scale lensing signals using t
 
 Crucially, the lensing pilot does not alter any dynamical fits or Solar‑System bounds: it is only a check that a consistent relativistic extension can plausibly deliver lensing strengths commensurate with observations given the same baryonic inputs. A full treatment—deriving the metric potentials, quantifying Φ+Ψ in the weak field, and validating against galaxy–galaxy lensing and Einstein rings—will be presented separately.
 
+#### Pilot outputs (enhanced_20250805_115400)
+- Table (per‑lens θ_E predictions; metric‑only with GR and RAR columns): results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv
+- Quantitative metrics (RAR vs observed θ_E): results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
+- Predicted vs observed Einstein radii (scatter):
+
+![θ_E: predicted (RAR metric) vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
+
+- Stacked ΔΣ from metric predictions:
+  - CSV: results/next_steps/enhanced_20250805_115400/lensing_metric_stack.csv
+
+![Stacked ΔΣ from metric predictions](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
+
+- Example per‑lens profiles (⟨Σ⟩(R) crossings and θ_E markers):
+
+![PG1115+080 — lensing panel](images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png)
+
+![B1608+656 — lensing panel](images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png)
+
+![Q0957+561 — lensing panel](images/next_steps/enhanced_20250805_115400/lensing_rar_Q0957+561.png)
+
 ## Discussion and Implications
 
 The above results position RAR-gated gravity as a compelling alternative explanation for galactic dynamics. Here we discuss its implications, strengths, and limitations in a broader context, especially in comparison to the dominant dark matter paradigm.
