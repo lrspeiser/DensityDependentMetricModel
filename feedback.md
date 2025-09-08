@@ -168,6 +168,13 @@ E) Positioning vs ΛCDM hydrodynamical RAR
 - Proposed actions:
   1) Add an overlay panel: SPARC points, DGG curve ± intrinsic scatter, and at least one ΛCDM simulation band (EAGLE/NIHAO) with citations; quantify the discriminant at low g_bar and the scatter trend vs mass.
 
+Update (2025-09-08): RAR panel implemented (SPARC+DGG), ΛCDM overlay pending
+- Implemented scripts/make_rar_master_panel.py: builds SPARC scatter and DGG posterior band (from hierarchical ln a0) and optionally overlays an LCDM band from docs/lcdm_rar_band.csv.
+- Artifacts:
+  - Figure: images/next_steps/rar_plateau_mw_full/rar_master_panel.png
+  - Source Data: results/next_steps/rar_plateau_mw_full/rar_master_panel_source.csv
+- Next step: curate docs/lcdm_rar_band.csv per docs/lcdm_rar_band.md (EAGLE/NIHAO band), then regenerate to include the overlay and annotate discriminants at low g_bar and scatter trends.
+
 F) Cosmology checks
 - Findings:
   - There is an exploratory cosmology section in validation/validate_ddmm.py touching on SN/BAO with schematic ξ-path effects, but no formal Boltzmann treatment; c_GW constraints noted only qualitatively.
