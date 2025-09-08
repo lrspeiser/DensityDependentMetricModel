@@ -220,6 +220,9 @@ runs/
 !images/next_steps/**/*.png
 !results/next_steps/**/*.csv
 
+# Allow docs CSV tables (curated small files)
+!docs/**/*.csv
+
 # Allow paper-ready figures (images)
 !images/paper/**/*.png
 !images/rar_plateau_analysis/**/*.png
