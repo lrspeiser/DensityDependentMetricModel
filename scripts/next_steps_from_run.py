@@ -90,6 +90,33 @@ def setup_logger(debug: bool = False) -> None:
     )
 
 
+def write_source_data(path: str, **arrays) -> None:
+    """Write a Source-Data CSV with named columns.
+    Imports pandas locally to avoid hard dependency if unused.
+    """
+    try:
+        import pandas as pd
+        from os import makedirs
+        d = os.path.dirname(path)
+        if d:
+            makedirs(d, exist_ok=True)
+        df = pd.DataFrame({k: np.asarray(v) for k, v in arrays.items()})
+        df.to_csv(path, index=False)
+    except Exception:
+        # Fallback: write raw CSV without pandas
+        cols = list(arrays.keys())
+        d = os.path.dirname(path)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(','.join(cols) + '\n')
+            # Infer length from first array
+            n = len(np.asarray(arrays[cols[0]])) if cols else 0
+            for i in range(n):
+                row = [str(np.asarray(arrays[c])[i]) for c in cols]
+                f.write(','.join(row) + '\n')
+
+
 def find_npz(run_dir: Path) -> Optional[Path]:
     """Find a plausible NPZ result file in the run directory.
     Preference order:
