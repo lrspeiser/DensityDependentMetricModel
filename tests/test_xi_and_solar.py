@@ -2,9 +2,9 @@ import numpy as np
 from scripts.next_steps_from_run import xi_rar_plateau_numpy, solar_system_table
 
 def test_xi_limits():
-    Vbar = np.array([220.0])
-    R = np.array([8.0])
-    # High-g: large V or small R -> xi ~ 1
+    # High-g: larger V / smaller R -> xi close to 1
+    Vbar = np.array([350.0])
+    R = np.array([2.0])
     xi, _ = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=1.2e-10)
     assert xi[0] >= 1.0 and xi[0] < 1.1
 

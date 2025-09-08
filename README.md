@@ -204,6 +204,48 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 
 ---
 
+## Latest Results Tables (auto-generated)
+
+These summarize the latest outputs under `results/next_steps/enhanced_20250805_115400/`. Full CSVs are linked for reproducibility.
+
+### Solar System (Source Data)
+
+File: `results/next_steps/enhanced_20250805_115400/solar_system_table.csv`
+
+| AU | dG/G (gated) | dG/G (worst) | gamma−1 | Cassini bound |
+|---:|--------------:|-------------:|--------:|--------------:|
+| 1.0 | 2.0235e-08 | 2.0235e-08 | 0.0 | 2.3e-05 |
+| 5.0 | 5.0588e-07 | 5.0588e-07 | 0.0 | 2.3e-05 |
+| 10.0 | 2.0235e-06 | 2.0235e-06 | 0.0 | 2.3e-05 |
+| 20.0 | 8.0940e-06 | 8.0940e-06 | 0.0 | 2.3e-05 |
+| 30.0 | 1.8211e-05 | 1.8211e-05 | 0.0 | 2.3e-05 |
+
+### SPARC per‑galaxy a0 summary (subset)
+
+File: `results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv`
+
+| Galaxy | a0_best [m/s^2] | a0_lo | a0_hi | chi2_rar | chi2_gr | dof |
+|:------|-----------------:|------:|------:|---------:|--------:|----:|
+| M31 | 8.860488e-11 | 8.068256e-11 | 9.730510e-11 | 31.734 | 477.097 | 11 |
+| NGC3198 | 3.472786e-11 | 3.313897e-11 | 3.472786e-11 | 132.051 | 1903.006 | 42 |
+| NGC2403 | 5.813086e-11 | 5.813086e-11 | 5.813086e-11 | 439.470 | 2906.038 | 72 |
+| NGC2841 | 1.350543e-10 | 1.350543e-10 | 1.350543e-10 | 42.769 | 8073.565 | 49 |
+| NGC5055 | 3.162278e-11 | 3.162278e-11 | 3.162278e-11 | 3035.600 | 2800.328 | 27 |
+
+### Milky Way vertical force Kz (full 3‑D phantom)
+
+File: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`
+
+| z [kpc] | Kz [m s^-2] |
+|-------:|------------:|
+| 0.5 | 8.3962e+07 |
+| 0.8 | 1.3880e+08 |
+| 1.1 | 1.9443e+08 |
+| 1.5 | 2.6870e+08 |
+| 2.0 | 3.6068e+08 |
+
+---
+
 ## Appendices (ready text & placeholders)
 
 ### Appendix A — Exact working formula (duplicate of Box 1 for reference)

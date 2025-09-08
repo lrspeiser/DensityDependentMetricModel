@@ -1502,6 +1502,14 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                         sf.write('R_kpc,DeltaSigma_mean,DeltaSigma_p16,DeltaSigma_p84,N\n')
                         for Rv, m, l, u in zip(Rgrid, mean, p16, p84):
                             sf.write(f"{Rv:.6e},{m:.6e},{l:.6e},{u:.6e},{DSarr.shape[0]}\n")
+                    # Also write Source-Data via helper
+                    try:
+                        write_source_data(
+                            (out_dir / 'lensing_metric_stack_source.csv').as_posix(),
+                            R_kpc=Rgrid, DeltaSigma_mean=mean, DeltaSigma_p16=p16, DeltaSigma_p84=p84
+                        )
+                    except Exception as _e:
+                        logging.debug(f"Lensing stack Source-Data write failed: {_e}")
                     # Plot
                     plt.figure(figsize=(6.8, 4.4))
                     plt.loglog(Rgrid, mean, 'k-', lw=2, label='ΔΣ (RAR metric) mean')
@@ -1859,6 +1867,18 @@ def main():
         plt.savefig(outpng, dpi=140)
         plt.close()
         logging.info(f"Saved {outpng}")
+        # Source-Data for this overlay
+        try:
+            write_source_data(
+                (results_root / f"sparc_overlay_{gid.replace(' ','_')}_source.csv").as_posix(),
+                R_kpc=R,
+                V_obs_kms=Vobs,
+                e_V_obs_kms=eV,
+                Vbar_kms=Vbar,
+                V_model_kms=V_model,
+            )
+        except Exception as _e:
+            logging.debug(f"Source-Data write failed for {gid}: {_e}")
 
     logging.info(f"SPARC summary: {csv_path}")
 
@@ -2042,6 +2062,16 @@ def main():
 
     n_btfr = len(x)
     logging.info(f"BTFR: usable galaxies = {n_btfr}")
+    # Source-Data for BTFR points
+    try:
+        write_source_data(
+            (results_root / 'btfr_source.csv').as_posix(),
+            galaxy=np.array(used, dtype=object),
+            log10Vflat=np.array(x, dtype=float),
+            log10Mb=np.array(y, dtype=float),
+        )
+    except Exception as _e:
+        logging.debug(f"BTFR Source-Data write failed: {_e}")
 
     # Fit log M_b = a + b log V; report slope, R^2, RMS scatter; test curvature
     btfr_png = images_root / 'btfr_baryonic.png'
