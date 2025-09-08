@@ -2,6 +2,8 @@
 
 ## Introduction
 
+> Math rendering note: GitHub supports TeX-style math using $...$ for inline and $$...$$ for display equations. If you view this file outside GitHub (e.g., local editor preview), you may need a Markdown math extension. We ensure all display equations below use $$ blocks with blank lines above and below for reliable rendering.
+
 Galactic rotation curves have long challenged the standard cosmological model, which invokes massive halos of non-baryonic *dark matter* to explain the unexpectedly high orbital speeds in outer galactic disks. While dark halos can be *fitted* to match individual galaxy rotations, their success comes at the cost of introducing numerous free parameters (one halo per galaxy) and fine-tuned correlations between baryonic and dark mass distributions. A striking empirical clue is the **Radial Acceleration Relation (RAR)**: across hundreds of galaxies, the observed centripetal acceleration \(g_{\rm obs}(r)\) tightly correlates with that predicted by visible matter alone \(g_{\rm bar}(r)\)[1]. This correlation persists even in regions where dark matter is presumed to dominate, implying that the dark contribution is “fully specified by that of the baryons”[1]. The small scatter in the RAR (comparable to observational uncertainties) suggests an underlying law of nature[1] rather than a fortuitous result of galaxy formation. Indeed, the RAR has been called “tantamount to a natural law” for galaxies[1]. Such a universal relation is difficult to reconcile with arbitrary halo tuning, as it would require a mysterious *conspiracy* between visible and dark components across all galaxies[2]. This has motivated the pursuit of alternative gravity theories that *predict* the RAR intrinsically, without invoking invisible mass[2].
 
 One notable example is Milgrom’s Modified Newtonian Dynamics (MOND), which postulates a new fundamental acceleration scale \(a_0\sim10^{-10}\) m/s² at which gravity deviates from Newton’s laws[3]. MOND’s simple prescription can explain flat rotation curves and was prescient in foreseeing the RAR decades before its observational confirmation[3][1]. However, the original MOND formula (and similar empirical interpolations) are *too rigid* – with a single parameter and no built-in relativistic framework, they struggle to fit *all* phenomena (e.g. the diversity of galaxy profiles, galaxy clusters, and cosmological observations)[4]. On the other hand, explaining the RAR within the dark matter paradigm also poses challenges: it requires highly coordinated distributions of baryons and dark matter for every system[5], which may be achievable in detailed galaxy formation models but lacks the elegance of a universal law. Given the continuing non-detection of dark matter particles and the empirical successes of MOND-like phenomenology on galactic scales, it is worthwhile to explore new gravity models that combine **predictive rigidity** with flexibility and consistency across scales.
@@ -19,14 +21,17 @@ In RAR‑gated gravity, the departure from Newton’s law is governed by an inte
 - **Intermediate regime** (\(g\sim a_0\)) — A smooth transition governed by the specific interpolating function; the transition width can be calibrated against rotation‑curve shapes.
 
 Mathematically, one representation is a modified Poisson equation or GR‑style field equation with a nonlinear term that depends on the field strength and/or density:
+
 $$
 \nabla^2 \Phi \;=\; 4\pi G\,\rho_b \;+\; \nabla\!\cdot\!\Big[f\!\left(\tfrac{|\nabla\Phi|}{a_0},\, \tfrac{\rho_b}{\rho_0}\right)\nabla\Phi\Big],
 $$
+
 with \(f\rightarrow 0\) in high‑acceleration/high‑density limits and \(f>0\) in low‑acceleration environments.
 
 ### **Box 1 — Exact weak‑field formula used in all figures (from code)**
 
 Let \(V_{\rm bar}(R)\) be the baryonic circular speed (km s\(^{-1}\)) and \(R\) the radius (kpc). Convert to SI:
+
 $$
 g_{\rm bar}(R) \;=\; \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,
 \quad C \equiv 3.240779289\times 10^{-14}\\ 
@@ -34,6 +39,7 @@ g_{\rm bar}(R) \;=\; \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,
 $$
 
 **Environmental gate (optional):**
+
 $$
 s_\rho(\rho;\rho_c,\gamma)=\frac{1}{1+(\rho/\rho_c)^\gamma}\in[0,1],\qquad
 W(T;T_0,\sigma_{\ln T},w_{\min})=w_{\min}+(1-w_{\min})\exp\!\left[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\right],
@@ -41,11 +47,13 @@ $$
 with \(T\equiv V_{\rm bar}^2/R^2\) used purely as a tidal proxy.
 
 **Effective acceleration scale:**
+
 $$
  a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
 $$
 
 **Boost (“\(\nu\)” function) used in figures (paper preset).**
+
 $$
 \xi(R)\equiv D(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],
 \qquad
@@ -65,9 +73,11 @@ For manuscript figures we adopt a **metric‑only** weak‑field mapping with \(
 ## Rotation Curve Predictions with No Dark Halos
 
 We applied the RAR‑gated model to baryonic mass models for the **Milky Way** and for external galaxies from **SPARC**. In each case we compute
+
 $$
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)
 $$
+
 with \(\xi\) from **Box 1** and compare to observed rotation curves.
 
 ### Milky Way: A Case Study
@@ -107,6 +117,7 @@ We selected representative spirals spanning mass and surface brightness. For eac
 ## Solar‑System Constraints
 
 Any modified gravity must clear Solar‑System bounds. We evaluate the same \(\xi(r)\) in the Sun’s Kepler field \(g_N(r)=GM_\odot/r^2\) and report
+
 $$
 \left|\frac{\Delta G}{G}\right| \;\equiv\; \left|\xi(r)-1\right|
 $$
@@ -209,11 +220,11 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 
 ## Latest Results Tables (auto-generated)
 
-These summarize the latest outputs under `results/next_steps/enhanced_20250805_115400/`. Full CSVs are linked for reproducibility.
+These summarize the latest outputs under `results/next_steps/btfr_fix_20250906/` and related top-level summaries. Full CSVs are linked for reproducibility.
 
 ### Solar System (Source Data)
 
-File: `results/next_steps/enhanced_20250805_115400/solar_system_table.csv`
+File: `results/next_steps/btfr_fix_20250906/solar_system_table.csv`
 
 | AU | dG/G (gated) | dG/G (worst) | gamma−1 | Cassini bound |
 |---:|--------------:|-------------:|--------:|--------------:|
@@ -239,6 +250,8 @@ File: `results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv`
 
 File: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`
 
+Aggregate summary: `results/mw_kz_sigma.csv`
+
 | z [kpc] | Kz [m s^-2] |
 |-------:|------------:|
 | 0.5 | 8.3962e+07 |
@@ -248,6 +261,18 @@ File: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`
 | 2.0 | 3.6068e+08 |
 
 ---
+
+### Lensing metrics (CASTLES sample; paper preset)
+
+- Per-lens tables: `results/next_steps/btfr_fix_20250906/lensing_table.csv`
+- RAR lens metrics: `results/next_steps/btfr_fix_20250906/lensing_rar_table.csv`
+- Combined pivots and summaries:  
+  - `results/next_steps/btfr_fix_20250906/combined/lensing_summary_pivot_RAR.csv`  
+  - `results/next_steps/btfr_fix_20250906/combined/lensing_summary_pivot_GR.csv`  
+  - `results/next_steps/btfr_fix_20250906/combined/global_alpha/lensing_global_alpha_metrics.csv`
+- Figure: `results/next_steps/btfr_fix_20250906/combined/global_alpha/lensing_global_alpha_pred_vs_obs.png`
+
+> CASTLES conversion used: `results/next_steps/btfr_fix_20250906/lenses_castles_small_converted.csv`.
 
 ## Reproduction (paper preset)
 

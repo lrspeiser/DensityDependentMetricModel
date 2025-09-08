@@ -1752,7 +1752,7 @@ def main():
         if args.rar_dmax in (None, 0.0):
             args.rar_dmax = 50.0
         logging.info("Applied paper preset: metric-only lensing, 400+ posterior samples, Q≤2 SPARC selection, D_max=%.1f" % float(args.rar_dmax))
-elif args.preset == 'pilot':
+    elif args.preset == 'pilot':
         # Pilot mode: enable experimental features
         args.allow_pilot_lensing = True
         logging.info("Applied pilot preset: experimental lensing scalars enabled")
@@ -1802,7 +1802,8 @@ elif args.preset == 'pilot':
             'python': sys.version.split()[0],
             'numpy': np.__version__,
         },
-        'timestamp_utc': datetime.datetime.utcnow().isoformat() + 'Z',
+        # Use timezone-aware UTC; keep 'Z' suffix for backward compatibility
+        'timestamp_utc': datetime.datetime.now(datetime.UTC).isoformat().replace('+00:00', 'Z'),
     }
     (results_root / 'run_metadata.json').write_text(json.dumps(run_meta, indent=2), encoding='utf-8')
 
@@ -1976,9 +1977,10 @@ elif args.preset == 'pilot':
                 raise ValueError('model_comparison_bic.csv missing required columns')
         fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.8))
         bins = 20
-        mdf['delta_logZ_rar_vs_gr'].replace([np.inf, -np.inf], np.nan, inplace=True)
-        mdf['delta_logZ_nfw_vs_gr'].replace([np.inf, -np.inf], np.nan, inplace=True)
-        mdf['delta_logZ_rar_vs_nfw'].replace([np.inf, -np.inf], np.nan, inplace=True)
+        # Replace +/-inf with NaN without chained assignment to avoid pandas 3.0 behavior changes
+        mdf['delta_logZ_rar_vs_gr'] = mdf['delta_logZ_rar_vs_gr'].replace([np.inf, -np.inf], np.nan)
+        mdf['delta_logZ_nfw_vs_gr'] = mdf['delta_logZ_nfw_vs_gr'].replace([np.inf, -np.inf], np.nan)
+        mdf['delta_logZ_rar_vs_nfw'] = mdf['delta_logZ_rar_vs_nfw'].replace([np.inf, -np.inf], np.nan)
         ax.hist(mdf['delta_logZ_rar_vs_gr'].dropna(), bins=bins, alpha=0.6, label='ΔlogZ (DGG−GR)', color='tab:red')
         ax.hist(mdf['delta_logZ_nfw_vs_gr'].dropna(), bins=bins, alpha=0.6, label='ΔlogZ (NFW−GR)', color='tab:blue')
         ax.hist(mdf['delta_logZ_rar_vs_nfw'].dropna(), bins=bins, alpha=0.6, label='ΔlogZ (DGG−NFW)', color='tab:green')
