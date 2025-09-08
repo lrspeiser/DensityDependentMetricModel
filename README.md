@@ -211,6 +211,10 @@ At Saturn (~10 AU), the predicted |ΔG/G| is consistent with the Cassini bound (
 # 1) Clone & environment
 git clone https://github.com/lrspeiser/DensityDependentMetricModel.git
 cd DensityDependentMetricModel
+# Ensure Git LFS pulls large data (SPARC + Gaia slices)
+# If LFS isn’t installed, see https://git-lfs.com and run: git lfs install
+git lfs install
+git lfs pull
 # (set up your Python env per README; CuPy build if using GPU)
 
 # 2) GR baseline (baryons only)
@@ -264,9 +268,11 @@ We executed the next‑step tests outlined above using the latest rar_plateau Mi
 1) Environment
 - Python ≥3.10; packages: numpy, matplotlib, pandas, dynesty; optional: cupy (GPU), pyarrow (Parquet), astropy (FITS), pyvo (Gaia TAP API).
 
-2) Data
-- SPARC: place Lelli et al. (2016) rotmod files under external_data/Rotmod_LTG. If you prefer, run the project’s SPARC fetchers (see scripts/fetch_sparc_hirad_sb_v2.py) to populate the directory; the orchestrator will consume rotmod/SB content directly.
-- Gaia (optional for LMC/SMC slices): see docs/gaia_slices_readme.md for ADQL and API options; convert to Parquet via data_loaders/load_existing_gaia_lmc_smc.py.
+2) Data (included via Git LFS)
+- SPARC (required): external_data/Rotmod_LTG is tracked in this repo. After cloning, run git lfs pull to fetch contents. If you prefer to re-fetch, see scripts/fetch_sparc_hirad_sb_v2.py.
+- Gaia slices (optional for LMC/SMC or all-sky runs): external_data/gaia_sky_slices contains raw_L*.csv, processed_L*.parquet, and all_sky_gaia.csv via Git LFS. After cloning, run git lfs pull to fetch contents. For generating new slices, see docs/gaia_slices_readme.md and data_loaders/load_existing_gaia_lmc_smc.py.
+
+Note: Using GitHub’s “Download ZIP” will not fetch LFS content; clone with git and Git LFS, then run git lfs pull.
 
 3) Milky Way run (rar_plateau)
 - Use runners/dynesty_latest/run_dynesty_stellar_fit_cupy.py with xi=rar_plateau (as in our runs/rar_plateau_mw_full). The run produces NPZ/JSON outputs consumed by the orchestrator. Example flags are documented in runners/dynesty_latest/README.md.
