@@ -89,22 +89,40 @@ def setup_logger(debug: bool = False) -> None:
 
 def find_npz(run_dir: Path) -> Optional[Path]:
     """Find a plausible NPZ result file in the run directory.
-    Looks for named outputs from run_dynesty_stellar_fit_cupy.py, or any *.npz with
-    param_names/samples keys.
+    Preference order:
+    1) Any NPZ that contains both 'samples' and 'param_names' (posterior-friendly), largest first.
+    2) Otherwise, fall back to the largest NPZ.
     """
     if not run_dir.exists():
         return None
-    # Priority patterns
-    candidates = []
+    # Collect candidates
+    cands = []
     for pat in [
         '*stellar_fit_cupy*_results.npz',  # produced by run_dynesty_stellar_fit_cupy.py
         '*checkpoint*latest*.npz',         # checkpointer variants
         '*.npz',                           # fallback
     ]:
-        candidates.extend(run_dir.glob(pat))
-    # Heuristic: pick the largest NPZ expecting it to contain full arrays
-    candidates = sorted(candidates, key=lambda p: p.stat().st_size if p.exists() else 0, reverse=True)
-    return candidates[0] if candidates else None
+        cands.extend(run_dir.glob(pat))
+    if not cands:
+        return None
+    # Sort by size desc
+    cands = sorted(cands, key=lambda p: p.stat().st_size if p.exists() else 0, reverse=True)
+    # Prefer those with posterior keys
+    good = []
+    for p in cands:
+        try:
+            with np.load(p, allow_pickle=False) as z:
+                files = set(z.files)
+                if 'samples' in files and 'param_names' in files:
+                    good.append(p)
+        except Exception:
+            continue
+    if good:
+        # Largest among good
+        good = sorted(good, key=lambda p: p.stat().st_size if p.exists() else 0, reverse=True)
+        return good[0]
+    # Fallback: largest overall
+    return cands[0]
 
 
 def load_run_params(run_dir: Path) -> Dict[str, float]:
@@ -711,12 +729,7 @@ def solar_system_posterior_bands(
         return None
     samples = load_posterior_samples_npz(run_dir, max_samples=n_samples)
     if not samples:
-        # Fallback: produce a degenerate band from base params so manuscript can cite a CSV
-        rows = solar_system_table(base_params, radii_AU=radii_AU)
-        AUs = np.asarray(radii_AU, float)
-        vals = np.asarray([[r['dGoverG_gated'] for r in rows]], float)
-        p16 = p50 = p84 = vals[0]
-        return np.vstack([AUs, p16, p50, p84]).T
+        return None
     AUs = np.asarray(radii_AU, float)
     vals = []  # shape: (nsamples, nAU)
     for sp in samples:
