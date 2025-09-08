@@ -26,11 +26,11 @@ $$
 \nabla^2 \Phi \;=\; 4\pi G\,\rho_b \;+\; \nabla\!\cdot\!\Big[f\!\left(\tfrac{|\nabla\Phi|}{a_0},\, \tfrac{\rho_b}{\rho_0}\right)\nabla\Phi\Big],
 $$
 
-with \(f\rightarrow 0\) in high‑acceleration/high‑density limits and \(f>0\) in low‑acceleration environments.
+with $f\rightarrow 0$ in high‑acceleration/high‑density limits and $f>0$ in low‑acceleration environments.
 
 ### **Box 1 — Exact weak‑field formula used in all figures (from code)**
 
-Let \(V_{\rm bar}(R)\) be the baryonic circular speed (km s\(^{-1}\)) and \(R\) the radius (kpc). Convert to SI:
+Let $V_{\rm bar}(R)$ be the baryonic circular speed ($\mathrm{km\,s^{-1}}$) and $R$ the radius (kpc). Convert to SI:
 
 $$
 g_{\rm bar}(R) \;=\; \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,
@@ -44,7 +44,7 @@ $$
 s_\rho(\rho;\rho_c,\gamma)=\frac{1}{1+(\rho/\rho_c)^\gamma}\in[0,1],\qquad
 W(T;T_0,\sigma_{\ln T},w_{\min})=w_{\min}+(1-w_{\min})\exp\!\left[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\right],
 $$
-with \(T\equiv V_{\rm bar}^2/R^2\) used purely as a tidal proxy.
+with $T\equiv V_{\rm bar}^2/R^2$ used purely as a tidal proxy.
 
 **Effective acceleration scale:**
 
@@ -52,7 +52,7 @@ $$
  a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
 $$
 
-**Boost (“\(\nu\)” function) used in figures (paper preset).**
+**Boost (“$\nu$” function) used in figures (paper preset).**
 
 $$
 \xi(R)\equiv D(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],
@@ -64,9 +64,9 @@ $$
 
 ### Relativistic and lensing stance used for figures
 
-For manuscript figures we adopt a **metric‑only** weak‑field mapping with \(\Phi=\Psi\) and \(c_T=1\); lensing uses \(\Phi+\Psi=2\Phi\) and the same \(\xi(g)\) as dynamics. A concise PPN derivation and full metric completion are slated for Methods/Supplement.
+For manuscript figures we adopt a **metric‑only** weak‑field mapping with $\Phi=\Psi$ and $c_T=1$; lensing uses $\Phi+\Psi=2\Phi$ and the same $\xi(g)$ as dynamics. A concise PPN derivation and full metric completion are slated for Methods/Supplement.
 
-> **Placeholder to add:** short derivation connecting \(\xi\) to \(\kappa(R)\) and \(\theta_E\) in this subclass, and the PPN parameters \((\gamma,\beta,\alpha_1,\alpha_2)\).
+> **Placeholder to add:** short derivation connecting $\xi$ to $\kappa(R)$ and $\theta_E$ in this subclass, and the PPN parameters $(\gamma,\beta,\alpha_1,\alpha_2)$.
 
 ---
 
@@ -78,21 +78,21 @@ $$
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)
 $$
 
-with \(\xi\) from **Box 1** and compare to observed rotation curves.
+with $\xi$ from **Box 1** and compare to observed rotation curves.
 
 ### Milky Way: A Case Study
 
 **Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**  
 ![Milky Way: GR vs NFW vs RAR‑gate (0.1 kpc Gaia medians)](images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png)
 
-*Caption:* Observed Gaia DR3 median stellar speeds every 0.1 kpc (black with 16–84% bands) compared with GR (baryons‑only; blue dashed), an NFW **yardstick** (green dotted), and RAR‑gate (red). Curves use the same baryon model and a representative \(a_0\) consistent with the SPARC range.
+*Caption:* Observed Gaia DR3 median stellar speeds every 0.1 kpc (black with 16–84% bands) compared with GR (baryons‑only; blue dashed), an NFW **yardstick** (green dotted), and RAR‑gate (red). Curves use the same baryon model and a representative $a_0$ consistent with the SPARC range.
 
-As in the original text, the model matches the inner rise (where baryons dominate) and sustains the outer speed once \(g_{\rm bar}\sim a_0\), without galaxy‑specific halos.
+As in the original text, the model matches the inner rise (where baryons dominate) and sustains the outer speed once $g_{\rm bar}\sim a_0$, without galaxy‑specific halos.
 
-### Milky Way: vertical force \(K_z\) and local surface density \(\Sigma_{1.1}\)
+### Milky Way: vertical force $K_z$ and local surface density $\Sigma_{1.1}$
 
-We compute \(K_z(R_0,z)\) for the same MW baryons and infer \(\Sigma_{1.1}\approx K_z/2\pi G\). The figure below uses the **full 3‑D** DGG ("phantom") mass implied by \(\xi\) via
-\(\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm bar}\).
+We compute $K_z(R_0,z)$ for the same MW baryons and infer $\Sigma_{1.1}\approx K_z/2\pi G$. The figure below uses the **full 3‑D** DGG ("phantom") mass implied by $\xi$ via
+$\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm bar}$.
 
 ![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
 
@@ -100,12 +100,12 @@ We compute \(K_z(R_0,z)\) for the same MW baryons and infer \(\Sigma_{1.1}\appro
 
 ### External Galaxies: SPARC Rotation‑Curve Fits
 
-We selected representative spirals spanning mass and surface brightness. For each galaxy we hold gating parameters fixed (MW‑tuned) and **scan \(a_0\) on a grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (m s\(^{-2}\)) to minimize \(\chi^2\) (per‑galaxy \(a_0\) strategy). A hierarchical log‑normal model for \(a_0\) is available and reported as Extended Data when used.
+We selected representative spirals spanning mass and surface brightness. For each galaxy we hold gating parameters fixed (MW‑tuned) and **scan $a_0$ on a grid** $\log_{10} a_0\in[-10.5,-9.3]$ (m s$^{-2}$) to minimize $\chi^2$ (per‑galaxy $a_0$ strategy). A hierarchical log‑normal model for $a_0$ is available and reported as Extended Data when used.
 
 #### SPARC gold‑sample panel (RAR‑gate vs GR vs observations)
 ![SPARC gold overlays panel](images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png)
 
-*Caption:* M31, NGC 3198, NGC 2403, NGC 2841, NGC 5055. Black: observed \(V_c\); blue dashed: GR baryons; red: RAR‑gate with **per‑galaxy** best‑fit \(a_0\). See `results/.../sparc_a0_summary.csv` for \(a_0\) values and \(\Delta\chi^2\).
+*Caption:* M31, NGC 3198, NGC 2403, NGC 2841, NGC 5055. Black: observed $V_c$; blue dashed: GR baryons; red: RAR‑gate with **per‑galaxy** best‑fit $a_0$. See `results/.../sparc_a0_summary.csv` for $a_0$ values and $\Delta\chi^2$.
 
 **RAR master panel** (optional ΛCDM band) is available at  
 `images/next_steps/rar_plateau_mw_full/rar_master_panel.png`.
@@ -116,7 +116,7 @@ We selected representative spirals spanning mass and surface brightness. For eac
 
 ## Solar‑System Constraints
 
-Any modified gravity must clear Solar‑System bounds. We evaluate the same \(\xi(r)\) in the Sun’s Kepler field \(g_N(r)=GM_\odot/r^2\) and report
+Any modified gravity must clear Solar‑System bounds. We evaluate the same $\xi(r)$ in the Sun’s Kepler field $g_N(r)=GM_\odot/r^2$ and report
 
 $$
 \left|\frac{\Delta G}{G}\right| \;\equiv\; \left|\xi(r)-1\right|
@@ -125,19 +125,19 @@ at 1–30 AU. We show a **gated** curve (same parameters as galaxy fits) and a
 
 ![Solar‑System constraints](images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png)
 
-*Caption:* The orange (gated) curve remains below the Cassini bound \(|\gamma-1|<2.3\times10^{-5}\) at Saturn (dotted line). A formal PPN mapping \(\Delta G/G \!\leftrightarrow\! \gamma-1\) for our subclass will be provided in Methods.
+*Caption:* The orange (gated) curve remains below the Cassini bound $|\gamma-1|<2.3\times 10^{-5}$ at Saturn (dotted line). A formal PPN mapping $\Delta G/G \!\leftrightarrow\! \gamma-1$ for our subclass will be provided in Methods.
 
-> **Source Data:** `results/next_steps/rar_plateau_mw_full/solar_system_table.csv` (AU, \(g_{\rm bar}\), \(\xi_{\rm gated}\), \(\xi_{\rm worst}\)). Paper preset also writes `ppn_table.csv` for the adopted \(\Phi=\Psi\) subclass.
+> **Source Data:** `results/next_steps/rar_plateau_mw_full/solar_system_table.csv` (AU, $g_{\rm bar}$, $\xi_{\rm gated}$, $\xi_{\rm worst}$). Paper preset also writes `ppn_table.csv` for the adopted $\Phi=\Psi$ subclass.
 
 ### PPN parameters (placeholder)
 
-We plan to present a short derivation for \((\gamma,\beta,\alpha_1,\alpha_2)\) in the quasi‑static, screened limit with \(\Phi=\Psi\). A CSV export is supported by the code when the relativistic module is present.
+We plan to present a short derivation for $(\gamma,\beta,\alpha_1,\alpha_2)$ in the quasi‑static, screened limit with $\Phi=\Psi$. A CSV export is supported by the code when the relativistic module is present.
 
 ---
 
 ## Gravitational Lensing (metric‑only path for figures)
 
-Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping with \(\Phi=\Psi\). We produce per‑lens \(\langle\Sigma\rangle(R)\), \(\Delta\Sigma(R)\), and \(\theta_E\), plus a stacked \(\Delta\Sigma\).
+Lensing is computed from the same $\xi(g)$ via a **metric‑only** mapping with $\Phi=\Psi$. We produce per‑lens $\langle\Sigma\rangle(R)$, $\Delta\Sigma(R)$, and $\theta_E$, plus a stacked $\Delta\Sigma$.
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
 
@@ -293,7 +293,7 @@ python scripts/reproduce_paper.py \
 
 ### Extended Data — Wide Binaries (Gaia DR3)
 
-We provide the predicted velocity-ratio statistic \(\sqrt{\xi}-1\) vs separation using the same DGG mapping; run:
+We provide the predicted velocity-ratio statistic $\sqrt{\xi}-1$ vs separation using the same DGG mapping; run:
 
 ```
 python scripts/analyze_wide_binaries.py \
