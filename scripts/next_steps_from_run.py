@@ -1507,6 +1507,11 @@ def main():
     ap.add_argument('--nfw-mass-ratio', type=float, default=50.0, help='If no halo mass provided in CSV, set M200 = ratio * M_star (yardstick).')
     ap.add_argument('--nfw-c', type=float, default=8.0, help='If no halo concentration provided in CSV, use this c for NFW yardstick.')
     ap.add_argument('--write-ppn-table', action='store_true', help='Write PPN table (γ, β, α1, α2) for Solar-System radii under adopted subclass (Φ=Ψ, c_T=1).')
+    # Milky Way vertical force Kz and Sigma_1.1
+    ap.add_argument('--mw-kz', action='store_true', help='Compute Milky Way Kz(R0,z) and Σ_1.1 from a simple MN+Hernquist baryon model; also provide a D-scaled (RAR) approximation.')
+    ap.add_argument('--mw-R0-kpc', type=float, default=8.2, help='Solar radius R0 (kpc) for Kz/Σ_1.1 calculation.')
+    ap.add_argument('--mw-zmax-kpc', type=float, default=3.0, help='Max height (kpc) for Kz/Σ_1.1 grid.')
+    ap.add_argument('--mw-nz', type=int, default=181, help='Number of z samples for Kz/Σ_1.1 (including z=0).')
     # Hierarchical Bayesian posterior (dynesty nested sampling) over (mu, sigma) for ln a0
     ap.add_argument('--hierarchical-a0-bayes', action='store_true', help='Run full Bayesian hierarchical posterior over (mu, sigma) using dynesty and precomputed per-galaxy chi2 grids.')
     ap.add_argument('--hierarchical-a0-live', type=int, default=400, help='Number of live points for dynesty nested sampling (Bayesian hierarchical step).')
@@ -1884,7 +1889,7 @@ def main():
         plt.figure(figsize=(7.2, 5.0))
         plt.scatter(xv, yv, s=16, alpha=0.7, label=f'BTFR sample (N={n_btfr})')
         xs = np.linspace(min(xv)-0.05, max(xv)+0.05, 200)
-        plt.plot(xs, a_lin + b_lin*xs, 'r-', lw=2, label=f'fit: slope={b_lin:.2f}±{(b_err if np.isfinite(b_err) else float('nan')):.2f}')
+        plt.plot(xs, a_lin + b_lin*xs, 'r-', lw=2, label=f"fit: slope={b_lin:.2f}±{(b_err if np.isfinite(b_err) else float('nan')):.2f}")
         plt.xlabel('log10 V_flat [km/s]')
         plt.ylabel('log10 M_b [M_sun]')
         plt.title('Baryonic Tully–Fisher Relation (observed V_flat)')
@@ -2109,6 +2114,110 @@ def main():
                         logging.info(f"Hierarchical a0 posterior: {post_json}; heatmap: {hm}")
         except Exception as e:
             logging.warning(f"Hierarchical Bayesian step skipped: {e}")
+
+    # 5c) Milky Way vertical force Kz and Σ_1.1 (baryons-only + D-scaled approximation)
+    if args.mw_kz:
+        try:
+            # Constants in kpc, km/s, Msun units (for convenience)
+            G_KPC = 4.300917270e-6  # kpc (km/s)^2 / Msun
+            TWOPI = 2.0 * math.pi
+
+            def mn_kz(R_kpc: float, z_vals: np.ndarray, M: float, a: float, b: float) -> np.ndarray:
+                R = float(R_kpc)
+                z = np.asarray(z_vals, float)
+                B = np.sqrt(z*z + b*b)
+                denom = (R*R + (a + B)**2) ** 1.5
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    dphi_dz = -G_KPC * M * (a + B) * (z / np.maximum(B, 1e-12)) / np.maximum(denom, 1e-30)
+                return -dphi_dz
+
+            def hern_kz(R_kpc: float, z_vals: np.ndarray, M: float, a: float) -> np.ndarray:
+                R = float(R_kpc)
+                z = np.asarray(z_vals, float)
+                r = np.sqrt(R*R + z*z)
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    dphi_dz = -G_KPC * M * z / (np.maximum(r, 1e-12) * (r + a)**2)
+                return -dphi_dz
+
+            # Simple MW baryon model (order-of-magnitude consistent with literature)
+            mw = {
+                'M_disk_thin': 4.0e10,
+                'M_disk_thick': 1.5e10,
+                'M_bulge': 1.2e10,
+                'M_gas': 3.0e10,
+                'R_d_thin': 2.6,
+                'R_d_thick': 4.5,
+                'R_d_gas': 7.0,
+                'a_bulge': 0.7,
+                'h_z_thin': 0.3,
+                'h_z_thick': 0.9,
+                'h_z_gas': 0.15,
+            }
+
+            R0 = float(args.mw_R0_kpc)
+            z = np.linspace(0.0, float(args.mw_zmax_kpc), int(args.mw_nz))
+            # Component Kz
+            kz_thin = mn_kz(R0, z, mw['M_disk_thin'], mw['R_d_thin'], mw['h_z_thin'])
+            kz_thick = mn_kz(R0, z, mw['M_disk_thick'], mw['R_d_thick'], mw['h_z_thick'])
+            kz_gas = mn_kz(R0, z, mw['M_gas'], mw['R_d_gas'], mw['h_z_gas'])
+            kz_bulge = hern_kz(R0, z, mw['M_bulge'], mw['a_bulge'])
+            kz_bary = kz_thin + kz_thick + kz_gas + kz_bulge
+            # Infer Sigma(z) via Oort approximation: Kz ≈ 2π G Σ(<|z|)
+            sigma_bary = np.maximum(kz_bary, 0.0) / (TWOPI * G_KPC)  # Msun/kpc^2
+
+            # RAR scaling factor D at R0 using baryonic centripetal g_bar(R0)
+            # Approximate Vc_bar from MN+Hernquist midplane derivatives: Vc^2 = R dΦ/dR
+            def mn_dphidR(R: float, z0: float, M: float, a: float, b: float) -> float:
+                B = math.sqrt(z0*z0 + b*b)
+                denom = (R*R + (a + B)**2) ** 1.5
+                return G_KPC * M * R / max(denom, 1e-30)
+
+            def hern_dphidR(R: float, z0: float, M: float, a: float) -> float:
+                r = math.sqrt(R*R + z0*z0)
+                return G_KPC * M * R / (max(r, 1e-12) * (r + a)**2)
+
+            dphi_dR = (
+                mn_dphidR(R0, 0.0, mw['M_disk_thin'], mw['R_d_thin'], mw['h_z_thin']) +
+                mn_dphidR(R0, 0.0, mw['M_disk_thick'], mw['R_d_thick'], mw['h_z_thick']) +
+                mn_dphidR(R0, 0.0, mw['M_gas'], mw['R_d_gas'], mw['h_z_gas']) +
+                hern_dphidR(R0, 0.0, mw['M_bulge'], mw['a_bulge'])
+            )
+            Vc2_bar = max(R0 * dphi_dR, 0.0)
+            # Convert to m/s^2 using ACC_M_S2_PER_KMS2_PER_KPC
+            gbar_R0_m_s2 = ACC_M_S2_PER_KMS2_PER_KPC * (Vc2_bar / max(R0, 1e-12))
+            a0 = float(rar_params.get('a0_m_s2', 1.2e-10))
+            D_R0 = 0.5 + math.sqrt(0.25 + max(a0, 0.0) / max(gbar_R0_m_s2, 1e-30))
+
+            kz_dgg = D_R0 * kz_bary
+            sigma_dgg = D_R0 * sigma_bary
+
+            # Σ_1.1
+            z11 = 1.1
+            sig11_bary = float(np.interp(z11, z, sigma_bary))
+            sig11_dgg = float(np.interp(z11, z, sigma_dgg))
+
+            # Write CSV
+            mw_csv = results_root / 'mw_kz_sigma.csv'
+            with mw_csv.open('w', encoding='utf-8') as f:
+                f.write('z_kpc,Kz_bary_km2s2_per_kpc,Kz_dgg_km2s2_per_kpc,Sigma_bary_Msun_per_kpc2,Sigma_dgg_Msun_per_kpc2,D_R0,gbar_R0_m_s2\n')
+                for i in range(len(z)):
+                    f.write(
+                        f"{z[i]:.6f},{kz_bary[i]:.6e},{kz_dgg[i]:.6e},{sigma_bary[i]:.6e},{sigma_dgg[i]:.6e},{D_R0:.6e},{gbar_R0_m_s2:.6e}\n"
+                    )
+
+            # Plot
+            plt.figure(figsize=(6.8, 4.6))
+            plt.plot(z, kz_bary, 'k-', lw=2, label='Kz baryons')
+            plt.plot(z, kz_dgg, color='#e11d48', lw=2, ls='--', label='Kz DGG (approx)')
+            plt.axvline(z11, color='tab:orange', ls='--', label=f'z=1.1 kpc → Σ_bary~{sig11_bary/1e6:.2f}, Σ_DGG~{sig11_dgg/1e6:.2f} (×10^6 Msun/kpc^2)')
+            plt.xlabel('z (kpc)'); plt.ylabel('Kz (km^2 s^-2 kpc^-1)')
+            plt.title(f'MW Kz at R0={R0} kpc (baryons and DGG-scaled)')
+            plt.grid(alpha=0.3); plt.legend(frameon=False)
+            outpng = images_root / 'mw_kz_sigma.png'
+            plt.tight_layout(); plt.savefig(outpng, dpi=140); plt.close()
+            logging.info(f"MW Kz/Σ written: {mw_csv} and {outpng}")
+        except Exception as e:
+            logging.warning(f"MW Kz/Σ step skipped: {e}")
 
     # 6) Write docs index stub
     ndx = Path('docs') / 'next_steps.md'

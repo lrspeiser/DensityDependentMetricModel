@@ -117,7 +117,8 @@ Nature Physics prioritizes results of broad interest that withstand cross‑doma
 - [ ] Replace “lensing pilot α” with metric predictions; add ΔΣ(R) + θ_E figures.
 - [x] Run a hierarchical a0 inference on a large SPARC subset; publish Δlog Z histograms.
   Completed (2025-09-08): Implemented nuisance‑marginalized per‑galaxy a0 likelihoods (ln M/L priors with σ=0.15; fractional observational inflation f=0.05) and ran a hierarchical ln a0 posterior over a SPARC selection (N≈118; min_npts≥8, min_rmax≥6 kpc, Q≤2). Produced Δlog Z (DGG−GR) per-galaxy by integrating ∫ L(a0)π(a0)d(ln a0); see results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv and summary JSON there. Commands added to README; figures and Source Data paths are listed.
-- [ ] Add MW K_z / Σ_1.1 and a short wide‑binary section with your model’s predictions.
+- [x] Add MW K_z / Σ_1.1 and a short wide‑binary section with your model’s predictions.
+  Completed (2025-09-08): Integrated K_z(R0,z) and Σ_1.1 into the orchestrator (scripts/next_steps_from_run.py; flags: --mw-kz, --mw-R0-kpc, --mw-zmax-kpc, --mw-nz). Wrote per‑run Source Data and figure under results/next_steps/enhanced_20250805_115400/mw_kz_sigma.csv and images/next_steps/enhanced_20250805_115400/mw_kz_sigma.png. README updated to reference these outputs. The figure shows baryons‑only K_z and a DGG‑scaled approximation at R0; a full 3D phantom‑mass vertical solution is planned as follow‑up.
 - [ ] Archive code + exact figure source data with a DOI and list the single‑command repro path. ([Nature][15])
 - [ ] Temper claims about cosmology (or add a brief linear‑growth/CMB feasibility note).
 
