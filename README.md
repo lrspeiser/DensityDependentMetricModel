@@ -2,8 +2,6 @@
 
 ## Introduction
 
-> Math rendering note: GitHub supports TeX-style math using $...$ for inline and $$...$$ for display equations. If you view this file outside GitHub (e.g., local editor preview), you may need a Markdown math extension. We ensure all display equations below use $$ blocks with blank lines above and below for reliable rendering.
-
 Galactic rotation curves have long challenged the standard cosmological model, which invokes massive halos of non-baryonic *dark matter* to explain the unexpectedly high orbital speeds in outer galactic disks. While dark halos can be *fitted* to match individual galaxy rotations, their success comes at the cost of introducing numerous free parameters (one halo per galaxy) and fine-tuned correlations between baryonic and dark mass distributions. A striking empirical clue is the **Radial Acceleration Relation (RAR)**: across hundreds of galaxies, the observed centripetal acceleration \(g_{\rm obs}(r)\) tightly correlates with that predicted by visible matter alone \(g_{\rm bar}(r)\)[1]. This correlation persists even in regions where dark matter is presumed to dominate, implying that the dark contribution is “fully specified by that of the baryons”[1]. The small scatter in the RAR (comparable to observational uncertainties) suggests an underlying law of nature[1] rather than a fortuitous result of galaxy formation. Indeed, the RAR has been called “tantamount to a natural law” for galaxies[1]. Such a universal relation is difficult to reconcile with arbitrary halo tuning, as it would require a mysterious *conspiracy* between visible and dark components across all galaxies[2]. This has motivated the pursuit of alternative gravity theories that *predict* the RAR intrinsically, without invoking invisible mass[2].
 
 One notable example is Milgrom’s Modified Newtonian Dynamics (MOND), which postulates a new fundamental acceleration scale \(a_0\sim10^{-10}\) m/s² at which gravity deviates from Newton’s laws[3]. MOND’s simple prescription can explain flat rotation curves and was prescient in foreseeing the RAR decades before its observational confirmation[3][1]. However, the original MOND formula (and similar empirical interpolations) are *too rigid* – with a single parameter and no built-in relativistic framework, they struggle to fit *all* phenomena (e.g. the diversity of galaxy profiles, galaxy clusters, and cosmological observations)[4]. On the other hand, explaining the RAR within the dark matter paradigm also poses challenges: it requires highly coordinated distributions of baryons and dark matter for every system[5], which may be achievable in detailed galaxy formation models but lacks the elegance of a universal law. Given the continuing non-detection of dark matter particles and the empirical successes of MOND-like phenomenology on galactic scales, it is worthwhile to explore new gravity models that combine **predictive rigidity** with flexibility and consistency across scales.
@@ -60,7 +58,7 @@ $$
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
 $$
 
-> **Preset note.** In the paper preset, we enforce a finite plateau \(D_{\max}=50\), and propagate it to rotation curves, lensing, Solar‑System checks, and \(K_z\). The effective \(D_{\max}\) is recorded in `run_metadata.json`.
+> **Preset note.** In the paper preset, we enforce a finite plateau \(D_{\max}=50\), and propagate it to rotation curves, lensing, Solar‑System checks, and \(K_z\). The effective \(D_{\max}\) is recorded in `run_metadata.json`. Passing `--rar-dmax` overrides this value; overrides are logged in the same metadata file.
 
 ### Relativistic and lensing stance used for figures
 
@@ -110,7 +108,7 @@ We selected representative spirals spanning mass and surface brightness. For eac
 **RAR master panel** (optional ΛCDM band) is available at  
 `images/next_steps/rar_plateau_mw_full/rar_master_panel.png`.
 
-**BTFR outcome.** On a working subset (N≈89) using \(M_b=M_\star+1.33\,M_{\mathrm{HI}}\) and **observed** \(V_{\rm flat}\), a simple log–log fit yields a slope \(\sim 3.2\pm0.1\). The deep‑regime prediction from the \(\nu\)-function approaches \(M_b\propto V^4\); we will report selection sensitivity (flatness criterion, inclinations, gas content) and intrinsic scatter. The BTFR figure shades the 16–84% bootstrap band; exact percentiles (p16/p50/p84) are recorded in `btfr_fit_summary.json`.
+**BTFR outcome.** On a working subset (N≈89) using $M_b=M_\star+1.33\,M_{\mathrm{HI}}$ and observed $V_{\rm flat}$, a simple log–log fit yields slope $3.184\,[3.034,\,3.332]$ (p50 [p16, p84]); $R^2\approx0.885$ and RMS scatter $\approx0.22$ dex (see `btfr_fit_summary.json`). The deep‑regime prediction from the $\nu$‑function approaches $M_b\propto V^4$; we also assess selection sensitivity (flatness, inclinations, gas content) and intrinsic scatter.
 
 ---
 
@@ -143,9 +141,9 @@ Lensing is computed from the same $\xi(g)$ via a **metric‑only** mapping with 
 
 ![Stacked ΔΣ from metric predictions](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
 
-> **Placeholders to complete for submission:** lens table with measured \((M_\star, R_e, n)\), \((z_l,z_s)\), cosmology for \(\Sigma_{\rm cr}\), and uncertainties on \(\theta_E\). Per‑lens panels (e.g., PG1115+080; B1608+656) appear in Extended Data:  
-> `images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,  
-> `images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`.
+We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \theta_E^{\rm obs})$, together with stellar masses and sizes $(\log_{10} M_\star, R_e, n)$ compiled in our lens table. Source‑Data tables accompany the figures: `results/next_steps/btfr_fix_20250906/lensing_table.csv` and `results/next_steps/btfr_fix_20250906/lensing_rar_table.csv`. Rows lacking required measured inputs are flagged and omitted from summary metrics until completed. Per‑lens panels (e.g., PG1115+080; B1608+656) appear in Extended Data:
+`images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,
+`images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`.
 
 ---
 
@@ -159,7 +157,7 @@ Lensing is computed from the same $\xi(g)$ via a **metric‑only** mapping with 
 
 **Lensing under one metric.** Metric‑only predictions show the right order of magnitude for \(\theta_E\) and stacked \(\Delta\Sigma\) with measured lens inputs pending. A single‑theory lensing success is essential.
 
-**Open issues.** (i) Whether a **finite plateau** \(D_{\max}\) is required observationally (and, if so, at what value). (ii) Universality of \(a_0\): hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion.
+**Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data.
 
 ---
 
@@ -195,6 +193,8 @@ Lensing is computed from the same $\xi(g)$ via a **metric‑only** mapping with 
 ---
 
 ## References (selection; expand to full bib in submission)
+
+- CASTLES: The CfA-Arizona Space Telescope LEns Survey of gravitational lenses. URL: https://www.cfa.harvard.edu/castles/ (accessed).
 
 1. McGaugh, Lelli & Schombert (2016): The Radial Acceleration Relation in Rotationally Supported Galaxies.  
 2. Lelli, McGaugh & Schombert (2016): SPARC mass models.  
