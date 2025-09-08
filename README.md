@@ -45,14 +45,14 @@ $$
  a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
 $$
 
-**Boost (“\(\nu\)” function) actually implemented:**
+**Boost (“\(\nu\)” function) used in figures (paper preset).**
 $$
-\xi(R)\equiv D \;=\; \frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}} \;\;\ge 1,
+\xi(R)\equiv D(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],
 \qquad
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
 $$
 
-> **Clarification.** Prior text referred to a low‑\(g\) **“plateau”**; the code currently **does not impose a hard cap** on \(D\) as \(g_{\rm bar}\to 0\). If a finite plateau \(D\le D_{\max}\) is desired, a one‑line clamp can be added. Until then, we avoid “plateau” terminology in the main claims.
+> **Preset note.** In the paper preset, we enforce a finite plateau \(D_{\max}=50\), and propagate it to rotation curves, lensing, Solar‑System checks, and \(K_z\). The effective \(D_{\max}\) is recorded in `run_metadata.json`.
 
 ### Relativistic and lensing stance used for figures
 
@@ -100,7 +100,7 @@ We selected representative spirals spanning mass and surface brightness. For eac
 **RAR master panel** (optional ΛCDM band) is available at  
 `images/next_steps/rar_plateau_mw_full/rar_master_panel.png`.
 
-**BTFR outcome.** On a working subset (N≈89) using \(M_b=M_\star+1.33\,M_{\mathrm{HI}}\) and **observed** \(V_{\rm flat}\), a simple log–log fit yields a slope \(\sim 3.2\pm0.1\). The deep‑regime prediction from the \(\nu\)-function approaches \(M_b\propto V^4\); we will report selection sensitivity (flatness criterion, inclinations, gas content) and intrinsic scatter.
+**BTFR outcome.** On a working subset (N≈89) using \(M_b=M_\star+1.33\,M_{\mathrm{HI}}\) and **observed** \(V_{\rm flat}\), a simple log–log fit yields a slope \(\sim 3.2\pm0.1\). The deep‑regime prediction from the \(\nu\)-function approaches \(M_b\propto V^4\); we will report selection sensitivity (flatness criterion, inclinations, gas content) and intrinsic scatter. The BTFR figure shades the 16–84% bootstrap band; exact percentiles (p16/p50/p84) are recorded in `btfr_fit_summary.json`.
 
 ---
 
@@ -144,7 +144,7 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 
 **Solar‑System safety.** The same mapping that boosts galaxy outskirts yields \(|\Delta G/G|\ll 10^{-5}\) at \(\sim10\) AU for galaxy‑fit parameters, qualitatively consistent with Cassini. A PPN derivation will firm up the comparison.
 
-**Vertical forces and local surface density.** A decisive check is \(K_z(R_0,z)\) and \(\Sigma_{1.1}\). We will replace the scaled curve by the **full 3D** DGG contribution.
+**Vertical forces and local surface density.** A decisive check is \(K_z(R_0,z)\) and \(\Sigma_{1.1}\). We use the **full 3‑D** DGG contribution throughout the paper preset.
 
 **Lensing under one metric.** Metric‑only predictions show the right order of magnitude for \(\theta_E\) and stacked \(\Delta\Sigma\) with measured lens inputs pending. A single‑theory lensing success is essential.
 
@@ -168,7 +168,8 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 **Computation.** We evaluate \(\xi(g)\) as in **Box 1**, with unit conversion constant \(C\) and optional gates \(s_\rho, W(T)\).  
 **Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling.  
 **Solar‑System.** Evaluate \(\xi(r)\) in the Sun’s field and report \(|\Delta G/G|\) at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass \(\Phi=\Psi, c_T=1\)), we also export a PPN CSV (\(\gamma\approx1, \beta\approx1, \alpha_1\approx\alpha_2\approx0\)).  
-**Lensing (metric‑only).** Build \(\langle\Sigma\rangle(R)\), \(\Delta\Sigma(R)\), and \(\theta_E\) using the same \(\xi\) and measured lens properties; \(\Sigma_{\rm cr}\) from a standard flat ΛCDM cosmology.
+**Lensing (metric‑only).** Build \(\langle\Sigma\rangle(R)\), \(\Delta\Sigma(R)\), and \(\theta_E\) using the same \(\xi\) and measured lens properties; \(\Sigma_{\rm cr}\) from a standard flat ΛCDM cosmology.  
+**Model comparison.** Δlog Z histograms are reported as a BIC approximation; full evidences are produced when hierarchical runs are enabled.
 
 > **Where to find in code:** the working implementation is `xi_rar_plateau_numpy(...)` and `solar_system_table(...)` in `scripts/next_steps_from_run.py`.
 

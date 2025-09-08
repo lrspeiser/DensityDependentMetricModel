@@ -6,7 +6,9 @@ All notable changes to this repository will be documented in this file.
 
 ### Changed
 - Orchestrator: Paper preset now enforces D_max=50 in the xi (nu) mapping and threads it across all xi calls (SPARC scans, lensing, Kz) for low-g stability.
-- README.md: Added PPN CSV note under Solar (paper preset) and a new Extended Data section for Wide Binaries; included reproduce snippet for paper preset.
+- README.md: Box 1 updated to document min(…, D_max) and the paper preset plateau (D_max=50); removed conflicting “no hard cap” clarification.
+- README.md: Switched all Milky Way Kz references to full‑3D figure; added PPN CSV note under Solar (paper preset), Extended Data section for Wide Binaries, and paper preset reproduction snippet.
+- README.md: Added BTFR note about bootstrap CI shading and a model‑comparison (BIC) figure note.
 - README.md: Replaced Milky Way Kz/Σ_1.1 figure and description to use the new full 3‑D phantom density computation:
   - Old: images/next_steps/enhanced_20250805_115400/mw_kz_sigma.png (scaled approximation)
   - New: images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png (full 3‑D via ρ_ph = (ξ−1)ρ_b − (4πG)^{-1}∇ξ·g_bar)
