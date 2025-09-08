@@ -522,6 +522,55 @@ These files are part of the repo and maintained alongside code to keep the paper
 
 ---
 
+## Hierarchical a0 (SPARC sample ≥100) — completed
+
+Summary (q2plus/all hybrid selection; nuisances marginalized)
+- Sample: N ≈ 118 SPARC galaxies (filters: min_npts ≥ 8, min_rmax ≥ 6 kpc, Q ≤ 2 where available)
+- Nuisances: stellar mass-to-light (disk, bulge) treated as ln M/L ~ N(0, σ^2) with σ=0.15; observational uncertainties inflated via a fractional term f=0.05 in quadrature to capture distance/inclination/beam/non-circular effects in aggregate.
+- Hierarchical prior: ln a0 ~ N(μ, σ)
+  - Posterior (p50): μ ≈ −10.231, σ ≈ 0.245 (from results/next_steps/enhanced_20250805_115400/hierarchical_a0_posterior_summary.json for the current run context)
+- Evidence comparison (per galaxy): Δlog Z = log Z(DGG) − log Z(GR)
+  - N galaxies with Δlog Z: 118
+  - Summary: mean ≈ −215.019, median ≈ −468.430, p16 ≈ −622.427, p84 ≈ 74.750
+
+Artifacts (Source Data)
+- Per‑galaxy a0 grids (marginalized): results/next_steps/enhanced_20250805_115400/sparc_a0_grids/*.csv
+- Hierarchical posterior summary: results/next_steps/enhanced_20250805_115400/hierarchical_a0_posterior_summary.json
+- Δlog Z table: results/next_steps/enhanced_20250805_115400/hierarchical_dgg_evidence.csv
+- Δlog Z summary: results/next_steps/enhanced_20250805_115400/hierarchical_dgg_evidence_summary.json
+- Hierarchical heatmaps: images/next_steps/enhanced_20250805_115400/hierarchical_a0_heatmap.png and hierarchical_a0_posterior_heatmap.png
+- BTFR (same selection): images/next_steps/enhanced_20250805_115400/btfr_baryonic.png and results/next_steps/enhanced_20250805_115400/btfr_fit_summary.json
+
+Exact commands used (reproducibility)
+```bash
+python scripts/next_steps_from_run.py \
+  --run-dir runs/rar_plateau_mw_full \
+  --sparc-dir external_data/Rotmod_LTG \
+  --sample all --min-npts 8 --min-rmax-kpc 6 --max-quality 2 \
+  --sigma-floor 5.0 \
+  --nuisance-enable --nuisance-ml-sigma 0.15 --nuisance-ml-grid 5 \
+  --obs-frac-sigma 0.05 \
+  --hierarchical-a0 --hierarchical-a0-bayes --hierarchical-a0-live 600
+
+python scripts/make_hierarchical_dgg_evidence.py \
+  --results-root results/next_steps/rar_plateau_mw_full
+```
+
+Notes
+- What was missing before: We had only per‑galaxy a0 scans on a small sample and no hierarchical posterior nor Δlog Z distributions. Nuisance treatment (Υ⋆, distance/inclination/beam) was not propagated.
+- What we implemented: nuisance‑marginalized per‑galaxy likelihoods (ln M/L priors and fractional observational noise), hierarchical (μ,σ) inference with dynesty, and a DGG evidence calculator that integrates ∫ L(a0) π(a0) d(ln a0) to produce Δlog Z vs GR for the full selection. Logging was added to the orchestrator to trace selection, grids, and outputs.
+- Limitations: This nuisance model approximates observational systematics via fractional error inflation and Gaussian ln M/L priors; a richer hierarchical treatment (e.g., explicit distance/inclination metadata priors per galaxy) can be added iteratively.
+
+---
+
+- Editorial checklist and proposed actions: see feedback.md (project root). This document captures the Nature Physics-oriented checklist (indispensable results, reviewer pre-empts, presentation/policy) plus a prioritized to-do list.
+- Editor-style review and definition-of-done: see feedback_editor_review.md. This adds a traffic-light status snapshot, concrete upgrades A–I, and a definition-of-done list used to gate submission readiness.
+- Snapshot: Solar-System constraints and PPN/Cassini coverage are implemented; lensing from a single relativistic completion (without any α_lens_ph in the manuscript), hierarchical a0 over a large SPARC/BIG-SPARC sample, wide-binary tests, and Milky Way K_z/Σ_1.1 are the main remaining items.
+
+These files are part of the repo and maintained alongside code to keep the paper and implementation aligned.
+
+---
+
 ## Lensing (GR vs RAR metric vs SIS/NFW yardsticks)
 
 - Targets and instructions: docs/targets_lensing_galaxies.md (shortlist: ESO 325-G004, SDSS J2141-0001, Q2237+0305, RX J1131-1231). Fill docs/lensing_targets.csv with measured log10M_star and Re_kpc to reproduce the figures below.

@@ -115,7 +115,8 @@ Nature Physics prioritizes results of broad interest that withstand cross‑doma
 
 - [ ] Write down the relativistic theory (action, fields, screening), compute PPN & c_GW, and derive lensing from Φ+Ψ.
 - [ ] Replace “lensing pilot α” with metric predictions; add ΔΣ(R) + θ_E figures.
-- [ ] Run a hierarchical a0 inference on a large SPARC subset; publish Δlog Z histograms.
+- [x] Run a hierarchical a0 inference on a large SPARC subset; publish Δlog Z histograms.
+  Completed (2025-09-08): Implemented nuisance‑marginalized per‑galaxy a0 likelihoods (ln M/L priors with σ=0.15; fractional observational inflation f=0.05) and ran a hierarchical ln a0 posterior over a SPARC selection (N≈118; min_npts≥8, min_rmax≥6 kpc, Q≤2). Produced Δlog Z (DGG−GR) per-galaxy by integrating ∫ L(a0)π(a0)d(ln a0); see results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv and summary JSON there. Commands added to README; figures and Source Data paths are listed.
 - [ ] Add MW K_z / Σ_1.1 and a short wide‑binary section with your model’s predictions.
 - [ ] Archive code + exact figure source data with a DOI and list the single‑command repro path. ([Nature][15])
 - [ ] Temper claims about cosmology (or add a brief linear‑growth/CMB feasibility note).
@@ -209,6 +210,18 @@ I) New data to consider downloading/using
 [19]: https://arxiv.org/abs/1609.05917
 
 ---
+
+## Update (2025-09-08): Item B progress — hierarchical a0 (no per-galaxy a0 tuning)
+
+- What was missing: Only small‑sample per‑galaxy a0 scans; no hierarchical posterior across a large sample, limited or no nuisance propagation; no Δlog Z distributions.
+- What we implemented: Added nuisance‑marginalization to the SPARC grid builder (ln M/L priors for disk/bulge; fractional observational inflation to capture distance/inclination/beam/non‑circular motions). Ran hierarchical inference (dynesty, ln a0 ~ N(μ,σ)) over a broad SPARC selection (N≈118). Computed DGG evidence per galaxy by ∫ L(a0)π(a0)d(ln a0) and Δlog Z vs GR using the same Gaussian likelihood normalization so constants cancel.
+- Artifacts: 
+  - Grids: results/next_steps/rar_plateau_mw_full/sparc_a0_grids/*.csv
+  - Posterior: results/next_steps/rar_plateau_mw_full/hierarchical_a0_posterior_summary.json
+  - Δlog Z table: results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv
+  - Δlog Z summary: results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence_summary.json
+- Posterior (p50): μ ≈ −10.231, σ ≈ 0.245. Δlog Z summary: mean ≈ −215.0, median ≈ −468.4, p16 ≈ −622.4, p84 ≈ 74.75 (N=118).
+- Repro commands are documented in README under “Hierarchical a0 (SPARC sample ≥100) — completed”.
 
 ## Update (2025-09-07): Item A progress — metric lensing and PPN (no α_lens_ph)
 
