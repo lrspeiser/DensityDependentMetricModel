@@ -1187,14 +1187,27 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
     with csv_path.open('r', encoding='utf-8') as f:
         header = f.readline().strip().split(',')
         cols = [h.strip() for h in header]
+        # Validate required columns
+        required = ["lens_id", "z_l", "z_s", "log10M_star", "Re_kpc"]
+        missing = [c for c in required if c not in cols]
+        if missing:
+            raise ValueError(f"Lens table missing columns: {missing}")
         for line in f:
             if not line.strip():
                 continue
             fr = [s.strip() for s in line.strip().split(',')]
-            if len(fr) < 5:
-                continue
-            data = {cols[i]: fr[i] if i < len(fr) else '' for i in range(len(cols))}
+            if len(fr) < len(cols):
+                # pad with empties
+                fr = fr + [''] * (len(cols) - len(fr))
+            data = {cols[i]: fr[i] for i in range(len(cols))}
             rows.append(data)
+    # Validate z_s > z_l
+    for r in rows:
+        try:
+            if float(r['z_s']) <= float(r['z_l']):
+                raise ValueError(f"Invalid lens row (z_s<=z_l) for lens_id={r.get('lens_id','?')}")
+        except Exception:
+            raise ValueError(f"Invalid redshift values (z_l,z_s) in lens table for lens_id={r.get('lens_id','?')}")
 
     for row in rows:
         try:
@@ -1730,10 +1743,14 @@ def main():
         args.min_rmax_kpc = max(args.min_rmax_kpc, 8.0)
         args.max_quality = min(args.max_quality, 2)
         logging.info("Applied paper preset: metric-only lensing, 400+ posterior samples, Q≤2 SPARC selection")
-    elif args.preset == 'pilot':
+elif args.preset == 'pilot':
         # Pilot mode: enable experimental features
         args.allow_pilot_lensing = True
         logging.info("Applied pilot preset: experimental lensing scalars enabled")
+
+    # Paper preset: write PPN table if mapping present
+    if args.preset == 'paper':
+        args.write_ppn_table = True
 
     setup_logger(args.debug)
 
@@ -1799,6 +1816,7 @@ def main():
     grids_dir.mkdir(parents=True, exist_ok=True)
 
     galaxy_store: List[Tuple[str, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]] = []
+    selection_info = []
     for gid in sample:
         logging.info(f"SPARC: {gid}")
         data = load_sparc_galaxy(gid, sparc_dir)
@@ -1891,6 +1909,12 @@ def main():
 
         # Stash for possible global a0
         galaxy_store.append((gid, R, Vbar, Vobs, eV, a0_best))
+        # Record selection metrics for disclosure
+        selection_info.append({
+            'galaxy': gid,
+            'npts': int(len(R)),
+            'rmax_kpc': float(np.nanmax(R)) if len(R) else float('nan')
+        })
 
         # Overlay plot
         plt.figure(figsize=(7.2, 5.0))
@@ -1921,6 +1945,12 @@ def main():
             logging.debug(f"Source-Data write failed for {gid}: {_e}")
 
     logging.info(f"SPARC summary: {csv_path}")
+    # Write SPARC selection disclosure
+    try:
+        (results_root / 'sparc_selection.json').write_text(json.dumps(selection_info, indent=2), encoding='utf-8')
+        logging.info(f"SPARC selection info: {results_root/'sparc_selection.json'}")
+    except Exception as e:
+        logging.debug(f"SPARC selection disclosure skipped: {e}")
 
     # Model comparison distributions (histograms)
     try:
@@ -2120,6 +2150,21 @@ def main():
         p, cov = np.polyfit(xv, yv, 1, cov=True)
         a_lin, b_lin = p[1], p[0]
         b_err = float(np.sqrt(cov[0,0])) if cov.shape == (2,2) else float('nan')
+        # Bootstrap slope uncertainty
+        try:
+            rng = np.random.default_rng(42)
+            B = 1000
+            boots = []
+            n = len(xv)
+            for _ in range(B):
+                idx = rng.integers(0, n, size=n)
+                xb = xv[idx]; yb = yv[idx]
+                pb = np.polyfit(xb, yb, 1)
+                boots.append(pb[0])
+            boots = np.asarray(boots)
+            p16, p50, p84 = np.percentile(boots, [16, 50, 84])
+        except Exception:
+            p16 = p50 = p84 = float('nan')
         yhat = a_lin + b_lin * xv
         resid = yv - yhat
         rss = float(np.sum(resid**2))
@@ -2144,7 +2189,8 @@ def main():
             'R2': r2,
             'rms_dex': rms,
             'quad_c': a2,
-            'delta_BIC_quad_minus_lin': delta_bic,
+'delta_BIC_quad_minus_lin': delta_bic,
+            'slope_bootstrap': {'p16': float(p16), 'p50': float(p50), 'p84': float(p84)},
         }
         (results_root / 'btfr_fit_summary.json').write_text(json.dumps(btfr_summary, indent=2), encoding='utf-8')
         logging.info(f"BTFR fit: slope={b_lin:.3f}±{(b_err if np.isfinite(b_err) else float('nan')):.3f}, R2={r2:.3f}, rms={rms:.3f} dex, ΔBIC={delta_bic:.2f}")
