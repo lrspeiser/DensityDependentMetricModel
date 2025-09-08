@@ -24,38 +24,38 @@ In RAR‑gated gravity, the departure from Newton’s law is governed by an inte
 - **Intermediate regime** (\(g\sim a_0\)) — A smooth transition governed by the specific interpolating function; the transition width can be calibrated against rotation‑curve shapes.
 
 Mathematically, one representation is a modified Poisson equation or GR‑style field equation with a nonlinear term that depends on the field strength and/or density:
-\[
+$$
 \nabla^2 \Phi \;=\; 4\pi G\,\rho_b \;+\; \nabla\!\cdot\!\Big[f\!\left(\tfrac{|\nabla\Phi|}{a_0},\, \tfrac{\rho_b}{\rho_0}\right)\nabla\Phi\Big],
-\]
+$$
 with \(f\rightarrow 0\) in high‑acceleration/high‑density limits and \(f>0\) in low‑acceleration environments.
 
 ### **Box 1 — Exact weak‑field formula used in all figures (from code)**
 
 Let \(V_{\rm bar}(R)\) be the baryonic circular speed (km s\(^{-1}\)) and \(R\) the radius (kpc). Convert to SI:
-\[
+$$
 g_{\rm bar}(R) \;=\; \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,
-\quad C \equiv 3.240779289\times 10^{-14}\ 
+\quad C \equiv 3.240779289\times 10^{-14}\\ 
 \frac{\mathrm{m/s}^2}{(\mathrm{km/s})^2/\mathrm{kpc}}.
-\]
+$$
 
 **Environmental gate (optional):**
-\[
+$$
 s_\rho(\rho;\rho_c,\gamma)=\frac{1}{1+(\rho/\rho_c)^\gamma}\in[0,1],\qquad
 W(T;T_0,\sigma_{\ln T},w_{\min})=w_{\min}+(1-w_{\min})\exp\!\left[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\right],
-\]
+$$
 with \(T\equiv V_{\rm bar}^2/R^2\) used purely as a tidal proxy.
 
 **Effective acceleration scale:**
-\[
-a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
-\]
+$$
+ a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
+$$
 
 **Boost (“\(\nu\)” function) actually implemented:**
-\[
+$$
 \xi(R)\equiv D \;=\; \frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}} \;\;\ge 1,
 \qquad
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
-\]
+$$
 
 > **Clarification.** Prior text referred to a low‑\(g\) **“plateau”**; the code currently **does not impose a hard cap** on \(D\) as \(g_{\rm bar}\to 0\). If a finite plateau \(D\le D_{\max}\) is desired, a one‑line clamp can be added. Until then, we avoid “plateau” terminology in the main claims.
 
@@ -70,9 +70,9 @@ For manuscript figures we adopt a **metric‑only** weak‑field mapping with \(
 ## Rotation Curve Predictions with No Dark Halos
 
 We applied the RAR‑gated model to baryonic mass models for the **Milky Way** and for external galaxies from **SPARC**. In each case we compute
-\[
+$$
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)
-\]
+$$
 with \(\xi\) from **Box 1** and compare to observed rotation curves.
 
 ### Milky Way: A Case Study
@@ -111,9 +111,9 @@ We selected representative spirals spanning mass and surface brightness. For eac
 ## Solar‑System Constraints
 
 Any modified gravity must clear Solar‑System bounds. We evaluate the same \(\xi(r)\) in the Sun’s Kepler field \(g_N(r)=GM_\odot/r^2\) and report
-\[
+$$
 \left|\frac{\Delta G}{G}\right| \;\equiv\; \left|\xi(r)-1\right|
-\]
+$$
 at 1–30 AU. We show a **gated** curve (same parameters as galaxy fits) and a **worst‑case** curve (no screening).
 
 ![Solar‑System constraints](images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png)
@@ -213,16 +213,16 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 
 ### Appendix A — Exact working formula (duplicate of Box 1 for reference)
 
-\[
+$$
 \begin{aligned}
-g_{\rm bar}(R) &= \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,\quad C=3.240779289\times10^{-14}\ \frac{\mathrm{m/s}^2}{(\mathrm{km/s})^2/\mathrm{kpc}},\\[3pt]
-s_\rho(\rho) &= \bigl[1+(\rho/\rho_c)^{\gamma}\bigr]^{-1},\qquad
-W(T)=w_{\min}+(1-w_{\min})\exp\!\Bigl[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\Bigr],\\[3pt]
-a_0^{\rm eff} &= a_0\bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\bigr],\qquad T\equiv V_{\rm bar}^2/R^2,\\[3pt]
-\xi(R) &\equiv \tfrac12+\sqrt{\tfrac14+\tfrac{a_0^{\rm eff}}{g_{\rm bar}(R)}},\qquad
-V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
+ g_{\rm bar}(R) &= \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,\quad C=3.240779289\times10^{-14}\\ \frac{\mathrm{m/s}^2}{(\mathrm{km/s})^2/\mathrm{kpc}},\\[3pt]
+ s_\rho(\rho) &= \bigl[1+(\rho/\rho_c)^{\gamma}\bigr]^{-1},\qquad
+ W(T)=w_{\min}+(1-w_{\min})\exp\!\Bigl[-\frac{(\\ln T-\\ln T_0)^2}{2\\sigma_{\\ln T}^2}\Bigr],\\[3pt]
+ a_0^{\rm eff} &= a_0\bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\bigr],\qquad T\equiv V_{\rm bar}^2/R^2,\\[3pt]
+ \xi(R) &\equiv \tfrac12+\sqrt{\tfrac14+\tfrac{a_0^{\rm eff}}{g_{\rm bar}(R)}},\qquad
+ V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
 \end{aligned}
-\]
+$$
 
 *Optional plateau:* impose \(\xi\le D_{\max}\) if a finite cap is required observationally.
 
