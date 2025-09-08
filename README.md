@@ -42,6 +42,14 @@ As an initial test, we consider the Milky Way, where independent measurements of
 
 As shown above, our RAR-gated model (red curve) provides a reasonable match to the Milky Way’s rotation profile. In the inner galaxy ($r \lesssim 5$ kpc), the baryonic contribution dominates and the model effectively reduces to Newtonian gravity, so it matches the observed rising rotation curve up to the peak. Beyond the peak, the baryonic $v_{\rm bar}(r)$ would decline (blue dashed), but the RAR-gating kicks in around the acceleration threshold ($\sim$$a_0$) near a few kpc. This yields an additional gravitational acceleration that partially counteracts the decline. Consequently, the model rotation curve stays higher than the baryonic one, in line with observations out to the measured range (~15 kpc). We emphasize that this was achieved with a single choice of global parameters and the known baryon distribution – no galaxy-specific halo tuning was performed. In contrast, the green curve shows a typical dark-matter-based fit using an NFW halo: while it can also fit the data, it does so by **introducing two extra free parameters** (halo mass and concentration) tailored to the Milky Way. Moreover, one can see that the NFW fit tends to overshoot the rotation curve in the inner region (green exceeds black around 5–8 kpc, whereas red stays closer), because the halo adds excess gravity even where baryons already explain the rotation. The RAR-gated model naturally avoids such issues; it adds “extra gravity” only where and when needed (at large $r$ once the baryonic acceleration drops below the threshold), thus preserving the successful baryonic prediction in the inner galaxy. The slight underestimation of the observed speed by the RAR model in the 8–15 kpc range (red vs. black line) is within the observational uncertainties (gray band) but could hint at areas for model refinement (e.g. the exact interpolating function shape). Overall, the Milky Way test demonstrates that RAR-gated gravity can reproduce a realistic rotation curve for a large spiral galaxy without dark matter, while remaining consistent with known data in both the inner and outer regions.
 
+### Milky Way: vertical force Kz and local surface density Σ_1.1
+
+We compute the vertical force K_z(R_0, z) using the same Milky Way baryonic mass model (Miyamoto–Nagai disks + Hernquist bulge) used for the radial curve and infer Σ_1.1 via the Oort‑limit approximation K_z ≈ 2πG Σ(<|z|). This is the first step toward the full DGG (RAR‑plateau) vertical analysis; a follow‑up will add the effective “phantom” component consistently in 3D and compare to Bovy & Rix / McMillan bands.
+
+![Milky Way Kz and Σ_1.1 (baryons-only)](images/mw_kz_sigma.png)
+
+Source data: results/mw_kz_sigma.csv (includes component K_z and Σ_inferred columns).
+
 ### External Galaxies: SPARC Rotation Curve Fits
 
 To further assess the model’s performance and universality, we applied it to a sample of external galaxies with well-measured rotation curves. We selected several representative spirals from the SPARC database, spanning a range of mass and surface brightness. For each galaxy, the baryonic mass distribution (stellar disk, bulge if present, and gas disk) is known from observations. We computed the model rotation curve for each galaxy’s baryons under RAR-gated gravity, allowing the acceleration scale $a_0$ to vary initially in order to see if a single universal value can fit all galaxies or if some scatter is present. We then compared to the observed rotation velocities at various radii.
@@ -623,6 +631,14 @@ Representative SPARC overlays (observed vs GR vs RAR)
 Lensing — ΔΣ stack and θE scatter (RAR metric vs observed; GR/NFW yardsticks shown)
 - ΔΣ stack: images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png
 - θE scatter: images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+
+RAR master panel — SPARC scatter with DGG posterior band
+- ![RAR master panel](images/next_steps/rar_plateau_mw_full/rar_master_panel.png)
+- Source Data: results/next_steps/rar_plateau_mw_full/rar_master_panel_source.csv
+
+Evidence distributions (histograms)
+- Δlog Z (DGG − GR): images/next_steps/rar_plateau_mw_full/delta_logZ_dgg_vs_gr.png (table: results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv)
+- Δlog Z (NFW − GR): images/next_steps/rar_plateau_mw_full/delta_logZ_nfw_vs_gr.png (table: results/next_steps/rar_plateau_mw_full/delta_logZ_nfw_vs_gr.csv)
 
 ---
 
