@@ -61,6 +61,9 @@ Notes and caveats
 - This is a first-order, testable prescription. It is effectively a phenomenological disformal scalar coupling in the weak field. A full covariant action can be written to reproduce these linearized metric potentials while respecting screening; that development is beyond scope here but consistent with standard scalar–tensor effective field theory with environment-dependent functions.
 - Cluster and CMB lensing would further constrain (a_env + b_env) at larger scales and temperatures; screening should suppress φ_env in hot intracluster media.
 
-How to run
+How to run (manuscript path)
+- Use scripts/next_steps_from_run.py with --metric-lensing-only (no α_lens_ph). Provide docs/lensing_targets.csv with measured log10M_star and Re_kpc. See docs/paper_appendix_relativistic.md and theory/relativistic.py for the mapping used.
+
+Internal pilot (not for manuscript figures)
 - See tools/lensing_predict.py for a CLI that computes θ_E and α(R) for chosen parameters, including a worked example with uncertainties. You can plug in posterior-informed priors for A_env, p from your ER/TFR fits in SPARC.
 

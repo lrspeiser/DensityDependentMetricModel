@@ -60,7 +60,7 @@ To further assess the model’s performance and universality, we applied it to a
 
 ### RAR master panel — SPARC vs DGG (posterior band) [ΛCDM overlay optional]
 
-We aggregate SPARC points into the RAR plane (log10 g_bar, log10 g_obs) and overlay the DGG prediction as a posterior band derived from the hierarchical ln a0 posterior (median with 16–84% envelope). An optional ΛCDM (EAGLE/NIHAO) band can be overlaid via a curated CSV (see docs/lcdm_rar_band.md).
+We aggregate SPARC points into the RAR plane (log10 g_bar, log10 g_obs) and overlay the DGG prediction as a posterior band derived from the hierarchical ln a0 posterior (median with 16–84% envelope). An optional ΛCDM (EAGLE/NIHAO) band can be overlaid via a curated CSV (see docs/lcdm_rar_band.md; a header‑only template is provided at docs/lcdm_rar_band_template.csv — copy to docs/lcdm_rar_band.csv and fill).
 
 - Figure: images/next_steps/rar_plateau_mw_full/rar_master_panel.png
 - Source Data (scatter): results/next_steps/rar_plateau_mw_full/rar_master_panel_source.csv
@@ -111,13 +111,13 @@ Repro and overlay instructions: docs/wide_binaries.md
 Source Data: results/next_steps/rar_plateau_mw_full/wide_binaries_pred.csv
 Figure: images/next_steps/rar_plateau_mw_full/wide_binaries_pred.png
 
-## Gravitational Lensing: Preliminary Consistency
+## Gravitational Lensing: Metric path (manuscript)
 
-Any modified gravity theory intended as a serious alternative to dark matter must address light deflection as well as dynamics. Our model is designed to admit a relativistic completion (GR‑style metric with environment‑gated modifications) so that the same mechanism that boosts galaxy rotation can also enhance gravitational lensing in the low‑acceleration regime without violating Solar‑System tests.
+Any modified gravity theory intended as a serious alternative to dark matter must address light deflection as well as dynamics. For manuscript figures we use a single‑theory, metric‑only path: the same gating that boosts galaxy dynamics maps to an environment potential φ_env = 1/2 ln ξ, and the weak‑field lensing kernel is Φ+Ψ with Φ=Ψ (quasi‑static, screened limit; c_T=1). See docs/paper_appendix_relativistic.md.
 
-As a pilot consistency check, we computed galaxy‑scale lensing signals using the baryonic mass plus the associated “phantom” contribution implied by the RAR‑gated dynamics, under a simple, weak‑field metric ansatz in which deflection responds to the same low‑acceleration enhancement. Using a monotone‑envelope solver for the mean surface density ⟨Σ⟩(R) and defining the Einstein radius as the outer crossing with the critical surface density, we find that predicted Einstein radii for a small, canonical set of lenses fall in the right order of magnitude. In this early test, a single global scaling of the phantom term in lensing improves the match (best around a factor ~2 on our 3‑lens smoke test); we treat this purely as a placeholder until a full, self‑consistent relativistic derivation removes such dials.
+The orchestrator computes per‑lens ⟨Σ⟩(R), ΔΣ(R), and θ_E from Φ+Ψ, writes per‑lens profiles (results/next_steps/<run>/lensing_metric_profiles/*) and a stacked ΔΣ (results/next_steps/<run>/lensing_metric_stack.csv). To regenerate manuscript outputs, pass --metric-lensing-only so no lensing‑only scalars are used in outputs. A small strong‑lens table is produced when you provide docs/lensing_targets.csv.
 
-Crucially, the lensing pilot does not alter any dynamical fits or Solar‑System bounds: it is only a check that a consistent relativistic extension can plausibly deliver lensing strengths commensurate with observations given the same baryonic inputs. A full treatment—deriving the metric potentials, quantifying Φ+Ψ in the weak field, and validating against galaxy–galaxy lensing and Einstein rings—will be presented separately.
+For internal scoping (not used in manuscript figures), a lensing‑only pilot scaling remains available behind flags (--alpha-lens-ph, --zeta-env-lens); this is disabled by --metric-lensing-only.
 
 #### Pilot outputs (enhanced_20250805_115400)
 - Table (per‑lens θ_E predictions; metric‑only with GR and RAR columns): results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv
@@ -655,6 +655,7 @@ RAR master panel — SPARC scatter with DGG posterior band
 Evidence distributions (histograms)
 - Δlog Z (DGG − GR): images/next_steps/rar_plateau_mw_full/delta_logZ_dgg_vs_gr.png (table: results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv)
 - Δlog Z (NFW − GR): images/next_steps/rar_plateau_mw_full/delta_logZ_nfw_vs_gr.png (table: results/next_steps/rar_plateau_mw_full/delta_logZ_nfw_vs_gr.csv)
+- Δlog Z (DGG − GR) [enhanced run]: images/next_steps/enhanced_20250805_115400/delta_logZ_dgg_vs_gr.png (table: results/next_steps/enhanced_20250805_115400/hierarchical_dgg_evidence.csv)
 
 ---
 
