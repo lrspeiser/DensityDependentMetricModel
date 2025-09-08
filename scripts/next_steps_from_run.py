@@ -556,6 +556,7 @@ def fit_a0_grid(
             T0=rar_params.get('T0', None),
             sigma_lnT=rar_params.get('sigma_lnT', None),
             wmin=float(rar_params.get('wmin', 0.0)),
+            D_max=rar_params.get('D_max', None),
         )
         V_model = np.sqrt(np.maximum(Vbar_kms, 0.0)**2 * xi)
         chi2 = chi2_velocity(V_obs, V_model, e_V_obs, sigma_floor=sigma_floor)
@@ -588,6 +589,7 @@ def scan_a0_grid(
             T0=rar_params.get('T0', None),
             sigma_lnT=rar_params.get('sigma_lnT', None),
             wmin=float(rar_params.get('wmin', 0.0)),
+            D_max=rar_params.get('D_max', None),
         )
         V_model = np.sqrt(np.maximum(Vbar_kms, 0.0)**2 * xi)
         chi2_vals.append(chi2_velocity(V_obs, V_model, e_V_obs, sigma_floor=sigma_floor))
@@ -654,6 +656,7 @@ def scan_a0_grid_marginalized(
                     T0=rar_params.get('T0', None),
                     sigma_lnT=rar_params.get('sigma_lnT', None),
                     wmin=float(rar_params.get('wmin', 0.0)),
+                    D_max=rar_params.get('D_max', None),
                 )
                 V_model = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi)
                 # likelihood with fractional noise inflation
@@ -1121,7 +1124,8 @@ def _theta_E_from_profile_with_xi(log10M_star: float, Re_kpc: float, z_l: float,
                                   gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
                                   T0=rar_params.get('T0', None),
                                   sigma_lnT=rar_params.get('sigma_lnT', None),
-                                  wmin=float(rar_params.get('wmin', 0.0)))
+                                  wmin=float(rar_params.get('wmin', 0.0)),
+                                  D_max=rar_params.get('D_max', None))
         M_eff_encl = np.maximum(xi, 0.0) * np.maximum(M_b_encl, 0.0)
     else:
         M_eff_encl = np.maximum(M_b_encl, 0.0)
@@ -1268,7 +1272,8 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                                       rho=None, rho_c=rar_params.get('rho_c', None),
                                       gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
                                       T0=rar_params.get('T0', None), sigma_lnT=rar_params.get('sigma_lnT', None),
-                                      wmin=float(rar_params.get('wmin', 0.0)))
+                                      wmin=float(rar_params.get('wmin', 0.0)),
+                                      D_max=rar_params.get('D_max', None))
             M_eff = np.maximum(xi, 0.0) * np.maximum(M_b, 0.0)
             dM = np.gradient(M_eff, r, edge_order=2)
             rho_eff = np.maximum(dM, 0.0) / (4.0 * math.pi * np.maximum(r, 1e-9)**2)
@@ -1714,6 +1719,7 @@ def main():
     ap.add_argument('--sigma-cr-scale', type=float, default=1.0, help='Multiplicative factor on Σ_cr (lensing-only, distances sensitivity)')
     ap.add_argument('--metric-lensing-only', action='store_true', default=True, help='If set, compute lensing strictly from the metric (Φ+Ψ via xi) and disable any α_lens_ph or ζ_env_lens scaling in outputs (paper build path).')
     ap.add_argument('--allow-pilot-lensing', action='store_true', default=False, help='Allow lensing-only phantom scaling (α_lens_ph, ζ_env_lens) for pilot studies. Default False for paper builds.')
+    ap.add_argument('--rar-dmax', type=float, default=None, help='Optional finite plateau cap D_max for xi (nu). If unset, no cap is applied.')
     # NFW yardstick (DM baseline)
     ap.add_argument('--nfw-enable', action='store_true', help='If set, compute an NFW yardstick per lens (dark-matter baseline) and include θE_NFW and ΔΣ_NFW overlays.')
     ap.add_argument('--nfw-mass-ratio', type=float, default=50.0, help='If no halo mass provided in CSV, set M200 = ratio * M_star (yardstick).')
@@ -1743,7 +1749,9 @@ def main():
         args.min_npts = max(args.min_npts, 12)
         args.min_rmax_kpc = max(args.min_rmax_kpc, 8.0)
         args.max_quality = min(args.max_quality, 2)
-        logging.info("Applied paper preset: metric-only lensing, 400+ posterior samples, Q≤2 SPARC selection")
+        if args.rar_dmax in (None, 0.0):
+            args.rar_dmax = 50.0
+        logging.info("Applied paper preset: metric-only lensing, 400+ posterior samples, Q≤2 SPARC selection, D_max=%.1f" % float(args.rar_dmax))
 elif args.preset == 'pilot':
         # Pilot mode: enable experimental features
         args.allow_pilot_lensing = True
@@ -1769,6 +1777,9 @@ elif args.preset == 'pilot':
 
     # 1) Load rar_plateau parameters
     rar_params = load_run_params(run_dir)
+    # Thread preset D_max into rar_params for consistent xi usage
+    if getattr(args, 'rar_dmax', None) not in (None, 0.0):
+        rar_params['D_max'] = float(args.rar_dmax)
 
     # Save a metadata snapshot for reproducibility
     import sys
@@ -1860,7 +1871,8 @@ elif args.preset == 'pilot':
             gamma_exp=rar_params.get('gamma_exp', 3.0),
             T0=rar_params.get('T0', None),
             sigma_lnT=rar_params.get('sigma_lnT', None),
-            wmin=rar_params.get('wmin', 0.0)
+            wmin=rar_params.get('wmin', 0.0),
+            D_max=rar_params.get('D_max', None)
         )
         V_model = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi_best)
         chi2_gr = chi2_velocity(Vobs, np.maximum(Vbar, 0.0), eV, sigma_floor=float(args.sigma_floor))
@@ -2229,7 +2241,7 @@ elif args.preset == 'pilot':
         for a0 in a0_grid:
             tot = 0.0
             for (_gid, R, Vbar, Vobs, eV, _a0best) in galaxy_store:
-                xi, _ = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=float(a0))
+                xi, _ = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=float(a0), D_max=rar_params.get('D_max', None))
                 Vmod = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi)
                 tot += chi2_velocity(Vobs, Vmod, eV, sigma_floor=float(args.sigma_floor))
             totals.append(tot)

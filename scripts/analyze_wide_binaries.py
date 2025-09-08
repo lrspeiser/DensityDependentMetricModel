@@ -91,7 +91,8 @@ def predict_vratio_curve(params: Dict[str, float], *, M_tot_Msun: float = 2.0,
             rho=None, rho_c=params.get('rho_c', None),
             gamma_exp=float(params.get('gamma_exp', 3.0)),
             T0=params.get('T0', None), sigma_lnT=params.get('sigma_lnT', None),
-            wmin=float(params.get('wmin', 0.0))
+            wmin=float(params.get('wmin', 0.0)),
+            D_max=params.get('D_max', None)
         )
     v_ratio_minus1 = np.sqrt(np.maximum(xi, 0.0)) - 1.0
     return np.vstack([s_AU, v_ratio_minus1]).T

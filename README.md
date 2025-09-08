@@ -116,7 +116,7 @@ at 1–30 AU. We show a **gated** curve (same parameters as galaxy fits) and a
 
 *Caption:* The orange (gated) curve remains below the Cassini bound \(|\gamma-1|<2.3\times10^{-5}\) at Saturn (dotted line). A formal PPN mapping \(\Delta G/G \!\leftrightarrow\! \gamma-1\) for our subclass will be provided in Methods.
 
-> **Source Data:** `results/next_steps/rar_plateau_mw_full/solar_system_table.csv` (AU, \(g_{\rm bar}\), \(\xi_{\rm gated}\), \(\xi_{\rm worst}\)).
+> **Source Data:** `results/next_steps/rar_plateau_mw_full/solar_system_table.csv` (AU, \(g_{\rm bar}\), \(\xi_{\rm gated}\), \(\xi_{\rm worst}\)). Paper preset also writes `ppn_table.csv` for the adopted \(\Phi=\Psi\) subclass.
 
 ### PPN parameters (placeholder)
 
@@ -264,6 +264,20 @@ python scripts/reproduce_paper.py \
 - Provide measured lens entries in `docs/lensing_targets.csv` with columns `lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]` to produce the lensing metric table.
 
 ## Appendices (ready text & placeholders)
+
+### Extended Data — Wide Binaries (Gaia DR3)
+
+We provide the predicted velocity-ratio statistic \(\sqrt{\xi}-1\) vs separation using the same DGG mapping; run:
+
+```
+python scripts/analyze_wide_binaries.py \
+  --run-dir runs/enhanced_20250805_115400 \
+  --out-root results/next_steps/enhanced_20250805_115400 \
+  --images-root images/next_steps/enhanced_20250805_115400
+```
+
+- Source‑Data: `results/next_steps/enhanced_20250805_115400/wide_binaries_pred.csv`
+- Figure: `images/next_steps/enhanced_20250805_115400/wide_binaries_pred.png`
 
 ### Appendix A — Exact working formula (duplicate of Box 1 for reference)
 
