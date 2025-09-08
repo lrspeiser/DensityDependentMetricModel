@@ -168,8 +168,8 @@ Outputs are written under results/next_steps/<run>/ and images/next_steps/<run>/
 Note: figures and large tables are tracked via Git LFS; if you want to commit newly generated artifacts, ensure LFS is installed (git lfs install).
 
 **Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**
-![Milky Way: GR vs NFW vs RAR‑gate](images/rar_plateau_mw_full/mw_rotation_rar_plateau.png)
-*Caption: Comparison of GR (baryons‑only), NFW halo, and RAR‑gate predictions for the Milky Way rotation curve (Gaia DR3); figure regenerated from the latest pipeline outputs for this repo.*
+![Milky Way: GR vs NFW vs RAR‑gate (0.1 kpc Gaia medians)](images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png)
+*Caption: Observed Gaia DR3 median stellar speeds every 0.1 kpc (black with 16–84% error bars) compared with GR (baryons‑only; blue dashed), ΛCDM/NFW yardstick (green dotted), and RAR‑Plateau (red). Curves use default baryon parameters and a0=1.2e−10 m/s² when MW NPZ is not available; on GPU systems they are generated with the canonical CuPy kernels.*
 
 Below we embed representative outputs produced by the analysis orchestrator (scripts/next_steps_from_run.py) using the latest Milky Way rar_plateau run. Plots link directly to tracked artifacts in this repository.
 
