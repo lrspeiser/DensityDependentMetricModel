@@ -1669,6 +1669,8 @@ def kz_sigma_from_grid(
 
 def main():
     ap = argparse.ArgumentParser(description='Next steps orchestrator for rar_plateau runs')
+    ap.add_argument('--preset', choices=['paper', 'pilot', 'custom'], default='custom',
+                    help='Preset configuration. "paper" enforces metric-only lensing, posterior bands, Q≤2 SPARC cuts.')
     ap.add_argument('--run-dir', required=True, help='Path to the run folder (e.g., runs/rar_plateau_mw_full)')
     ap.add_argument('--sparc-dir', required=True, help='Path to SPARC rotmod folder (e.g., external_data/Rotmod_LTG)')
     ap.add_argument('--galaxies', nargs='*', default=None, help='Subset of SPARC galaxies to analyze (e.g., NGC3198 NGC2403)')
@@ -1717,6 +1719,22 @@ def main():
     ap.add_argument('--debug', action='store_true')
     args = ap.parse_args()
 
+    # Apply preset configurations
+    if args.preset == 'paper':
+        # Paper defaults: ensure reproducible manuscript figures
+        args.metric_lensing_only = True
+        args.allow_pilot_lensing = False
+        args.posterior_samples = max(args.posterior_samples, 400)
+        args.sample = 'q2plus' if args.galaxies is None else args.sample
+        args.min_npts = max(args.min_npts, 12)
+        args.min_rmax_kpc = max(args.min_rmax_kpc, 8.0)
+        args.max_quality = min(args.max_quality, 2)
+        logging.info("Applied paper preset: metric-only lensing, 400+ posterior samples, Q≤2 SPARC selection")
+    elif args.preset == 'pilot':
+        # Pilot mode: enable experimental features
+        args.allow_pilot_lensing = True
+        logging.info("Applied pilot preset: experimental lensing scalars enabled")
+
     setup_logger(args.debug)
 
     run_dir = Path(args.run_dir)
@@ -1735,7 +1753,29 @@ def main():
     rar_params = load_run_params(run_dir)
 
     # Save a metadata snapshot for reproducibility
-    (results_root / 'run_metadata.json').write_text(json.dumps({'run_dir': str(run_dir), 'rar_plateau_params': rar_params}, indent=2), encoding='utf-8')
+    import sys
+    import datetime
+    run_meta = {
+        'run_dir': str(run_dir),
+        'rar_plateau_params': rar_params,
+        'flags': {
+            'preset': args.preset,
+            'metric_lensing_only': bool(args.metric_lensing_only),
+            'allow_pilot_lensing': bool(args.allow_pilot_lensing),
+            'posterior_samples': int(args.posterior_samples),
+            'D_max': rar_params.get('D_max', None),
+            'sample': args.sample,
+            'min_npts': args.min_npts,
+            'min_rmax_kpc': args.min_rmax_kpc,
+            'max_quality': args.max_quality,
+        },
+        'env': {
+            'python': sys.version.split()[0],
+            'numpy': np.__version__,
+        },
+        'timestamp_utc': datetime.datetime.utcnow().isoformat() + 'Z',
+    }
+    (results_root / 'run_metadata.json').write_text(json.dumps(run_meta, indent=2), encoding='utf-8')
 
     # 2) SPARC a0 universality (initial or filtered subset)
     if args.galaxies:

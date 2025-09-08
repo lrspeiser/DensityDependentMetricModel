@@ -81,11 +81,12 @@ As in the original text, the model matches the inner rise (where baryons dominat
 
 ### Milky Way: vertical force \(K_z\) and local surface density \(\Sigma_{1.1}\)
 
-We compute \(K_z(R_0,z)\) for the same MW baryons and infer \(\Sigma_{1.1}\approx K_z/2\pi G\). In addition to baryons‑only we show a **scaled** DGG curve for orientation.
+We compute \(K_z(R_0,z)\) for the same MW baryons and infer \(\Sigma_{1.1}\approx K_z/2\pi G\). The figure below uses the **full 3‑D** DGG ("phantom") mass implied by \(\xi\) via
+\(\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm bar}\).
 
-![Milky Way Kz and Σ_1.1](images/next_steps/enhanced_20250805_115400/mw_kz_sigma.png)
+![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
 
-> **To be upgraded for submission:** replace the scaled approximation with the **full 3D** DGG (“phantom”) mass implied by \(\xi\) and compare \(\Sigma_{1.1}\) with Bovy & Rix / McMillan bands, including uncertainties.
+> Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`. Optional overlays with Bovy & Rix / McMillan bands can be added in a follow‑up PR.
 
 ### External Galaxies: SPARC Rotation‑Curve Fits
 
@@ -195,7 +196,7 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 ## Figures (main and extended)
 
 - **Fig. 1** Milky Way rotation — `images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png`  
-- **Fig. 2** MW \(K_z\) / \(\Sigma_{1.1}\) — `images/next_steps/enhanced_20250805_115400/mw_kz_sigma.png`  
+- **Fig. 2** MW \(K_z\) / \(\Sigma_{1.1}\) — `images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png`
 - **Fig. 3** SPARC panel — `images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png`  
 - **Fig. 4** BTFR subset — `images/next_steps/btfr_fix_20250906/btfr_baryonic.png`  
 - **Fig. 5** Solar \(|\Delta G/G|\) — `images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png`  

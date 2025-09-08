@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to this repository will be documented in this file.
+
+## 2025-09-08
+
+### Changed
+- README.md: Replaced Milky Way Kz/Σ_1.1 figure and description to use the new full 3‑D phantom density computation:
+  - Old: images/next_steps/enhanced_20250805_115400/mw_kz_sigma.png (scaled approximation)
+  - New: images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png (full 3‑D via ρ_ph = (ξ−1)ρ_b − (4πG)^{-1}∇ξ·g_bar)
+  - Added Source‑Data link: results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv
+- README.md Figures list: Updated “Fig. 2” path to the full 3‑D figure.
+
+### Rationale
+- Align the manuscript and documentation with the improved method requested by reviewers: replace the scaled DGG proxy with the full 3‑D phantom‑density computation consistent with the Poisson identity.
+
+### Notes
+- The previous figure and CSV remain in the results directory for reproducibility (`mw_kz_sigma.png` and `mw_kz_sigma.csv`). The README now points to the full‑3D outputs.
+- If needed, revert by restoring the prior README image paths to `mw_kz_sigma.png` and updating the text back to the scaled‑approximation description.
+
