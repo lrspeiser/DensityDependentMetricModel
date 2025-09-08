@@ -84,7 +84,7 @@ def predict_vratio_curve(params: Dict[str, float], *, M_tot_Msun: float = 2.0,
     if xi_rar_plateau_numpy is None:
         xi = np.ones_like(V_kms)
     else:
-        xi = xi_rar_plateau_numpy(
+        xi, _ = xi_rar_plateau_numpy(
             V_kms, r_kpc,
             a0_m_s2=float(params.get('a0_m_s2', 1.2e-10)),
             zeta_env=float(params.get('zeta_env', 0.0)),

@@ -76,6 +76,9 @@ G_SI = 6.6743e-11              # m^3 kg^-1 s^-2
 M_SUN = 1.98847e30             # kg
 AU_M = 1.495978707e11          # m
 ACC_M_S2_PER_KMS2_PER_KPC = 3.240779289e-14  # m/s^2 per [(km/s)^2/kpc]
+KMPS2_PER_KPC_TO_M_S2 = ACC_M_S2_PER_KMS2_PER_KPC  # alias for clarity
+TWOPI_G = 2.0 * np.pi * G_SI  # SI
+CASSINI_BOUND_GAMMA = 2.3e-5
 
 
 # ---------- Utilities -----------------------------------------------------------------
@@ -266,25 +269,22 @@ def xi_rar_plateau_numpy(
     T0: Optional[float] = None,
     sigma_lnT: Optional[float] = None,
     wmin: float = 0.0,
-) -> np.ndarray:
-    """RAR-Plateau factor D ≡ g_eff/g_bar to multiply Vbar^2.
+    D_max: Optional[float] = None,
+) -> Tuple[np.ndarray, dict]:
+    """RAR gate (weak-field): returns (xi ≡ D, meta dict).
 
+    V_model^2 = xi * Vbar^2
     D = 0.5 + sqrt(0.25 + a0_eff / g_bar)
     a0_eff = a0 * (1 + zeta_env * s_rho * W(T))
     s_rho = 1 / (1 + (rho/rho_c)^gamma) when rho and rho_c are defined.
-
-    Inputs
-    - Vbar_kms: baryonic circular speed in km/s
-    - R_kpc: radius in kpc
-
-    Returns
-    - xi (== D), to be used as V_model^2 = Vbar^2 * xi
+    Optional finite plateau: D <= D_max if provided (>1).
     """
     Vbar_kms = np.asarray(Vbar_kms, dtype=float)
     R_kpc = np.asarray(R_kpc, dtype=float)
     R_safe = np.maximum(R_kpc, 1e-12)
     # g_bar from Vbar and R
     g_bar = ACC_M_S2_PER_KMS2_PER_KPC * np.maximum(Vbar_kms, 0.0)**2 / R_safe
+    y = np.maximum(g_bar, 1e-30)
     # T proxy for optional tidal window
     T = np.maximum(Vbar_kms, 0.0)**2 / np.maximum(R_safe**2, 1e-18)
 
@@ -299,12 +299,25 @@ def xi_rar_plateau_numpy(
     # Tidal window
     W = tidal_window(T, T0, sigma_lnT, wmin)
 
+    # Effective a0 and boost
     a0_eff = float(a0_m_s2) * (1.0 + float(zeta_env) * s_rho * W)
-    y = np.maximum(g_bar, 1e-30)
     D = 0.5 + np.sqrt(0.25 + np.maximum(a0_eff, 0.0) / y)
     D = np.where(np.isfinite(D), D, 1.0)
     D = np.maximum(D, 1.0)
-    return D
+
+    # Optional finite plateau
+    if (D_max is not None) and np.isfinite(D_max) and (float(D_max) > 1.0):
+        D = np.minimum(D, float(D_max))
+
+    meta = {
+        'g_bar_m_s2': g_bar,
+        'T': T,
+        's_rho': s_rho,
+        'W': W,
+        'a0_eff': a0_eff,
+        'D_max': D_max,
+    }
+    return D, meta
 
 
 # ---------- SPARC loader wrapper --------------------------------------------------------
@@ -506,7 +519,7 @@ def fit_a0_grid(
     a0_vals = 10 ** np.linspace(grid_log10[0], grid_log10[1], ngrid)
     chi2_vals: List[float] = []
     for a0 in a0_vals:
-        xi = xi_rar_plateau_numpy(
+        xi, _ = xi_rar_plateau_numpy(
             Vbar_kms, R_kpc,
             a0_m_s2=float(a0),
             zeta_env=float(rar_params.get('zeta_env', 0.0)),
@@ -538,7 +551,7 @@ def scan_a0_grid(
     a0_vals = 10 ** np.linspace(grid_log10[0], grid_log10[1], ngrid)
     chi2_vals: List[float] = []
     for a0 in a0_vals:
-        xi = xi_rar_plateau_numpy(
+        xi, _ = xi_rar_plateau_numpy(
             Vbar_kms, R_kpc,
             a0_m_s2=float(a0),
             zeta_env=float(rar_params.get('zeta_env', 0.0)),
@@ -604,7 +617,7 @@ def scan_a0_grid_marginalized(
             for i_b, mb in enumerate(m_b):
                 Vb = float(np.sqrt(max(mb, 0.0))) * np.asarray(V_bulge, dtype=float)
                 Vbar = np.sqrt(np.maximum(V_gas, 0.0)**2 + np.maximum(Vd, 0.0)**2 + np.maximum(Vb, 0.0)**2)
-                xi = xi_rar_plateau_numpy(
+                xi, _ = xi_rar_plateau_numpy(
                     Vbar, R_kpc,
                     a0_m_s2=float(a0),
                     zeta_env=float(rar_params.get('zeta_env', 0.0)),
@@ -659,12 +672,14 @@ def fit_a0_err_from_grid(a0_vals: np.ndarray, chi2_vals: np.ndarray) -> Tuple[fl
 def solar_system_table(
     rar_params: Dict[str, float],
     radii_AU: List[float] = [1, 5, 10, 20, 30],
+    write_csv_path: Optional[str] = None,
 ) -> List[Dict[str, float]]:
+    """Compute Solar-System dG/G under RAR-plateau and write Source-Data CSV.
+
+    In the adopted metric-only subclass (Φ=Ψ), PPN γ=1 exactly; Cassini is satisfied.
+    """
     rows: List[Dict[str, float]] = []
     a0 = float(rar_params.get('a0_m_s2', 1.2e-10))
-    # Worst-case: no gating (s_rho=W=0 in a0_eff formula but that only reduces a0_eff here; for a
-    # "worst-case" larger deviation, adopt s_rho=W=1 -> a0_eff = a0 * (1 + zeta_env). If zeta_env=0,
-    # this reduces to standard rar-plateau.)
     zeta = float(rar_params.get('zeta_env', 0.0))
     T0 = rar_params.get('T0', None)
     sig = rar_params.get('sigma_lnT', None)
@@ -672,47 +687,52 @@ def solar_system_table(
 
     for AU in radii_AU:
         r_m = float(AU) * AU_M
-        # Kepler g_bar at radius r around the Sun
-        g_bar = G_SI * M_SUN / max(r_m**2, 1.0)
-        # Express g_bar using our D formula: need Vbar and R. For a circular orbit,
-        # V^2/R = g_bar => pick an arbitrary R_kpc and V_kms that satisfy this relation.
-        # Choose R_kpc from AU and Vbar from g_bar.
+        g_bar = G_SI * M_SUN / max(r_m**2, 1.0)  # Kepler g_N
         R_kpc = r_m / (3.085677581491367e19)
-        V_ms = math.sqrt(g_bar * (r_m))
+        V_ms = math.sqrt(g_bar * r_m)
         V_kms = V_ms / 1000.0
+
         # Worst-case: W=1, s_rho=1 -> a0_eff = a0*(1+zeta)
-        xi_worst = 0.5 + math.sqrt(0.25 + (a0 * (1.0 + zeta)) / max(g_bar, 1e-30))
-        # Gated: s_rho from a representative local density; W(T) from Kepler T
-        # Adopt a nominal local midplane density ~ 0.04 Msun/pc^3 = 1.5e-21 kg/m^3. For rar_plateau, rho is only
-        # used if zeta_env>0; otherwise effect is zero.
-        rho_local = 1.5e-21
-        if rar_params.get('rho_c', None) not in (None, 0.0) and zeta > 0.0:
-            ratio = rho_local / max(float(rar_params['rho_c']), 1e-30)
-            s_rho = 1.0 / (1.0 + ratio**float(rar_params.get('gamma_exp', 3.0)))
-        else:
-            s_rho = 0.0
-        # Tidal window for Solar System: T = GM/r^3 in SI; convert to our T-units ≈ (km/s)^2/kpc^2
-        T_si = G_SI * M_SUN / max(r_m**3, 1.0)
-        # Convert SI to (km/s)^2/kpc^2: 1 (km/s)^2/kpc^2 = (1000 m/s)^2 / (kpc in m)^2
-        KPC_M = 3.085677581491367e19
-        unit = (1000.0**2) / (KPC_M**2)
-        T_unit = T_si / unit
-        if T0 is None or sig is None or sig <= 0:
-            W = 1.0
-        else:
+        xi_worst = 0.5 + math.sqrt(0.25 + a0 * (1.0 + zeta) / max(g_bar, 1e-30))
+
+        # Gated branch
+        if (T0 is not None) and (sig is not None):
+            T_si = G_SI * M_SUN / max(r_m**3, 1.0)
+            KPC_M = 3.085677581491367e19
+            unit = (1000.0**2) / (KPC_M**2)
+            T_unit = T_si / unit
             u = (math.log(max(T_unit, 1e-30)) - math.log(max(float(T0), 1e-30))) / max(float(sig), 1e-6)
             W = max(float(wmin) + (1.0 - float(wmin)) * math.exp(-0.5 * u * u), 0.0)
-        a0_eff = a0 * (1.0 + zeta * s_rho * W)
+        else:
+            W = 1.0
+        a0_eff = a0 * (1.0 + zeta * 1.0 * W)
         xi_gated = 0.5 + math.sqrt(0.25 + a0_eff / max(g_bar, 1e-30))
 
         rows.append({
             'AU': float(AU),
-            'g_bar_m_s2': g_bar,
-            'xi_worst': xi_worst,
-            'dGoverG_worst': xi_worst - 1.0,
-            'xi_gated': xi_gated,
-            'dGoverG_gated': xi_gated - 1.0,
+            'g_bar_m_s2': float(g_bar),
+            'xi_worst': float(xi_worst),
+            'dGoverG_worst': float(xi_worst - 1.0),
+            'xi_gated': float(xi_gated),
+            'dGoverG_gated': float(xi_gated - 1.0),
+            'gamma_minus_1': 0.0,
+            'cassini_bound': CASSINI_BOUND_GAMMA,
         })
+
+    if write_csv_path:
+        try:
+            import pandas as pd  # local import to avoid hard dependency if unused
+            df = pd.DataFrame(rows)
+            Path(write_csv_path).parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(write_csv_path, index=False)
+        except Exception:
+            # Fallback: write simple CSV
+            with open(write_csv_path, 'w', encoding='utf-8') as f:
+                cols = list(rows[0].keys()) if rows else []
+                f.write(','.join(cols) + '\n')
+                for r in rows:
+                    f.write(','.join(str(r[c]) for c in cols) + '\n')
+
     return rows
 
 
@@ -1068,7 +1088,7 @@ def _theta_E_from_profile_with_xi(log10M_star: float, Re_kpc: float, z_l: float,
         KPC_M = 3.085677581491367e19
         V_ms = np.sqrt(np.maximum(G_SI * (M_b_encl * M_SUN) / (r * KPC_M), 0.0))
         V_kms = V_ms / 1000.0
-        xi = xi_rar_plateau_numpy(V_kms, r, a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
+        xi, _ = xi_rar_plateau_numpy(V_kms, r, a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
                                   zeta_env=float(rar_params.get('zeta_env', 0.0)),
                                   rho=None, rho_c=rar_params.get('rho_c', None),
                                   gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
@@ -1203,7 +1223,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # RAR projection (stars + phantom via xi)
             KPC_M = 3.085677581491367e19
             V_ms = np.sqrt(np.maximum(G_SI * (M_b * M_SUN) / (r * KPC_M), 0.0)); V_kms = V_ms/1000.0
-            xi = xi_rar_plateau_numpy(V_kms, r, a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
+            xi, _ = xi_rar_plateau_numpy(V_kms, r, a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
                                       zeta_env=float(rar_params.get('zeta_env', 0.0)),
                                       rho=None, rho_c=rar_params.get('rho_c', None),
                                       gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
@@ -1469,6 +1489,147 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
         logging.warning(f"Lensing stack step skipped: {e}")
 
 
+# ---------- Milky Way Kz/Sigma full 3D helpers ----------------------------------------
+
+@dataclass
+class GridSpec:
+    R_min: float = 0.5
+    R_max: float = 20.0
+    Z_max: float = 3.0
+    nR: int = 256
+    nZ: int = 256
+
+def cylindrical_grid(gs: GridSpec):
+    R = np.linspace(gs.R_min, gs.R_max, gs.nR)
+    Z = np.linspace(-gs.Z_max, gs.Z_max, gs.nZ)
+    dR = R[1] - R[0]
+    dZ = Z[1] - Z[0]
+    return R, Z, dR, dZ
+
+def grad_cylindrical_scalar(F: np.ndarray, dR: float, dZ: float):
+    dF_dR = np.zeros_like(F)
+    dF_dZ = np.zeros_like(F)
+    dF_dR[1:-1, :] = (F[2:, :] - F[:-2, :]) / (2.0 * dR)
+    dF_dZ[:, 1:-1] = (F[:, 2:] - F[:, :-2]) / (2.0 * dZ)
+    dF_dR[0, :] = (F[1, :] - F[0, :]) / max(dR, 1e-12)
+    dF_dR[-1, :] = (F[-1, :] - F[-2, :]) / max(dR, 1e-12)
+    dF_dZ[:, 0] = (F[:, 1] - F[:, 0]) / max(dZ, 1e-12)
+    dF_dZ[:, -1] = (F[:, -1] - F[:, -2]) / max(dZ, 1e-12)
+    return dF_dR, dF_dZ
+
+def _laplacian_cylindrical(Phi: np.ndarray, R_vec: np.ndarray, dR: float, dZ: float) -> np.ndarray:
+    """Axisymmetric cylindrical Laplacian: ∇²Φ = 1/R ∂/∂R (R ∂Φ/∂R) + ∂²Φ/∂Z².
+    Phi is 2D over (R,Z), R_vec is 1D of R values.
+    Units track those of Phi and coordinates.
+    """
+    dPhi_dR, _ = grad_cylindrical_scalar(Phi, dR, dZ)
+    R2D = np.repeat(R_vec[:, None], Phi.shape[1], axis=1)
+    # ∂/∂R (R ∂Φ/∂R)
+    A = R2D * dPhi_dR
+    dA_dR = np.zeros_like(A)
+    dA_dR[1:-1, :] = (A[2:, :] - A[:-2, :]) / (2.0 * dR)
+    dA_dR[0, :] = (A[1, :] - A[0, :]) / max(dR, 1e-12)
+    dA_dR[-1, :] = (A[-1, :] - A[-2, :]) / max(dR, 1e-12)
+    term_R = np.where(R2D > 0, dA_dR / R2D, 0.0)
+    # ∂²Φ/∂Z²
+    term_Z = np.zeros_like(Phi)
+    term_Z[:, 1:-1] = (Phi[:, 2:] - 2.0 * Phi[:, 1:-1] + Phi[:, :-2]) / max(dZ, 1e-12)**2
+    term_Z[:, 0] = (Phi[:, 2] - 2.0 * Phi[:, 1] + Phi[:, 0]) / max(dZ, 1e-12)**2 if Phi.shape[1] > 2 else 0.0
+    term_Z[:, -1] = (Phi[:, -1] - 2.0 * Phi[:, -2] + Phi[:, -3]) / max(dZ, 1e-12)**2 if Phi.shape[1] > 2 else 0.0
+    return term_R + term_Z
+
+# Component potentials in (km/s)^2 units
+G_KPC = 4.300917270e-6  # kpc (km/s)^2 / Msun
+
+def _mn_phi_kms2(R: np.ndarray, Z: np.ndarray, M: float, a: float, b: float) -> np.ndarray:
+    B = np.sqrt(Z*Z + b*b)
+    return -G_KPC * M / np.sqrt(R*R + (a + B)**2)
+
+def _hern_phi_kms2(R: np.ndarray, Z: np.ndarray, M: float, a: float) -> np.ndarray:
+    r = np.sqrt(R*R + Z*Z)
+    return -G_KPC * M / (r + a)
+
+def build_baryon_grids(R_vec: np.ndarray, Z_vec: np.ndarray, mw: dict):
+    """Return (Phi_kms2, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid) on (R,Z) grid."""
+    R2D, Z2D = np.meshgrid(R_vec, Z_vec, indexing='ij')
+    Phi = np.zeros_like(R2D)
+    if mw.get('M_disk_thin', 0.0) > 0:
+        Phi += _mn_phi_kms2(R2D, Z2D, mw['M_disk_thin'], mw['R_d_thin'], mw['h_z_thin'])
+    if mw.get('M_disk_thick', 0.0) > 0:
+        Phi += _mn_phi_kms2(R2D, Z2D, mw['M_disk_thick'], mw['R_d_thick'], mw['h_z_thick'])
+    if mw.get('M_gas', 0.0) > 0:
+        Phi += _mn_phi_kms2(R2D, Z2D, mw['M_gas'], mw['R_d_gas'], mw['h_z_gas'])
+    if mw.get('M_bulge', 0.0) > 0:
+        Phi += _hern_phi_kms2(R2D, Z2D, mw['M_bulge'], mw['a_bulge'])
+
+    dR = R_vec[1] - R_vec[0]
+    dZ = Z_vec[1] - Z_vec[0]
+    dPhi_dR_kms2_per_kpc, dPhi_dZ_kms2_per_kpc = grad_cylindrical_scalar(Phi, dR, dZ)
+    # Accelerations in SI
+    KPC_M = 3.085677581491367e19
+    gR_SI = -dPhi_dR_kms2_per_kpc * (1000.0**2) / KPC_M
+    gZ_SI = -dPhi_dZ_kms2_per_kpc * (1000.0**2) / KPC_M
+
+    # ρ_b from Poisson
+    lap_kms2_per_kpc2 = _laplacian_cylindrical(Phi, R_vec, dR, dZ)
+    lap_SI = lap_kms2_per_kpc2 * (1000.0**2) / (KPC_M**2)
+    rho_b_SI = lap_SI / (4.0 * np.pi * G_SI)
+
+    # Vbar from gR
+    R_m = R2D * KPC_M
+    V_ms = np.sqrt(np.maximum(np.abs(gR_SI) * np.maximum(R_m, 1.0), 0.0))
+    Vbar_kms_grid = V_ms / 1000.0
+
+    return Phi, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid
+
+def phantom_density_from_xi(R_kpc: np.ndarray, Z_kpc: np.ndarray, gR_bar_SI: np.ndarray, gZ_bar_SI: np.ndarray, xi: np.ndarray, rho_b_SI: np.ndarray) -> np.ndarray:
+    dR = R_kpc[1] - R_kpc[0]
+    dZ = Z_kpc[1] - Z_kpc[0]
+    dxi_dR, dxi_dZ = grad_cylindrical_scalar(xi, dR, dZ)
+    dot_term = dxi_dR * gR_bar_SI + dxi_dZ * gZ_bar_SI
+    rho_ph = (xi - 1.0) * rho_b_SI - (1.0 / (4.0 * np.pi * G_SI)) * dot_term
+    return rho_ph
+
+def kz_sigma_from_grid(
+    R: np.ndarray, Z: np.ndarray, rho_b_SI: np.ndarray, gR_bar_SI: np.ndarray, gZ_bar_SI: np.ndarray, Vbar_kms_grid: np.ndarray, *,
+    a0_m_s2: float, gate_kwargs: dict, R0_kpc: float, z_list_kpc: Tuple[float, ...], D_max: Optional[float] = None
+):
+    """Compute (Kz, Sigma) at R0 for |z| in z_list using full phantom density."""
+    nR, nZ = len(R), len(Z)
+    xi = np.zeros((nR, nZ))
+    a0_eff_grid = np.zeros_like(xi)
+    for iR, Rval in enumerate(R):
+        Vbar_line = Vbar_kms_grid[iR, :]
+        R_line = np.full_like(Vbar_line, Rval)
+        xi_line, meta = xi_rar_plateau_numpy(Vbar_line, R_line, a0_m_s2=a0_m_s2, D_max=D_max, **gate_kwargs)
+        xi[iR, :] = xi_line
+        a0_eff_grid[iR, :] = meta['a0_eff']
+    rho_ph_SI = phantom_density_from_xi(R, Z, gR_bar_SI, gZ_bar_SI, xi, rho_b_SI)
+    rho_tot_SI = rho_b_SI + rho_ph_SI
+
+    # Integrate Σ and compute Kz ≈ 2πG Σ
+    iR0 = int(np.argmin(np.abs(R - float(R0_kpc))))
+    KPC_M = 3.085677581491367e19
+    dZ_m = (Z[1] - Z[0]) * KPC_M
+    mid = int(np.argmin(np.abs(Z - 0.0)))
+
+    out = []
+    for z_abs in z_list_kpc:
+        jmax = int(np.argmin(np.abs(Z - float(z_abs))))
+        lo = min(mid, jmax)
+        hi = max(mid, jmax)
+        sl = slice(lo, hi + 1)
+        Sigma = np.trapz(rho_tot_SI[iR0, sl], dx=dZ_m)
+        Kz = TWOPI_G * Sigma
+        out.append({'z_kpc': float(z_abs), 'Sigma_SI': float(Sigma), 'Kz_m_s2': float(Kz)})
+
+    try:
+        import pandas as pd  # local import
+        df = pd.DataFrame(out)
+    except Exception:
+        df = out  # caller can handle list of dicts fallback
+    return df, {'xi_grid': xi, 'a0_eff_grid': a0_eff_grid}
+
 # ---------- Main orchestrator ----------------------------------------------------------
 
 def main():
@@ -1501,7 +1662,8 @@ def main():
     ap.add_argument('--env-profile', choices=['constant','tapered'], default='constant', help='Environment radial profile f(R) for lensing-only phantom scaling')
     ap.add_argument('--density-profile', choices=['sersic','hernquist','jaffe'], default='sersic', help='Stellar 3D profile for lensing deprojection (lensing-only)')
     ap.add_argument('--sigma-cr-scale', type=float, default=1.0, help='Multiplicative factor on Σ_cr (lensing-only, distances sensitivity)')
-    ap.add_argument('--metric-lensing-only', action='store_true', help='If set, compute lensing strictly from the metric (Φ+Ψ via xi) and disable any α_lens_ph or ζ_env_lens scaling in outputs (paper build path).')
+    ap.add_argument('--metric-lensing-only', action='store_true', default=True, help='If set, compute lensing strictly from the metric (Φ+Ψ via xi) and disable any α_lens_ph or ζ_env_lens scaling in outputs (paper build path).')
+    ap.add_argument('--allow-pilot-lensing', action='store_true', default=False, help='Allow lensing-only phantom scaling (α_lens_ph, ζ_env_lens) for pilot studies. Default False for paper builds.')
     # NFW yardstick (DM baseline)
     ap.add_argument('--nfw-enable', action='store_true', help='If set, compute an NFW yardstick per lens (dark-matter baseline) and include θE_NFW and ΔΣ_NFW overlays.')
     ap.add_argument('--nfw-mass-ratio', type=float, default=50.0, help='If no halo mass provided in CSV, set M200 = ratio * M_star (yardstick).')
@@ -1553,7 +1715,7 @@ def main():
 
     csv_path = results_root / 'sparc_a0_summary.csv'
     with csv_path.open('w', encoding='utf-8') as f:
-        f.write('galaxy,a0_best_m_s2,chi2_rar,chi2_gr,dof,notes\n')
+        f.write('galaxy,a0_best_m_s2,a0_lo_m_s2,a0_hi_m_s2,chi2_rar,chi2_gr,dof,notes\n')
     # Model comparison CSV (will append rows as we go)
     mc_csv = results_root / 'model_comparison_bic.csv'
     with mc_csv.open('w', encoding='utf-8') as fmc:
@@ -1590,8 +1752,12 @@ def main():
         j = int(np.argmin(chi2_vals))
         a0_best = float(a0_vals[j])
         chi2_rar = float(chi2_vals[j])
+        # 1σ profile-likelihood bounds (Δχ²=1)
+        mask = chi2_vals <= (chi2_rar + 1.0)
+        a0_lo = float(a0_vals[mask].min()) if np.any(mask) else float('nan')
+        a0_hi = float(a0_vals[mask].max()) if np.any(mask) else float('nan')
         a0_best_fit, a0_err = fit_a0_err_from_grid(a0_vals, chi2_vals)
-        V_model = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi_rar_plateau_numpy(
+        xi_best, _ = xi_rar_plateau_numpy(
             Vbar, R,
             a0_m_s2=a0_best,
             zeta_env=rar_params.get('zeta_env', 0.0),
@@ -1601,14 +1767,15 @@ def main():
             T0=rar_params.get('T0', None),
             sigma_lnT=rar_params.get('sigma_lnT', None),
             wmin=rar_params.get('wmin', 0.0)
-        ))
+        )
+        V_model = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi_best)
         chi2_gr = chi2_velocity(Vobs, np.maximum(Vbar, 0.0), eV, sigma_floor=float(args.sigma_floor))
         dof = max(len(R) - 1, 1)
-        notes = f"a0_pm={a0_err:.2e}" if np.isfinite(a0_err) else ''
+        notes = f"a0_pm~{a0_err:.2e}" if np.isfinite(a0_err) else ''
 
         # Save CSV row
         with csv_path.open('a', encoding='utf-8') as f:
-            f.write(f"{gid},{a0_best_fit:.6e},{chi2_rar:.3f},{chi2_gr:.3f},{dof},{notes}\n")
+            f.write(f"{gid},{a0_best_fit:.6e},{a0_lo:.6e},{a0_hi:.6e},{chi2_rar:.3f},{chi2_gr:.3f},{dof},{notes}\n")
 
         # Optional NFW fit (grid) for model comparison
         chi2_nfw = float('nan'); M200_best = float('nan'); c_best = float('nan')
@@ -1696,12 +1863,8 @@ def main():
         logging.warning(f"Model comparison histogram skipped: {e}")
 
     # 3) Solar-System ΔG/G and optional PPN table
-    solar_rows = solar_system_table(rar_params)
     solar_csv = results_root / 'solar_system_table.csv'
-    with solar_csv.open('w', encoding='utf-8') as f:
-        f.write('AU,g_bar_m_s2,xi_worst,dGoverG_worst,xi_gated,dGoverG_gated\n')
-        for r in solar_rows:
-            f.write(f"{r['AU']:.1f},{r['g_bar_m_s2']:.6e},{r['xi_worst']:.6e},{r['dGoverG_worst']:.6e},{r['xi_gated']:.6e},{r['dGoverG_gated']:.6e}\n")
+    solar_rows = solar_system_table(rar_params, write_csv_path=str(solar_csv))
     logging.info(f"Solar table: {solar_csv}")
 
     # Plot
@@ -1759,10 +1922,14 @@ def main():
     # 4b) Metric lensing from CSV sample (stars + phantom via xi); optional pilot scaling suppressed if --metric-lensing-only
     if args.lensing_sample_csv:
         try:
+            # Enforce metric-only unless explicitly allowed for pilot scaling
+            enforce_metric = bool(args.metric_lensing_only) and (not bool(args.allow_pilot_lensing))
+            alpha_lens_ph = 1.0 if enforce_metric else float(args.alpha_lens_ph)
+            zeta_env_lens = 0.0 if enforce_metric else float(args.zeta_env_lens)
             run_lensing_rar_from_csv(
                 results_root, images_root, Path(args.lensing_sample_csv), rar_params,
-                alpha_lens_ph=float(args.alpha_lens_ph),
-                zeta_env_lens=float(args.zeta_env_lens),
+                alpha_lens_ph=alpha_lens_ph,
+                zeta_env_lens=zeta_env_lens,
                 env_profile=str(args.env_profile),
                 density_profile=str(args.density_profile),
                 sigma_cr_scale=float(args.sigma_cr_scale),
@@ -1907,7 +2074,7 @@ def main():
         for a0 in a0_grid:
             tot = 0.0
             for (_gid, R, Vbar, Vobs, eV, _a0best) in galaxy_store:
-                xi = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=float(a0))
+                xi, _ = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=float(a0))
                 Vmod = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi)
                 tot += chi2_velocity(Vobs, Vmod, eV, sigma_floor=float(args.sigma_floor))
             totals.append(tot)
@@ -2118,28 +2285,9 @@ def main():
     # 5c) Milky Way vertical force Kz and Σ_1.1 (baryons-only + D-scaled approximation)
     if args.mw_kz:
         try:
-            # Constants in kpc, km/s, Msun units (for convenience)
-            G_KPC = 4.300917270e-6  # kpc (km/s)^2 / Msun
-            TWOPI = 2.0 * math.pi
-
-            def mn_kz(R_kpc: float, z_vals: np.ndarray, M: float, a: float, b: float) -> np.ndarray:
-                R = float(R_kpc)
-                z = np.asarray(z_vals, float)
-                B = np.sqrt(z*z + b*b)
-                denom = (R*R + (a + B)**2) ** 1.5
-                with np.errstate(divide='ignore', invalid='ignore'):
-                    dphi_dz = -G_KPC * M * (a + B) * (z / np.maximum(B, 1e-12)) / np.maximum(denom, 1e-30)
-                return -dphi_dz
-
-            def hern_kz(R_kpc: float, z_vals: np.ndarray, M: float, a: float) -> np.ndarray:
-                R = float(R_kpc)
-                z = np.asarray(z_vals, float)
-                r = np.sqrt(R*R + z*z)
-                with np.errstate(divide='ignore', invalid='ignore'):
-                    dphi_dz = -G_KPC * M * z / (np.maximum(r, 1e-12) * (r + a)**2)
-                return -dphi_dz
-
-            # Simple MW baryon model (order-of-magnitude consistent with literature)
+            # Build (R,Z) grid and baryonic fields
+            gs = GridSpec(R_min=0.5, R_max=20.0, Z_max=float(args.mw_zmax_kpc), nR=192, nZ=int(max(args.mw_nz, 129)))
+            Rg, Zg, dR, dZ = cylindrical_grid(gs)
             mw = {
                 'M_disk_thin': 4.0e10,
                 'M_disk_thick': 1.5e10,
@@ -2153,71 +2301,54 @@ def main():
                 'h_z_thick': 0.9,
                 'h_z_gas': 0.15,
             }
-
-            R0 = float(args.mw_R0_kpc)
-            z = np.linspace(0.0, float(args.mw_zmax_kpc), int(args.mw_nz))
-            # Component Kz
-            kz_thin = mn_kz(R0, z, mw['M_disk_thin'], mw['R_d_thin'], mw['h_z_thin'])
-            kz_thick = mn_kz(R0, z, mw['M_disk_thick'], mw['R_d_thick'], mw['h_z_thick'])
-            kz_gas = mn_kz(R0, z, mw['M_gas'], mw['R_d_gas'], mw['h_z_gas'])
-            kz_bulge = hern_kz(R0, z, mw['M_bulge'], mw['a_bulge'])
-            kz_bary = kz_thin + kz_thick + kz_gas + kz_bulge
-            # Infer Sigma(z) via Oort approximation: Kz ≈ 2π G Σ(<|z|)
-            sigma_bary = np.maximum(kz_bary, 0.0) / (TWOPI * G_KPC)  # Msun/kpc^2
-
-            # RAR scaling factor D at R0 using baryonic centripetal g_bar(R0)
-            # Approximate Vc_bar from MN+Hernquist midplane derivatives: Vc^2 = R dΦ/dR
-            def mn_dphidR(R: float, z0: float, M: float, a: float, b: float) -> float:
-                B = math.sqrt(z0*z0 + b*b)
-                denom = (R*R + (a + B)**2) ** 1.5
-                return G_KPC * M * R / max(denom, 1e-30)
-
-            def hern_dphidR(R: float, z0: float, M: float, a: float) -> float:
-                r = math.sqrt(R*R + z0*z0)
-                return G_KPC * M * R / (max(r, 1e-12) * (r + a)**2)
-
-            dphi_dR = (
-                mn_dphidR(R0, 0.0, mw['M_disk_thin'], mw['R_d_thin'], mw['h_z_thin']) +
-                mn_dphidR(R0, 0.0, mw['M_disk_thick'], mw['R_d_thick'], mw['h_z_thick']) +
-                mn_dphidR(R0, 0.0, mw['M_gas'], mw['R_d_gas'], mw['h_z_gas']) +
-                hern_dphidR(R0, 0.0, mw['M_bulge'], mw['a_bulge'])
+            Phi_kms2, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid = build_baryon_grids(Rg, Zg, mw)
+            gate_kwargs = dict(
+                zeta_env=rar_params.get('zeta_env', 0.0),
+                rho=None, rho_c=None, gamma_exp=3.0,
+                T0=None, sigma_lnT=None, wmin=0.0,
             )
-            Vc2_bar = max(R0 * dphi_dR, 0.0)
-            # Convert to m/s^2 using ACC_M_S2_PER_KMS2_PER_KPC
-            gbar_R0_m_s2 = ACC_M_S2_PER_KMS2_PER_KPC * (Vc2_bar / max(R0, 1e-12))
-            a0 = float(rar_params.get('a0_m_s2', 1.2e-10))
-            D_R0 = 0.5 + math.sqrt(0.25 + max(a0, 0.0) / max(gbar_R0_m_s2, 1e-30))
-
-            kz_dgg = D_R0 * kz_bary
-            sigma_dgg = D_R0 * sigma_bary
-
-            # Σ_1.1
-            z11 = 1.1
-            sig11_bary = float(np.interp(z11, z, sigma_bary))
-            sig11_dgg = float(np.interp(z11, z, sigma_dgg))
-
-            # Write CSV
-            mw_csv = results_root / 'mw_kz_sigma.csv'
-            with mw_csv.open('w', encoding='utf-8') as f:
-                f.write('z_kpc,Kz_bary_km2s2_per_kpc,Kz_dgg_km2s2_per_kpc,Sigma_bary_Msun_per_kpc2,Sigma_dgg_Msun_per_kpc2,D_R0,gbar_R0_m_s2\n')
-                for i in range(len(z)):
-                    f.write(
-                        f"{z[i]:.6f},{kz_bary[i]:.6e},{kz_dgg[i]:.6e},{sigma_bary[i]:.6e},{sigma_dgg[i]:.6e},{D_R0:.6e},{gbar_R0_m_s2:.6e}\n"
-                    )
-
+            df_kz, meta_kz = kz_sigma_from_grid(
+                Rg, Zg, rho_b_SI, gR_SI, gZ_SI, Vbar_kms_grid,
+                a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
+                gate_kwargs=gate_kwargs,
+                R0_kpc=float(args.mw_R0_kpc),
+                z_list_kpc=(0.5, 0.8, 1.1, 1.5, 2.0),
+                D_max=rar_params.get('D_max', None)
+            )
+            out_csv = results_root / 'mw_kz_sigma_full3d.csv'
+            # Support both pandas DataFrame and list fallback
+            try:
+                import pandas as pd
+                if isinstance(df_kz, pd.DataFrame):
+                    df_kz.to_csv(out_csv, index=False)
+                else:
+                    df = pd.DataFrame(df_kz)
+                    df.to_csv(out_csv, index=False)
+            except Exception:
+                with out_csv.open('w', encoding='utf-8') as f:
+                    if isinstance(df_kz, list) and df_kz:
+                        cols = list(df_kz[0].keys())
+                        f.write(','.join(cols) + '\n')
+                        for r in df_kz:
+                            f.write(','.join(str(r[c]) for c in cols) + '\n')
             # Plot
-            plt.figure(figsize=(6.8, 4.6))
-            plt.plot(z, kz_bary, 'k-', lw=2, label='Kz baryons')
-            plt.plot(z, kz_dgg, color='#e11d48', lw=2, ls='--', label='Kz DGG (approx)')
-            plt.axvline(z11, color='tab:orange', ls='--', label=f'z=1.1 kpc → Σ_bary~{sig11_bary/1e6:.2f}, Σ_DGG~{sig11_dgg/1e6:.2f} (×10^6 Msun/kpc^2)')
-            plt.xlabel('z (kpc)'); plt.ylabel('Kz (km^2 s^-2 kpc^-1)')
-            plt.title(f'MW Kz at R0={R0} kpc (baryons and DGG-scaled)')
-            plt.grid(alpha=0.3); plt.legend(frameon=False)
-            outpng = images_root / 'mw_kz_sigma.png'
-            plt.tight_layout(); plt.savefig(outpng, dpi=140); plt.close()
-            logging.info(f"MW Kz/Σ written: {mw_csv} and {outpng}")
+            try:
+                import pandas as pd
+                if not isinstance(df_kz, pd.DataFrame):
+                    df_kz = pd.read_csv(out_csv)
+            except Exception:
+                df_kz = None
+            if df_kz is not None:
+                plt.figure(figsize=(6.8, 4.6))
+                plt.plot(df_kz['z_kpc'], df_kz['Kz_m_s2'], 'r-', lw=2, label='Kz (full 3D)')
+                plt.xlabel('z (kpc)'); plt.ylabel('Kz (m s$^{-2}$)')
+                plt.title(f'MW Kz at R0={args.mw_R0_kpc} kpc (full 3D phantom)')
+                plt.grid(alpha=0.3); plt.legend(frameon=False)
+                outpng = images_root / 'mw_kz_sigma_full3d.png'
+                plt.tight_layout(); plt.savefig(outpng, dpi=140); plt.close()
+            logging.info(f"MW Kz/Σ (full 3D) written: {out_csv}")
         except Exception as e:
-            logging.warning(f"MW Kz/Σ step skipped: {e}")
+            logging.warning(f"MW Kz/Σ full-3D step skipped: {e}")
 
     # 6) Write docs index stub
     ndx = Path('docs') / 'next_steps.md'
