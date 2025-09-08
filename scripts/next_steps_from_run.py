@@ -916,6 +916,34 @@ def _nfw_rho_kpc(M200_Msun: float, c: float, z_l: float, r_kpc: np.ndarray, H0: 
     return rho_msun_kpc3
 
 
+def _nfw_vcirc_kms(R_kpc: np.ndarray, M200_Msun: float, c: float, z: float = 0.0, H0: float = 70.0, Om0: float = 0.3) -> np.ndarray:
+    """Return circular speed contribution (km/s) from an NFW halo at radii R_kpc.
+    Uses enclosed mass M(<r) = M200 * g(x)/g(c) with x = r/rs.
+    """
+    KPC_M = 3.085677581491367e19
+    G = G_SI
+    M200 = float(M200_Msun) * M_SUN
+    c = max(float(c), 1.0)
+    # r200 and r_s
+    rho_crit = _rho_crit_z(H0, Om0, z)
+    r200_m = (3.0 * M200 / (4.0 * math.pi * 200.0 * rho_crit)) ** (1.0/3.0)
+    r200_kpc = r200_m / KPC_M
+    rs_kpc = r200_kpc / c
+    # g(u)
+    def g(u):
+        return np.log(1.0 + u) - u / (1.0 + u)
+    gc = g(c)
+    gc = np.maximum(gc, 1e-12)
+    r = np.asarray(R_kpc, float)
+    x = np.maximum(r / max(rs_kpc, 1e-12), 1e-12)
+    Menc = M200 * g(x) / gc  # kg
+    # V^2 = G M(<r) / r
+    r_m = r * KPC_M
+    V2 = G * np.maximum(Menc, 0.0) / np.maximum(r_m, 1.0)
+    V_kms = np.sqrt(np.maximum(V2, 0.0)) / 1000.0
+    return V_kms
+
+
 def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2: np.ndarray, z_l: float, z_s: float, *, sigma_cr_scale: float = 1.0) -> Tuple[float, float]:
     """Solve for R_E (kpc) where mean surface density <Σ>(<R) = Σ_cr.
     Returns (R_E_kpc, theta_E_arcsec). If no solution found, returns (nan, nan).
@@ -1459,6 +1487,10 @@ def main():
     ap.add_argument('--nuisance-ml-grid', type=int, default=5, help='Grid points per axis for ln M/L integration (≥2).')
     ap.add_argument('--obs-frac-sigma', type=float, default=0.05, help='Fractional observational noise added in quadrature to e_V_obs (captures distance/inc/beam in aggregate).')
     ap.add_argument('--fit-global-a0', action='store_true', help='Also compute a global a0 across the sample')
+    ap.add_argument('--fit-nfw', action='store_true', help='Also fit an NFW halo per galaxy (M200, c) and record chi2 and BIC.')
+    ap.add_argument('--nfw-logm200-range', type=float, nargs=2, default=(11.2, 13.6), help='Range for log10 M200 [Msun] grid inclusive (e.g., 11.2 13.6).')
+    ap.add_argument('--nfw-c-range', type=float, nargs=2, default=(5.0, 20.0), help='Range for concentration c grid inclusive (e.g., 5 20).')
+    ap.add_argument('--nfw-grid', type=int, nargs=2, default=(18, 16), help='Grid sizes for (logM200, c).')
     ap.add_argument('--posterior-samples', type=int, default=0, help='Optional number of posterior samples to propagate (0=best-fit only)')
     ap.add_argument('--out-root', default=None, help='Output results root, default results/next_steps/<run_name>')
     ap.add_argument('--images-root', default=None, help='Images root, default images/next_steps/<run_name>')
@@ -1517,6 +1549,10 @@ def main():
     csv_path = results_root / 'sparc_a0_summary.csv'
     with csv_path.open('w', encoding='utf-8') as f:
         f.write('galaxy,a0_best_m_s2,chi2_rar,chi2_gr,dof,notes\n')
+    # Model comparison CSV (will append rows as we go)
+    mc_csv = results_root / 'model_comparison_bic.csv'
+    with mc_csv.open('w', encoding='utf-8') as fmc:
+        fmc.write('galaxy,npts,k_gr,k_rar,k_nfw,chi2_gr,chi2_rar,chi2_nfw,bic_gr,bic_rar,bic_nfw,delta_logZ_rar_vs_gr,delta_logZ_nfw_vs_gr,delta_logZ_rar_vs_nfw\n')
     grids_dir = results_root / 'sparc_a0_grids'
     grids_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1569,6 +1605,43 @@ def main():
         with csv_path.open('a', encoding='utf-8') as f:
             f.write(f"{gid},{a0_best_fit:.6e},{chi2_rar:.3f},{chi2_gr:.3f},{dof},{notes}\n")
 
+        # Optional NFW fit (grid) for model comparison
+        chi2_nfw = float('nan'); M200_best = float('nan'); c_best = float('nan')
+        if args.fit_nfw:
+            try:
+                logM_lo, logM_hi = float(args.nfw_logm200_range[0]), float(args.nfw_logm200_range[1])
+                c_lo, c_hi = float(args.nfw_c_range[0]), float(args.nfw_c_range[1])
+                nM, nC = int(args.nfw_grid[0]), int(args.nfw_grid[1])
+                logM_grid = np.linspace(logM_lo, logM_hi, nM)
+                c_grid = np.linspace(c_lo, c_hi, nC)
+                best = (float('inf'), float('nan'), float('nan'))
+                for logM in logM_grid:
+                    M200 = 10**logM
+                    V_nfw = _nfw_vcirc_kms(R, M200, c_grid[0])  # init vector for shape
+                    for cval in c_grid:
+                        Vn = _nfw_vcirc_kms(R, M200, cval)
+                        V_model_nfw = np.sqrt(np.maximum(Vbar, 0.0)**2 + np.maximum(Vn, 0.0)**2)
+                        c2 = chi2_velocity(Vobs, V_model_nfw, eV, sigma_floor=float(args.sigma_floor))
+                        if c2 < best[0]:
+                            best = (c2, M200, cval)
+                chi2_nfw, M200_best, c_best = best
+            except Exception as e:
+                logging.warning(f"NFW fit failed for {gid}: {e}")
+
+        # Compute BICs and delta log Z (BIC ≈ -2 ln Z + k ln n; ΔlogZ ≈ -0.5 ΔBIC)
+        npts = len(R)
+        k_gr = 0
+        k_rar = 1  # a0 per galaxy
+        k_nfw = 2  # M200, c
+        bic_gr = chi2_gr + k_gr * math.log(max(npts,1))
+        bic_rar = chi2_rar + k_rar * math.log(max(npts,1))
+        bic_nfw = (chi2_nfw + k_nfw * math.log(max(npts,1))) if np.isfinite(chi2_nfw) else float('nan')
+        dlogZ_rar_vs_gr = -0.5 * (bic_rar - bic_gr)
+        dlogZ_nfw_vs_gr = -0.5 * (bic_nfw - bic_gr) if np.isfinite(bic_nfw) else float('nan')
+        dlogZ_rar_vs_nfw = -0.5 * (bic_rar - bic_nfw) if np.isfinite(bic_nfw) else float('nan')
+        with mc_csv.open('a', encoding='utf-8') as fmc:
+            fmc.write(f"{gid},{npts},{k_gr},{k_rar},{k_nfw},{chi2_gr:.3f},{chi2_rar:.3f},{(chi2_nfw if np.isfinite(chi2_nfw) else float('nan'))},{bic_gr:.3f},{bic_rar:.3f},{(bic_nfw if np.isfinite(bic_nfw) else float('nan'))},{dlogZ_rar_vs_gr:.3f},{(dlogZ_nfw_vs_gr if np.isfinite(dlogZ_nfw_vs_gr) else float('nan'))},{(dlogZ_rar_vs_nfw if np.isfinite(dlogZ_rar_vs_nfw) else float('nan'))}\n")
+
         # Stash for possible global a0
         galaxy_store.append((gid, R, Vbar, Vobs, eV, a0_best))
 
@@ -1589,6 +1662,33 @@ def main():
         logging.info(f"Saved {outpng}")
 
     logging.info(f"SPARC summary: {csv_path}")
+
+    # Model comparison distributions (histograms)
+    try:
+        import pandas as pd
+        mdf = pd.read_csv(results_root / 'model_comparison_bic.csv')
+        # Drop NaNs in the relevant columns
+        cols = ['delta_logZ_rar_vs_gr','delta_logZ_nfw_vs_gr','delta_logZ_rar_vs_nfw']
+        for c in cols:
+            if c not in mdf.columns:
+                raise ValueError('model_comparison_bic.csv missing required columns')
+        fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.8))
+        bins = 20
+        mdf['delta_logZ_rar_vs_gr'].replace([np.inf, -np.inf], np.nan, inplace=True)
+        mdf['delta_logZ_nfw_vs_gr'].replace([np.inf, -np.inf], np.nan, inplace=True)
+        mdf['delta_logZ_rar_vs_nfw'].replace([np.inf, -np.inf], np.nan, inplace=True)
+        ax.hist(mdf['delta_logZ_rar_vs_gr'].dropna(), bins=bins, alpha=0.6, label='ΔlogZ (DGG−GR)', color='tab:red')
+        ax.hist(mdf['delta_logZ_nfw_vs_gr'].dropna(), bins=bins, alpha=0.6, label='ΔlogZ (NFW−GR)', color='tab:blue')
+        ax.hist(mdf['delta_logZ_rar_vs_nfw'].dropna(), bins=bins, alpha=0.6, label='ΔlogZ (DGG−NFW)', color='tab:green')
+        ax.set_xlabel('Δ log Z'); ax.set_ylabel('Count')
+        ax.set_title('Model comparison distributions (BIC approximation)')
+        ax.legend(frameon=False)
+        outp = images_root / 'model_comparison' / 'delta_logZ_hist.png'
+        outp.parent.mkdir(parents=True, exist_ok=True)
+        plt.tight_layout(); plt.savefig(outp, dpi=140); plt.close(fig)
+        logging.info(f"Model comparison histogram written: {outp}")
+    except Exception as e:
+        logging.warning(f"Model comparison histogram skipped: {e}")
 
     # 3) Solar-System ΔG/G and optional PPN table
     solar_rows = solar_system_table(rar_params)
