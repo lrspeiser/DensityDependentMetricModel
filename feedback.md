@@ -239,3 +239,13 @@ Notes
     --metric-lensing-only --density-profile sersic --write-ppn-table
   ```
 
+---
+
+## Update (2025-09-08): Item A.3 — Local-universe (PPN, Solar bands, wide binaries)
+
+- PPN table export (γ, β, α1, α2) implemented for the adopted Φ=Ψ, c_T=1 subclass; orchestrator writes results/next_steps/<run>/ppn_table.csv when --write-ppn-table is set.
+- Solar-System posterior bands: orchestrator now samples NPZ posteriors (if present) to emit 16–84% credible bands for |ΔG/G| at 1–30 AU (results/next_steps/<run>/solar_system_posterior_bands.csv) and overlays them on the Solar figure.
+- Wide-binary prediction: added scripts/analyze_wide_binaries.py to generate a forward theory curve (sqrt(ξ) − 1 vs separation) and optional overlay from a local CSV.
+  - Outputs: results/next_steps/<run>/wide_binaries_pred.csv and images/next_steps/<run>/wide_binaries_pred.png.
+  - How-to: see docs/wide_binaries.md.
+

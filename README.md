@@ -70,6 +70,25 @@ As seen above, with the fiducial parameter choices used to fit galaxies (orange 
 
 It is worth mentioning that our model’s consistency with solar system gravity is achieved without adding any *ad hoc* mechanism separate from what fits galaxies. In other words, the same function that produces the RAR effects at low acceleration automatically reduces the effect at high acceleration. This is analogous to how General Relativity itself does not need special patches for different scales – one set of equations works in the solar system and in galaxies – and it underscores the physical plausibility of the theory.
 
+### PPN Parameters and Solar‑System Tests
+
+Consistent with a GR‑style completion where Φ=Ψ and c_T=1 in the weak field, we export a PPN table (γ, β, α1, α2) for standard Solar‑System radii. In the adopted subclass, the values evaluate to GR within current bounds (γ≈1, β≈1, α1≈α2≈0); the Cassini bound |γ−1|<2.3×10⁻⁵ is respected.
+
+Source Data: results/next_steps/rar_plateau_mw_full/ppn_table.csv
+
+Posterior‑propagated Solar bands. Using posterior samples from the same run, we propagate to |ΔG/G| at 1–30 AU and provide 16–84% credible bands (median shown) alongside worst‑case and gated curves in the Solar panel.
+
+Source Data: results/next_steps/rar_plateau_mw_full/solar_system_posterior_bands.csv
+Figure: images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png
+
+### Wide‑Binary Constraints (Gaia DR3)
+
+We provide a forward prediction for the wide‑binary (WB) velocity‑ratio statistic in the Solar neighborhood. The theory curve (sqrt(ξ)−1 vs separation) reflects screening at small separations and small deviations emerging only in the deep low‑acceleration regime; this aligns qualitatively with recent DR3 WB constraints that disfavour large MOND‑like boosts near ~10⁻¹⁰ m s⁻².
+
+Repro and overlay instructions: docs/wide_binaries.md
+Source Data: results/next_steps/rar_plateau_mw_full/wide_binaries_pred.csv
+Figure: images/next_steps/rar_plateau_mw_full/wide_binaries_pred.png
+
 ## Gravitational Lensing: Preliminary Consistency
 
 Any modified gravity theory intended as a serious alternative to dark matter must address light deflection as well as dynamics. Our model is designed to admit a relativistic completion (GR‑style metric with environment‑gated modifications) so that the same mechanism that boosts galaxy rotation can also enhance gravitational lensing in the low‑acceleration regime without violating Solar‑System tests.

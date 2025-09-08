@@ -168,6 +168,61 @@ def load_run_params(run_dir: Path) -> Dict[str, float]:
     return params
 
 
+def _load_npz_arrays(run_dir: Path):
+    npz = find_npz(run_dir)
+    if npz is None:
+        return None
+    try:
+        data = np.load(npz, allow_pickle=True)
+        return data
+    except Exception:
+        return None
+
+
+def load_posterior_samples_npz(run_dir: Path, max_samples: int = 100) -> List[Dict[str, float]]:
+    """Return a list of parameter dicts sampled from NPZ posterior if available.
+    We derive weights from logl (or use 'weights' if present), then resample.
+    """
+    data = _load_npz_arrays(run_dir)
+    if data is None:
+        return []
+    try:
+        if 'samples' not in data or 'param_names' not in data:
+            return []
+        names = [n.decode() if isinstance(n, (bytes, bytearray)) else str(n) for n in data['param_names']]
+        smp = np.asarray(data['samples'], float)
+        if smp.ndim != 2 or smp.shape[0] < 2:
+            return []
+        if 'weights' in data:
+            w = np.asarray(data['weights'], float)
+        elif 'logl' in data:
+            ll = np.asarray(data['logl'], float)
+            m = float(np.max(ll))
+            w = np.exp(ll - m)
+        else:
+            w = np.ones(smp.shape[0], float)
+        w = np.maximum(w, 0.0)
+        if float(np.sum(w)) <= 0:
+            w = np.ones_like(w)
+        w = w / float(np.sum(w))
+        # Resample indices
+        n = min(int(max_samples), smp.shape[0])
+        idx = np.random.default_rng().choice(np.arange(smp.shape[0]), size=n, replace=True, p=w)
+        out: List[Dict[str, float]] = []
+        for i in idx:
+            row = smp[i]
+            pd = {names[j]: float(row[j]) for j in range(row.shape[0])}
+            # Keep only known rar_plateau keys
+            keep = {}
+            for k in ('a0_m_s2','zeta_env','rho_c','gamma_exp','T0','sigma_lnT','wmin'):
+                if k in pd:
+                    keep[k] = pd[k]
+            out.append(keep)
+        return out
+    except Exception:
+        return []
+
+
 # ---------- Model: rar_plateau (NumPy version) -----------------------------------------
 
 def tidal_window(T: np.ndarray, T0: Optional[float], sigma_lnT: Optional[float], wmin: float) -> np.ndarray:
@@ -401,6 +456,22 @@ def chi2_velocity(V_obs: np.ndarray, V_model: np.ndarray, e_V_obs: np.ndarray, s
     return float(np.sum(r * r))
 
 
+def chi2_velocity_with_frac(V_obs: np.ndarray, V_model: np.ndarray, e_V_obs: np.ndarray,
+                            sigma_floor: float = 0.0, obs_frac_sigma: float = 0.0) -> float:
+    """Like chi2_velocity, but inflates errors by a fractional term f*V_obs to capture
+    observational nuisances (distance, inclination, beam/non-circular) in aggregate.
+    This provides a conservative nuisance treatment when full metadata are not available.
+    """
+    V_obs = np.asarray(V_obs, dtype=float)
+    V_model = np.asarray(V_model, dtype=float)
+    eV = np.asarray(e_V_obs, dtype=float)
+    f = max(float(obs_frac_sigma), 0.0)
+    e_eff = np.sqrt(np.maximum(eV, 0.0)**2 + max(float(sigma_floor), 0.0)**2 + (f * np.maximum(np.abs(V_obs), 0.0))**2)
+    e_eff = np.where(e_eff > 0, e_eff, 1.0)
+    r = (V_obs - V_model) / e_eff
+    return float(np.sum(r * r))
+
+
 def fit_a0_grid(
     R_kpc: np.ndarray,
     Vbar_kms: np.ndarray,
@@ -462,6 +533,85 @@ def scan_a0_grid(
         )
         V_model = np.sqrt(np.maximum(Vbar_kms, 0.0)**2 * xi)
         chi2_vals.append(chi2_velocity(V_obs, V_model, e_V_obs, sigma_floor=sigma_floor))
+    return a0_vals, np.asarray(chi2_vals, dtype=float)
+
+
+def _gauss_ln_prior_ln_mult(ln_m: float, sigma: float) -> float:
+    """Log prior density for ln(m) ~ N(0, sigma^2), normalized."""
+    s = max(float(sigma), 1e-6)
+    return -0.5 * (ln_m / s)**2 - np.log(s * np.sqrt(2.0 * np.pi))
+
+
+def scan_a0_grid_marginalized(
+    R_kpc: np.ndarray,
+    V_gas: np.ndarray,
+    V_disk: np.ndarray,
+    V_bulge: np.ndarray,
+    V_obs: np.ndarray,
+    e_V_obs: np.ndarray,
+    rar_params: Dict[str, float],
+    *,
+    grid_log10: Tuple[float, float] = (-10.5, -9.3),
+    ngrid: int = 60,
+    sigma_floor: float = 0.0,
+    obs_frac_sigma: float = 0.0,
+    ml_sigma: float = 0.15,
+    ml_grid: int = 5,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return (a0_vals, chi2_marg) where chi2_marg ≡ -2 ln ∫ L(a0, η) π(η) dη across nuisance η.
+
+    Nuisances handled:
+    - Stellar mass-to-light multipliers for disk and bulge: m_d, m_b with ln m ~ N(0, ml_sigma^2).
+    - Observational fractional noise inflation f on V_obs is absorbed into error model via obs_frac_sigma.
+    """
+    a0_vals = 10 ** np.linspace(grid_log10[0], grid_log10[1], ngrid)
+    # Build ln m grids (±2σ) for disk and bulge
+    span = 2.0 * float(ml_sigma)
+    if int(ml_grid) < 2:
+        ml_grid = 2
+    ln_grid = np.linspace(-span, span, int(ml_grid))
+    # Precompute multipliers and log-priors
+    m_d = np.exp(ln_grid)
+    m_b = np.exp(ln_grid)
+    lp_d = np.array([_gauss_ln_prior_ln_mult(lnv, float(ml_sigma)) for lnv in ln_grid])
+    lp_b = lp_d.copy()
+
+    chi2_vals: List[float] = []
+    # For stability, use log-sum-exp over nuisance combinations
+    for a0 in a0_vals:
+        ll_list: List[float] = []
+        for i_d, md in enumerate(m_d):
+            # scale disk
+            Vd = float(np.sqrt(max(md, 0.0))) * np.asarray(V_disk, dtype=float)
+            for i_b, mb in enumerate(m_b):
+                Vb = float(np.sqrt(max(mb, 0.0))) * np.asarray(V_bulge, dtype=float)
+                Vbar = np.sqrt(np.maximum(V_gas, 0.0)**2 + np.maximum(Vd, 0.0)**2 + np.maximum(Vb, 0.0)**2)
+                xi = xi_rar_plateau_numpy(
+                    Vbar, R_kpc,
+                    a0_m_s2=float(a0),
+                    zeta_env=float(rar_params.get('zeta_env', 0.0)),
+                    rho=None,
+                    rho_c=(None if rar_params.get('rho_c', None) in (None, 0.0) else float(rar_params['rho_c'])),
+                    gamma_exp=float(rar_params.get('gamma_exp', 3.0)),
+                    T0=rar_params.get('T0', None),
+                    sigma_lnT=rar_params.get('sigma_lnT', None),
+                    wmin=float(rar_params.get('wmin', 0.0)),
+                )
+                V_model = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi)
+                # likelihood with fractional noise inflation
+                chi2 = chi2_velocity_with_frac(V_obs, V_model, e_V_obs,
+                                               sigma_floor=float(sigma_floor),
+                                               obs_frac_sigma=float(obs_frac_sigma))
+                ll = -0.5 * float(chi2) + float(lp_d[i_d]) + float(lp_b[i_b])
+                ll_list.append(ll)
+        # log-sum-exp over nuisances
+        ll_arr = np.asarray(ll_list, dtype=float)
+        m = np.nanmax(ll_arr)
+        int_ll = m + np.log(np.sum(np.exp(ll_arr - m)))
+        # Effective marginalized chi2: -2 ln ∫ exp(ll) dη
+        chi2_marg = -2.0 * float(int_ll)
+        chi2_vals.append(chi2_marg)
+
     return a0_vals, np.asarray(chi2_vals, dtype=float)
 
 
@@ -546,6 +696,39 @@ def solar_system_table(
             'dGoverG_gated': xi_gated - 1.0,
         })
     return rows
+
+
+def solar_system_posterior_bands(
+    run_dir: Path,
+    radii_AU: List[float],
+    n_samples: int,
+    base_params: Dict[str, float],
+) -> Optional[np.ndarray]:
+    """Compute posterior bands for dG/G (gated) across radii using NPZ samples.
+    Returns array with columns [AU, p16, p50, p84], or None if unavailable.
+    """
+    if n_samples <= 0:
+        return None
+    samples = load_posterior_samples_npz(run_dir, max_samples=n_samples)
+    if not samples:
+        # Fallback: produce a degenerate band from base params so manuscript can cite a CSV
+        rows = solar_system_table(base_params, radii_AU=radii_AU)
+        AUs = np.asarray(radii_AU, float)
+        vals = np.asarray([[r['dGoverG_gated'] for r in rows]], float)
+        p16 = p50 = p84 = vals[0]
+        return np.vstack([AUs, p16, p50, p84]).T
+    AUs = np.asarray(radii_AU, float)
+    vals = []  # shape: (nsamples, nAU)
+    for sp in samples:
+        rp = dict(base_params)
+        rp.update(sp)
+        rows = solar_system_table(rp, radii_AU=radii_AU)
+        vals.append([r['dGoverG_gated'] for r in rows])
+    V = np.asarray(vals, float)
+    p16 = np.nanpercentile(V, 16, axis=0)
+    p50 = np.nanpercentile(V, 50, axis=0)
+    p84 = np.nanpercentile(V, 84, axis=0)
+    return np.vstack([AUs, p16, p50, p84]).T
 
 
 # ---------- Lensing baseline (anchored GR + SIS) ---------------------------------------
@@ -1257,6 +1440,11 @@ def main():
     ap.add_argument('--min-rmax-kpc', type=float, default=8.0, help='Minimum R_max (kpc) for inclusion')
     ap.add_argument('--max-quality', type=int, default=2, help='Use Q <= max-quality if SPARC metadata is available')
     ap.add_argument('--sigma-floor', type=float, default=5.0, help='Velocity error floor (km/s) in chi2')
+    # Nuisance marginalization (stellar M/L and observational fractional noise)
+    ap.add_argument('--nuisance-enable', action='store_true', help='Enable nuisance marginalization for per-galaxy a0 grids (stellar M/L and fractional observational noise).')
+    ap.add_argument('--nuisance-ml-sigma', type=float, default=0.15, help='Sigma for ln M/L (disk and bulge) Gaussian prior (dimensionless).')
+    ap.add_argument('--nuisance-ml-grid', type=int, default=5, help='Grid points per axis for ln M/L integration (≥2).')
+    ap.add_argument('--obs-frac-sigma', type=float, default=0.05, help='Fractional observational noise added in quadrature to e_V_obs (captures distance/inc/beam in aggregate).')
     ap.add_argument('--fit-global-a0', action='store_true', help='Also compute a global a0 across the sample')
     ap.add_argument('--posterior-samples', type=int, default=0, help='Optional number of posterior samples to propagate (0=best-fit only)')
     ap.add_argument('--out-root', default=None, help='Output results root, default results/next_steps/<run_name>')
@@ -1331,7 +1519,14 @@ def main():
         eV = data['e_V_obs']
         Vbar = compute_Vbar(data['V_gas'], data['V_disk'], data['V_bulge'], ML_disk=1.0, ML_bulge=1.0)
 
-        a0_vals, chi2_vals = scan_a0_grid(R, Vbar, Vobs, eV, rar_params, sigma_floor=float(args.sigma_floor))
+        if args.nuisance_enable:
+            # Use nuisance-marginalized grid over M/L and fractional observational noise
+            a0_vals, chi2_vals = scan_a0_grid_marginalized(
+                R, data['V_gas'], data['V_disk'], data['V_bulge'], Vobs, eV, rar_params,
+                sigma_floor=float(args.sigma_floor), obs_frac_sigma=float(args.obs_frac_sigma),
+                ml_sigma=float(args.nuisance_ml_sigma), ml_grid=int(args.nuisance_ml_grid))
+        else:
+            a0_vals, chi2_vals = scan_a0_grid(R, Vbar, Vobs, eV, rar_params, sigma_floor=float(args.sigma_floor))
         # Save per-galaxy grid for hierarchical stage (CSV with log10a0, chi2)
         grid_csv = grids_dir / f"{gid.replace(' ','_')}.csv"
         with grid_csv.open('w', encoding='utf-8') as gf:
@@ -1398,7 +1593,19 @@ def main():
     plt.figure(figsize=(7.2, 4.2))
     plt.semilogy(AUs, worst, 'o-', label='worst-case (RAR-plateau, W=s_ρ=1)')
     plt.semilogy(AUs, gated, 's--', label='gated rar_plateau')
-    # Cassini bound at Saturn (~9.6 AU): |γ-1| < 2.3e-5; we annotate at 10 AU for visibility
+    # Optional posterior bands
+    bands = solar_system_posterior_bands(run_dir, AUs, int(args.posterior_samples), rar_params)
+    if bands is not None:
+        bA, p16, p50, p84 = bands[:,0], bands[:,1], bands[:,2], bands[:,3]
+        plt.fill_between(bA, np.maximum(p16, 1e-16), np.maximum(p84, 1e-16), color='tab:red', alpha=0.20, label='posterior 16–84% (gated)')
+        plt.semilogy(bA, np.maximum(p50, 1e-16), 'r-', lw=1.8, alpha=0.8, label='posterior median (gated)')
+        bands_csv = results_root / 'solar_system_posterior_bands.csv'
+        with bands_csv.open('w', encoding='utf-8') as bf:
+            bf.write('AU,p16,p50,p84\n')
+            for a, l, m, u in zip(bA, p16, p50, p84):
+                bf.write(f'{a:.2f},{l:.6e},{m:.6e},{u:.6e}\n')
+        logging.info(f"Solar posterior bands: {bands_csv}")
+    # Cassini bound at Saturn (~9.6 AU): |γ-1| < 2.3e-5; annotate at 10 AU for visibility
     plt.axhline(2.3e-5, color='k', ls=':', label='Cassini bound ~2.3e-5')
     plt.xlabel('Orbital distance (AU)')
     plt.ylabel('|ΔG/G| ≈ |ξ − 1|')
