@@ -170,8 +170,19 @@ chains_dynesty*/
 # -------------------------------------------------------------------
 *.csv
 *.parquet
+# Root-level Gaia slices whitelist
 !gaia_sky_slices/*.csv
 !gaia_sky_slices/*.parquet
+!gaia_sky_slices/**/*.csv
+!gaia_sky_slices/**/*.parquet
+# External-data Gaia slices whitelist (many tools look here)
+!external_data/gaia_sky_slices/**/*.csv
+!external_data/gaia_sky_slices/**/*.parquet
+# Historical doc path whitelist
+!data/gaia_slices/**/*.csv
+!data/gaia_slices/**/*.parquet
+# Ensure SPARC directory is never ignored (forward-compatible with LFS)
+!external_data/Rotmod_LTG/**
 
 # -------------------------------------------------------------------
 # 🆕 Runtime and Monitoring Files (Machine-Specific)
