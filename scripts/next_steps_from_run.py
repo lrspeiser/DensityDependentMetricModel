@@ -1748,8 +1748,8 @@ def main():
                                 tot += (m + np.log(s))
                             return float(tot)
 
-                        seed = None if int(args.hierarchical_a0_seed) == 0 else int(args.hierarchical_a0_seed)
-                        sampler = dynesty.NestedSampler(loglike, prior_transform, 2, nlive=int(args.hierarchical_a0_live), sample='rwalk', bound='multi', seed=seed)
+                        # Note: dynesty versions may not accept a seed parameter; to keep compatibility, we do not pass it here.
+                        sampler = dynesty.NestedSampler(loglike, prior_transform, 2, nlive=int(args.hierarchical_a0_live), sample='rwalk', bound='multi')
                         sampler.run_nested()
                         res = sampler.results
                         # Equal-weight samples
