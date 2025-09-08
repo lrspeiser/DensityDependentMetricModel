@@ -167,7 +167,7 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 **Baryon models.** Milky Way disks (Miyamoto–Nagai) + bulge (Hernquist) + gas; external galaxies use SPARC component rotmods.  
 **Computation.** We evaluate \(\xi(g)\) as in **Box 1**, with unit conversion constant \(C\) and optional gates \(s_\rho, W(T)\).  
 **Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling.  
-**Solar‑System.** Evaluate \(\xi(r)\) in the Sun’s field and report \(|\Delta G/G|\) at 1–30 AU; compare to the Cassini line as a consistency check.  
+**Solar‑System.** Evaluate \(\xi(r)\) in the Sun’s field and report \(|\Delta G/G|\) at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass \(\Phi=\Psi, c_T=1\)), we also export a PPN CSV (\(\gamma\approx1, \beta\approx1, \alpha_1\approx\alpha_2\approx0\)).  
 **Lensing (metric‑only).** Build \(\langle\Sigma\rangle(R)\), \(\Delta\Sigma(R)\), and \(\theta_E\) using the same \(\xi\) and measured lens properties; \(\Sigma_{\rm cr}\) from a standard flat ΛCDM cosmology.
 
 > **Where to find in code:** the working implementation is `xi_rar_plateau_numpy(...)` and `solar_system_table(...)` in `scripts/next_steps_from_run.py`.
@@ -178,7 +178,7 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 
 - **Code.** Analysis and plotting scripts are part of this repository. The exact function used in all figures is **Box 1**, implemented as `xi_rar_plateau_numpy`.  
 - **Data.** SPARC rotmod files and Source Data CSVs accompany the figures (`results/...`) and are tracked with Git LFS.  
-- **Reproduction.** See `scripts/reproduce_paper.py` for end‑to‑end regeneration of figures and tables.
+- **Reproduction.** See `scripts/reproduce_paper.py` for end‑to‑end regeneration of figures and tables. Each run writes a `run_metadata.json` with flags, environment, and timestamp; SPARC selection disclosure is saved to `sparc_selection.json`.
 
 ---
 
@@ -202,6 +202,7 @@ Lensing is computed from the same \(\xi(g)\) via a **metric‑only** mapping wit
 - **Fig. 5** Solar \(|\Delta G/G|\) — `images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png`  
 - **Fig. 6** Lensing \(\theta_E\) scatter — `images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png`  
 - **Ext. Fig.** Stacked \(\Delta\Sigma\) — `images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png`
+- **Ext. Fig.** Model comparison Δlog Z histograms (BIC approximation) — `images/next_steps/enhanced_20250805_115400/model_comparison/delta_logZ_hist.png`
 
 ---
 
@@ -246,6 +247,21 @@ File: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`
 | 2.0 | 3.6068e+08 |
 
 ---
+
+## Reproduction (paper preset)
+
+Run the all-in-one script to regenerate figures/tables using the paper preset:
+
+```
+python scripts/reproduce_paper.py \
+  --preset paper \
+  --run-dir runs/enhanced_20250805_115400 \
+  --sparc-dir external_data/Rotmod_LTG \
+  --lensing-csv docs/lensing_targets.csv
+```
+
+- Paper preset enforces metric-only lensing, posterior sampling for Solar bands, and standardized SPARC cuts.
+- Provide measured lens entries in `docs/lensing_targets.csv` with columns `lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]` to produce the lensing metric table.
 
 ## Appendices (ready text & placeholders)
 

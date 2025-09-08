@@ -49,6 +49,7 @@ def main() -> None:
     ap.add_argument("--sparc-dir", required=True, help="SPARC rotmod dir (e.g., external_data/Rotmod_LTG)")
     ap.add_argument("--lensing-csv", default="docs/lensing_targets.csv", help="Lens CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]")
     ap.add_argument("--sample", default="gold", choices=["gold","q2plus","all"], help="SPARC sample for the orchestrator: gold (default), q2plus (Q<=2), or all")
+    ap.add_argument("--preset", default="paper", choices=["paper","pilot","custom"], help="Preset for orchestrator (default: paper)")
     ap.add_argument("--hierarchical-a0", action="store_true", help="Also compute hierarchical a0 MLE over the SPARC subset")
     ap.add_argument("--hierarchical-a0-bayes", action="store_true", help="Run full Bayesian hierarchical posterior for a0 (dynesty)")
     args = ap.parse_args()
@@ -64,6 +65,7 @@ def main() -> None:
         "--run-dir", str(run_dir),
         "--sparc-dir", str(sparc_dir),
         "--lensing-sample-csv", str(lens_csv),
+        "--preset", str(args.preset),
         "--metric-lensing-only",
         "--density-profile", "sersic",
         "--nfw-enable",

@@ -1724,6 +1724,7 @@ def main():
     ap.add_argument('--mw-R0-kpc', type=float, default=8.2, help='Solar radius R0 (kpc) for Kz/Σ_1.1 calculation.')
     ap.add_argument('--mw-zmax-kpc', type=float, default=3.0, help='Max height (kpc) for Kz/Σ_1.1 grid.')
     ap.add_argument('--mw-nz', type=int, default=181, help='Number of z samples for Kz/Σ_1.1 (including z=0).')
+    ap.add_argument('--mw-kz-overlay-csv', type=str, default='', help='Optional CSV with comparison bands for Kz (columns: z_kpc,Kz_min,Kz_max) to overlay.')
     # Hierarchical Bayesian posterior (dynesty nested sampling) over (mu, sigma) for ln a0
     ap.add_argument('--hierarchical-a0-bayes', action='store_true', help='Run full Bayesian hierarchical posterior over (mu, sigma) using dynesty and precomputed per-galaxy chi2 grids.')
     ap.add_argument('--hierarchical-a0-live', type=int, default=400, help='Number of live points for dynesty nested sampling (Bayesian hierarchical step).')
@@ -2199,7 +2200,18 @@ elif args.preset == 'pilot':
         plt.figure(figsize=(7.2, 5.0))
         plt.scatter(xv, yv, s=16, alpha=0.7, label=f'BTFR sample (N={n_btfr})')
         xs = np.linspace(min(xv)-0.05, max(xv)+0.05, 200)
-        plt.plot(xs, a_lin + b_lin*xs, 'r-', lw=2, label=f"fit: slope={b_lin:.2f}±{(b_err if np.isfinite(b_err) else float('nan')):.2f}")
+        y_fit = a_lin + b_lin*xs
+        plt.plot(xs, y_fit, 'r-', lw=2, label=f"fit: slope={b_lin:.2f}±{(b_err if np.isfinite(b_err) else float('nan')):.2f}")
+        # Bootstrap CI shading if available
+        try:
+            y_lo = a_lin + p16*xs
+            y_hi = a_lin + p84*xs
+            import numpy as _np
+            m = _np.isfinite(y_lo) & _np.isfinite(y_hi)
+            if _np.any(m):
+                plt.fill_between(xs[m], y_lo[m], y_hi[m], color='red', alpha=0.12, label='bootstrap 16–84%')
+        except Exception:
+            pass
         plt.xlabel('log10 V_flat [km/s]')
         plt.ylabel('log10 M_b [M_sun]')
         plt.title('Baryonic Tully–Fisher Relation (observed V_flat)')
@@ -2484,6 +2496,27 @@ elif args.preset == 'pilot':
             if df_kz is not None:
                 plt.figure(figsize=(6.8, 4.6))
                 plt.plot(df_kz['z_kpc'], df_kz['Kz_m_s2'], 'r-', lw=2, label='Kz (full 3D)')
+                # Optional overlay bands
+                if args.mw_kz_overlay_csv:
+                    import csv as _csv
+                    ovp = Path(args.mw_kz_overlay_csv)
+                    if ovp.exists():
+                        zz = []; lo = []; hi = []
+                        with ovp.open('r', encoding='utf-8') as fh:
+                            rdr = _csv.DictReader(fh)
+                            for row in rdr:
+                                try:
+                                    zz.append(float(row['z_kpc']))
+                                    lo.append(float(row['Kz_min']))
+                                    hi.append(float(row['Kz_max']))
+                                except Exception:
+                                    continue
+                        if len(zz) >= 2:
+                            import numpy as _np
+                            zz = _np.asarray(zz); lo = _np.asarray(lo); hi = _np.asarray(hi)
+                            order = _np.argsort(zz)
+                            zz = zz[order]; lo = lo[order]; hi = hi[order]
+                            plt.fill_between(zz, lo, hi, color='gray', alpha=0.25, label='Reference band')
                 plt.xlabel('z (kpc)'); plt.ylabel('Kz (m s$^{-2}$)')
                 plt.title(f'MW Kz at R0={args.mw_R0_kpc} kpc (full 3D phantom)')
                 plt.grid(alpha=0.3); plt.legend(frameon=False)
