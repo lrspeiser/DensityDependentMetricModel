@@ -635,6 +635,8 @@ Lensing — ΔΣ stack and θE scatter (RAR metric vs observed; GR/NFW yardstick
 RAR master panel — SPARC scatter with DGG posterior band
 - ![RAR master panel](images/next_steps/rar_plateau_mw_full/rar_master_panel.png)
 - Source Data: results/next_steps/rar_plateau_mw_full/rar_master_panel_source.csv
+- Optional ΛCDM overlay: fill docs/lcdm_rar_band.csv (see docs/lcdm_rar_band.md) and run:
+  - python scripts/make_rar_master_panel.py --sparc-dir external_data/Rotmod_LTG --results-root results/next_steps/rar_plateau_mw_full --lcdm-band docs/lcdm_rar_band.csv
 
 Evidence distributions (histograms)
 - Δlog Z (DGG − GR): images/next_steps/rar_plateau_mw_full/delta_logZ_dgg_vs_gr.png (table: results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv)
