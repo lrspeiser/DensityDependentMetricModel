@@ -2027,32 +2027,52 @@ def main():
     AUs = [r['AU'] for r in solar_rows]
     worst = [r['dGoverG_worst'] for r in solar_rows]
     gated = [r['dGoverG_gated'] for r in solar_rows]
-    plt.figure(figsize=(7.2, 4.2))
-    plt.semilogy(AUs, worst, 'o-', label='worst-case (RAR-plateau, W=s_ρ=1)')
-    plt.semilogy(AUs, gated, 's--', label='gated rar_plateau')
+    fig, ax = plt.subplots(figsize=(7.2, 4.4))
+    ax.semilogy(AUs, worst, 'o-', label='worst-case (RAR-plateau, W=s_ρ=1)')
+    ax.semilogy(AUs, gated, 's--', label='gated rar_plateau')
     # Optional posterior bands
     bands = solar_system_posterior_bands(run_dir, AUs, int(args.posterior_samples), rar_params)
     if bands is not None:
         bA, p16, p50, p84 = bands[:,0], bands[:,1], bands[:,2], bands[:,3]
-        plt.fill_between(bA, np.maximum(p16, 1e-16), np.maximum(p84, 1e-16), color='tab:red', alpha=0.20, label='posterior 16–84% (gated)')
-        plt.semilogy(bA, np.maximum(p50, 1e-16), 'r-', lw=1.8, alpha=0.8, label='posterior median (gated)')
+        ax.fill_between(bA, np.maximum(p16, 1e-16), np.maximum(p84, 1e-16), color='tab:red', alpha=0.20, label='posterior 16–84% (gated)')
+        ax.semilogy(bA, np.maximum(p50, 1e-16), 'r-', lw=1.8, alpha=0.8, label='posterior median (gated)')
         bands_csv = results_root / 'solar_system_posterior_bands.csv'
         with bands_csv.open('w', encoding='utf-8') as bf:
             bf.write('AU,p16,p50,p84\n')
             for a, l, m, u in zip(bA, p16, p50, p84):
                 bf.write(f'{a:.2f},{l:.6e},{m:.6e},{u:.6e}\n')
         logging.info(f"Solar posterior bands: {bands_csv}")
-    # Cassini bound at Saturn (~9.6 AU): |γ-1| < 2.3e-5; annotate at 10 AU for visibility
-    plt.axhline(2.3e-5, color='k', ls=':', label='Cassini bound ~2.3e-5')
-    plt.xlabel('Orbital distance (AU)')
-    plt.ylabel('|ΔG/G| ≈ |ξ − 1|')
-    plt.title('Solar-System constraints (RAR-plateau params)')
-    plt.grid(alpha=0.3, which='both')
-    plt.legend(frameon=False)
+
+    # Planetary semi-major axis markers with labels at top
+    planet_marks = [(5.2, 'Jupiter'), (9.5, 'Saturn'), (19.2, 'Uranus'), (30.1, 'Neptune')]
+    # Draw vertical lines first so they sit behind markers
+    for au, name in planet_marks:
+        ax.axvline(au, color='gray', lw=0.8, ls=':', alpha=0.6)
+    ymin, ymax = ax.get_ylim()
+    ylab = ymax / (10 ** 0.1)  # slightly below the top in log space
+    for au, name in planet_marks:
+        ax.text(au, ylab, name, rotation=90, va='bottom', ha='center', fontsize=8, color='gray')
+
+    # Secondary right axis for Cassini |γ−1| reference band
+    axr = ax.twinx()
+    axr.set_yscale('log')
+    axr.set_ylim(ax.get_ylim())
+    cassini = 2.3e-5
+    # Use a small floor for log scale lower bound of the band
+    band_lo = max(1e-16, ymin)
+    axr.axhspan(band_lo, cassini, color='k', alpha=0.08, label='Cassini |γ−1| reference')
+    ax.set_xlabel('Orbital distance (AU)')
+    ax.set_ylabel('|ΔG/G| ≈ |ξ − 1|')
+    axr.set_ylabel('|γ−1| (reference)')
+    ax.set_title('Solar-System constraints (RAR-plateau params)')
+    ax.grid(alpha=0.3, which='both')
+    # Build a combined legend from left axis handles
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles, labels, frameon=False, loc='upper left')
     outpng = images_root / 'solar_rar_plateau.png'
-    plt.tight_layout()
-    plt.savefig(outpng, dpi=140)
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(outpng, dpi=140)
+    plt.close(fig)
     logging.info(f"Saved {outpng}")
 
     # Optional PPN export for Solar-System radii (γ, β, α1, α2 with explicit theory assumption)
@@ -2063,13 +2083,37 @@ def main():
             logging.warning('PPN export unavailable: theory.relativistic not importable.')
         else:
             radii_AU = [r['AU'] for r in solar_rows]
+            # Map AU -> dG/G (gated) for synchronized export
+            dg_map = {float(r['AU']): float(r['dGoverG_gated']) for r in solar_rows}
             ppn_list = evaluate_ppn(rar_params, radii_AU)
             ppn_csv = results_root / 'ppn_table.csv'
             with ppn_csv.open('w', encoding='utf-8') as f:
-                f.write('AU,gamma,beta,alpha1,alpha2,theory_assumption,note\n')
+                f.write('AU,gamma_minus_1,beta_minus_1,alpha1,alpha2,dG_over_G_gated\n')
                 for AU, res in zip(radii_AU, ppn_list):
-                    f.write(f"{AU:.1f},{res.gamma:.6f},{res.beta:.6f},{res.alpha1:.6f},{res.alpha2:.6f}," \
-                            f"{res.theory_assumption.replace(',', ';')},{res.note.replace(',', ';')}\n")
+                    g_m1 = float(res.gamma) - 1.0
+                    b_m1 = float(res.beta) - 1.0
+                    a1 = float(res.alpha1)
+                    a2 = float(res.alpha2)
+                    dg = float(dg_map.get(float(AU), float('nan')))
+                    f.write(f"{AU:.1f},{g_m1:.2e},{b_m1:.2e},{a1:.2e},{a2:.2e},{dg:.2e}\n")
+            # Also write a Markdown table with the requested footnote
+            try:
+                ppn_md = results_root / 'ppn_table.md'
+                lines = []
+                lines.append('| AU | gamma-1 | beta-1 | alpha1 | alpha2 | dG/G (gated) |')
+                lines.append('|---:|--------:|-------:|-------:|-------:|--------------:|')
+                for AU, res in zip(radii_AU, ppn_list):
+                    g_m1 = float(res.gamma) - 1.0
+                    b_m1 = float(res.beta) - 1.0
+                    a1 = float(res.alpha1)
+                    a2 = float(res.alpha2)
+                    dg = float(dg_map.get(float(AU), float('nan')))
+                    lines.append(f"| {AU:.1f} | {g_m1:.2e} | {b_m1:.2e} | {a1:.2e} | {a2:.2e} | {dg:.2e} |")
+                lines.append('')
+                lines.append('Note: Adopted weak-field subclass with Φ=Ψ, c_T=1; in the screened Solar limit γ−1=β−1=α1=α2=0 by construction; |ΔG/G|=ξ−1 shown as a conservative amplitude tracer. See Methods for mapping details.')
+                ppn_md.write_text('\n'.join(lines), encoding='utf-8')
+            except Exception as _e:
+                logging.debug(f"PPN markdown write skipped: {_e}")
             logging.info(f"PPN table: {ppn_csv}")
 
     # 4) Lensing pilot
@@ -2575,6 +2619,7 @@ def main():
         lines.append('Artifacts:')
         lines.append(f"- SPARC summary: `{csv_path.as_posix()}`")
         lines.append(f"- Solar table: `{solar_csv.as_posix()}`, plot: `{(images_root / 'solar_rar_plateau.png').as_posix()}`")
+        lines.append(f"- PPN table: `{(results_root / 'ppn_table.csv').as_posix()}` (Markdown: `{(results_root / 'ppn_table.md').as_posix()}`)")
         lines.append(f"- Lensing baseline table: `{(results_root / 'lensing_table.csv').as_posix()}` (if present)")
         lines.append(f"- Lensing RAR table: `{(results_root / 'lensing_rar_table.csv').as_posix()}` (if present)")
         lines.append(f"- BTFR subset: `{btfr_csv.as_posix()}`")

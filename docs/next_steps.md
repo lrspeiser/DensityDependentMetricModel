@@ -5,6 +5,7 @@ Run: `enhanced_20250805_115400`
 Artifacts:
 - SPARC summary: `results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv`
 - Solar table: `results/next_steps/enhanced_20250805_115400/solar_system_table.csv`, plot: `images/next_steps/enhanced_20250805_115400/solar_rar_plateau.png`
+- PPN table: `results/next_steps/enhanced_20250805_115400/ppn_table.csv` (Markdown: `results/next_steps/enhanced_20250805_115400/ppn_table.md`)
 - Lensing baseline table: `results/next_steps/enhanced_20250805_115400/lensing_table.csv` (if present)
 - Lensing RAR table: `results/next_steps/enhanced_20250805_115400/lensing_rar_table.csv` (if present)
 - BTFR subset: `results/next_steps/enhanced_20250805_115400/btfr_summary.csv`
