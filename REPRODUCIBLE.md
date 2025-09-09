@@ -32,6 +32,38 @@ This note describes how to reproduce the main figures and tables in this reposit
 Notes
 - The dynesty run regeneration (to create the NPZ) requires GPU/CuPy. If you need to regenerate the run, set `RUN_GENERATE=1` and ensure a working GPU/CuPy environment; otherwise, provide an existing run NPZ.
 
+## Milky Way RAR‑plateau run & paper preset
+
+If you need to run the Milky Way fit that produces the paper’s run NPZ, use the dynesty CuPy runner (GPU/CuPy recommended) and then invoke the paper preset orchestrator.
+
+- Fit the Milky Way (RAR‑plateau):
+
+  python runners/dynesty_latest/run_dynesty_stellar_fit_cupy.py \
+    --xi rar_plateau \
+    --nlive 2000 --maxcall 1500000 --dlogz_target 0.01 \
+    --seed 42 --num_threads 8 \
+    --run_analysis \
+    --out runs/rar_plateau_mw_full
+
+  If runners/dynesty_latest/ is not present, fallback script: runners/run_dynesty_stellar_fit_cupy.py with the same flags.
+
+- Generate paper figures/tables (paper preset):
+
+  python scripts/reproduce_paper.py \
+    --run-dir runs/rar_plateau_mw_full \
+    --sparc-dir external_data/Rotmod_LTG \
+    --lensing-csv docs/lensing_targets.csv \
+    --sample gold --preset paper
+
+- Helper: reproduce_paper.sh performs the orchestrator step and (optionally) the MW Kz overlay band plot. Set RUN_GENERATE=1 to let it attempt the dynesty run on a GPU/CuPy machine; otherwise provide an existing NPZ.
+- Container: the provided Dockerfile runs reproduce_paper.sh in a CPU-first image; mount runs/ and external_data/Rotmod_LTG to reproduce outputs without GPU.
+
+### Data requirements
+- SPARC rotmod files under external_data/Rotmod_LTG/ (fetch via `git lfs pull`).
+- Lensing targets table at docs/lensing_targets.csv with measured columns (lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]).
+- Milky Way Kz overlay CSV (optional): docs/mw_kz_overlay_two_bands.csv.
+- Gaia annuli and posterior snapshots (if referenced) can be downloaded via the DOIs listed in §2 of this document once minted.
+
 1) Environment and packages
 - Python: 3.10+
 - Core packages:
