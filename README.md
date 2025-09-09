@@ -100,6 +100,19 @@ $$
 
 with $\xi$ from **Box 1** and compare to observed rotation curves.
 
+### Figure‑by‑Figure Guide (what each plot proves)
+
+| Figure | What question does it answer? | What to look for / success criterion | Why it matters to the paper’s claims |
+|---|---|---|---|
+| MW rotation (GR vs NFW vs DGG) | Can one set of DGG parameters match the Milky Way without a dark halo? | Red DGG curve follows the data in the inner Galaxy and sustains the outer speed once $g_{\rm bar}\sim a_0$; blue (baryons‑only) falls short; NFW is a yardstick only. | Establishes core claim: a single gate, not a custom halo, captures the shape. |
+| MW $K_z$ (full‑3D) | Is the vertical force at $R_0$ consistent with measurements? | Red full‑3D DGG curve lies inside the Bovy & Rix / McMillan bands (overlay these); quote $\Sigma_{1.1}$. | Cross‑check of a different field component; prevents “in‑plane tuning” and uses the full‑3D figure/CSV. |
+| SPARC panel (5 exemplars) | Does the same gate shape work across galaxies of very different surface brightness? | Red DGG lines broadly track black points; residuals correlate with known systematics (inclination, gas). | Demonstrates generality with one functional form; avoids per‑galaxy halo freedom. |
+| BTFR with bootstrap band | Do DGG predictions respect the baryonic Tully–Fisher slope and scatter? | Slope $3.184\,[3.034,\,3.332]$, RMS $\sim0.22$ dex; band from bootstrap. | Connects to the RAR/BTFR “natural law”; shows we’re in the correct phenomenology with few knobs. |
+| Solar‑System ($\Delta G/G$) | Is the gate invisible where GR is well tested? | Curve remains below the Cassini bound at Saturn; $\Delta G/G\ll10^{-5}$ over 1–30 AU. | Confirms Solar‑System safety under the same mapping used for galaxies. |
+| $\theta_E$: predicted vs observed | Does the same $\xi$ (metric‑only, $\Phi=\Psi$) reproduce strong‑lensing scales? | Red points cluster around the 1:1 line with errors; blue (baryons‑only) under‑predicts; include per‑lens residuals. | Puts DGG on the same footing as halo models for lensing—critical for credibility. |
+| Stacked $\Delta\Sigma$ (metric) | Is the average projected signal roughly correct over 0.05–300 kpc? | Solid curve with 16–84% band sits in the ballpark of literature stacks alongside the data points. | Shows the global profile is captured without non‑baryonic mass. |
+| Wide‑binary (Extended Data) | Does DGG avoid order‑unity deviations at $10^3$–$10^4$ AU? | Predicted statistic $\xi-1$ stays modest; compare to Gaia analyses. | Complements Solar constraints in a distinct low‑$g$ environment. |
+
 ### Milky Way: A Case Study
 
 **Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**  
