@@ -1442,10 +1442,10 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                 'Bias_rel': float(np.nanmean(rel)),
             }
             # Optional κ_ext marginalization
-            if float(args.kappa_ext_sigma) > 0.0 and int(args.kappa_ext_samples) > 0:
+            if float(SYS_CFG.kappa_ext_sigma) > 0.0 and int(SYS_CFG.kappa_ext_samples) > 0:
                 try:
                     rng = np.random.default_rng(42)
-                    k = rng.normal(float(args.kappa_ext_mean), float(args.kappa_ext_sigma), size=int(args.kappa_ext_samples))
+                    k = rng.normal(float(SYS_CFG.kappa_ext_mean), float(SYS_CFG.kappa_ext_sigma), size=int(SYS_CFG.kappa_ext_samples))
                     k = np.clip(k, -0.1, 0.1)
                     # Broadcast to per-lens predictions
                     pr_mat = pr[None, :]
@@ -1455,9 +1455,9 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     rel_k = resid_k / np.where(obs!=0, obs, np.nan)
                     metrics.update({
                         'kappa_ext': {
-                            'mean': float(args.kappa_ext_mean),
-                            'sigma': float(args.kappa_ext_sigma),
-                            'samples': int(args.kappa_ext_samples),
+                            'mean': float(SYS_CFG.kappa_ext_mean),
+                            'sigma': float(SYS_CFG.kappa_ext_sigma),
+                            'samples': int(SYS_CFG.kappa_ext_samples),
                         },
                         'RMSE_abs_arcsec_kappa': float(np.sqrt(np.nanmean(resid_k**2))),
                         'MAE_abs_arcsec_kappa': float(np.nanmean(np.abs(resid_k))),
@@ -1465,17 +1465,8 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                         'RMSE_rel_kappa': float(np.sqrt(np.nanmean(rel_k**2))),
                         'MAE_rel_kappa': float(np.nanmean(np.abs(rel_k))),
                         'Bias_rel_kappa': float(np.nanmean(rel_k)),
+                        'thetaE_pred_med_kappa': pr_med.tolist(),
                     })
-                    # Save per-lens summary
-                    try:
-                        kout = out_dir / 'lensing_thetaE_kappa_summary.csv'
-                        with kout.open('w', encoding='utf-8') as f:
-                            f.write('lens_id,thetaE_obs_arcsec,thetaE_pred_rar_arcsec,thetaE_pred_rar_med_kappa_arcsec\n')
-                            for lid, tobs, tp, tm in rows2:
-                                if np.isfinite(tobs) and np.isfinite(tp):
-                                    f.write(f"{lid},{(tobs if np.isfinite(tobs) else 'nan')},{(tp if np.isfinite(tp) else 'nan')},{(tm if 'tm' in locals() else 'nan')}\n")
-                    except Exception:
-                        pass
                 except Exception as _e:
                     logging.warning(f"κ_ext marginalization skipped: {_e}")
             (out_dir / 'lensing_thetaE_metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf-8')
@@ -1545,6 +1536,10 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
 
     # Aggregate ΔΣ stack (metric-only inputs are always available regardless of flag)
     try:
+        # Capture systematics flags locally for robustness (from global config)
+        _twohalo_csv_path = str(getattr(SYS_CFG, 'twohalo_csv', '') or '')
+        _mis_f_off = float(getattr(SYS_CFG, 'miscenter_f_off', 0.0) or 0.0)
+        _mis_sigma = float(getattr(SYS_CFG, 'miscenter_sigma_kpc', 50.0) or 50.0)
         prof_dir = out_dir / 'lensing_metric_profiles'
         profiles = sorted([p for p in prof_dir.glob('*_profiles.csv') if p.is_file()])
         if len(profiles) >= 1:
@@ -1587,11 +1582,11 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     p84 = np.nanpercentile(DSarr, 84, axis=0)
 
                     # Optional miscentering: convolve Σ_tot with Rayleigh offsets, then recompute ΔΣ
-                    use_mis = (float(args.miscenter_f_off) > 0.0)
+                    use_mis = (_mis_f_off > 0.0)
                     DSarr_mis = None
                     if use_mis:
-                        f_off = float(args.miscenter_f_off)
-                        sig_off = float(args.miscenter_sigma_kpc)
+                        f_off = _mis_f_off
+                        sig_off = _mis_sigma
                         n_phi = 32; n_roff = 64; rmax_sig = 5.0
                         DSstack_mis = []
                         for idx, pair in enumerate(Sigmas):
@@ -1635,11 +1630,11 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
 
                     # Optional two-halo tail: load template CSV and add to stack curves
                     ds2h = None
-                    if args.twohalo_csv:
+                    if _twohalo_csv_path:
                         try:
                             import csv as _csv
                             Rth = []; Dth = []
-                            with open(args.twohalo_csv, 'r', encoding='utf-8') as tf:
+                            with open(_twohalo_csv_path, 'r', encoding='utf-8') as tf:
                                 rdr = _csv.DictReader(tf)
                                 for row in rdr:
                                     try:
@@ -1869,6 +1864,21 @@ def kz_sigma_from_grid(
         df = out  # caller can handle list of dicts fallback
     return df, {'xi_grid': xi, 'a0_eff_grid': a0_eff_grid}
 
+# ---------- Systematics configuration (module-level) ----------------------------------
+from dataclasses import dataclass
+
+@dataclass
+class SystematicsConfig:
+    twohalo_csv: str = ''
+    miscenter_f_off: float = 0.0
+    miscenter_sigma_kpc: float = 50.0
+    kappa_ext_mean: float = 0.0
+    kappa_ext_sigma: float = 0.0
+    kappa_ext_samples: int = 0
+
+# Global systematics config (populated in main())
+SYS_CFG = SystematicsConfig()
+
 # ---------- Main orchestrator ----------------------------------------------------------
 
 def main():
@@ -1956,6 +1966,17 @@ def main():
 
     setup_logger(args.debug)
 
+    # Populate global systematics configuration so inner blocks/functions can access
+    global SYS_CFG
+    SYS_CFG = SystematicsConfig(
+        twohalo_csv=str(getattr(args, 'twohalo_csv', '') or ''),
+        miscenter_f_off=float(getattr(args, 'miscenter_f_off', 0.0) or 0.0),
+        miscenter_sigma_kpc=float(getattr(args, 'miscenter_sigma_kpc', 50.0) or 50.0),
+        kappa_ext_mean=float(getattr(args, 'kappa_ext_mean', 0.0) or 0.0),
+        kappa_ext_sigma=float(getattr(args, 'kappa_ext_sigma', 0.0) or 0.0),
+        kappa_ext_samples=int(getattr(args, 'kappa_ext_samples', 0) or 0),
+    )
+
     run_dir = Path(args.run_dir)
     sparc_dir = Path(args.sparc_dir)
     run_name = run_dir.name
@@ -1990,6 +2011,16 @@ def main():
             'min_npts': args.min_npts,
             'min_rmax_kpc': args.min_rmax_kpc,
             'max_quality': args.max_quality,
+        },
+        'lensing_systematics': {
+            'twohalo_csv': getattr(SYS_CFG, 'twohalo_csv', ''),
+            'miscenter_f_off': float(getattr(SYS_CFG, 'miscenter_f_off', 0.0) or 0.0),
+            'miscenter_sigma_kpc': float(getattr(SYS_CFG, 'miscenter_sigma_kpc', 50.0) or 50.0),
+            'kappa_ext': {
+                'mean': float(getattr(SYS_CFG, 'kappa_ext_mean', 0.0) or 0.0),
+                'sigma': float(getattr(SYS_CFG, 'kappa_ext_sigma', 0.0) or 0.0),
+                'samples': int(getattr(SYS_CFG, 'kappa_ext_samples', 0) or 0),
+            },
         },
         'env': {
             'python': sys.version.split()[0],
