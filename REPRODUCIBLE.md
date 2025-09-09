@@ -53,6 +53,33 @@ python scripts/next_steps_from_run.py \
 
 Omitting these flags reproduces the manuscript figures and tables byte-for-byte (aside from the harmless new metadata section).
 
+### QA and SI helpers (optional)
+- Lens table QA (reports missing required fields for θE metrics):
+  ```bash
+  python tools/qa_lensing_table.py
+  # → results/qa/lensing_missing_report.csv
+  ```
+- Compare baseline vs systematics outputs (θE metrics and stack deltas):
+  ```bash
+  python tools/compare_lensing_systematics.py
+  # → results/qa/thetaE_metrics_comparison.csv, results/qa/stack_deltas.csv
+  ```
+- Merge MW Kz overlays (Bovy–Rix + McMillan) into a single CSV for plotting:
+  ```bash
+  python tools/mw_kz_overlay_merge.py
+  # Use with: --mw-kz-overlay-csv docs/mw_kz_overlay_2band.csv
+  ```
+- Dmax sensitivity sweep summarizer (after running three presets to results/dmax_sweep/30,50,80):
+  ```bash
+  python tools/summarize_dmax_sweep.py
+  # → results/qa/dmax_summary.csv
+  ```
+- SPARC rotation-curve PPC (requires a per-point residuals CSV):
+  ```bash
+  python tools/sparc_ppc.py
+  # → results/qa/sparc_ppc_summary.csv, results/qa/sparc_ppc_hist.csv
+  ```
+
 ## Milky Way RAR‑plateau run & paper preset
 
 If you need to run the Milky Way fit that produces the paper’s run NPZ, use the dynesty CuPy runner (GPU/CuPy recommended) and then invoke the paper preset orchestrator.

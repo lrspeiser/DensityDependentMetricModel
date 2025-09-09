@@ -96,6 +96,8 @@ $$
 
 We adopt a metric‑only weak‑field subclass with $c_T=1$ and $\Phi=\Psi$ in screened, quasi‑static limits. Dynamics depend on $\Phi$; lensing depends on $\Phi+\Psi=2\Phi$. The same $\xi(g)$ rescales the weak‑field potential entering both dynamics and light deflection. See Methods for a PPN sketch and Appendix for a covariant scaffold; for broader context compare to TeVeS‑like and modern scalar–tensor completions (e.g., Skordis–Zlosnik).
 
+A QUMOND‑like mapping is useful for intuition: $\nabla^2\Phi=\nabla\!\cdot\![\nu(|\nabla\Phi_b|/a_0)\nabla\Phi_b]$ with $\nu(y)=\tfrac12+\sqrt{\tfrac14+1/y}$, so that $g=\nu\,g_N$ and $V^2=\xi\,V_{\rm bar}^2$ in the disk plane. The associated phantom‑density identity yields the full 3‑D contribution used for $K_z$ and lensing in the paper preset. We use the same $\nu$ function as in Box 1.
+
 ---
 
 ## Rotation Curve Predictions with No Dark Halos
@@ -137,7 +139,7 @@ $\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm
 
 ![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
 
-Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. Overlay band corresponds to Bovy & Rix (2013) $\Sigma_{1.1}=68\pm4\;M_\odot\,\mathrm{pc}^{-2}$ (pass `--mw-kz-overlay-csv docs/mw_kz_overlay_bovyrix2013_SCALED.csv` to reproduce). Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`.
+Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. Overlay bands (when provided) include Bovy & Rix (2013) $\Sigma_{1.1}=68\pm4\;M_\odot\,\mathrm{pc}^{-2}$ and McMillan (2017/2022); see `--mw-kz-overlay-csv` in the orchestrator. Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`.
 
 ### External Galaxies: SPARC Rotation‑Curve Fits
 
@@ -191,31 +193,7 @@ We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \th
 
 Uncertainties: where available, per‑lens $\theta_E$ uncertainties ($\sigma_{\theta_E}$) are included in `docs/lensing_targets.csv`; rows lacking uncertainties are omitted from weighted metrics. Residuals and a goodness‑of‑fit summary are written to `results/.../lensing_thetaE_residuals.csv` and `.../lensing_thetaE_metrics.json`.
 
-Systematics options (optional)
-- Stacked ΔΣ: `--twohalo-csv docs/2halo_tail_template.csv` to add a two‑halo tail; `--miscenter-f-off 0.25 --miscenter-sigma-kpc 50` to apply a Rayleigh miscentering kernel before stacking. Stack outputs include both baseline and `_sys` series.
-- θE metrics: `--kappa-ext-mean 0.03 --kappa-ext-sigma 0.02 --kappa-ext-samples 5000` to marginalize $\theta_E$ under a Gaussian $\kappa_\mathrm{ext}$ prior; metrics JSON gains `_kappa` entries.
-
-Example (optional sensitivity run; keeps paper outputs unchanged if you omit flags):
-```bash
-python scripts/next_steps_from_run.py \
-  --preset paper \
-  --run-dir runs/<your_run> \
-  --sparc-dir external_data/Rotmod_LTG \
-  --lensing-sample-csv docs/lensing_targets.csv \
-  --miscenter-f-off 0.25 --miscenter-sigma-kpc 50 \
-  --kappa-ext-mean 0.03 --kappa-ext-sigma 0.02 --kappa-ext-samples 5000 \
-  --out-root results/next_steps_sys/<your_run> \
-  --images-root images/next_steps_sys/<your_run>
-```
-
-Outputs with flags enabled:
-- `lensing_metric_stack.csv` gains `DeltaSigma_*_sys` columns.
-- `lensing_thetaE_metrics.json` gains `_kappa` metrics and a `kappa_ext` summary.
-- `run_metadata.json` includes a `lensing_systematics` section recording the exact parameters.
-
-Reproducibility note: If you do not pass these flags, the pipeline reproduces the paper’s figures and tables as-is (only an extra metadata section is appended in `run_metadata.json`).
-
-Bug fix: A `NameError` in `scripts/next_steps_from_run.py` (inner references to `args.*`) was fixed by introducing a module-level `SystematicsConfig` used inside inner blocks. CLI flags are unchanged; behavior is default-off.
+We assess miscentering and external convergence $\kappa_\mathrm{ext}$ in SI; paper figures use the baseline unless stated. See REPRODUCIBLE.md and docs/lensing.md for exact flags and outputs.
 
 ---
 
@@ -223,7 +201,7 @@ Bug fix: A `NameError` in `scripts/next_steps_from_run.py` (inner references to 
 
 **Predictive power vs flexibility.** With a single principal scale \(a_0\) and a fixed \(\nu\)-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior).
 
-**Solar‑System safety.** The same mapping that boosts galaxy outskirts yields \(|\Delta G/G|\ll 10^{-5}\) at \(\sim10\) AU for galaxy‑fit parameters, qualitatively consistent with Cassini. A PPN derivation will firm up the comparison.
+**Solar‑System safety.** The same mapping that boosts galaxy outskirts yields \(|\Delta G/G|\ll 10^{-5}\) at \(\sim10\) AU for galaxy‑fit parameters, qualitatively consistent with Cassini. In the screened Solar limit of our adopted subclass (\(\Phi=\Psi, c_T=1\)), we have \(\gamma=\beta=1\) and \(\alpha_{1,2}=0\); per‑AU values are exported in `ppn_table.csv`.
 
 **Vertical forces and local surface density.** A decisive check is \(K_z(R_0,z)\) and \(\Sigma_{1.1}\). We use the **full 3‑D** DGG contribution throughout the paper preset.
 
@@ -257,6 +235,8 @@ Bug fix: A `NameError` in `scripts/next_steps_from_run.py` (inner references to 
 PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$. In our subclass with screening and $\Phi=\Psi$, both potentials receive the same small fractional rescaling $U\to (1+\epsilon)U$ with $\epsilon\equiv\Delta G/G\approx\xi-1\ll1$. Then $\gamma\equiv\Psi/\Phi=1$ identically, while light‑deflection and Shapiro delay amplitudes scale with $(1+\gamma)U\to (1+\gamma)(1+\epsilon)U$. Thus Cassini’s $|\gamma-1|<2.3\times10^{-5}$ bound implies $\epsilon\ll10^{-5}$ for any mapping that would attribute the observed delay amplitude to an effective rescaling of $U$. We therefore use $|\Delta G/G|$ as a conservative tracer; in the screened Solar limit both $\epsilon$ and $|\gamma-1|$ approach zero, consistent with the CSV export.
 **Lensing (metric‑only).** We adopt a metric‑only mapping with $\Phi=\Psi$; the deflection potential is $2\Phi$, so the same $\xi(g)$ that boosts dynamics boosts lensing. Critical surface density $\Sigma_{\rm cr}(z_l, z_s)$ is computed for a flat $\Lambda$CDM cosmology. Stellar masses come from SED‑based $M/L$ (prior specified in Supplement), and sizes $(R_e, n)$ are measured from the discovery images or follow‑ups listed in the lens table. Residuals and goodness‑of‑fit metrics for $\theta_E$ are written to `lensing_thetaE_residuals.csv` and `lensing_thetaE_metrics.json`.  
 **Model comparison.** Δlog Z histograms are reported as a BIC approximation; full evidences are produced when hierarchical runs are enabled.
+
+**NFW comparator priors.** For the NFW yardstick we adopt weak, non‑informative bounds on \(\log_{10} M_{200}\) and \(c\) consistent with a standard mass–concentration relation at \(z\simeq 0\). Fits are performed by \(\chi^2\) minimization on the same radii and velocity uncertainties as the DGG/GR fits; exact prior ranges and any mass–concentration hyper‑prior are listed in SI (Table Sx).
 
 > **Where to find in code:** the working implementation is `xi_rar_plateau_numpy(...)` and `solar_system_table(...)` in `scripts/next_steps_from_run.py`.
 
@@ -409,8 +389,7 @@ $$
 
 *Optional plateau:* impose \(\xi\le D_{\max}\) if a finite cap is required observationally.
 
-### Appendix B — PPN and Cassini (placeholder)
+### Appendix B — PPN and Cassini (working summary)
 
-- Starting from the relativistic completion with \(\Phi=\Psi\) and \(c_T=1\), derive \(\gamma,\beta\) in the Solar limit and connect \(\Delta G/G\) to \(\gamma-1\).  
-- Provide a compact AU table (1–30 AU) and show consistency with \(|\gamma-1|<2.3\times10^{-5}\) at Saturn.
+In the adopted screened weak‑field subclass with \(\Phi=\Psi\) and \(c_T=1\), Solar‑System limits imply \(\gamma=\beta=1\) and \(\alpha_{1,2}=0\). We therefore use \(|\Delta G/G|\equiv|\xi-1|\) as a conservative tracer for any residual weak‑field rescaling. We export a per‑AU PPN table (`ppn_table.csv`) with columns \((\mathrm{AU},\gamma-1,\beta-1,\alpha_1,\alpha_2,|\Delta G/G|)\), and the Solar figure plots \(|\Delta G/G|\) vs AU alongside the Cassini \(|\gamma-1|\) reference band.
 
