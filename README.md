@@ -133,7 +133,7 @@ $\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm
 
 ![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
 
-Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. Overlay observational bands (Bovy & Rix; McMillan) to show consistency. Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`.
+Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. Overlay observational bands (Bovy & Rix; McMillan) to show consistency (pass `--mw-kz-overlay-csv <bands.csv>` to the orchestrator). Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`. We report $\Sigma_{1.1}$ in the CSV; uncertainties to be added in the submission draft.
 
 ### External Galaxies: SPARC Rotation‑Curve Fits
 
@@ -190,6 +190,8 @@ We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \th
 `images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,
 `images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`.
 
+Uncertainties: where available, per‑lens $\theta_E$ uncertainties ($\sigma_{\theta_E}$) are included in `docs/lensing_targets.csv`; rows lacking uncertainties are omitted from weighted metrics. Residuals and a goodness‑of‑fit summary are written to `results/.../lensing_thetaE_residuals.csv` and `.../lensing_thetaE_metrics.json`.
+
 ---
 
 ## Discussion and Implications
@@ -200,9 +202,9 @@ We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \th
 
 **Vertical forces and local surface density.** A decisive check is \(K_z(R_0,z)\) and \(\Sigma_{1.1}\). We use the **full 3‑D** DGG contribution throughout the paper preset.
 
-**Lensing under one metric.** Metric‑only predictions show the right order of magnitude for \(\theta_E\) and stacked \(\Delta\Sigma\) with measured lens inputs pending. A single‑theory lensing success is essential.
+**Lensing under one metric.** Metric‑only predictions show the right order of magnitude for $\theta_E$ and stacked $\Delta\Sigma$ with measured lens inputs; residuals and RMSE are reported. A single‑theory lensing success is essential. **Sanity:** varying the stellar $M/L$ prior within the SED‑informed band shifts the amplitude of $\Delta\Sigma$ but not its slope over 0.05–300 kpc.
 
-**Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data.
+**Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data. **Falsifiability:** a decisive failure would be a requirement for $D_{\max}\gg100$ to fit strong‑lensing scales or cluster dynamics under the same mapping, or a systematic misfit of the BTFR slope/scatter under standardized selections.
 
 ---
 
@@ -218,11 +220,15 @@ We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \th
 
 ## Methods (condensed; full details in Supplementary)
 
+**Hierarchical $a_0$ (optional).** When enabled, we infer a population‑level mean and scatter in $\ln a_0$ from per‑galaxy grids (dynesty nested sampling). We report $(\mu,\sigma)$ posteriors in `hierarchical_a0_posterior_summary.json` and a heatmap at `images/.../hierarchical_a0_posterior_heatmap.png`.  
+
 **Baryon models.** Milky Way disks (Miyamoto–Nagai) + bulge (Hernquist) + gas; external galaxies use SPARC component rotmods.  
 **Computation.** We evaluate \(\xi(g)\) as in **Box 1**, with unit conversion constant \(C\) and optional gates \(s_\rho, W(T)\).  
 **Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling.  
-**Solar‑System.** In the Solar limit where $g_{\rm bar}\gg a_0$, $\xi\to1$ and the metric reduces to GR with $\gamma\simeq\beta\simeq1$ and $\alpha_{1,2}\simeq0$. We evaluate $\xi(r)$ in the Sun’s field and report $|\Delta G/G|$ at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass $\Phi=\Psi, c_T=1$), we also export a PPN CSV (`ppn_table.csv`) with $(\gamma,\beta,\alpha_1,\alpha_2)$.  
-**Lensing (metric‑only).** We adopt a metric‑only mapping with $\Phi=\Psi$; the deflection potential is $2\Phi$, so the same $\xi(g)$ that boosts dynamics boosts lensing. Critical surface density $\Sigma_{\rm cr}(z_l, z_s)$ is computed for a flat $\Lambda$CDM cosmology. Stellar masses come from SED‑based $M/L$ (prior specified in Supplement), and sizes $(R_e, n)$ are measured from the discovery images or follow‑ups listed in the lens table.  
+**Solar‑System.** In the Solar limit where $g_{\rm bar}\gg a_0$, $\xi\to1$ and the metric reduces to GR with $\gamma\simeq\beta\simeq1$ and $\alpha_{1,2}\simeq0$. We evaluate $\xi(r)$ in the Sun’s field and report $|\Delta G/G|$ at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass $\Phi=\Psi, c_T=1$), we also export a PPN CSV (`ppn_table.csv`) with $(\gamma,\beta,\alpha_1,\alpha_2)$.
+
+PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$. In our subclass with screening and $\Phi=\Psi$, both potentials receive the same small fractional rescaling $U\to (1+\epsilon)U$ with $\epsilon\equiv\Delta G/G\approx\xi-1\ll1$. Then $\gamma\equiv\Psi/\Phi=1$ identically, while light‑deflection and Shapiro delay amplitudes scale with $(1+\gamma)U\to (1+\gamma)(1+\epsilon)U$. Thus Cassini’s $|\gamma-1|<2.3\times10^{-5}$ bound implies $\epsilon\ll10^{-5}$ for any mapping that would attribute the observed delay amplitude to an effective rescaling of $U$. We therefore use $|\Delta G/G|$ as a conservative tracer; in the screened Solar limit both $\epsilon$ and $|\gamma-1|$ approach zero, consistent with the CSV export.
+**Lensing (metric‑only).** We adopt a metric‑only mapping with $\Phi=\Psi$; the deflection potential is $2\Phi$, so the same $\xi(g)$ that boosts dynamics boosts lensing. Critical surface density $\Sigma_{\rm cr}(z_l, z_s)$ is computed for a flat $\Lambda$CDM cosmology. Stellar masses come from SED‑based $M/L$ (prior specified in Supplement), and sizes $(R_e, n)$ are measured from the discovery images or follow‑ups listed in the lens table. Residuals and goodness‑of‑fit metrics for $\theta_E$ are written to `lensing_thetaE_residuals.csv` and `lensing_thetaE_metrics.json`.  
 **Model comparison.** Δlog Z histograms are reported as a BIC approximation; full evidences are produced when hierarchical runs are enabled.
 
 > **Where to find in code:** the working implementation is `xi_rar_plateau_numpy(...)` and `solar_system_table(...)` in `scripts/next_steps_from_run.py`.
@@ -332,7 +338,7 @@ python scripts/reproduce_paper.py \
 ```
 
 - Paper preset enforces metric-only lensing, posterior sampling for Solar bands, and standardized SPARC cuts.
-- Provide measured lens entries in `docs/lensing_targets.csv` with columns `lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]` to produce the lensing metric table.
+- Provide measured lens entries in `docs/lensing_targets.csv` with columns `lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec,theta_E_obs_err_arcsec]` to produce the lensing metric table (rows missing uncertainties are excluded from weighted metrics).
 
 ## Appendices (ready text & placeholders)
 

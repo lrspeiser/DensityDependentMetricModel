@@ -1479,6 +1479,30 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             sp = images_dir / 'lensing_thetaE_pred_vs_obs.png'
             plt.tight_layout(); plt.savefig(sp, dpi=140); plt.close()
             logging.info(f"Scatter plot written: {sp}")
+            # Residuals CSV and panel (RAR only)
+            try:
+                res_csv = out_dir / 'lensing_thetaE_residuals.csv'
+                with res_csv.open('w', encoding='utf-8') as rf:
+                    rf.write('thetaE_obs_arcsec,thetaE_pred_rar_arcsec,residual_arcsec,residual_frac\n')
+                    for o, p in zip(obs, pr):
+                        if np.isfinite(o) and np.isfinite(p) and o != 0:
+                            rf.write(f"{o:.6f},{p:.6f},{(p-o):.6f},{((p-o)/o):.6f}\n")
+                # Plot residual scatter and histogram
+                plt.figure(figsize=(9.0, 4.2))
+                ax1 = plt.subplot(1,2,1)
+                ax1.axhline(0.0, color='k', ls=':')
+                ax1.scatter(obs, resid, c='tab:red', s=35, alpha=0.8)
+                ax1.set_xlabel('θ_E observed [arcsec]'); ax1.set_ylabel('Residual (pred−obs) [arcsec]')
+                ax1.grid(alpha=0.3)
+                ax2 = plt.subplot(1,2,2)
+                ax2.hist(resid[np.isfinite(resid)], bins=12, color='tab:red', alpha=0.8)
+                ax2.set_xlabel('Residual (pred−obs) [arcsec]'); ax2.set_ylabel('Count')
+                ax2.grid(alpha=0.3)
+                rp = images_dir / 'lensing_thetaE_residuals.png'
+                plt.tight_layout(); plt.savefig(rp, dpi=140); plt.close()
+                logging.info(f"Residuals panel written: {rp}; CSV: {res_csv}")
+            except Exception as _e:
+                logging.debug(f"Residuals panel step skipped: {_e}")
     except Exception as e:
         logging.warning(f"θE metrics step skipped: {e}")
 
