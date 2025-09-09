@@ -2,6 +2,17 @@
 
 All notable changes to this repository will be documented in this file.
 
+## 2025-09-09
+
+### Added
+- Optional lensing systematics (defaults off to preserve baseline results):
+  - Two‑halo ΔΣ template for stacked profiles via `--twohalo-csv` (CSV: `R_kpc,DeltaSigma_2h`). Stack CSV/Source‑Data now include baseline and `_sys` series when provided.
+  - Miscentering kernel for stacked Σ/ΔΣ via `--miscenter-f-off` and `--miscenter-sigma-kpc` (Rayleigh offsets), applied at stack time using per‑lens Σ_tot profiles.
+  - $\kappa_\mathrm{ext}$ prior marginalization for $\theta_E$ metrics via `--kappa-ext-mean/--kappa-ext-sigma/--kappa-ext-samples`. Metrics JSON contains stat‑only and `_kappa` entries.
+
+### Docs
+- README.md and docs/lensing.md updated with systematics usage and flags.
+
 ## 2025-09-08
 
 ### Changed

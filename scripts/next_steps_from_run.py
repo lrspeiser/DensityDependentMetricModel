@@ -1429,7 +1429,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
         if len(obs) >= 2:
             obs = np.asarray(obs, float)
             pr = np.asarray(pred_rar, float)
-            # Metrics
+            # Metrics (stat only)
             resid = pr - obs
             rel = resid / np.where(obs!=0, obs, np.nan)
             metrics = {
@@ -1441,6 +1441,43 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                 'MAE_rel': float(np.nanmean(np.abs(rel))),
                 'Bias_rel': float(np.nanmean(rel)),
             }
+            # Optional κ_ext marginalization
+            if float(args.kappa_ext_sigma) > 0.0 and int(args.kappa_ext_samples) > 0:
+                try:
+                    rng = np.random.default_rng(42)
+                    k = rng.normal(float(args.kappa_ext_mean), float(args.kappa_ext_sigma), size=int(args.kappa_ext_samples))
+                    k = np.clip(k, -0.1, 0.1)
+                    # Broadcast to per-lens predictions
+                    pr_mat = pr[None, :]
+                    th_samp = pr_mat / (1.0 - k[:, None])
+                    pr_med = np.nanmedian(th_samp, axis=0)
+                    resid_k = pr_med - obs
+                    rel_k = resid_k / np.where(obs!=0, obs, np.nan)
+                    metrics.update({
+                        'kappa_ext': {
+                            'mean': float(args.kappa_ext_mean),
+                            'sigma': float(args.kappa_ext_sigma),
+                            'samples': int(args.kappa_ext_samples),
+                        },
+                        'RMSE_abs_arcsec_kappa': float(np.sqrt(np.nanmean(resid_k**2))),
+                        'MAE_abs_arcsec_kappa': float(np.nanmean(np.abs(resid_k))),
+                        'Bias_abs_arcsec_kappa': float(np.nanmean(resid_k)),
+                        'RMSE_rel_kappa': float(np.sqrt(np.nanmean(rel_k**2))),
+                        'MAE_rel_kappa': float(np.nanmean(np.abs(rel_k))),
+                        'Bias_rel_kappa': float(np.nanmean(rel_k)),
+                    })
+                    # Save per-lens summary
+                    try:
+                        kout = out_dir / 'lensing_thetaE_kappa_summary.csv'
+                        with kout.open('w', encoding='utf-8') as f:
+                            f.write('lens_id,thetaE_obs_arcsec,thetaE_pred_rar_arcsec,thetaE_pred_rar_med_kappa_arcsec\n')
+                            for lid, tobs, tp, tm in rows2:
+                                if np.isfinite(tobs) and np.isfinite(tp):
+                                    f.write(f"{lid},{(tobs if np.isfinite(tobs) else 'nan')},{(tp if np.isfinite(tp) else 'nan')},{(tm if 'tm' in locals() else 'nan')}\n")
+                    except Exception:
+                        pass
+                except Exception as _e:
+                    logging.warning(f"κ_ext marginalization skipped: {_e}")
             (out_dir / 'lensing_thetaE_metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf-8')
             logging.info(f"θE metrics (RAR vs obs): {metrics}")
             # Scatter plot
@@ -1514,9 +1551,11 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # Read all profiles and build a common R grid
             Rs = []
             Ds = []
+            Sigmas = []  # Σ_tot per lens for optional miscentering
             for pth in profiles:
                 Rloc = []
                 DSloc = []
+                Sloc = []
                 with pth.open('r', encoding='utf-8') as pf:
                     header = pf.readline().strip().split(',')
                     colmap = {h:i for i,h in enumerate(header)}
@@ -1524,14 +1563,21 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                         parts = line.strip().split(',')
                         Rloc.append(float(parts[colmap['R_kpc']]))
                         DSloc.append(float(parts[colmap['DeltaSigma_tot']]))
+                        if 'Sigma_tot' in colmap:
+                            Sloc.append(float(parts[colmap['Sigma_tot']]))
                 if len(Rloc) > 8:
                     Rs.append(np.asarray(Rloc, float))
                     Ds.append(np.asarray(DSloc, float))
+                    if Sloc and len(Sloc) == len(Rloc):
+                        Sigmas.append((np.asarray(Rloc, float), np.asarray(Sloc, float)))
+                    else:
+                        Sigmas.append(None)
             if len(Rs) >= 1:
                 Rmin = max([r.min() for r in Rs])
                 Rmax = min([r.max() for r in Rs])
                 if Rmax > Rmin:
                     Rgrid = np.logspace(np.log10(Rmin), np.log10(Rmax), 80)
+                    # Baseline (centered, metric-only) stack
                     DSstack = []
                     for Rr, Dd in zip(Rs, Ds):
                         DSstack.append(np.interp(Rgrid, Rr, Dd))
@@ -1539,25 +1585,128 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     mean = np.nanmean(DSarr, axis=0)
                     p16 = np.nanpercentile(DSarr, 16, axis=0)
                     p84 = np.nanpercentile(DSarr, 84, axis=0)
+
+                    # Optional miscentering: convolve Σ_tot with Rayleigh offsets, then recompute ΔΣ
+                    use_mis = (float(args.miscenter_f_off) > 0.0)
+                    DSarr_mis = None
+                    if use_mis:
+                        f_off = float(args.miscenter_f_off)
+                        sig_off = float(args.miscenter_sigma_kpc)
+                        n_phi = 32; n_roff = 64; rmax_sig = 5.0
+                        DSstack_mis = []
+                        for idx, pair in enumerate(Sigmas):
+                            if pair is None:
+                                # fallback: use baseline ΔΣ if Σ not available
+                                DSstack_mis.append(np.interp(Rgrid, Rs[idx], Ds[idx]))
+                                continue
+                            Rloc, Sloc = pair
+                            # Build interpolator for Σ
+                            def Sigma_fn(Rq):
+                                return np.interp(np.asarray(Rq, float), Rloc, Sloc, left=Sloc[0], right=Sloc[-1])
+                            # Rayleigh distribution of offsets
+                            R_off = np.linspace(0.0, rmax_sig*sig_off, n_roff)
+                            pdf = (R_off/(sig_off**2)) * np.exp(-0.5*(R_off/sig_off)**2)
+                            if np.trapz(pdf, R_off) > 0:
+                                pdf = pdf / np.trapz(pdf, R_off)
+                            phi = np.linspace(0.0, 2.0*np.pi, n_phi, endpoint=False)
+                            # Convolve
+                            Sigma_mis = np.zeros_like(Rgrid)
+                            for iR, R0 in enumerate(Rgrid):
+                                acc = 0.0
+                                for j, Ro in enumerate(R_off):
+                                    Rp = np.sqrt(np.maximum(R0*R0 + Ro*Ro - 2.0*R0*Ro*np.cos(phi), 0.0))
+                                    Sigma_phi = Sigma_fn(Rp)
+                                    acc += pdf[j] * float(np.mean(Sigma_phi))
+                                Sigma_mis[iR] = acc
+                            # Mix centered + miscentered fractions
+                            Sigma_c = Sigma_fn(Rgrid)
+                            Sigma_mix = (1.0 - f_off) * Sigma_c + f_off * Sigma_mis
+                            # ΔΣ from Σ_mix
+                            M2D = 2.0 * math.pi * _cumtrapz(Sigma_mix * Rgrid, Rgrid)
+                            mean_Sig = np.where(Rgrid>0, M2D/(math.pi*Rgrid*Rgrid), np.nan)
+                            DeltaSigma_mix = np.maximum(mean_Sig - Sigma_mix, 0.0)
+                            DSstack_mis.append(DeltaSigma_mix)
+                        DSarr_mis = np.vstack(DSstack_mis)
+                        mean_mis = np.nanmean(DSarr_mis, axis=0)
+                        p16_mis = np.nanpercentile(DSarr_mis, 16, axis=0)
+                        p84_mis = np.nanpercentile(DSarr_mis, 84, axis=0)
+                    else:
+                        mean_mis = None; p16_mis = None; p84_mis = None
+
+                    # Optional two-halo tail: load template CSV and add to stack curves
+                    ds2h = None
+                    if args.twohalo_csv:
+                        try:
+                            import csv as _csv
+                            Rth = []; Dth = []
+                            with open(args.twohalo_csv, 'r', encoding='utf-8') as tf:
+                                rdr = _csv.DictReader(tf)
+                                for row in rdr:
+                                    try:
+                                        Rth.append(float(row['R_kpc']))
+                                        Dth.append(float(row['DeltaSigma_2h']))
+                                    except Exception:
+                                        continue
+                            if len(Rth) >= 2:
+                                Rth = np.asarray(Rth, float); Dth = np.asarray(Dth, float)
+                                order = np.argsort(Rth)
+                                ds2h = np.interp(Rgrid, Rth[order], Dth[order], left=0.0, right=0.0)
+                        except Exception as _e:
+                            logging.warning(f"Two-halo template load failed: {_e}")
+
+                    # Compose systematics-adjusted series
+                    if use_mis and (ds2h is not None):
+                        mean_sys = mean_mis + ds2h
+                        p16_sys  = p16_mis  + ds2h
+                        p84_sys  = p84_mis  + ds2h
+                    elif use_mis:
+                        mean_sys, p16_sys, p84_sys = mean_mis, p16_mis, p84_mis
+                    elif (ds2h is not None):
+                        mean_sys = mean + ds2h
+                        p16_sys  = p16 + ds2h
+                        p84_sys  = p84 + ds2h
+                    else:
+                        mean_sys = None; p16_sys = None; p84_sys = None
+
+                    # Write CSV
                     stack_csv = out_dir / 'lensing_metric_stack.csv'
                     with stack_csv.open('w', encoding='utf-8') as sf:
-                        sf.write('R_kpc,DeltaSigma_mean,DeltaSigma_p16,DeltaSigma_p84,N\n')
-                        for Rv, m, l, u in zip(Rgrid, mean, p16, p84):
-                            sf.write(f"{Rv:.6e},{m:.6e},{l:.6e},{u:.6e},{DSarr.shape[0]}\n")
-                    # Also write Source-Data via helper
+                        hdr = 'R_kpc,DeltaSigma_mean,DeltaSigma_p16,DeltaSigma_p84,N'
+                        if mean_sys is not None:
+                            hdr += ',DeltaSigma_mean_sys,DeltaSigma_p16_sys,DeltaSigma_p84_sys'
+                        sf.write(hdr + '\n')
+                        for i in range(len(Rgrid)):
+                            row = f"{Rgrid[i]:.6e},{mean[i]:.6e},{p16[i]:.6e},{p84[i]:.6e},{DSarr.shape[0]}"
+                            if mean_sys is not None:
+                                row += f",{mean_sys[i]:.6e},{p16_sys[i]:.6e},{p84_sys[i]:.6e}"
+                            sf.write(row + '\n')
+                    # Source-Data
                     try:
-                        write_source_data(
-                            (out_dir / 'lensing_metric_stack_source.csv').as_posix(),
-                            R_kpc=Rgrid, DeltaSigma_mean=mean, DeltaSigma_p16=p16, DeltaSigma_p84=p84
-                        )
+                        if mean_sys is not None:
+                            write_source_data(
+                                (out_dir / 'lensing_metric_stack_source.csv').as_posix(),
+                                R_kpc=Rgrid,
+                                DeltaSigma_mean=mean, DeltaSigma_p16=p16, DeltaSigma_p84=p84,
+                                DeltaSigma_mean_sys=mean_sys, DeltaSigma_p16_sys=p16_sys, DeltaSigma_p84_sys=p84_sys
+                            )
+                        else:
+                            write_source_data(
+                                (out_dir / 'lensing_metric_stack_source.csv').as_posix(),
+                                R_kpc=Rgrid, DeltaSigma_mean=mean, DeltaSigma_p16=p16, DeltaSigma_p84=p84
+                            )
                     except Exception as _e:
                         logging.debug(f"Lensing stack Source-Data write failed: {_e}")
                     # Plot
                     plt.figure(figsize=(6.8, 4.4))
                     plt.loglog(Rgrid, mean, 'k-', lw=2, label='ΔΣ (RAR metric) mean')
                     plt.fill_between(Rgrid, p16, p84, color='gray', alpha=0.3, label='16–84%')
+                    if mean_sys is not None:
+                        plt.loglog(Rgrid, mean_sys, 'r-', lw=1.6, alpha=0.8, label='ΔΣ + systematics')
                     plt.xlabel('R (kpc)'); plt.ylabel('ΔΣ (Msun/kpc^2)')
-                    plt.title('Stacked ΔΣ from metric predictions (per-lens average)')
+                    ttl = 'Stacked ΔΣ from metric predictions (per-lens average)'
+                    if use_mis or (ds2h is not None):
+                        ttl += ' — with miscentering/2-halo'
+                    plt.title(ttl)
                     plt.grid(alpha=0.3, which='both'); plt.legend(frameon=False)
                     figp = images_dir / 'lensing_metric_stack.png'
                     plt.tight_layout(); plt.savefig(figp, dpi=140); plt.close()
@@ -1762,6 +1911,13 @@ def main():
     ap.add_argument('--nfw-mass-ratio', type=float, default=50.0, help='If no halo mass provided in CSV, set M200 = ratio * M_star (yardstick).')
     ap.add_argument('--nfw-c', type=float, default=8.0, help='If no halo concentration provided in CSV, use this c for NFW yardstick.')
     ap.add_argument('--write-ppn-table', action='store_true', help='Write PPN table (γ, β, α1, α2) for Solar-System radii under adopted subclass (Φ=Ψ, c_T=1).')
+    # Lensing systematics (optional)
+    ap.add_argument('--twohalo-csv', type=str, default='', help='Optional CSV with two-halo ΔΣ template to add to stacked ΔΣ (columns: R_kpc,DeltaSigma_2h).')
+    ap.add_argument('--miscenter-f-off', type=float, default=0.0, help='Fraction of miscentered systems for stacked ΔΣ (0..1). Default 0 = off.')
+    ap.add_argument('--miscenter-sigma-kpc', type=float, default=50.0, help='Rayleigh σ_off [kpc] for miscentering kernel (stacked ΔΣ).')
+    ap.add_argument('--kappa-ext-mean', type=float, default=0.0, help='Mean of κ_ext prior for θE mass-sheet marginalization.')
+    ap.add_argument('--kappa-ext-sigma', type=float, default=0.0, help='Sigma of κ_ext prior; if 0, κ_ext marginalization is disabled.')
+    ap.add_argument('--kappa-ext-samples', type=int, default=0, help='Number of κ_ext samples for marginalization (e.g., 2000). 0 disables marginalization.')
     # Milky Way vertical force Kz and Sigma_1.1
     ap.add_argument('--mw-kz', action='store_true', help='Compute Milky Way Kz(R0,z) and Σ_1.1 from a simple MN+Hernquist baryon model; also provide a D-scaled (RAR) approximation.')
     ap.add_argument('--mw-R0-kpc', type=float, default=8.2, help='Solar radius R0 (kpc) for Kz/Σ_1.1 calculation.')

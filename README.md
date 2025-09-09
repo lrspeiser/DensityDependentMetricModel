@@ -191,6 +191,10 @@ We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \th
 
 Uncertainties: where available, per‑lens $\theta_E$ uncertainties ($\sigma_{\theta_E}$) are included in `docs/lensing_targets.csv`; rows lacking uncertainties are omitted from weighted metrics. Residuals and a goodness‑of‑fit summary are written to `results/.../lensing_thetaE_residuals.csv` and `.../lensing_thetaE_metrics.json`.
 
+Systematics options (optional)
+- Stacked ΔΣ: `--twohalo-csv docs/2halo_tail_template.csv` to add a two‑halo tail; `--miscenter-f-off 0.25 --miscenter-sigma-kpc 50` to apply a Rayleigh miscentering kernel before stacking. Stack outputs include both baseline and `_sys` series.
+- θE metrics: `--kappa-ext-mean 0.03 --kappa-ext-sigma 0.02 --kappa-ext-samples 5000` to marginalize $\theta_E$ under a Gaussian $\kappa_\mathrm{ext}$ prior; metrics JSON gains `_kappa` entries.
+
 ---
 
 ## Discussion and Implications
