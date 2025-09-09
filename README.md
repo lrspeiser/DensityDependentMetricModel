@@ -133,7 +133,7 @@ $\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm
 
 ![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
 
-Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. Overlay observational bands (Bovy & Rix; McMillan) to show consistency (pass `--mw-kz-overlay-csv <bands.csv>` to the orchestrator). Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`. We report $\Sigma_{1.1}$ in the CSV; uncertainties to be added in the submission draft.
+Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. Overlay band corresponds to Bovy & Rix (2013) $\Sigma_{1.1}=68\pm4\;M_\odot\,\mathrm{pc}^{-2}$ (pass `--mw-kz-overlay-csv docs/mw_kz_overlay_bovyrix2013_SCALED.csv` to reproduce). Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`.
 
 ### External Galaxies: SPARC Rotation‑Curve Fits
 
