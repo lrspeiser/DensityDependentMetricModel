@@ -14,9 +14,31 @@ One notable example is Milgrom’s Modified Newtonian Dynamics (MOND), which pos
 
 In RAR‑gated gravity, the departure from Newton’s law is governed by an interpolating “gating” function that depends on the local gravitational acceleration (and/or local mass distribution). Conceptually, one can think of the model as modifying the effective gravitational constant or the relationship between the matter distribution and the curvature of spacetime, such that:
 
-- **High‑acceleration limit** (\(g\gg a_0\)) — The gate suppresses modifications, restoring Newton/GR and passing Solar‑System tests.
-- **Low‑acceleration limit** (\(g\ll a_0\)) — The gate enhances the effective force in a way tuned to reproduce the RAR (and hence the BTFR).
-- **Intermediate regime** (\(g\sim a_0\)) — A smooth transition governed by the specific interpolating function; the transition width can be calibrated against rotation‑curve shapes.
+- **High‑acceleration limit** ($g\gg a_0$) — The gate suppresses modifications, restoring Newton/GR and passing Solar‑System tests.
+- **Low‑acceleration limit** ($g\ll a_0$) — The gate enhances the effective force in a way tuned to reproduce the RAR (and hence the BTFR).
+- **Intermediate regime** ($g\sim a_0$) — A smooth transition governed by the specific interpolating function; the transition width can be calibrated against rotation‑curve shapes.
+
+### How the model works (plain language)
+
+- In high‑acceleration regions, gravity behaves like ordinary GR/Newton.
+- In low‑acceleration regions (galaxy outskirts), gravity gets a boost. The size of the boost is set by a single universal scale $a_0$ and capped by a plateau $D_{\max}$ to prevent unphysical divergence.
+- Practically, we compute the Newtonian acceleration from baryons ($g_{\rm bar}$) and then multiply by a boost factor $\xi$ (the “gate”). This $\xi$ depends only on the local field strength (and, optionally, a mild environment term), not on a custom dark halo for each galaxy.
+- The same $\xi$ is used consistently for rotation curves, vertical forces in the Milky Way, Solar‑System checks, and gravitational lensing (via a metric‑only mapping with $\Phi=\Psi$).
+
+### Five‑step recipe (what the code actually does)
+
+1. Baryons → $g_{\rm bar}(R)$. Compute from the observed stellar+gas mass model.
+2. Environment (optional). Adjust $a_0$ to $a_0^{\rm eff}$ with a density/tidal proxy (defaults are conservative).
+3. Gate/boost.
+
+   $$
+   \xi(R)=\min\!\left[\,\tfrac{1}{2}+\sqrt{\tfrac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\,,\,D_{\max}\right],\qquad D_{\max}=50\;\text{(paper preset)}.
+   $$
+
+4. Prediction. Rotation speed $V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)$. The same $\xi$ feeds lensing and vertical‑force predictions.
+5. Fit only $a_0$ (with fixed $D_{\max}$). We either grid‑scan $a_0$ per galaxy or fit a hierarchical population mean and scatter.
+
+> Why the plateau? Prior drafts used an unbounded boost; with real data the cap $D_{\max}=50$ avoids pathologies at extremely low $g_{\rm bar}$ yet leaves galaxy‑scale predictions unchanged over the measured range. Robust for $30\!\lesssim\!D_{\max}\!\lesssim\!80$; see lensing sensitivity analyses.
 
 Mathematically, one representation is a modified Poisson equation or GR‑style field equation with a nonlinear term that depends on the field strength and/or density:
 
