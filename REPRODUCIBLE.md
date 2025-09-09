@@ -32,6 +32,27 @@ This note describes how to reproduce the main figures and tables in this reposit
 Notes
 - The dynesty run regeneration (to create the NPZ) requires GPU/CuPy. If you need to regenerate the run, set `RUN_GENERATE=1` and ensure a working GPU/CuPy environment; otherwise, provide an existing run NPZ.
 
+### Optional: Lensing systematics (sensitivity checks)
+The manuscript uses default-off systematics. To explore robustness without altering paper outputs, run to a separate output root:
+
+```bash
+python scripts/next_steps_from_run.py \
+  --preset paper \
+  --run-dir runs/<your_run> \
+  --sparc-dir external_data/Rotmod_LTG \
+  --lensing-sample-csv docs/lensing_targets.csv \
+  --miscenter-f-off 0.25 --miscenter-sigma-kpc 50 \
+  --kappa-ext-mean 0.03 --kappa-ext-sigma 0.02 --kappa-ext-samples 5000 \
+  --out-root results/next_steps_sys/<your_run> \
+  --images-root images/next_steps_sys/<your_run>
+```
+
+- Stacked ΔΣ: add a two‑halo tail via `--twohalo-csv <template.csv>` and/or miscentering via `--miscenter-*`; the stack CSV gains `*_sys` columns.
+- θE metrics: enable κ_ext marginalization via `--kappa-ext-*`; JSON metrics gain `_kappa` entries and a `kappa_ext` block.
+- Metadata: `run_metadata.json` includes `lensing_systematics` with the parameters used.
+
+Omitting these flags reproduces the manuscript figures and tables byte-for-byte (aside from the harmless new metadata section).
+
 ## Milky Way RAR‑plateau run & paper preset
 
 If you need to run the Milky Way fit that produces the paper’s run NPZ, use the dynesty CuPy runner (GPU/CuPy recommended) and then invoke the paper preset orchestrator.

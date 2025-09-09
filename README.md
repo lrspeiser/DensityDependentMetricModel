@@ -195,6 +195,28 @@ Systematics options (optional)
 - Stacked ΔΣ: `--twohalo-csv docs/2halo_tail_template.csv` to add a two‑halo tail; `--miscenter-f-off 0.25 --miscenter-sigma-kpc 50` to apply a Rayleigh miscentering kernel before stacking. Stack outputs include both baseline and `_sys` series.
 - θE metrics: `--kappa-ext-mean 0.03 --kappa-ext-sigma 0.02 --kappa-ext-samples 5000` to marginalize $\theta_E$ under a Gaussian $\kappa_\mathrm{ext}$ prior; metrics JSON gains `_kappa` entries.
 
+Example (optional sensitivity run; keeps paper outputs unchanged if you omit flags):
+```bash
+python scripts/next_steps_from_run.py \
+  --preset paper \
+  --run-dir runs/<your_run> \
+  --sparc-dir external_data/Rotmod_LTG \
+  --lensing-sample-csv docs/lensing_targets.csv \
+  --miscenter-f-off 0.25 --miscenter-sigma-kpc 50 \
+  --kappa-ext-mean 0.03 --kappa-ext-sigma 0.02 --kappa-ext-samples 5000 \
+  --out-root results/next_steps_sys/<your_run> \
+  --images-root images/next_steps_sys/<your_run>
+```
+
+Outputs with flags enabled:
+- `lensing_metric_stack.csv` gains `DeltaSigma_*_sys` columns.
+- `lensing_thetaE_metrics.json` gains `_kappa` metrics and a `kappa_ext` summary.
+- `run_metadata.json` includes a `lensing_systematics` section recording the exact parameters.
+
+Reproducibility note: If you do not pass these flags, the pipeline reproduces the paper’s figures and tables as-is (only an extra metadata section is appended in `run_metadata.json`).
+
+Bug fix: A `NameError` in `scripts/next_steps_from_run.py` (inner references to `args.*`) was fixed by introducing a module-level `SystematicsConfig` used inside inner blocks. CLI flags are unchanged; behavior is default-off.
+
 ---
 
 ## Discussion and Implications
