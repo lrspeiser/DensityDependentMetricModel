@@ -242,6 +242,28 @@ PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$. In our
 - **Data.** SPARC rotmod files and Source Data CSVs accompany the figures (`results/...`) and are tracked with Git LFS.  
 - **Reproduction.** See `scripts/reproduce_paper.py` for end‑to‑end regeneration of figures and tables. Each run writes a `run_metadata.json` with flags, environment, and timestamp; SPARC selection disclosure is saved to `sparc_selection.json`.
 
+Quick start (one command)
+- From repo root, with paper run NPZ and SPARC rotmods available:
+  ```bash
+  RUN_DIR=runs/enhanced_20250805_115400 \
+  SPARC_DIR=external_data/Rotmod_LTG \
+  LENS_CSV=docs/lensing_targets.csv \
+  ./reproduce_paper.sh
+  ```
+- Docker (CPU-first):
+  ```bash
+  docker build -t dgg-repro .
+  docker run --rm -it \
+    -e RUN_DIR=runs/enhanced_20250805_115400 \
+    -e SPARC_DIR=external_data/Rotmod_LTG \
+    -e LENS_CSV=docs/lensing_targets.csv \
+    -v "$PWD/runs:/app/runs" \
+    -v "$PWD/external_data/Rotmod_LTG:/app/external_data/Rotmod_LTG:ro" \
+    -v "$PWD/results:/app/results" \
+    -v "$PWD/images:/app/images" \
+    dgg-repro
+  ```
+
 ---
 
 ## References (selection; expand to full bib in submission)

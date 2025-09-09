@@ -2,6 +2,36 @@
 
 This note describes how to reproduce the main figures and tables in this repository with exact commands, package versions, and data artifacts. Update the DOI placeholders after minting Zenodo records.
 
+## Single-command reproduction (recommended)
+
+- From repo root (host):
+  - Ensure SPARC rotmods exist under `external_data/Rotmod_LTG/` and a paper run NPZ exists under `runs/<run_name>/`.
+  - Then run:
+
+  ```bash
+  RUN_DIR=runs/enhanced_20250805_115400 \
+  SPARC_DIR=external_data/Rotmod_LTG \
+  LENS_CSV=docs/lensing_targets.csv \
+  ./reproduce_paper.sh
+  ```
+
+- Docker (CPU-first):
+  ```bash
+  docker build -t dgg-repro .
+  docker run --rm -it \
+    -e RUN_DIR=runs/enhanced_20250805_115400 \
+    -e SPARC_DIR=external_data/Rotmod_LTG \
+    -e LENS_CSV=docs/lensing_targets.csv \
+    -v "$PWD/runs:/app/runs" \
+    -v "$PWD/external_data/Rotmod_LTG:/app/external_data/Rotmod_LTG:ro" \
+    -v "$PWD/results:/app/results" \
+    -v "$PWD/images:/app/images" \
+    dgg-repro
+  ```
+
+Notes
+- The dynesty run regeneration (to create the NPZ) requires GPU/CuPy. If you need to regenerate the run, set `RUN_GENERATE=1` and ensure a working GPU/CuPy environment; otherwise, provide an existing run NPZ.
+
 1) Environment and packages
 - Python: 3.10+
 - Core packages:
