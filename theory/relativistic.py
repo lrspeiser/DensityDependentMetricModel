@@ -3,12 +3,23 @@
 Relativistic weak-field module: explicit Φ, Ψ, Φ+Ψ and PPN under a minimal
 covariant subclass that enforces c_T = 1 and Φ = Ψ in the quasi-static regime.
 
-See docs/paper_appendix_relativistic.md for the appendix derivation and mapping.
+Mapping and derivations
+- Non-relativistic (QUMOND) field equation: ∇²Φ = ∇·[ ν(|∇Φ_b|/a0) ∇Φ_b ], with ∇²Φ_b = 4πG ρ_b.
+  In spherical symmetry g = ν g_N and V² = ξ V_bar² with ξ ≡ ν; for the "simple" family ν(y) = 1/2 + √(1/4 + 1/y),
+  yielding ξ(g_N) = 1/2 + √(1/4 + a0_eff/g_N). See docs/modified_poisson_qumond.md.
+- Phantom density identity used for lensing on (R,Z) grids:
+  ρ_ph = (ξ−1) ρ_b − (1/4πG) (∇ξ · ∇Φ_b), equivalent to ρ_ph = (1/4πG) ∇·[(ν−1) ∇Φ_b]
+  when ξ ≡ ν(|∇Φ_b|/a0_eff). The orchestrator computes this and projects Σ_tot for θ_E and ΔΣ.
+- Weak-field potentials: Φ = Φ_b + φ_env and Ψ = Ψ_b + φ_env with φ_env ≡ 1/2 ln ξ; thus Φ_W ≡ (Φ+Ψ)/2 = Φ_b + φ_env.
+
+PPN export and guardrails
+- Under Solar-System screening, φ_env → 0 and the metric reduces locally to GR. PPN parameters are exported as
+  γ = 1, β = 1, α1 = 0, α2 = 0 (see evaluate_ppn). The c_T guardrail enforces c_T = 1.
 
 Notes for maintainers
-- This module is used by manuscript-generation paths (PPN table, Solar bands,
-  and metric lensing). Do not reintroduce any lensing-only scalars in these
-  paths; predictions must stem from the same φ_env derived from ξ.
+- This module is used by manuscript-generation paths (PPN table, Solar bands, and metric lensing). Do not
+  reintroduce any lensing-only scalars; predictions must stem from the same φ_env derived from ξ.
+- See also: docs/paper_appendix_relativistic.md and docs/modified_poisson_qumond.md.
 """
 from __future__ import annotations
 from dataclasses import dataclass

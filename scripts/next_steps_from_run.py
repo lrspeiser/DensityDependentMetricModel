@@ -1660,6 +1660,19 @@ def build_baryon_grids(R_vec: np.ndarray, Z_vec: np.ndarray, mw: dict):
     return Phi, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid
 
 def phantom_density_from_xi(R_kpc: np.ndarray, Z_kpc: np.ndarray, gR_bar_SI: np.ndarray, gZ_bar_SI: np.ndarray, xi: np.ndarray, rho_b_SI: np.ndarray) -> np.ndarray:
+    """Compute the QUMOND-equivalent phantom density from ξ on an axisymmetric (R,Z) grid.
+
+    Identity used (see docs/modified_poisson_qumond.md):
+      ρ_ph = (ξ − 1) ρ_b − (1/(4πG)) (∇ξ · ∇Φ_b),  with  ∇Φ_b = (∂Φ_b/∂R, ∂Φ_b/∂Z).
+
+    Equivalence:
+      ρ_ph = (1/(4πG)) ∇·[(ν−1) ∇Φ_b]  when  ξ ≡ ν(|∇Φ_b|/a0_eff).
+
+    Implementation details:
+    - gR_bar_SI and gZ_bar_SI are baryonic accelerations: g_R^b = −∂Φ_b/∂R, g_Z^b = −∂Φ_b/∂Z (SI units).
+    - ∇ξ is computed by centered differences on the (R,Z) grid.
+    - The result ρ_ph combines with ρ_b to form ρ_tot used for Σ and θ_E.
+    """
     dR = R_kpc[1] - R_kpc[0]
     dZ = Z_kpc[1] - Z_kpc[0]
     dxi_dR, dxi_dZ = grad_cylindrical_scalar(xi, dR, dZ)
@@ -2583,22 +2596,43 @@ def main():
                     import csv as _csv
                     ovp = Path(args.mw_kz_overlay_csv)
                     if ovp.exists():
-                        zz = []; lo = []; hi = []
+                        groups = {}
                         with ovp.open('r', encoding='utf-8') as fh:
                             rdr = _csv.DictReader(fh)
                             for row in rdr:
                                 try:
-                                    zz.append(float(row['z_kpc']))
-                                    lo.append(float(row['Kz_min']))
-                                    hi.append(float(row['Kz_max']))
+                                    z = float(row['z_kpc'])
+                                    lo = float(row.get('Kz_min', row.get('band_lo', 'nan')))
+                                    hi = float(row.get('Kz_max', row.get('band_hi', 'nan')))
+                                    lbl = (row.get('label') or 'Reference band').strip()
                                 except Exception:
                                     continue
-                        if len(zz) >= 2:
-                            import numpy as _np
-                            zz = _np.asarray(zz); lo = _np.asarray(lo); hi = _np.asarray(hi)
+                                groups.setdefault(lbl, {'z': [], 'lo': [], 'hi': []})
+                                groups[lbl]['z'].append(z)
+                                groups[lbl]['lo'].append(lo)
+                                groups[lbl]['hi'].append(hi)
+                        # Plot each labeled band
+                        import numpy as _np
+                        colors = ['gray', 'silver', 'lightgray', 'gainsboro']
+                        for i, (lbl, dat) in enumerate(groups.items()):
+                            zz = _np.asarray(dat['z'], float)
+                            lo = _np.asarray(dat['lo'], float)
+                            hi = _np.asarray(dat['hi'], float)
+                            if len(zz) == 0:
+                                continue
+                            # sort by z
                             order = _np.argsort(zz)
                             zz = zz[order]; lo = lo[order]; hi = hi[order]
-                            plt.fill_between(zz, lo, hi, color='gray', alpha=0.25, label='Reference band')
+                            # If only a single z row is provided, draw a vertical band using a slender rectangle around that z
+                            if len(zz) == 1:
+                                z0 = float(zz[0])
+                                # 0.01 kpc slender width
+                                z_left = z0 - 0.005
+                                z_right = z0 + 0.005
+                                plt.fill_between([z_left, z_right], [lo[0], lo[0]], [hi[0], hi[0]],
+                                                 color=colors[i % len(colors)], alpha=0.25, label=lbl)
+                            else:
+                                plt.fill_between(zz, lo, hi, color=colors[i % len(colors)], alpha=0.25, label=lbl)
                 plt.xlabel('z (kpc)'); plt.ylabel('Kz (m s$^{-2}$)')
                 plt.title(f'MW Kz at R0={args.mw_R0_kpc} kpc (full 3D phantom)')
                 plt.grid(alpha=0.3); plt.legend(frameon=False)
