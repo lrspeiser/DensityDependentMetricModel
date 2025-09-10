@@ -336,7 +336,7 @@ def main() -> int:
         MAE_rel = m.get("MAE_rel", m.get("mae_rel"))
         Bias_rel = m.get("Bias_rel", m.get("bias_rel"))
         rows.append({
-            "IMF variant": label,
+            "IMF variant": f"GG {label}",
             "N": int(N) if isinstance(N, (int, float)) and np.isfinite(N) else N,
             "RMSE_abs [arcsec]": round(float(RMSE_abs), 3) if RMSE_abs is not None else None,
             "MAE_abs [arcsec]": round(float(MAE_abs), 3) if MAE_abs is not None else None,
@@ -347,6 +347,26 @@ def main() -> int:
             "Coverage_68": round(c.get("coverage_68", float('nan')), 3) if isinstance(c.get("coverage_68"), (int, float)) else c.get("coverage_68"),
             "Coverage_95": round(c.get("coverage_95", float('nan')), 3) if isinstance(c.get("coverage_95"), (int, float)) else c.get("coverage_95"),
         })
+        # Also add a GR+baryons row using GR_* metrics from the same JSON (fairness baseline)
+        GR_RMSE_abs = m.get("GR_RMSE_abs_arcsec")
+        GR_MAE_abs = m.get("GR_MAE_abs_arcsec")
+        GR_Bias_abs = m.get("GR_Bias_abs_arcsec")
+        GR_RMSE_rel = m.get("GR_RMSE_rel")
+        GR_MAE_rel = m.get("GR_MAE_rel")
+        GR_Bias_rel = m.get("GR_Bias_rel")
+        if all(v is not None for v in [GR_RMSE_abs, GR_MAE_abs, GR_Bias_abs, GR_RMSE_rel, GR_MAE_rel, GR_Bias_rel]):
+            rows.append({
+                "IMF variant": f"GR+baryons {label}",
+                "N": int(N) if isinstance(N, (int, float)) and np.isfinite(N) else N,
+                "RMSE_abs [arcsec]": round(float(GR_RMSE_abs), 3),
+                "MAE_abs [arcsec]": round(float(GR_MAE_abs), 3),
+                "Bias_abs [arcsec]": round(float(GR_Bias_abs), 3),
+                "RMSE_rel": round(float(GR_RMSE_rel), 3),
+                "MAE_rel": round(float(GR_MAE_rel), 3),
+                "Bias_rel": round(float(GR_Bias_rel), 3),
+                "Coverage_68": None,
+                "Coverage_95": None,
+            })
         # Per-lens
         if vp.per_lens_csv and os.path.exists(vp.per_lens_csv):
             df = pd.read_csv(vp.per_lens_csv)

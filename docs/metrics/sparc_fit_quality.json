@@ -1,0 +1,9 @@
+{
+  "n_galaxies": 90,
+  "n_points": 2488,
+  "chi2_red_median": 25.125673876665424,
+  "chi2_red_mean": 104.45462731438177,
+  "chi2_red_p16": 2.2744438584785613,
+  "chi2_red_p84": 119.56765238012177,
+  "notes": "Derived from per-galaxy overlay source CSVs; standardized residuals z=(Vobs-Vmodel)/sigma."
+}

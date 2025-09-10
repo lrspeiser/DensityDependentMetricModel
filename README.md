@@ -340,8 +340,8 @@ RUN_DIR=runs/enhanced_20250805_115400 \
 
 For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets.
 
-- JSON: `results/next_steps/enhanced_20250805_115400/sparc_fit_quality.json` (raw vs floor)
-- Figure: `images/next_steps/enhanced_20250805_115400/sparc_ppc_panel.png`
+- JSON: `docs/metrics/sparc_fit_quality.json`
+- Figure: `docs/figures/sparc_ppc_panel.png`
 
 ### Universality (mini‑table)
 
