@@ -2909,7 +2909,8 @@ def main():
                 df_kz = None
             if df_kz is not None:
                 plt.figure(figsize=(6.8, 4.6))
-                plt.plot(df_kz['z_kpc'], df_kz['Kz_m_s2'], 'r-', lw=2, label='Kz (full 3D) — baseline baryons')
+                # Baseline in black for contrast
+                plt.plot(df_kz['z_kpc'], df_kz['Kz_m_s2'], 'k-', lw=2, label='Kz (full 3D) — baseline baryons')
                 # Optional overlay bands
                 if args.mw_kz_overlay_csv:
                     import csv as _csv
@@ -2942,15 +2943,13 @@ def main():
                             # sort by z
                             order = _np.argsort(zz)
                             zz = zz[order]; lo = lo[order]; hi = hi[order]
-                            # If only a single z row is provided, draw a vertical band using a slender rectangle around that z
                             if len(zz) == 1:
-                                z0 = float(zz[0])
-                                # 0.01 kpc slender width
-                                z_left = z0 - 0.005
-                                z_right = z0 + 0.005
-                                plt.fill_between([z_left, z_right], [lo[0], lo[0]], [hi[0], hi[0]],
-                                                 color=colors[i % len(colors)], alpha=0.25, label=lbl)
+                                # Single-z literature band: draw a horizontal band across the full z range for visibility
+                                plt.axhspan(lo[0], hi[0], color=colors[i % len(colors)], alpha=0.22, label=f"{lbl} (z={zz[0]:.1f} kpc)")
+                                # Also mark the specific z position
+                                plt.axvline(float(zz[0]), color=colors[i % len(colors)], ls=':', lw=1.0, alpha=0.6)
                             else:
+                                # Multi-z band: shaded envelope vs z
                                 plt.fill_between(zz, lo, hi, color=colors[i % len(colors)], alpha=0.25, label=lbl)
                 # If prior band requested, compute and overlay
                 if bool(getattr(args, 'mw_kz_prior_band', False)):
