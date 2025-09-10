@@ -218,6 +218,11 @@ LENS_CSV=docs/lensing_targets_slacs.csv ./reproduce_paper.sh
 ```
 Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave theta_E_obs_err_arcsec blank (metrics involving error weighting will omit those lenses). Re_kpc is converted from Re(I→V→B) arcsec using a flat ΛCDM (H0=70, Ωm=0.3). Axis ratio q and n are not provided in this table; we use n_sersic=4 as an ETG baseline.
 
+Importer sanity checks (applied in scripts/tools):
+- Assert θE is provided in arcsec on ingest; warn if any θE > 10″ (common kpc mis-units).
+- Assert Re is in arcsec before cosmology conversion; log the cosmology used (H0, Ωm) in table metadata.
+- Cosmology constants are pinned in one place (LENSING_COSMO in scripts/next_steps_from_run.py) and included in run_metadata for every build; the same values are used consistently across lensing artifacts.
+
 ---
 
 ## Discussion and Implications
@@ -229,6 +234,8 @@ Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave t
 **Vertical forces and local surface density.** A decisive check is \(K_z(R_0,z)\) and \(\Sigma_{1.1}\). We use the **full 3‑D** DGG contribution throughout the paper preset.
 
 **Lensing under one metric.** Metric‑only predictions show the right order of magnitude for $\theta_E$ and stacked $\Delta\Sigma$ with measured lens inputs; residuals and RMSE are reported. A single‑theory lensing success is essential. **Sanity:** varying the stellar $M/L$ prior within the SED‑informed band shifts the amplitude of $\Delta\Sigma$ but not its slope over 0.05–300 kpc.
+
+**Environment term (ablation).** We publish an ablation between env‑ON and env‑OFF on the same SPARC subset with Δχ², ΔAIC/ΔBIC (global parameter counts stated), and, where available, Δlog Z. We also report residual correlation slopes vs central surface brightness, inclination, and gas fraction (Pearson/Spearman with p‑values). See `env_ablation_summary.json` and `residual_correlations.{json,csv}` (SI) for the quantitative outcomes; the Discussion notes the sign of ΔIC in plain language.
 
 **Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data. See `docs/dmax_cap.md` for details and sweep instructions. **Falsifiability:** a decisive failure would be a requirement for $D_{\max}\gg100$ to fit strong‑lensing scales or cluster dynamics under the same mapping, or a systematic misfit of the BTFR slope/scatter under standardized selections.
 
@@ -250,12 +257,12 @@ Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave t
 
 **Baryon models.** Milky Way disks (Miyamoto–Nagai) + bulge (Hernquist) + gas; external galaxies use SPARC component rotmods.  
 **Computation.** We evaluate \(\xi(g)\) as in **Box 1**, with unit conversion constant \(C\) and optional gates \(s_\rho, W(T)\).  
-**Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling. We report both “raw” \(\chi^2\) (as in the SPARC files) and floor‑augmented fits using a velocity error floor and/or fractional observational floor to capture inclination/distance/beam systematics: use `--sigma-floor 5.0` (km/s) and optionally `--obs-frac-sigma 0.05` in the orchestrator. Residual PPC plots (residuals vs R with 16–84% bands) can be generated via `tools/sparc_ppc.py`.  
+**Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling. We report both “raw” \(\chi^2\) (as in the SPARC files) and floor‑augmented fits using a velocity error floor and/or fractional observational floor to capture inclination/distance/beam systematics. For headline SPARC reduced‑\(\chi^2\) we adopt `--sigma-floor 6.0` (km/s) and `--obs-frac-sigma 0.05` unless otherwise stated; raw values (no floors) are reported alongside in SI. Residual PPC plots (residuals vs R with 16–84% bands) can be generated via `tools/sparc_ppc.py`.  
 **Solar‑System.** In the Solar limit where $g_{\rm bar}\gg a_0$, $\xi\to1$ and the metric reduces to GR with $\gamma\simeq\beta\simeq1$ and $\alpha_{1,2}\simeq0$. We evaluate $\xi(r)$ in the Sun’s field and report $|\Delta G/G|$ at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass $\Phi=\Psi, c_T=1$), we also export a PPN CSV (`ppn_table.csv`) with $(\gamma,\beta,\alpha_1,\alpha_2)$.
 
 **PPN mapping and export.** In the metric subclass we adopt, the weak-field line element is $ds^2=-(1+2\Phi/c^2)dt^2+(1-2\Psi/c^2)d\mathbf x^2$ with screening such that $\Phi=\Psi$ and $c_T=1$. The DGG gate $\xi(g)$ rescales the weak-field potential by a small factor $1+\epsilon$ with $\epsilon\equiv\xi-1\ll1$ in the Solar System. Matching coefficients of the baryonic Newtonian potential $U$ at 1PN, the equal additive contribution of $c^2\phi_{\rm env}$ to $g_{00}$ and $g_{ij}$ implies the coefficient ratio is unity: $\gamma=1$; $\beta=1$; and preferred‑frame parameters $\alpha_{1,2}=0$ in this limit. Cassini measures the coefficient of the logarithmic term in the Shapiro delay relative to the ephemeris $GM_\odot$; hence the two regimes (degenerate vs non‑degenerate amplitude) discussed in docs/ppn_mapping.md. We therefore use $|\Delta G/G|=|\xi-1|$ as a conservative amplitude tracer and export a PPN table with columns $(\mathrm{AU},\gamma-1,\beta-1,\alpha_1,\alpha_2,|\Delta G/G|)$ alongside the Solar System source‑data CSV. The figure shows $|\Delta G/G|$ vs. $r$ with planetary semi‑major axes marked and a reference band for the Cassini $|\gamma-1|$ limit on a secondary axis. See docs/ppn_mapping.md for the precise $\gamma/\epsilon$ conditions.
 
-PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\gamma$ is the ratio of the coefficients of $U$ in $g_{ij}$ vs $g_{00}$. In our subclass with screening and $\Phi=\Psi$, both potentials receive the same additive $c^2\phi_{\rm env}$ at 1PN, so the coefficients of $U$ match and $\gamma=1$, while light‑deflection and Shapiro‑delay amplitudes scale with $(1+\gamma)U\to (1+\gamma)(1+\epsilon)U$. Because Cassini determines this coefficient relative to the ephemeris $GM_\odot$, a uniform $\epsilon$ absorbed into $GM_\odot$ leaves $\gamma$ unchanged (degenerate regime); if not absorbed, $|\gamma-1|$ projects to $|\epsilon|$ at the $\sim10^{-5}$ level along the ray. We therefore use $|\Delta G/G|$ as a conservative tracer and refer to docs/ppn_mapping.md for details; in the screened Solar limit both $\epsilon$ and $|\gamma-1|$ approach zero, consistent with the CSV export.
+PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\gamma$ is the ratio of the coefficients of $U$ in $g_{ij}$ vs $g_{00}$. In our subclass with screening and $\Phi=\Psi$, both potentials receive the same additive $c^2\phi_{\rm env}$ at 1PN, so the coefficients of $U$ match and $\gamma=1$, while light‑deflection and Shapiro‑delay amplitudes scale with $(1+\gamma)U\to (1+\gamma)(1+\epsilon)U$. Because Cassini determines this coefficient relative to the ephemeris $GM_\odot$, a uniform $\epsilon$ absorbed into $GM_\odot$ leaves $\gamma$ unchanged (degenerate regime); if not absorbed, $|\gamma-1|$ projects to $|\epsilon|$ at the $\sim10^{-5}$ level along the ray. We therefore use $|\Delta G/G|$ as a conservative tracer and refer to docs/ppn_mapping.md for details; in the screened Solar limit both $\epsilon$ and $|\gamma-1|$ approach zero, consistent with the CSV export (ε treated as locally constant over 1–30 AU).
 **Lensing (metric‑only).** We adopt a metric‑only mapping with $\Phi=\Psi$; the deflection potential is $2\Phi$, so the same $\xi(g)$ that boosts dynamics boosts lensing. Critical surface density $\Sigma_{\rm cr}(z_l, z_s)$ and distances use a flat $\Lambda$CDM cosmology with $H_0=70\,\mathrm{km\,s^{-1}\,Mpc^{-1}}$ and $\Omega_m=0.3$. Stellar masses come from SED‑based $M/L$ (prior specified in Supplement), and sizes $(R_e, n)$ are measured from the discovery images or follow‑ups listed in the lens table. Residuals and goodness‑of‑fit metrics for $\theta_E$ are written to `lensing_thetaE_residuals.csv` and `lensing_thetaE_metrics.json`.  
 **Model comparison.** Δlog Z histograms are reported as a BIC approximation; full evidences are produced when hierarchical runs are enabled.
 
@@ -304,6 +311,8 @@ Quick start (one command)
 5. Bovy & Rix (2013); McMillan (2017/2022): MW \(\Sigma_{1.1}\) and mass model.  
 6. Additional RAR/BTFR and lensing references as in the repository’s bibliography.
 7. Will, C. M., The Confrontation between General Relativity and Experiment, Living Reviews in Relativity (2014, 2018 update).
+8. Auger, M. W., et al. (2009), The Sloan Lens ACS Survey. IX. Colors, Lensing, and Stellar Masses of Early-type Galaxies, ApJ 705, 1099.
+9. Bolton, A. S., et al. (2008), The Sloan Lens ACS Survey. V. The Full ACS Strong-Lens Sample, ApJ 682, 964.
 
 ---
 
@@ -314,13 +323,22 @@ Quick start (one command)
 - **Fig. 3** SPARC panel — `images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png`  
 - **Fig. 4** BTFR subset — `images/next_steps/btfr_fix_20250906/btfr_baryonic.png`  
 - **Fig. 5** Solar \(|\Delta G/G|\) — `images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png`  
-- **Fig. 6** Lensing \(\theta_E\) scatter — `images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png`  
+- **Fig. 6** Lensing \(\theta_E\) scatter (SLACS, N≈70) — `images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png`  
 - **Ext. Fig.** Stacked \(\Delta\Sigma\) — `images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png`
 - **Ext. Fig.** Model comparison Δlog Z histograms (BIC approximation) — `images/next_steps/enhanced_20250805_115400/model_comparison/delta_logZ_hist.png`
 
 ---
 
 ## Latest Results Tables (auto-generated)
+
+### SPARC fit quality (floors and PPC)
+
+For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets.
+
+- JSON: `results/next_steps/enhanced_20250805_115400/sparc_fit_quality.json` (raw vs floor)
+- Figure: `images/next_steps/enhanced_20250805_115400/sparc_ppc_panel.png`
+
+### Universality (mini‑table)
 
 ### Universality (mini‑table)
 
