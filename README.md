@@ -186,7 +186,7 @@ Caption: Solar‑System constraints. The DGG gate remains close to unity in the 
 
 ---
 
-## Gravitational Lensing (auditable recipe)
+## Gravitational Lensing
 
 We map surface brightness to stellar mass using an SED‑informed $M/L$ prior (baseline IMF: Chabrier; see SI), deproject a Sérsic profile with measured $(n, R_e)$ (spherical baseline; axis ratio $q$ and external convergence priors can be added in SI), and build $\Sigma(R)$, $\bar\Sigma(<R)$, $\Delta\Sigma(R)$, and $\theta_E$ using the same metric‑only gate $\xi(g)$ (with $\Phi=\Psi$). Uncertainties propagate from $(\log_{10}M_\star, R_e, n, \theta_E^{\rm obs})$; we report residuals and RMSE and compare practice to SLACS/SL2S (see SI).
 
@@ -257,7 +257,7 @@ Importer sanity checks (applied in scripts/tools):
 
 ---
 
-## Methods (condensed; full details in Supplementary)
+## Methods
 
 **Hierarchical $a_0$ (optional).** When enabled, we infer a population‑level mean and scatter in $\ln a_0$ from per‑galaxy grids (dynesty nested sampling). We report $(\mu,\sigma)$ posteriors in `hierarchical_a0_posterior_summary.json` and a heatmap at `images/.../hierarchical_a0_posterior_heatmap.png`.  
 
@@ -282,7 +282,7 @@ PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\g
 - **Data.** SPARC rotmod files and Source Data CSVs accompany the figures (`results/...`) and are tracked with Git LFS.  
 - **Reproduction.** See `scripts/reproduce_paper.py` for end‑to‑end regeneration of figures and tables. Each run writes a `run_metadata.json` with flags, environment, and timestamp; SPARC selection disclosure is saved to `sparc_selection.json`.
 
-Quick start (one command)
+Reproduction (one command)
 From repo root, with paper run NPZ and SPARC rotmods available:
 ```bash
 RUN_DIR=runs/enhanced_20250805_115400 \
@@ -309,7 +309,7 @@ docker run --rm -it \
 
 ---
 
-## References (selection; expand to full bib in submission)
+## References
 
 - CASTLES: The CfA-Arizona Space Telescope LEns Survey of gravitational lenses. URL: https://www.cfa.harvard.edu/castles/ (accessed).
 
@@ -334,7 +334,7 @@ docker run --rm -it \
 
 ---
 
-## Figures (main and extended)
+## Figures
 
 - **Fig. 1** Milky Way rotation — `images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png`  
 - **Fig. 2** MW \(K_z\) / \(\Sigma_{1.1}\) — `images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png`
@@ -346,16 +346,16 @@ docker run --rm -it \
 
 ---
 
-## Latest Results Tables (auto-generated)
+## Latest Results Tables
 
-### SPARC fit quality (floors and PPC)
+### SPARC Fit Quality
 
 For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets.
 
 - JSON: `docs/metrics/sparc_fit_quality.json`
 - Figure: `docs/figures/sparc_ppc_panel.png`
 
-### Universality (mini‑table)
+### Universality Metrics
 
 The orchestrator can compute a global (universal) \(a_0\) and WAIC‑like metrics (when the optional module is available). Below is a compact summary from the current run; see JSONs for full details and confidence intervals.
 
@@ -365,7 +365,7 @@ The orchestrator can compute a global (universal) \(a_0\) and WAIC‑like metric
 
 These summarize the latest outputs under `results/next_steps/btfr_fix_20250906/` and related top-level summaries. Full CSVs are linked for reproducibility.
 
-### Solar System (Source Data)
+### Solar System Source Data
 
 File: `results/next_steps/btfr_fix_20250906/solar_system_table.csv`
 
@@ -442,11 +442,11 @@ We ran the post‑processing cap $D_{\max}$ over {30, 50, 80, ∞} using the sam
 
 Full details and rationale: see docs/dmax_cap.md. Combined summary CSV: docs/dmax_sweep_summary.csv.
 
-## Reproducibility (SI §R)
+## Reproducibility
 
 Code and data to reproduce figures are provided; see REPRODUCIBLE.md and docs/next_steps.md for one‑command runs, data DOIs, and exact environment notes.
 
-## Appendices (ready text & placeholders)
+## Appendices
 
 ### Extended Data — Wide Binaries (Gaia DR3)
 
@@ -462,7 +462,7 @@ python scripts/analyze_wide_binaries.py \
 - Source‑Data: `results/next_steps/enhanced_20250805_115400/wide_binaries_pred.csv`
 - Figure: `images/next_steps/enhanced_20250805_115400/wide_binaries_pred.png`
 
-### Appendix A — Exact working formula (duplicate of Box 1 for reference)
+### Appendix A — Exact working formula
 
 $$
 \begin{aligned}
