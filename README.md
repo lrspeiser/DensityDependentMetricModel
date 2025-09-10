@@ -83,8 +83,7 @@ $$
 **Boost (“$\nu$” function) used throughout.**
 
 $$
-\xi(R)\equiv D(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],\qquad D_{\max}=50~\text{(fiducial)}.
-\qquad
+\xi(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],\qquad D_{\max}=50~\text{(fiducial)}.\\[3pt]
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
 $$
 
@@ -193,11 +192,11 @@ We map surface brightness to stellar mass using an SED‑informed $M/L$ prior (b
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
 
-Caption: Lensing consistency on SLACS sample (N=70). Using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Summary metrics (RAR vs GR): RMSE$_{\rm abs}$ = 3.610″ vs 3.712″; RMSE$_{\rm rel}$ = 0.808 vs 0.836. With modest external‑convergence marginalization ($\kappa_{\rm ext}\sim\mathcal N(0,0.03)$, 2000 samples), RAR metrics change negligibly (RMSE$_{\rm abs}^{\kappa}$ = 3.610″; RMSE$_{\rm rel}^{\kappa}$ = 0.808). Residual panels accompany the figure.
+Caption: Lensing consistency on SLACS sample (N=70). Using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Summary metrics (RAR vs GR): RMSE$_{\rm abs}$ = 3.610″ vs 3.712″; RMSE$_{\rm rel}$ = 0.808 vs 0.836. With modest external‑convergence marginalization ($\kappa_{\rm ext}\sim\mathcal N(0,0.03)$, 2000 samples), RAR metrics change negligibly (RMSE$_{\rm abs}^{\kappa}$ = 3.610″; RMSE$_{\rm rel}^{\kappa}$ = 0.808). Residual panels accompany the figure. Methods caveat: spherical Sérsic baseline; axis ratio $q$ not modeled here; circularized‑radius correction and axisymmetric deprojection planned in SI.
 
 ![Stacked ΔΣ from metric predictions](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
 
-Caption: Population‑average lensing: the stacked prediction with a 16–84% band (posterior) has the right amplitude and radial trend; adding the data points from your stack completes the comparison.
+Caption: Population‑average lensing (theory‑only): the stacked prediction with a 16–84% band (posterior) has the right amplitude and radial trend; adding the data points from your stack completes the comparison. Literature stacks are omitted by design; adding them requires documenting shear calibration, photo‑$z$, boost, and miscentering pipelines.
 
 We use measured lens properties from SLACS (Auger+ 2009; VizieR J/ApJ/705/1099): $(z_l, z_s, \theta_E^{\rm obs})$, together with stellar masses (Chabrier) and sizes $(R_e)$ compiled in our lens table. Source‑Data tables accompany the figures: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv` and `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`. Rows lacking required measured inputs are flagged and omitted from summary metrics until completed. Per‑lens panels (SLACS examples) appear in Extended Data:
 `images/next_steps/enhanced_20250805_115400/lensing_rar_J0037-0942.png`,
@@ -436,7 +435,7 @@ $$
 \begin{aligned}
  g_{\rm bar}(R) &= \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,\quad C=3.240779289\times10^{-14}\\ \frac{\mathrm{m/s}^2}{(\mathrm{km/s})^2/\mathrm{kpc}},\\[3pt]
  s_\rho(\rho) &= \bigl[1+(\rho/\rho_c)^{\gamma}\bigr]^{-1},\qquad
- W(T)=w_{\min}+(1-w_{\min})\exp\!\Bigl[-\frac{(\\ln T-\\ln T_0)^2}{2\\sigma_{\\ln T}^2}\Bigr],\\[3pt]
+W(T)=w_{\min}+(1-w_{\min})\exp\!\Bigl[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\Bigr],\\[3pt]
  a_0^{\rm eff} &= a_0\bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\bigr],\qquad T\equiv V_{\rm bar}^2/R^2,\\[3pt]
  \xi(R) &\equiv \tfrac12+\sqrt{\tfrac14+\tfrac{a_0^{\rm eff}}{g_{\rm bar}(R)}},\qquad
  V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
