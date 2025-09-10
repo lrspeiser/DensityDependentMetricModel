@@ -43,6 +43,26 @@ from typing import Callable, List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
+# Import energy-coupled gate (support package or direct file import)
+try:
+    from tariff.energy_coupled_gate import (
+        EnergyCouplingParams,
+        xi_rar_plateau_energy_coupled,
+    )
+except Exception:
+    import importlib.util, os, sys
+    _this_dir = os.path.dirname(os.path.abspath(__file__))
+    _mod_path = os.path.join(_this_dir, 'energy_coupled_gate.py')
+    _spec = importlib.util.spec_from_file_location('energy_coupled_gate_runtime', _mod_path)
+    if _spec and _spec.loader:
+        _mod = importlib.util.module_from_spec(_spec)
+        sys.modules['energy_coupled_gate_runtime'] = _mod
+        _spec.loader.exec_module(_mod)  # type: ignore[attr-defined]
+        EnergyCouplingParams = getattr(_mod, 'EnergyCouplingParams')
+        xi_rar_plateau_energy_coupled = getattr(_mod, 'xi_rar_plateau_energy_coupled')
+    else:
+        raise
+
 # Physical constants
 C_KM_S = 299_792.458
 MPC_TO_M = 3.085677581491367e22
@@ -105,10 +125,12 @@ class PhotonJourney:
     1 + z = exp( k * ∫ (xi(r) - 1) dr ), with r in Mpc and k in 1/Mpc.
     """
 
-    def __init__(self, k_coupling_mpc_inv: float):
+    def __init__(self, k_coupling_mpc_inv: float,
+                 energy_params: EnergyCouplingParams | None = None):
         self.k = float(k_coupling_mpc_inv)
         self.a0 = float(A0)
         self.d_max = float(D_MAX)
+        self.energy_params = energy_params or EnergyCouplingParams(enabled=False)
         self._lookup: Tuple[np.ndarray, np.ndarray] | None = None  # (distances, z)
 
     @staticmethod
@@ -146,7 +168,10 @@ class PhotonJourney:
         accum = 0.0
         for i in range(steps):
             r = i * dr
-            xi = xi_rar_plateau(g_bar_fn(r), self.a0, self.d_max)
+            g_local = g_bar_fn(r)
+            xi = xi_rar_plateau_energy_coupled(
+                g_local, self.a0, self.d_max, self.energy_params
+            )
             accum += (xi - 1.0) * dr
         expo = self.k * accum
         return float(np.exp(expo) - 1.0)
@@ -196,6 +221,16 @@ def main(argv: List[str] | None = None) -> int:
                     help="Path to Pantheon+SH0ES .dat file to overlay (μ vs z)")
     ap.add_argument("--plot-hubble", action="store_true",
                     help="If set, build Hubble Diagram (μ vs z) with data overlay and model lines")
+    ap.add_argument("--energy-coupled", action="store_true",
+                    help="Enable energy→gravity coupling for a0_eff (Sakharov-style scaffold)")
+    ap.add_argument("--zeta-energy", type=float, default=1.0,
+                    help="Coupling strength ζ (dimensionless); used if --energy-coupled")
+    ap.add_argument("--beta-energy", type=float, default=2.0,
+                    help="Exponent β for H(y)=1/(1+y^β); used if --energy-coupled")
+    ap.add_argument("--u-gamma-evcm3", type=float, default=0.26,
+                    help="Photon energy density u_γ in eV/cm^3 (CMB+EBL proxy); used if --energy-coupled")
+    ap.add_argument("--E0-evcm3", type=float, default=0.26,
+                    help="Reference energy density E0 in eV/cm^3; used if --energy-coupled")
     args = ap.parse_args(argv)
 
     # Calibrate or accept k
@@ -210,7 +245,19 @@ def main(argv: List[str] | None = None) -> int:
         print(f"Using user k = {k_val:.9e} 1/Mpc (small‑z slope implies H0 ≈ {h0_smallz:.6f} km/s/Mpc)")
 
     # Build simulator
-    sim = PhotonJourney(k_coupling_mpc_inv=k_val)
+    energy_params = EnergyCouplingParams(
+        enabled=bool(args.energy_coupled),
+        zeta_energy=float(args.zeta_energy),
+        beta_energy=float(args.beta_energy),
+        u_gamma_evcm3=float(args.u_gamma_evcm3),
+        E0_evcm3=float(args.E0_evcm3),
+    )
+    if energy_params.enabled:
+        print(
+            f"Energy coupling ON: zeta={energy_params.zeta_energy}, beta={energy_params.beta_energy}, "
+            f"u_gamma/E0={energy_params.u_gamma_evcm3/energy_params.E0_evcm3 if energy_params.E0_evcm3 else float('nan'):.3f}"
+        )
+    sim = PhotonJourney(k_coupling_mpc_inv=k_val, energy_params=energy_params)
 
     # Distance grid for z(distance) curve
     dmax = max(float(args.distance_max), 0.0)
