@@ -139,9 +139,18 @@ As in the original text, the model matches the inner rise (where baryons dominat
 We compute $K_z(R_0,z)$ for the same MW baryons and infer $\Sigma_{1.1}\approx K_z/2\pi G$. The figure below uses the **full 3‑D** DGG ("phantom") mass implied by $\xi$ via
 $\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm bar}$.
 
+New in this draft: we propagate baryonic uncertainties (disk and bulge $M/L$, gas mass, disk scale heights/lengths, and a bulge‑scale proxy for flattening) through the full‑3D phantom density to produce a shaded band. We sample priors in the orchestrator and export a CSV with the 16–84% Kz band at selected z.
+
 ![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
 
-Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. Overlay bands (when provided) include Bovy & Rix (2013) $\Sigma_{1.1}=68\pm4\;M_\odot\,\mathrm{pc}^{-2}$ and McMillan (2017/2022); see `--mw-kz-overlay-csv` in the orchestrator. Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`.
+Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. The red shading shows the propagated baryon‑prior band (16–84%). Overlay bands (when provided) include Bovy & Rix (2013) $\Sigma_{1.1}=68\pm4\;M_\odot\,\mathrm{pc}^{-2}$ and McMillan (2017/2022); see `--mw-kz-overlay-csv` in the orchestrator. Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv` and `mw_kz_prior_band.csv`.
+
+Assumptions disclosed for this figure:
+- Solar radius $R_0$ = 8.2 kpc (override with `--mw-R0-kpc`).
+- Heights evaluated: |z| ∈ {0.5, 0.8, 1.1, 1.5, 2.0} kpc (override via `--mw-kz-zlist`).
+- Tracer kinematics for the comparison bands follow the published analyses (Bovy & Rix 2013; McMillan 2017/2022): axisymmetry, steady‑state vertical equilibrium, and the survey selection functions as reported therein. We overlay their published bands as references and do not re‑derive them here.
+- Baryon priors (defaults; adjustable): ln(M/L) σ = 0.15 (disk and bulge), gas mass fractional σ = 0.25, disk scale‑height fractional σ = 0.20, disk scale‑length fractional σ = 0.10, bulge Hernquist‑scale fractional σ = 0.25 (a proxy for flattening sensitivity).
+- The same DGG parameters used in the MW rotation fit are used for $K_z$.
 
 ### External Galaxies: SPARC Rotation‑Curve Fits
 

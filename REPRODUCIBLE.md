@@ -69,6 +69,20 @@ Omitting these flags reproduces the manuscript figures and tables byte-for-byte 
   python tools/mw_kz_overlay_merge.py
   # Use with: --mw-kz-overlay-csv docs/mw_kz_overlay_2band.csv
   ```
+- Propagate MW baryon priors into Kz (full 3‑D phantom) and produce a shaded band:
+  ```bash
+  python scripts/next_steps_from_run.py \
+    --preset paper \
+    --run-dir runs/<your_run> \
+    --sparc-dir external_data/Rotmod_LTG \
+    --mw-kz \
+    --mw-kz-prior-band \
+    --mw-kz-overlay-csv docs/mw_kz_overlay_two_bands.csv \
+    --mw-R0-kpc 8.2 --mw-kz-zlist 0.5 0.8 1.1 1.5 2.0 \
+    --mw-prior-samples 128 --mw-prior-ml-sigma 0.15 --mw-prior-gas-frac-sigma 0.25 \
+    --mw-prior-height-frac-sigma 0.20 --mw-prior-Rd-frac-sigma 0.10 --mw-prior-bulge-a-frac-sigma 0.25
+  # → results/.../mw_kz_prior_band.csv, images/.../mw_kz_sigma_full3d.png (with shading)
+  ```
 - Dmax sensitivity sweep summarizer (after running three presets to results/dmax_sweep/30,50,80):
   ```bash
   python tools/summarize_dmax_sweep.py

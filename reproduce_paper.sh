@@ -112,15 +112,17 @@ if [ "$HIER_A0_BAYES" = "1" ]; then cmd+=( --hierarchical-a0-bayes ); fi
 say "Running: ${cmd[*]}"
 "${cmd[@]}"
 
-# 4) Milky Way Kz overlay bands
+# 4) Milky Way Kz (full 3D) with overlay bands and optional baryon prior propagation
 if [ -f "docs/mw_kz_overlay_two_bands.csv" ]; then
-  say "Adding MW Kz with overlay bands"
+  say "Adding MW Kz with overlay bands (and prior band if enabled)"
   python scripts/next_steps_from_run.py \
     --preset "$PRESET" \
     --run-dir "$RUN_DIR" \
     --sparc-dir "$SPARC_DIR" \
     --mw-kz \
-    --mw-kz-overlay-csv docs/mw_kz_overlay_two_bands.csv
+    --mw-kz-overlay-csv docs/mw_kz_overlay_two_bands.csv \
+    ${MW_KZ_PRIOR_BAND:+--mw-kz-prior-band} \
+    ${MW_KZ_PRIOR_BAND:+--mw-prior-samples ${MW_PRIOR_SAMPLES:-128}}
 else
   say "MW Kz overlay CSV not found (docs/mw_kz_overlay_two_bands.csv); skipping overlay bands"
 fi

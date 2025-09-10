@@ -2,6 +2,23 @@
 
 All notable changes to this repository will be documented in this file.
 
+## 2025-09-10
+
+### Added
+- Milky Way Kz baryon‑prior propagation: new `--mw-kz-prior-band` path in `scripts/next_steps_from_run.py` draws baryonic parameter priors (disk/bulge M/L, gas, scale heights/lengths, bulge scale proxy) and propagates through the full‑3D phantom density to produce a Kz(z) band at R0. Outputs `mw_kz_prior_band.csv` and overlays a 16–84% shading on the Kz figure.
+- CLI knobs for MW baryon priors: `--mw-prior-samples`, `--mw-prior-ml-sigma`, `--mw-prior-gas-frac-sigma`, `--mw-prior-height-frac-sigma`, `--mw-prior-Rd-frac-sigma`, `--mw-prior-bulge-a-frac-sigma`, and `--mw-kz-zlist`.
+- README.md: expanded MW Kz section with assumptions (R0, z cuts, tracer‑kinematics) and description of the baryon‑prior band; lists Source‑Data CSVs.
+- REPRODUCIBLE.md: added one‑command example to generate the MW Kz prior band; clarified overlay CSV usage.
+
+### Changed
+- MW Kz baseline plot label now explicitly indicates “baseline baryons” when no band is requested.
+
+### Rationale
+- Addresses reviewer request to show propagation of baryonic uncertainties through the full‑3D phantom density and to disclose assumptions (R0, z cuts, tracer kinematics).
+
+### Notes
+- The bulge “flattening” is approximated via a fractional prior on the Hernquist scale radius a; a fully oblate bulge potential can be added in a future update. The impact on Kz at 0.5–2 kpc is modest within typical MW ranges.
+
 ## 2025-09-09
 
 ### Added

@@ -1827,7 +1827,10 @@ def _hern_phi_kms2(R: np.ndarray, Z: np.ndarray, M: float, a: float) -> np.ndarr
     return -G_KPC * M / (r + a)
 
 def build_baryon_grids(R_vec: np.ndarray, Z_vec: np.ndarray, mw: dict):
-    """Return (Phi_kms2, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid) on (R,Z) grid."""
+    """Return (Phi_kms2, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid) on (R,Z) grid.
+
+    mw keys (means): M_disk_thin, M_disk_thick, M_gas, M_bulge [Msun]; R_d_* [kpc]; h_z_* [kpc]; a_bulge [kpc].
+    """
     R2D, Z2D = np.meshgrid(R_vec, Z_vec, indexing='ij')
     Phi = np.zeros_like(R2D)
     if mw.get('M_disk_thin', 0.0) > 0:
@@ -1990,6 +1993,16 @@ def main():
     ap.add_argument('--mw-zmax-kpc', type=float, default=3.0, help='Max height (kpc) for Kz/Σ_1.1 grid.')
     ap.add_argument('--mw-nz', type=int, default=181, help='Number of z samples for Kz/Σ_1.1 (including z=0).')
     ap.add_argument('--mw-kz-overlay-csv', type=str, default='', help='Optional CSV with comparison bands for Kz (columns: z_kpc,Kz_min,Kz_max) to overlay.')
+    # Baryon-uncertainty propagation for MW Kz/Σ
+    ap.add_argument('--mw-kz-prior-band', action='store_true', help='Propagate baryonic priors (disk/bulge M/L, gas, scaleheights/lengths) through full-3D phantom density to produce a Kz(z) band at R0.')
+    ap.add_argument('--mw-prior-samples', type=int, default=128, help='Number of prior draws for MW Kz band (compute-heavy).')
+    ap.add_argument('--mw-prior-ml-sigma', type=float, default=0.15, help='Sigma in ln(M/L) for disk and bulge (dimensionless).')
+    ap.add_argument('--mw-prior-gas-frac-sigma', type=float, default=0.25, help='Fractional sigma for gas mass (dimensionless).')
+    ap.add_argument('--mw-prior-height-frac-sigma', type=float, default=0.20, help='Fractional sigma for disk scale heights (dimensionless).')
+    ap.add_argument('--mw-prior-Rd-frac-sigma', type=float, default=0.10, help='Fractional sigma for disk scale lengths (dimensionless).')
+    ap.add_argument('--mw-prior-bulge-a-frac-sigma', type=float, default=0.25, help='Fractional sigma for bulge Hernquist scale a (proxy for flattening).')
+    ap.add_argument('--mw-kz-zlist', type=float, nargs='*', default=(0.5, 0.8, 1.1, 1.5, 2.0), help='Heights |z| [kpc] at which to report Kz and Σ.')
+    ap.add_argument('--mw-kz-seed', type=int, default=42, help='Random seed for prior draws (reproducibility).')
     # Hierarchical Bayesian posterior (dynesty nested sampling) over (mu, sigma) for ln a0
     ap.add_argument('--hierarchical-a0-bayes', action='store_true', help='Run full Bayesian hierarchical posterior over (mu, sigma) using dynesty and precomputed per-galaxy chi2 grids.')
     ap.add_argument('--hierarchical-a0-live', type=int, default=400, help='Number of live points for dynesty nested sampling (Bayesian hierarchical step).')
@@ -2837,13 +2850,14 @@ def main():
         except Exception as e:
             logging.warning(f"Hierarchical Bayesian step skipped: {e}")
 
-    # 5c) Milky Way vertical force Kz and Σ_1.1 (baryons-only + D-scaled approximation)
+    # 5c) Milky Way vertical force Kz and Σ_1.1 (baryons-only + full 3D phantom)
     if args.mw_kz:
         try:
             # Build (R,Z) grid and baryonic fields
             gs = GridSpec(R_min=0.5, R_max=20.0, Z_max=float(args.mw_zmax_kpc), nR=192, nZ=int(max(args.mw_nz, 129)))
             Rg, Zg, dR, dZ = cylindrical_grid(gs)
-            mw = {
+            # Baseline (means) — literature-consistent order-of-magnitude; priors below will propagate uncertainties
+            mw_mean = {
                 'M_disk_thin': 4.0e10,
                 'M_disk_thick': 1.5e10,
                 'M_bulge': 1.2e10,
@@ -2856,7 +2870,7 @@ def main():
                 'h_z_thick': 0.9,
                 'h_z_gas': 0.15,
             }
-            Phi_kms2, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid = build_baryon_grids(Rg, Zg, mw)
+            Phi_kms2, gR_SI, gZ_SI, rho_b_SI, Vbar_kms_grid = build_baryon_grids(Rg, Zg, mw_mean)
             gate_kwargs = dict(
                 zeta_env=rar_params.get('zeta_env', 0.0),
                 rho=None, rho_c=None, gamma_exp=3.0,
@@ -2867,7 +2881,7 @@ def main():
                 a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
                 gate_kwargs=gate_kwargs,
                 R0_kpc=float(args.mw_R0_kpc),
-                z_list_kpc=(0.5, 0.8, 1.1, 1.5, 2.0),
+                z_list_kpc=tuple(args.mw_kz_zlist),
                 D_max=rar_params.get('D_max', None)
             )
             out_csv = results_root / 'mw_kz_sigma_full3d.csv'
@@ -2895,7 +2909,7 @@ def main():
                 df_kz = None
             if df_kz is not None:
                 plt.figure(figsize=(6.8, 4.6))
-                plt.plot(df_kz['z_kpc'], df_kz['Kz_m_s2'], 'r-', lw=2, label='Kz (full 3D)')
+                plt.plot(df_kz['z_kpc'], df_kz['Kz_m_s2'], 'r-', lw=2, label='Kz (full 3D) — baseline baryons')
                 # Optional overlay bands
                 if args.mw_kz_overlay_csv:
                     import csv as _csv
@@ -2938,6 +2952,113 @@ def main():
                                                  color=colors[i % len(colors)], alpha=0.25, label=lbl)
                             else:
                                 plt.fill_between(zz, lo, hi, color=colors[i % len(colors)], alpha=0.25, label=lbl)
+                # If prior band requested, compute and overlay
+                if bool(getattr(args, 'mw_kz_prior_band', False)):
+                    try:
+                        import pandas as pd
+                        rng = np.random.default_rng(int(getattr(args, 'mw_kz_seed', 42)))
+                        n_draw = int(getattr(args, 'mw_prior_samples', 128))
+                        # Convenience prior widths
+                        s_lnML = float(getattr(args, 'mw_prior_ml_sigma', 0.15))
+                        s_gas = float(getattr(args, 'mw_prior_gas_frac_sigma', 0.25))
+                        s_h = float(getattr(args, 'mw_prior_height_frac_sigma', 0.20))
+                        s_Rd = float(getattr(args, 'mw_prior_Rd_frac_sigma', 0.10))
+                        s_ab = float(getattr(args, 'mw_prior_bulge_a_frac_sigma', 0.25))
+                        z_list = list(args.mw_kz_zlist)
+                        KZ = np.zeros((n_draw, len(z_list)), dtype=float)
+                        SIG = np.zeros_like(KZ)
+                        # Draws
+                        for i in range(n_draw):
+                            ln_md = rng.normal(0.0, s_lnML)
+                            ln_mb = rng.normal(0.0, s_lnML)
+                            f_g = max(0.0, 1.0 + rng.normal(0.0, s_gas))
+                            # Scale heights/lengths
+                            f_h_thin = max(1e-3, 1.0 + rng.normal(0.0, s_h))
+                            f_h_thick = max(1e-3, 1.0 + rng.normal(0.0, s_h))
+                            f_h_gas = max(1e-3, 1.0 + rng.normal(0.0, s_h))
+                            f_Rd_thin = max(1e-3, 1.0 + rng.normal(0.0, s_Rd))
+                            f_Rd_thick = max(1e-3, 1.0 + rng.normal(0.0, s_Rd))
+                            f_Rd_gas = max(1e-3, 1.0 + rng.normal(0.0, s_Rd))
+                            f_ab = max(1e-3, 1.0 + rng.normal(0.0, s_ab))
+                            mw_draw = dict(mw_mean)
+                            mw_draw['M_disk_thin'] = mw_mean['M_disk_thin'] * float(np.exp(ln_md))
+                            mw_draw['M_disk_thick'] = mw_mean['M_disk_thick'] * float(np.exp(ln_md))
+                            mw_draw['M_bulge'] = mw_mean['M_bulge'] * float(np.exp(ln_mb))
+                            mw_draw['M_gas'] = mw_mean['M_gas'] * f_g
+                            mw_draw['h_z_thin'] = mw_mean['h_z_thin'] * f_h_thin
+                            mw_draw['h_z_thick'] = mw_mean['h_z_thick'] * f_h_thick
+                            mw_draw['h_z_gas'] = mw_mean['h_z_gas'] * f_h_gas
+                            mw_draw['R_d_thin'] = mw_mean['R_d_thin'] * f_Rd_thin
+                            mw_draw['R_d_thick'] = mw_mean['R_d_thick'] * f_Rd_thick
+                            mw_draw['R_d_gas'] = mw_mean['R_d_gas'] * f_Rd_gas
+                            mw_draw['a_bulge'] = mw_mean['a_bulge'] * f_ab
+                            # Rebuild fields and compute Kz/Σ for this draw
+                            _, gR_d, gZ_d, rho_b_d, Vbar_d = build_baryon_grids(Rg, Zg, mw_draw)
+                            df_d, _ = kz_sigma_from_grid(
+                                Rg, Zg, rho_b_d, gR_d, gZ_d, Vbar_d,
+                                a0_m_s2=float(rar_params.get('a0_m_s2', 1.2e-10)),
+                                gate_kwargs=gate_kwargs,
+                                R0_kpc=float(args.mw_R0_kpc),
+                                z_list_kpc=tuple(z_list),
+                                D_max=rar_params.get('D_max', None)
+                            )
+                            # Normalize into arrays
+                            for j, z in enumerate(z_list):
+                                if isinstance(df_d, pd.DataFrame):
+                                    row = df_d[df_d['z_kpc'] == float(z)]
+                                    if len(row) == 1:
+                                        KZ[i, j] = float(row['Kz_m_s2'].values[0])
+                                        SIG[i, j] = float(row['Sigma_SI'].values[0])
+                                    else:
+                                        KZ[i, j] = np.nan; SIG[i, j] = np.nan
+                                else:
+                                    # list of dicts
+                                    found = [r for r in df_d if abs(float(r.get('z_kpc', np.nan)) - float(z)) < 1e-6]
+                                    if found:
+                                        KZ[i, j] = float(found[0].get('Kz_m_s2', np.nan))
+                                        SIG[i, j] = float(found[0].get('Sigma_SI', np.nan))
+                                    else:
+                                        KZ[i, j] = np.nan; SIG[i, j] = np.nan
+                        # Percentile bands
+                        p16 = np.nanpercentile(KZ, 16, axis=0)
+                        p50 = np.nanpercentile(KZ, 50, axis=0)
+                        p84 = np.nanpercentile(KZ, 84, axis=0)
+                        band_csv = results_root / 'mw_kz_prior_band.csv'
+                        with band_csv.open('w', encoding='utf-8') as bf:
+                            bf.write('z_kpc,Kz_p16,Kz_p50,Kz_p84\n')
+                            for z, l, m, u in zip(z_list, p16, p50, p84):
+                                bf.write(f"{float(z):.3f},{float(l):.6e},{float(m):.6e},{float(u):.6e}\n")
+                        # Plot shading
+                        plt.fill_between(z_list, p16, p84, color='tab:red', alpha=0.18, label='baryon prior band (16–84%)')
+                        plt.plot(z_list, p50, 'r-', lw=1.5, alpha=0.8, label='median (prior)')
+                        # Optional intersection check vs overlay band at z=1.1
+                        summary = {}
+                        try:
+                            ov_csv = Path(args.mw_kz_overlay_csv)
+                            if ov_csv.exists():
+                                import csv as _csv
+                                with ov_csv.open('r', encoding='utf-8') as fh:
+                                    rdr = _csv.DictReader(fh)
+                                    for row in rdr:
+                                        z = float(row.get('z_kpc', 'nan'))
+                                        if not np.isfinite(z):
+                                            continue
+                                        lo = float(row.get('Kz_min', row.get('band_lo', 'nan')))
+                                        hi = float(row.get('Kz_max', row.get('band_hi', 'nan')))
+                                        # Find our percentiles at this z (nearest)
+                                        j = int(np.argmin(np.abs(np.asarray(z_list, float) - z)))
+                                        inter = (p16[j] <= hi) and (p84[j] >= lo)
+                                        summary[f"z={z:.3f}"] = {
+                                            'overlay_lo': lo, 'overlay_hi': hi,
+                                            'prior_p16': float(p16[j]), 'prior_p50': float(p50[j]), 'prior_p84': float(p84[j]),
+                                            'intersects': bool(inter)
+                                        }
+                        except Exception:
+                            pass
+                        if summary:
+                            (results_root / 'mw_kz_prior_band_summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
+                    except Exception as _e:
+                        logging.warning(f"MW Kz prior band step skipped: {_e}")
                 plt.xlabel('z (kpc)'); plt.ylabel('Kz (m s$^{-2}$)')
                 plt.title(f'MW Kz at R0={args.mw_R0_kpc} kpc (full 3D phantom)')
                 plt.grid(alpha=0.3); plt.legend(frameon=False)
