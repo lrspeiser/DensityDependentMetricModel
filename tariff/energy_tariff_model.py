@@ -70,6 +70,7 @@ MPC_TO_M = 3.085677581491367e22
 # RAR‑plateau (from README Box 1)
 A0 = 1.2e-10   # m/s^2
 D_MAX = 50.0   # finite plateau cap
+G_BAR_VOID_DEFAULT = 1e-15  # m/s^2 (can be increased to move off cap)
 
 
 def xi_rar_plateau(g_bar_m_s2: float, a0: float = A0, D_max: float = D_MAX) -> float:
@@ -126,35 +127,49 @@ class PhotonJourney:
     """
 
     def __init__(self, k_coupling_mpc_inv: float,
-                 energy_params: EnergyCouplingParams | None = None):
+                 energy_params: EnergyCouplingParams | None = None,
+                 d_max: float = D_MAX,
+                 g_bar_void: float = G_BAR_VOID_DEFAULT,
+                 galaxy_shell_mpc: float = 0.05,
+                 r0_void: float = 0.0,
+                 gamma_void: float = 1.0):
         self.k = float(k_coupling_mpc_inv)
         self.a0 = float(A0)
-        self.d_max = float(D_MAX)
+        self.d_max = float(d_max)
+        self.g_bar_void = float(g_bar_void)
+        self.galaxy_shell_mpc = float(galaxy_shell_mpc)
+        self.r0_void = float(r0_void)
+        self.gamma_void = float(gamma_void)
         self.energy_params = energy_params or EnergyCouplingParams(enabled=False)
         self._lookup: Tuple[np.ndarray, np.ndarray] | None = None  # (distances, z)
 
-    @staticmethod
-    def piecewise_environment(distance_mpc: float,
-                              galaxy_shell_mpc: float = 0.05,
-                              g_bar_galaxy: float = 1e-8,
-                              g_bar_void: float = 1e-15) -> Callable[[float], float]:
+    def piecewise_environment(self, distance_mpc: float,
+                              g_bar_galaxy: float = 1e-8) -> Callable[[float], float]:
         """Return g_bar(r) in m/s^2 along the path:
         - [0, galaxy_shell_mpc]: host galaxy (high g → xi≈1)
         - (galaxy_shell_mpc, distance_mpc - galaxy_shell_mpc): void (xi saturates to D_MAX)
         - [distance_mpc - galaxy_shell_mpc, distance_mpc]: Milky Way (high g → xi≈1)
         """
-        galaxy_shell_mpc = max(float(galaxy_shell_mpc), 0.0)
+        shell = max(float(self.galaxy_shell_mpc), 0.0)
         distance_mpc = max(float(distance_mpc), 0.0)
 
         def g_bar_at(r_mpc: float) -> float:
-            if r_mpc <= galaxy_shell_mpc:
+            if r_mpc <= shell:
                 return g_bar_galaxy
-            if r_mpc >= distance_mpc - galaxy_shell_mpc:
+            if r_mpc >= distance_mpc - shell:
                 return g_bar_galaxy
             # interior void
-            return g_bar_void
+            return float(self.g_bar_void)
 
         return g_bar_at
+
+    def f_void(self, r_mpc: float) -> float:
+        """Effective fraction of the path in void at distance r. If r0_void<=0, return 1.0."""
+        r0 = float(self.r0_void)
+        if r0 <= 0.0:
+            return 1.0
+        g = max(float(self.gamma_void), 0.0)
+        return 1.0 / (1.0 + (max(r_mpc, 0.0) / r0) ** g)
 
     def redshift(self, distance_mpc: float, steps: int = 4000) -> float:
         """Numerically integrate to compute z for a source at distance_mpc.
@@ -166,13 +181,15 @@ class PhotonJourney:
         dr = float(distance_mpc) / steps
         g_bar_fn = self.piecewise_environment(distance_mpc)
         accum = 0.0
-        for i in range(steps):
-            r = i * dr
+        r = 0.0
+        for _ in range(steps):
+            r += dr
             g_local = g_bar_fn(r)
             xi = xi_rar_plateau_energy_coupled(
                 g_local, self.a0, self.d_max, self.energy_params
             )
-            accum += (xi - 1.0) * dr
+            eff = self.f_void(r) * (xi - 1.0)
+            accum += eff * dr
         expo = self.k * accum
         return float(np.exp(expo) - 1.0)
 
@@ -221,6 +238,14 @@ def main(argv: List[str] | None = None) -> int:
                     help="Path to Pantheon+SH0ES .dat file to overlay (μ vs z)")
     ap.add_argument("--plot-hubble", action="store_true",
                     help="If set, build Hubble Diagram (μ vs z) with data overlay and model lines")
+
+    # Tuning knobs for tariff shape and amplitude
+    ap.add_argument("--dmax", type=float, default=D_MAX, help="RAR plateau cap D_max")
+    ap.add_argument("--gbar-void", type=float, default=G_BAR_VOID_DEFAULT, help="Void g_bar [m/s^2]")
+    ap.add_argument("--galaxy-shell-mpc", type=float, default=0.05, help="Galaxy shell thickness [Mpc]")
+    ap.add_argument("--r0-void", type=float, default=0.0, help="Void fraction onset scale r0 [Mpc]; 0 disables")
+    ap.add_argument("--gamma-void", type=float, default=1.0, help="Void fraction power gamma")
+
     ap.add_argument("--energy-coupled", action="store_true",
                     help="Enable energy→gravity coupling for a0_eff (Sakharov-style scaffold)")
     ap.add_argument("--zeta-energy", type=float, default=1.0,
@@ -259,7 +284,15 @@ def main(argv: List[str] | None = None) -> int:
             f"Energy coupling ON: zeta={energy_params.zeta_energy}, beta={energy_params.beta_energy}, "
             f"u_gamma/E0={energy_params.u_gamma_evcm3/energy_params.E0_evcm3 if energy_params.E0_evcm3 else float('nan'):.3f}"
         )
-    sim = PhotonJourney(k_coupling_mpc_inv=k_val, energy_params=energy_params)
+    sim = PhotonJourney(
+        k_coupling_mpc_inv=k_val,
+        energy_params=energy_params,
+        d_max=float(args.dmax),
+        g_bar_void=float(args.gbar_void),
+        galaxy_shell_mpc=float(args.galaxy_shell_mpc),
+        r0_void=float(args.r0_void),
+        gamma_void=float(args.gamma_void),
+    )
 
     # Distance grid for z(distance) curve
     dmax = max(float(args.distance_max), 0.0)
