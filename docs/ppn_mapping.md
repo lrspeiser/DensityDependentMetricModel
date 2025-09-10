@@ -13,7 +13,8 @@ Scope and assumptions (weak field, SI units)
   (i) tensor speed c_T = 1; (ii) negligible weak-field anisotropic stress so Φ = Ψ; (iii) matter minimally coupled (Jordan frame), so photons and massive bodies see the same metric.
 - Baryonic Newtonian potential Φ_b solves ∇²Φ_b = 4π G ρ_b.
 - Gating enters as an “environment” potential φ_env built from the same ξ used for galaxy dynamics:
-  φ_env(x) ≡ (1/2) ln ξ(x).
+φ_env(x) ≡ (1/2) ln ξ(x).
+  Comment (justification): this identification is the leading-order term of a conformal rescaling A^2(ϕ)=ξ, so δΦ=δΨ=(1/2) c^2 ln ξ in the screened limit.
   In SI, write Φ = Φ_b + c^2 φ_env and Ψ = Ψ_b + c^2 φ_env with Φ_b, Ψ_b in m^2 s^{−2}.
 - Define ε ≡ ξ − 1; for Solar checks we require |ε| ≪ 1.
 
@@ -21,9 +22,10 @@ Result 1 — PPN parameters in the Solar limit
 - Substitute Φ = Φ_b + c^2 φ_env and Ψ = Ψ_b + c^2 φ_env into the PPN ansatz. To first post-Newtonian (1PN) order:
   g_00 = −1 + 2(Φ_b + c^2 φ_env)/c^2 + O(c^{−4}),
   g_ij = [1 + 2(Φ_b + c^2 φ_env)/c^2] δ_ij + O(c^{−4}).
-- Coefficients of Φ at 1PN are equal in g_00 and g_ij, hence
-  γ ≡ Ψ/Φ = 1  and  β = 1,
-  provided φ_env contributes additively to both potentials with the same coefficient (Φ=Ψ mapping) and no explicit U^2 term is introduced. Screening in the Solar System implies φ_env → 0 locally, so the exported PPN values are exactly the GR ones in this limit: γ = 1, β = 1, α1 = α2 = 0.
+- Matching coefficients of the baryonic U at 1PN, the equal additive contribution of c^2 φ_env to g_00 and g_ij implies the coefficient ratio is unity:
+  γ = 1 and β = 1,
+  with Φ=Ψ as the sufficient condition enforcing equal coefficients and no new U^2 term introduced. Screening in the Solar System implies φ_env → 0 locally, so the exported PPN values are exactly the GR ones in this limit: γ = 1, β = 1, α1 = α2 = 0.
+- In the screened Solar limit, the gate varies slowly: |ε| ≡ |ξ−1| = 𝒪(a_0/g) and ∇ε = 𝒪((a_0/g)(∇g/g)). Over 1–30 AU where g ≫ a_0, the extra gradient ∇(c^2 φ_env) is higher order, so replacing U → U + c^2 φ_env does not upset the 1PN coefficient matching. Equivalently, we may treat ε as locally constant along the Cassini light path and the planetary orbits used.
 - Practical export in code: we report these GR values in nature_readiness/…/ppn_table.csv under the screened subclass.
 
 Result 2 — Shapiro delay and amplitude rescaling
@@ -37,9 +39,10 @@ Result 2 — Shapiro delay and amplitude rescaling
   B) Non-degenerate regime (Cassini bounds ε): If GM_⊙ in the Cassini analysis is fixed from data insensitive to ε (or at radii where ε differs), while the light path experiences (1 + ε), then Cassini would infer an apparent γ_eff = (1 + ε) even if the true γ = 1. The published bound |γ − 1| ≲ 2.3 × 10^{−5} then implies |ε| ≲ 2.3 × 10^{−5} along the Cassini ray path near conjunction.
 
 When does Cassini constrain ε in this model?
-- The screened subclass in this repo is implemented such that ξ → 1 in (i) high-density/high-acceleration regions and (ii) deep vacuum, with enhancements confined to intermediate galactic environments. Around the Sun, both the solar interior (high ρ) and the low-density heliocentric vacuum are in regimes where ξ ≈ 1 by construction for the published gates. Under these conditions the light path sees ε ≈ 0 and regime A applies: Cassini constrains γ while ε is separately constrained by planetary dynamics (GM_⊙) and its radial constancy.
-- To be conservative, we report |ΔG/G| ≡ |ξ − 1| as a “tracer” curve across 1–30 AU. Where γ = 1 identically and ξ ≈ 1, the Cassini γ bound does not directly limit the tracer; rather, the requirement is that the tracer stays ≪ 10^{−5} over the radii and timescales probed by ephemerides (and indeed our Solar plots show |ξ−1| ≪ 10^{−5} at Saturn for the published gates).
-- If a future gate variant were to produce a non-uniform ε(r) in the inner Solar System, then two independent constraints apply: (i) ephemerides/ranging bound spatial variations of GM_⊙ (effectively ε(r)) at the 10^{−10}–10^{−11} level; (ii) Cassini’s γ bound would also project to |ε| ≲ 2.3×10^{−5} along the ray if GM_⊙ were held fixed from unaffected data.
+- The screened-Solar condition relevant here is simply g ≫ a_0 along the ray/orbits. In our published gates this is satisfied near conjunction, so ξ ≈ 1 and the light path sees ε ≈ 0. Regime A applies: Cassini constrains γ while ε is separately constrained by AU-scale dynamics and its radial constancy.
+- Ephemeris practice: Cassini analyses adopt state-of-the-art planetary ephemerides that already fit dynamics with a fixed GM_⊙. Departures from a uniform ε(r) would reveal themselves in (i) range residuals vs. heliocentric distance and (ii) small perihelion-precession shifts. We therefore emphasize “tight ephemeris and LLR constraints on any AU-scale departures from inverse-square gravity” rather than quoting a single number; see SI.
+- To be conservative, we report |ΔG/G| ≡ |ξ − 1| as a tracer across 1–30 AU. Where γ = 1 identically and ξ ≈ 1, the Cassini γ bound does not directly limit the tracer; rather, the requirement is that the tracer remains ≪ 10^{−5} over the radii/timescales probed by ephemerides (and indeed our Solar plots show |ξ−1| ≪ 10^{−5} at Saturn for the published gates).
+- If a future gate variant were to produce a non-uniform ε(r) in the inner Solar System, two independent constraints apply: (i) tight ephemeris/LLR limits on AU-scale deviations from inverse-square gravity (sensitive to spatial variations of GM_⊙, effectively ε(r)); and (ii) Cassini’s γ bound, which would then project to |ε| ≲ 2.3×10^{−5} along the ray if GM_⊙ were held fixed from unaffected data.
 
 Worked PPN sketch (algebra in SI)
 1) Start with the line element (weak field):
@@ -69,3 +72,7 @@ Where in the repo
 Reviewer checklist (what this establishes)
 - In the Solar limit with Φ=Ψ and c_T=1, γ=β=1 to 1PN; the gate enters as an additive environment potential that vanishes under screening.
 - Cassini constrains γ; it only constrains ε if amplitude rescaling is not absorbed into the GM used by ephemerides or if ε varies along the ray. In our published gates, ξ≈1 throughout the Solar regime, so Cassini’s γ bound is satisfied while |ΔG/G| serves as a conservative tracer.
+
+References (canonical PPN/Shapiro)
+- Will, C. M., The Confrontation between General Relativity and Experiment, Living Reviews in Relativity (2014, 2018 update). Standard source for PPN formalism and Shapiro delay derivations.
+- Bertotti, B., Iess, L., & Tortora, P. (2003), A test of general relativity using radio links with the Cassini spacecraft, Nature 425, 374–376.
