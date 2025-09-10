@@ -68,32 +68,36 @@ def leapfrog_precession(eps_fn: Callable[[float], float], a_AU: float, e: float,
     peri_angles = []
     prev_r = np.linalg.norm(x)
     for step in range(int(n_orbits * n_steps_per_orbit)):
+        # State at the beginning of the step
+        x_curr = x.copy()
+        r = np.linalg.norm(x_curr)
+        angle_curr = math.atan2(x_curr[1], x_curr[0])
         # Kick
-        r = np.linalg.norm(x)
         eps = float(eps_fn(r))
-        acc = -(G * M_SUN * (1.0 + eps) / max(r**3, 1.0)) * x
+        acc = -(G * M_SUN * (1.0 + eps) / max(r**3, 1.0)) * x_curr
         v_half = v + 0.5 * dt * acc
         # Drift
-        x = x + dt * v_half
+        x = x_curr + dt * v_half
         # Kick
         r_new = np.linalg.norm(x)
         eps = float(eps_fn(r_new))
         acc_new = -(G * M_SUN * (1.0 + eps) / max(r_new**3, 1.0)) * x
         v = v_half + 0.5 * dt * acc_new
-        # Perihelion detection: local minimum in r
+        # Perihelion detection: local minimum in r occurs at x_curr
         if step > 2 and r_new > r and r < prev_r:
-            angle = math.atan2(x[1], x[0])
-            peri_angles.append(angle)
+            peri_angles.append(angle_curr)
         prev_r = r
         r = r_new
-    # Compute precession per orbit from successive perihelia
+    # Compute precession per orbit from successive perihelia as change in periapsis angle
     dphis = []
     for i in range(1, len(peri_angles)):
         dphi = peri_angles[i] - peri_angles[i-1]
-        # unwrap to (0, 2π]
-        while dphi <= 0:
+        # wrap to [-π, π]
+        while dphi <= -math.pi:
             dphi += 2.0 * math.pi
-        dphis.append(dphi - 2.0 * math.pi)
+        while dphi > math.pi:
+            dphi -= 2.0 * math.pi
+        dphis.append(dphi)
     if len(dphis) == 0:
         return {"status": "insufficient_perihelia"}
     mean_precession_rad = float(np.mean(dphis))
