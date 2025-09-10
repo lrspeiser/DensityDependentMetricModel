@@ -7,6 +7,7 @@ Assumptions (explicit):
 - No weak-field anisotropic stress in the quasi-static regime so that Φ = Ψ.
 
 Implications used in code:
+- See also docs/ppn_mapping.md for the explicit Solar‑System PPN and Shapiro mapping used to address Cassini.
 - PPN coefficients in the screened/high-acceleration regime (Solar System): γ = 1, β = 1, α1 = 0, α2 = 0.
 - Weak-field lensing uses Φ + Ψ, where Φ and Ψ are built from the same baryons plus the environment potential φ_env = 1/2 ln ξ used in dynamics (see appendix and QUMOND mapping).
 
