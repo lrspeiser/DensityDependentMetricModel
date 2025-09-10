@@ -283,28 +283,29 @@ PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\g
 - **Reproduction.** See `scripts/reproduce_paper.py` for end‑to‑end regeneration of figures and tables. Each run writes a `run_metadata.json` with flags, environment, and timestamp; SPARC selection disclosure is saved to `sparc_selection.json`.
 
 Quick start (one command)
-- From repo root, with paper run NPZ and SPARC rotmods available:
-  ```bash
+From repo root, with paper run NPZ and SPARC rotmods available:
+```bash
 RUN_DIR=runs/enhanced_20250805_115400 \
-  SPARC_DIR=external_data/Rotmod_LTG \
-  LENS_CSV=docs/lensing_targets_slacs.csv \
-  ./reproduce_paper.sh
-  # Paper preset: circularized Re (q) enabled and δIMF=+0.23 (ETG) by default; override via
-  #   --use-circularized-Re=false or --delta-imf-dex 0.0 for Chabrier variant.
-  ```
-- Docker (CPU-first):
-  ```bash
-  docker build -t dgg-repro .
-  docker run --rm -it \
-    -e RUN_DIR=runs/enhanced_20250805_115400 \
-    -e SPARC_DIR=external_data/Rotmod_LTG \
--e LENS_CSV=docs/lensing_targets_slacs.csv \
-    -v "$PWD/runs:/app/runs" \
-    -v "$PWD/external_data/Rotmod_LTG:/app/external_data/Rotmod_LTG:ro" \
-    -v "$PWD/results:/app/results" \
-    -v "$PWD/images:/app/images" \
-    dgg-repro
-  ```
+SPARC_DIR=external_data/Rotmod_LTG \
+LENS_CSV=docs/lensing_targets_slacs.csv \
+./reproduce_paper.sh
+```
+Note: Paper preset enables circularized Re (q) and δIMF=+0.23 (ETG) by default. Override via:
+- --use-circularized-Re=false
+- --delta-imf-dex 0.0   # Chabrier variant
+Docker (CPU-first):
+```bash
+docker build -t dgg-repro .
+docker run --rm -it \
+  -e RUN_DIR=runs/enhanced_20250805_115400 \
+  -e SPARC_DIR=external_data/Rotmod_LTG \
+  -e LENS_CSV=docs/lensing_targets_slacs.csv \
+  -v "$PWD/runs:/app/runs" \
+  -v "$PWD/external_data/Rotmod_LTG:/app/external_data/Rotmod_LTG:ro" \
+  -v "$PWD/results:/app/results" \
+  -v "$PWD/images:/app/images" \
+  dgg-repro
+```
 
 ---
 
