@@ -59,6 +59,7 @@ def main():
     ap.add_argument("--out-csv", required=True, help="Output CSV for comparison stack")
     ap.add_argument("--out-png", required=True, help="Output PNG path for overlay figure")
     ap.add_argument("--ngrid", type=int, default=80, help="Number of R grid points for stack")
+    ap.add_argument("--rmin-kpc", type=float, default=1e-1, help="Minimum R (kpc) to plot; mask smaller radii")
     args = ap.parse_args()
 
     profdir = Path(args.profiles_dir)
@@ -99,11 +100,17 @@ def main():
     pg16 = np.maximum(p16_g, eps)
     pg84 = np.maximum(p84_g, eps)
 
+    # Apply R-min crop for plotting only
+    mask = Rr >= float(args.rmin_kpc)
+    Rm = Rr[mask]
+    mr = mr[mask]; pr16 = pr16[mask]; pr84 = pr84[mask]
+    mg = mg[mask]; pg16 = pg16[mask]; pg84 = pg84[mask]
+
     plt.figure(figsize=(6.8, 4.4))
-    plt.loglog(Rr, mr, 'k-', lw=2, label='ΔΣ mean (RAR metric)')
-    plt.fill_between(Rr, pr16, pr84, color='gray', alpha=0.3, label='RAR 16–84%')
-    plt.loglog(Rr, mg, color='tab:blue', lw=2, label='ΔΣ mean (GR, stars)')
-    plt.fill_between(Rr, pg16, pg84, color='lightblue', alpha=0.35, label='GR 16–84%')
+    plt.loglog(Rm, mr, 'k-', lw=2, label='ΔΣ mean (RAR metric)')
+    plt.fill_between(Rm, pr16, pr84, color='gray', alpha=0.3, label='RAR 16–84%')
+    plt.loglog(Rm, mg, color='tab:blue', lw=2, label='ΔΣ mean (GR, stars)')
+    plt.fill_between(Rm, pg16, pg84, color='lightblue', alpha=0.35, label='GR 16–84%')
     plt.xlabel('R (kpc)'); plt.ylabel('ΔΣ (Msun/kpc^2)')
     plt.title('Stacked ΔΣ — RAR vs GR (per-lens average)')
     plt.grid(alpha=0.3, which='both'); plt.legend(frameon=False)

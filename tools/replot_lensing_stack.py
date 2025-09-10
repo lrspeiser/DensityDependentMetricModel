@@ -15,6 +15,7 @@ def main():
     ap = argparse.ArgumentParser(description="Replot stacked ΔΣ with a log-safe floor from Source-Data CSV")
     ap.add_argument("--source", required=True, help="Path to lensing_metric_stack_source.csv")
     ap.add_argument("--out", required=True, help="Output PNG path for the figure")
+    ap.add_argument("--rmin-kpc", type=float, default=1e-1, help="Minimum R (kpc) to plot; mask smaller radii to avoid log-floor artifacts")
     args = ap.parse_args()
 
     src = Path(args.source)
@@ -47,12 +48,18 @@ def main():
     p16_plot  = np.maximum(p16,  eps)
     p84_plot  = np.maximum(p84,  eps)
 
+    # Apply R-min crop for plotting only
+    m = np.asarray(R, float) >= float(args.rmin_kpc)
+    Rm = R[m]; mean_plot = mean_plot[m]; p16_plot = p16_plot[m]; p84_plot = p84_plot[m]
+    if mean_sys is not None:
+        mean_sys = mean_sys[m]
+
     plt.figure(figsize=(6.8, 4.4))
-    plt.loglog(R, mean_plot, 'k-', lw=2, label='ΔΣ (RAR metric) mean')
-    plt.fill_between(R, p16_plot, p84_plot, color='gray', alpha=0.3, label='16–84%')
+    plt.loglog(Rm, mean_plot, 'k-', lw=2, label='ΔΣ (RAR metric) mean')
+    plt.fill_between(Rm, p16_plot, p84_plot, color='gray', alpha=0.3, label='16–84%')
     if mean_sys is not None:
         mean_sys_plot = np.maximum(mean_sys, eps)
-        plt.loglog(R, mean_sys_plot, 'r-', lw=1.6, alpha=0.8, label='ΔΣ + systematics')
+        plt.loglog(Rm, mean_sys_plot, 'r-', lw=1.6, alpha=0.8, label='ΔΣ + systematics')
 
     plt.xlabel('R (kpc)')
     plt.ylabel('ΔΣ (Msun/kpc^2)')

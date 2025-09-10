@@ -1920,12 +1920,18 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     mean_plot = np.maximum(mean, eps)
                     p16_plot  = np.maximum(p16,  eps)
                     p84_plot  = np.maximum(p84,  eps)
+                    # Crop R < 0.1 kpc for plotting only to avoid long gray boxes on log scale
+                    mask = Rgrid >= 1e-1
+                    Rm = Rgrid[mask]
+                    mean_plot = mean_plot[mask]
+                    p16_plot = p16_plot[mask]
+                    p84_plot = p84_plot[mask]
 
-                    plt.loglog(Rgrid, mean_plot, 'k-', lw=2, label='ΔΣ (RAR metric) mean')
-                    plt.fill_between(Rgrid, p16_plot, p84_plot, color='gray', alpha=0.3, label='16–84%')
+                    plt.loglog(Rm, mean_plot, 'k-', lw=2, label='ΔΣ (RAR metric) mean')
+                    plt.fill_between(Rm, p16_plot, p84_plot, color='gray', alpha=0.3, label='16–84%')
                     if mean_sys is not None:
-                        mean_sys_plot = np.maximum(mean_sys, eps)
-                        plt.loglog(Rgrid, mean_sys_plot, 'r-', lw=1.6, alpha=0.8, label='ΔΣ + systematics')
+                        mean_sys_plot = np.maximum(mean_sys, eps)[mask]
+                        plt.loglog(Rm, mean_sys_plot, 'r-', lw=1.6, alpha=0.8, label='ΔΣ + systematics')
                     plt.xlabel('R (kpc)'); plt.ylabel('ΔΣ (Msun/kpc^2)')
                     ttl = 'Stacked ΔΣ from metric predictions (per-lens average)'
                     if use_mis or (ds2h is not None):
