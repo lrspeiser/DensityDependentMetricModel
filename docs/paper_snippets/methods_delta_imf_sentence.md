@@ -1,0 +1,1 @@
+The ETG mass normalization δIMF is a single population-level parameter applied to all SLACS lenses; it is not a per-lens degree of freedom. For fairness, we apply the same IMF choice to the GR+baryons baseline.

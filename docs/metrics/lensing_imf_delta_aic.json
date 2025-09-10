@@ -1,0 +1,5 @@
+{
+  "delta_chi2": null,
+  "delta_aic": null,
+  "definition": "\u0394AIC = \u0394\u03c7\u00b2 + 2 (one added population-level parameter \u03b4IMF)"
+}
