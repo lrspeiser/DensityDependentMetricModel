@@ -1187,9 +1187,9 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
     out_csv = out_dir / ('lensing_metric_table.csv' if metric_only else 'lensing_rar_table.csv')
     with out_csv.open('w', encoding='utf-8') as f:
         if metric_only:
-            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_NFW_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_obs_err_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_NFW_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
         else:
-            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_RAR_phscaled_arcsec,alpha_lens_ph_used,zeta_env_lens_used,env_profile,alpha_req_at_thetaE_obs,theta_E_NFW_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
+            f.write('lens_id,z_l,z_s,Re_kpc,log10M_star,n_sersic,theta_E_obs_arcsec,theta_E_obs_err_arcsec,theta_E_GR_arcsec,theta_E_RAR_arcsec,theta_E_RAR_phscaled_arcsec,alpha_lens_ph_used,zeta_env_lens_used,env_profile,alpha_req_at_thetaE_obs,theta_E_NFW_arcsec,theta_E_SIS200_arcsec,theta_E_SIS250_arcsec\n')
 
     # Read CSV quickly (no pandas dependency)
     rows = []
@@ -1231,6 +1231,8 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             profile_override = (row.get('profile', '') or '').strip().lower()
             th_obs = row.get('theta_E_obs_arcsec', '')
             th_obs_f = float(th_obs) if th_obs not in ('', 'nan', 'NaN') else float('nan')
+            th_obs_err = row.get('theta_E_obs_err_arcsec', '')
+            th_obs_err_f = float(th_obs_err) if th_obs_err not in ('', 'nan', 'NaN') else float('nan')
 
             # GR and RAR (spherical Sersic)
             prof_use = profile_override if profile_override in ('sersic','hernquist','jaffe') else density_profile
@@ -1340,9 +1342,9 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             # Write row
             with out_csv.open('a', encoding='utf-8') as f:
                 if metric_only:
-                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_nfw if np.isfinite(th_nfw) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_obs_err if th_obs_err else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_nfw if np.isfinite(th_nfw) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
                 else:
-                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_mod if np.isfinite(th_mod) else 'nan')},{alpha_lens_ph:.3f},{zeta_env_lens:.3f},{env_profile},{alpha_req},{(th_nfw if np.isfinite(th_nfw) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
+                    f.write(f"{lens_id},{z_l},{z_s},{Re},{log10M},{n},{(th_obs if th_obs else '')},{(th_obs_err if th_obs_err else '')},{(th_gr if np.isfinite(th_gr) else 'nan')},{(th_rar if np.isfinite(th_rar) else 'nan')},{(th_mod if np.isfinite(th_mod) else 'nan')},{alpha_lens_ph:.3f},{zeta_env_lens:.3f},{env_profile},{alpha_req},{(th_nfw if np.isfinite(th_nfw) else 'nan')},{th_sis_200:.3f},{th_sis_250:.3f}\n")
 
             # Save radial profiles (metric) and plot
             # ΔΣ(R) = ⟨Σ⟩(R) - Σ(R) for total (RAR) and stars (GR)
@@ -1434,7 +1436,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
         if len(obs) >= 2:
             obs = np.asarray(obs, float)
             pr = np.asarray(pred_rar, float)
-            # Metrics (stat only)
+            # Metrics (RAR)
             resid = pr - obs
             rel = resid / np.where(obs!=0, obs, np.nan)
             metrics = {
@@ -1446,6 +1448,19 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                 'MAE_rel': float(np.nanmean(np.abs(rel))),
                 'Bias_rel': float(np.nanmean(rel)),
             }
+            # Metrics (GR) if available
+            if len(pred_gr) == len(obs) and np.sum(np.isfinite(pred_gr)) >= 2:
+                garr = np.asarray(pred_gr, float)
+                gres = garr - obs
+                grel = gres / np.where(obs!=0, obs, np.nan)
+                metrics.update({
+                    'GR_RMSE_abs_arcsec': float(np.sqrt(np.nanmean(gres**2))),
+                    'GR_MAE_abs_arcsec': float(np.nanmean(np.abs(gres))),
+                    'GR_Bias_abs_arcsec': float(np.nanmean(gres)),
+                    'GR_RMSE_rel': float(np.sqrt(np.nanmean(grel**2))),
+                    'GR_MAE_rel': float(np.nanmean(np.abs(grel))),
+                    'GR_Bias_rel': float(np.nanmean(grel)),
+                })
             # Optional κ_ext marginalization
             if float(SYS_CFG.kappa_ext_sigma) > 0.0 and int(SYS_CFG.kappa_ext_samples) > 0:
                 try:
@@ -1476,39 +1491,75 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     logging.warning(f"κ_ext marginalization skipped: {_e}")
             (out_dir / 'lensing_thetaE_metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf-8')
             logging.info(f"θE metrics (RAR vs obs): {metrics}")
-            # Scatter plot
-            plt.figure(figsize=(5.2, 5.2))
-            lim = [0.0, max(1.05*np.nanmax(obs), 1.05*np.nanmax(pr), 0.5)]
-            plt.plot(lim, lim, 'k:', label='1:1')
-            plt.scatter(obs, pr, c='tab:red', label='RAR metric', s=45, alpha=0.8)
-            # If we have GR and NFW preds for same rows, scatter those too
-            # Re-read to align arrays
-            ogr = []
-            gpr = []
-            onfw = []
-            pnfw = []
+            # Scatter plot with observed error bars if available
+            plt.figure(figsize=(5.6, 5.6))
+            # Re-parse table for aligned arrays (obs, err, GR, RAR, NFW)
+            xo_r = []  # obs for RAR points
+            xe_r = []  # obs err for RAR points
+            yp_r = []  # rar preds
+            xo_g = []  # obs for GR points
+            xe_g = []
+            yp_g = []  # gr preds
+            xo_n = []
+            yp_n = []
             with out_csv.open('r', encoding='utf-8') as f:
                 header = f.readline().strip().split(',')
                 cm = {h:i for i,h in enumerate(header)}
                 for line in f:
                     parts = [s.strip() for s in line.strip().split(',')]
+                    tobs = parts[cm['theta_E_obs_arcsec']] if 'theta_E_obs_arcsec' in cm else ''
+                    terr = parts[cm['theta_E_obs_err_arcsec']] if 'theta_E_obs_err_arcsec' in cm else ''
+                    tgr = parts[cm['theta_E_GR_arcsec']] if 'theta_E_GR_arcsec' in cm else ''
+                    trr = parts[cm['theta_E_RAR_arcsec']] if 'theta_E_RAR_arcsec' in cm else ''
+                    tnfw = parts[cm['theta_E_NFW_arcsec']] if 'theta_E_NFW_arcsec' in cm else ''
                     try:
-                        tobs = float(parts[cm['theta_E_obs_arcsec']]) if parts[cm['theta_E_obs_arcsec']] not in ('','nan','NaN') else float('nan')
-                        tgr = float(parts[cm['theta_E_GR_arcsec']]) if parts[cm['theta_E_GR_arcsec']] not in ('','nan','NaN') else float('nan')
-                        tnfw = float(parts[cm['theta_E_NFW_arcsec']]) if 'theta_E_NFW_arcsec' in cm and parts[cm['theta_E_NFW_arcsec']] not in ('','nan','NaN') else float('nan')
+                        fo = float(tobs) if tobs not in ('','nan','NaN') else float('nan')
+                        fe = float(terr) if terr not in ('','nan','NaN') else float('nan')
+                        fg = float(tgr) if tgr not in ('','nan','NaN') else float('nan')
+                        fr = float(trr) if trr not in ('','nan','NaN') else float('nan')
+                        fn = float(tnfw) if tnfw not in ('','nan','NaN') else float('nan')
                     except Exception:
-                        tobs, tgr, tnfw = float('nan'), float('nan'), float('nan')
-                    if np.isfinite(tobs) and np.isfinite(tgr):
-                        ogr.append(tobs); gpr.append(tgr)
-                    if np.isfinite(tobs) and np.isfinite(tnfw):
-                        onfw.append(tobs); pnfw.append(tnfw)
-            if len(ogr) >= 2:
-                plt.scatter(np.asarray(ogr,float), np.asarray(gpr,float), c='tab:blue', label='GR (baryons)', s=45, alpha=0.8)
-            if len(onfw) >= 2:
-                plt.scatter(np.asarray(onfw,float), np.asarray(pnfw,float), c='tab:green', label='NFW yardstick', s=45, alpha=0.8)
+                        fo=fe=fg=fr=fn=float('nan')
+                    if np.isfinite(fo) and np.isfinite(fr):
+                        xo_r.append(fo); xe_r.append(fe if np.isfinite(fe) else np.nan); yp_r.append(fr)
+                    if np.isfinite(fo) and np.isfinite(fg):
+                        xo_g.append(fo); xe_g.append(fe if np.isfinite(fe) else np.nan); yp_g.append(fg)
+                    if np.isfinite(fo) and np.isfinite(fn):
+                        xo_n.append(fo); yp_n.append(fn)
+            # Plot 1:1
+            xmax = 1.05 * np.nanmax([obs, pr, np.asarray(xo_g,float) if xo_g else np.array([np.nan])])
+            lim = [0.0, max(0.5, float(xmax))]
+            plt.plot(lim, lim, 'k:', label='1:1')
+            # RAR points with x-error if available
+            if xo_r:
+                x_r = np.asarray(xo_r,float); y_r = np.asarray(yp_r,float); e_r = np.asarray(xe_r,float)
+                if np.any(np.isfinite(e_r)):
+                    plt.errorbar(x_r, y_r, xerr=np.where(np.isfinite(e_r), e_r, 0.0), fmt='o', color='tab:red', ecolor='salmon', elinewidth=1.0, capsize=2, label='RAR metric')
+                else:
+                    plt.scatter(x_r, y_r, c='tab:red', s=45, alpha=0.85, label='RAR metric')
+            # GR points
+            if xo_g:
+                x_g = np.asarray(xo_g,float); y_g = np.asarray(yp_g,float); e_g = np.asarray(xe_g,float)
+                if np.any(np.isfinite(e_g)):
+                    plt.errorbar(x_g, y_g, xerr=np.where(np.isfinite(e_g), e_g, 0.0), fmt='o', color='tab:blue', ecolor='lightblue', elinewidth=1.0, capsize=2, label='GR (baryons)')
+                else:
+                    plt.scatter(x_g, y_g, c='tab:blue', s=45, alpha=0.85, label='GR (baryons)')
+            # NFW yardstick (no error bars)
+            if xo_n:
+                plt.scatter(np.asarray(xo_n,float), np.asarray(yp_n,float), c='tab:green', s=40, alpha=0.7, label='NFW yardstick')
             plt.xlabel('θ_E observed [arcsec]'); plt.ylabel('θ_E predicted [arcsec]')
+            # Metrics annotation
+            ann_lines = []
+            ann_lines.append(f"RAR RMSE={metrics.get('RMSE_abs_arcsec', float('nan')):.3f}, MAE={metrics.get('MAE_abs_arcsec', float('nan')):.3f}, bias={metrics.get('Bias_abs_arcsec', float('nan')):.3f}")
+            if 'GR_RMSE_abs_arcsec' in metrics:
+                ann_lines.append(f"GR  RMSE={metrics.get('GR_RMSE_abs_arcsec', float('nan')):.3f}, MAE={metrics.get('GR_MAE_abs_arcsec', float('nan')):.3f}, bias={metrics.get('GR_Bias_abs_arcsec', float('nan')):.3f}")
+            if 'RMSE_abs_arcsec_kappa' in metrics:
+                ann_lines.append(f"RAR (κ_ext) RMSE={metrics.get('RMSE_abs_arcsec_kappa', float('nan')):.3f}, bias={metrics.get('Bias_abs_arcsec_kappa', float('nan')):.3f}")
+            txt = "\n".join(ann_lines)
+            plt.text(0.05, 0.95, txt, transform=plt.gca().transAxes, va='top', ha='left', fontsize=9,
+                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.7, edgecolor='gray'))
             plt.title('Einstein radius: predicted vs observed')
-            plt.grid(alpha=0.3); plt.legend(frameon=False)
+            plt.grid(alpha=0.3); plt.legend(frameon=False, loc='best')
             sp = images_dir / 'lensing_thetaE_pred_vs_obs.png'
             plt.tight_layout(); plt.savefig(sp, dpi=140); plt.close()
             logging.info(f"Scatter plot written: {sp}")
@@ -1959,7 +2010,20 @@ def main():
         args.max_quality = min(args.max_quality, 2)
         if args.rar_dmax in (None, 0.0):
             args.rar_dmax = 50.0
-        logging.info("Applied paper preset: metric-only lensing, 400+ posterior samples, Q≤2 SPARC selection, D_max=%.1f" % float(args.rar_dmax))
+        # Enable modest κ_ext marginalization by default (reduces bias; configurable via CLI)
+        try:
+            args.kappa_ext_mean = float(getattr(args, 'kappa_ext_mean', 0.0) or 0.0)
+        except Exception:
+            args.kappa_ext_mean = 0.0
+        try:
+            args.kappa_ext_sigma = max(float(getattr(args, 'kappa_ext_sigma', 0.0) or 0.0), 0.03)
+        except Exception:
+            args.kappa_ext_sigma = 0.03
+        try:
+            args.kappa_ext_samples = max(int(getattr(args, 'kappa_ext_samples', 0) or 0), 2000)
+        except Exception:
+            args.kappa_ext_samples = 2000
+        logging.info("Applied paper preset: metric-only lensing, 400+ posterior samples, Q≤2 SPARC selection, D_max=%.1f, κ_ext σ=%.3f, samples=%d" % (float(args.rar_dmax), float(args.kappa_ext_sigma), int(args.kappa_ext_samples)))
     elif args.preset == 'pilot':
         # Pilot mode: enable experimental features
         args.allow_pilot_lensing = True
