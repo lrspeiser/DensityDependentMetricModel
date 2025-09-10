@@ -188,7 +188,7 @@ Caption: Solar‑System constraints. The DGG gate remains close to unity in the 
 
 ## Gravitational Lensing
 
-We map surface brightness to stellar mass using an SED‑informed $M/L$ prior (baseline IMF: Chabrier; see SI), deproject a Sérsic profile with measured $(n, R_e)$ (spherical baseline; axis ratio $q$ and external convergence priors can be added in SI), and build $\Sigma(R)$, $\bar\Sigma(<R)$, $\Delta\Sigma(R)$, and $\theta_E$ using the same metric‑only gate $\xi(g)$ (with $\Phi=\Psi$). Uncertainties propagate from $(\log_{10}M_\star, R_e, n, \theta_E^{\rm obs})$; we report residuals and RMSE and compare practice to SLACS/SL2S (see SI).
+We map surface brightness to stellar mass using an SED‑informed $M/L$ prior. For SLACS ETGs the paper preset applies a population‑level Salpeter‑like offset $\delta_{\rm IMF}=+0.23$ to Chabrier SED masses; Chabrier results are shown for comparison. We deproject a Sérsic profile with measured $(n, R_e)$ (spherical baseline; axis ratio $q$ and external convergence priors can be added in SI), and build $\Sigma(R)$, $\bar\Sigma(<R)$, $\Delta\Sigma(R)$, and $\theta_E$ using the same metric‑only gate $\xi(g)$ (with $\Phi=\Psi$). Uncertainties propagate from $(\log_{10}M_\star, R_e, n, \theta_E^{\rm obs})$; we report residuals and RMSE and compare practice to SLACS.
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
 
@@ -200,7 +200,7 @@ Caption: Lensing consistency on SLACS sample (N=70). Using the same $\\xi$ (metr
 - ΔAIC JSON: `docs/metrics/lensing_imf_delta_aic.json`
 - q‑axis summary: `docs/stats/lensing_q_axis_ratio_summary.json`
 
-Defaults for coverage sampling (θ_E): unless overridden, we propagate $\sigma(\log_{10}M_\star)=0.10$ dex, a fractional $\sigma(R_e)=3.5\%$, and a global $\kappa_{\rm ext}\sim\mathcal N(0,0.03)$. ΔAIC is computed on the subset of lenses with reported $\theta_E$ uncertainties; we report $N_{\rm eff}$ in the JSON.
+Defaults for coverage sampling (θ_E): unless overridden, we propagate $\sigma(\log_{10}M_\star)=0.10$ dex, a fractional $\sigma(R_e)=3.5\%$, and a global $\kappa_{\rm ext}\sim\mathcal N(0,0.03)$. ΔAIC is computed on the subset of lenses with reported $\theta_E$ uncertainties; we report $N_{\rm eff}$ in the JSON. When per‑lens $\sigma_{\theta_E}$ are unavailable, ΔAIC is omitted (see JSON for $N_{\rm eff}$).
 
 [Theoretical stacked ΔΣ moved to supplemental] See docs/supplemental_lensing_stack.md for the theory‑only stack (with GR vs RAR overlay), code references, and source tables. We omit it from the main paper because no observed stack is overlaid here; accuracy is judged instead via the θ_E comparison (predicted vs observed), for which metrics and scatter are included above.
 
@@ -350,7 +350,7 @@ docker run --rm -it \
 
 ### SPARC Fit Quality
 
-For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets.
+For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets. The aggregator standardizes residuals with $\sigma_{\rm eff}=\sqrt{\sigma^2+6^2+(0.05\,V_{\rm obs})^2}$ and records these floor settings in `docs/metrics/sparc_fit_quality.json`.
 
 - JSON: `docs/metrics/sparc_fit_quality.json`
 - Figure: `docs/figures/sparc_ppc_panel.png`
@@ -411,8 +411,8 @@ Aggregate summary: `results/mw_kz_sigma.csv`
 - Summary metrics JSON: `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`
 - Figure (scatter): `images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png`
 - Extended per‑lens panels (examples):  
-  `images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,  
-  `images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`
+  `images/next_steps/enhanced_20250805_115400/lensing_rar_J0037-0942.png`,  
+  `images/next_steps/enhanced_20250805_115400/lensing_rar_J1402+6321.png`
 
 Updated SLACS outcome (N=70):
 
@@ -428,7 +428,7 @@ Definitions: RMSE_abs/MAE_abs/Bias_abs are in arcsec; Bias_abs = mean(pred − o
 
 We ran the post‑processing cap $D_{\max}$ over {30, 50, 80, ∞} using the same pipeline (SPARC, MW $K_z$, metric‑only lensing). Results are insensitive across this range:
 
-- Lensing (CASTLES pilot, N=12): RMSE_rel ≈ 0.5598; MAE_rel ≈ 0.4934; RMSE_abs ≈ 1.086″; MAE_abs ≈ 0.847″ (differences < 10⁻⁶ across caps). SLACS (N=70) metrics are reported separately in the lensing section above.
+- Lensing (SLACS, N=70): summary metrics are insensitive across caps within reported precision; see the lensing section above for the Salpeter‑like preset values.
 - SPARC (gold‑like selection): median Δχ²(GR−RAR) and the fraction with χ²_RAR < χ²_GR are invariant across caps. Raw reduced χ² values (no floors) are typically ≫1; with a modest velocity error floor (e.g., 5–10 km/s) and/or a fractional floor on observational systematics (e.g., 5%), reduced χ² values decrease substantially. We therefore report both raw and floor‑augmented fits in the SI and provide CLI flags to reproduce them.
 - Model comparison: BIC‑based ΔlogZ$_{\rm RAR−GR}$ summaries are unchanged across caps.
 - Milky Way vertical force: $K_z(1.1\,\mathrm{kpc})$ is identical across caps for the baseline MW baryon model.
@@ -443,6 +443,8 @@ We ran the post‑processing cap $D_{\max}$ over {30, 50, 80, ∞} using the sam
 Full details and rationale: see docs/dmax_cap.md. Combined summary CSV: docs/dmax_sweep_summary.csv.
 
 ## Reproducibility
+
+Some tables reference a later run folder for Solar data; both runs use the same paper preset and flags.
 
 Code and data to reproduce figures are provided; see REPRODUCIBLE.md and docs/next_steps.md for one‑command runs, data DOIs, and exact environment notes.
 
