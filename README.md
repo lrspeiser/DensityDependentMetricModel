@@ -192,9 +192,9 @@ We map surface brightness to stellar mass using an SED‑informed $M/L$ prior (b
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
 
-Caption: Lensing consistency on SLACS sample (N=70). Using the same $\\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Paper preset (Salpeter‑like, $\\delta_{\\rm IMF}=+0.23$ dex, q‑circularized $R_e$): RMSE$_{\\rm abs}$ 0.256″ (GR 0.368″), RMSE$_{\\rm rel}$ 0.202 (GR 0.288), Coverage$_{68}$ 0.50, Coverage$_{95}$ 0.80. For comparison, a Chabrier prior yields RMSE$_{\\rm abs}$ 0.553″ (GR 0.655″), Coverage$_{68}$ 0.014, Coverage$_{95}$ 0.10. Methods caveat: spherical Sérsic; modest $\\kappa_{\\rm ext}\\sim\\mathcal N(0,0.03)$ has negligible impact on summary metrics at the $10^{-3}$ level.
+Caption: Lensing consistency on SLACS sample (N=70). Using the same $\\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. SLACS (N=70), paper preset (Salpeter‑like $\\delta_{\\rm IMF}=+0.23$ dex; circularized $R_e$): GG RMSE$_{\\rm abs}$=0.256″ (GR 0.368″), RMSE$_{\\rm rel}$=0.202 (GR 0.288), Coverage$_{68/95}$=0.50/0.80 (N_σ≈70). For comparison, Chabrier gives 0.553″ (GR 0.655″) and coverage 0.014/0.10. Methods caveat: Sérsic is spherical for the mass model; we apply circularized $R_e=R_e\\sqrt{q}$ when axis ratio $q$ is available; full axisymmetric deprojection remains future work. Modest $\\kappa_{\\rm ext}\\sim\\mathcal N(0,0.03)$ has negligible impact on summary metrics at the $10^{-3}$ level.
 
-**IMF normalization for SLACS ETGs.** With SED masses on a Chabrier IMF prior, the metric‑only GG prediction underestimates Einstein radii (high‑$g$; $\xi\simeq1$). Introducing a single population‑level offset $\delta_{\rm IMF}$ for early‑type lenses (Salpeter‑like, +0.23 dex) brings the amplitude into agreement without changing $\xi(g)$. Coverage improves and bias is reduced (Chab: 68% = 0.014, 95% = 0.100; Salp: 68% = 0.500, 95% = 0.800). For fairness, we apply the same IMF choice to the GR+baryons baseline; see the GR rows in the comparison table. See also:
+**IMF normalization for SLACS ETGs.** With SED masses on a Chabrier IMF prior, the metric‑only GG prediction underestimates Einstein radii (high‑$g$; $\xi\simeq1$). Introducing a single population‑level offset $\delta_{\rm IMF}$ for early‑type lenses (Salpeter‑like, +0.23 dex) brings the amplitude into agreement without changing $\xi(g)$. Coverage improves and bias is reduced (Chab: 68% = 0.014, 95% = 0.100; Salp: 68% = 0.500, 95% = 0.800). For fairness, we apply the same IMF choice to the GR+baryons baseline; see the GR rows in the comparison table. $\delta_{\rm IMF}$ is a single population‑level normalization for SLACS ETGs only; it is not used in SPARC, MW $K_z$, or Solar‑System tests. See also:
 - Table: `docs/tables/lensing_imf_comparison.md`
 - Histogram: `docs/figures/lensing_imf_f_theta_hist.png`
 - ΔAIC JSON: `docs/metrics/lensing_imf_delta_aic.json`
@@ -406,11 +406,11 @@ Aggregate summary: `results/mw_kz_sigma.csv`
 
 Updated SLACS outcome (N=70):
 
-| Model | RMSE_abs [arcsec] | MAE_abs [arcsec] | Bias_abs [arcsec] | RMSE_rel | MAE_rel | Bias_rel |
-|:------|-------------------:|-----------------:|------------------:|---------:|--------:|---------:|
-| RAR (baseline) | 0.553 | 0.519 | -0.519 | 0.440 | 0.426 | -0.426 |
-| GR (baryons)   | 0.655 | 0.624 | -0.624 | 0.523 | 0.513 | -0.513 |
-| RAR (κ_ext‑marg) | 0.553 | 0.520 | -0.520 | 0.440 | 0.426 | -0.426 |
+|| Model | RMSE_abs [arcsec] | MAE_abs [arcsec] | Bias_abs [arcsec] | RMSE_rel | MAE_rel | Bias_rel |
+||:------|-------------------:|-----------------:|------------------:|---------:|--------:|---------:|
+|| RAR (baseline; Salpeter‑like) | 0.256 | 0.213 | -0.171 | 0.202 | 0.172 | -0.133 |
+|| GR (baryons; Salpeter‑like)   | 0.368 | 0.321 | -0.313 | 0.288 | 0.259 | -0.252 |
+|| RAR (κ_ext‑marg; Salpeter‑like) | 0.256 | 0.213 | -0.172 | 0.202 | 0.173 | -0.134 |
 
 Definitions: RMSE_abs/MAE_abs/Bias_abs are in arcsec; Bias_abs = mean(pred − obs). RMSE_rel/MAE_rel/Bias_rel use residuals normalized by obs; Bias_rel = mean((pred − obs)/obs). We assume n_sersic=4 (ETG baseline); measured n≠4 would shift amplitudes at the O(10%) level. κ_ext prior: mean=0, σ=0.03, samples=2000.
 
