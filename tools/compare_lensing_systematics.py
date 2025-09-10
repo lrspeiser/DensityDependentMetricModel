@@ -1,12 +1,20 @@
 # tools/compare_lensing_systematics.py
+import argparse
 import json
 import pandas as pd
 from pathlib import Path
 
+
 def main():
-    base = Path("results/next_steps/enhanced_20250805_115400")
-    sysr = Path("results/next_steps_sys/enhanced_20250805_115400")
-    out = Path("results/qa"); out.mkdir(parents=True, exist_ok=True)
+    ap = argparse.ArgumentParser(description="Compare baseline vs systematics lensing outputs")
+    ap.add_argument("--base", default="results/next_steps/enhanced_20250805_115400", help="Baseline results root")
+    ap.add_argument("--sys", dest="sysroot", default="results/next_steps_sys/enhanced_20250805_115400", help="Systematics results root")
+    ap.add_argument("--out-dir", default="results/qa", help="Output directory for CSVs")
+    args = ap.parse_args()
+
+    base = Path(args.base)
+    sysr = Path(args.sysroot)
+    out = Path(args.out_dir); out.mkdir(parents=True, exist_ok=True)
 
     # θE metrics comparison
     mb_p = base / "lensing_thetaE_metrics.json"
@@ -20,7 +28,7 @@ def main():
             {"run":"baseline", **pick(mb)},
             {"run":"systematics", **pick(ms)},
         ])
-theta_summary.to_csv(out/"thetaE_metrics_comparison.csv", index=False)
+        theta_summary.to_csv(out/"thetaE_metrics_comparison.csv", index=False)
         print(f"[ok] wrote {out/'thetaE_metrics_comparison.csv'}")
     else:
         print("[warn] Missing one of the thetaE metrics JSONs; skipping θE comparison.")
@@ -48,4 +56,3 @@ theta_summary.to_csv(out/"thetaE_metrics_comparison.csv", index=False)
 
 if __name__ == "__main__":
     main()
-

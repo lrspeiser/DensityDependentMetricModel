@@ -1,10 +1,17 @@
 # tools/qa_lensing_table.py
+import argparse
 import pandas as pd
 from pathlib import Path
 
 
 def main():
-    csv = Path("docs/lensing_targets.csv")
+    ap = argparse.ArgumentParser(description="QA lensing_targets.csv for required fields")
+    ap.add_argument("--in", dest="inp", default="docs/lensing_targets.csv", help="Input lens CSV path")
+    ap.add_argument("--write-excluded", dest="excluded", default=None, help="Optional path to write rows with any missing required field")
+    ap.add_argument("--write-clean", dest="clean", default=None, help="Optional path to write only rows with all required fields present")
+    args = ap.parse_args()
+
+    csv = Path(args.inp)
     out = Path("results/qa"); out.mkdir(parents=True, exist_ok=True)
 
     if not csv.exists():
@@ -43,10 +50,29 @@ def main():
     rep = pd.DataFrame(rows).set_index("lens_id")
     rep.to_csv(out / "lensing_missing_report.csv")
 
+    # Optional writes
+    if args.excluded or args.clean:
+        def is_complete(row):
+            for col in req:
+                if col not in row or (pd.isna(row[col]) or str(row[col]).strip() == ""):
+                    return False
+            return True
+        mask_complete = df.apply(is_complete, axis=1)
+        if args.excluded:
+            Path(args.excluded).parent.mkdir(parents=True, exist_ok=True)
+            df.loc[~mask_complete].to_csv(Path(args.excluded), index=False)
+        if args.clean:
+            Path(args.clean).parent.mkdir(parents=True, exist_ok=True)
+            df.loc[mask_complete].to_csv(Path(args.clean), index=False)
+
     print("Missing-values by column:\n")
     for c, rows in missing.items():
         print(f"{c:>28}: {len(rows)} missing")
     print(f"\nWrote: {out/'lensing_missing_report.csv'}")
+    if args.excluded:
+        print(f"Wrote excluded rows: {args.excluded}")
+    if args.clean:
+        print(f"Wrote clean rows: {args.clean}")
     return 0
 
 
