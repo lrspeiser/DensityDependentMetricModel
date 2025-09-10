@@ -95,8 +95,21 @@ def main() -> None:
     if not post_json.exists():
         raise FileNotFoundError('hierarchical_a0_posterior_summary.json not found; run hierarchical step first')
     pj = json.loads(post_json.read_text(encoding='utf-8'))
-    mu = float(pj['mu_ln_a0']['p50'])
-    sigma = float(pj['sigma_ln_a0']['p50'])
+    # Posterior summary naming historically used "ln" but values are often in log10.
+    # Prefer explicit keys if available; otherwise, detect base by magnitude.
+    mu = None; sigma = None
+    # Explicit log10 keys
+    if 'mu_log10_a0' in pj and 'sigma_log10_a0' in pj:
+        mu = float(pj['mu_log10_a0']['p50'])
+        sigma = float(pj['sigma_log10_a0']['p50'])
+        log_base = 10
+    elif 'mu_ln_a0' in pj and 'sigma_ln_a0' in pj:
+        mu = float(pj['mu_ln_a0']['p50'])
+        sigma = float(pj['sigma_ln_a0']['p50'])
+        # Heuristic: if |mu| ~ 8–13 it's almost certainly log10(a0 in SI); if |mu| ~ 20–25 it's ln.
+        log_base = 10 if (-13.5 < mu < -8.0) else 'e'
+    else:
+        raise KeyError('Hierarchical a0 summary missing expected keys (mu_*, sigma_*)')
 
     galaxies = _load_selection(sample_csv)
 
@@ -144,7 +157,10 @@ def main() -> None:
     # Prepare DGG posterior band
     rng = np.random.default_rng(0)
     n = max(int(args.n_a0_samples), 200)
-    a0_samp = np.exp(rng.normal(mu, sigma, size=n))  # ln a0 ~ N(mu,sigma)
+    if log_base == 10:
+        a0_samp = 10 ** (rng.normal(mu, sigma, size=n))  # log10 a0 ~ N(mu,sigma)
+    else:
+        a0_samp = np.exp(rng.normal(mu, sigma, size=n))  # ln a0 ~ N(mu,sigma)
     # gbar grid
     gmin = max(1e-13, 10**(np.nanmin(xs) - 2.0))
     gmax = min(1e-8, 10**(np.nanmax(xs) + 0.5))
