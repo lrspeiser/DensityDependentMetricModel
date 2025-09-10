@@ -123,6 +123,16 @@ We evaluate ∣𝜉−1∣ at representative planetary/lab densities with 𝑇 i
 
 ## 7. Results (high‑level)
 
+### 7.0 RAR master panel (SPARC) and BTFR (subset)
+
+![RAR master panel — SPARC selection with DGG posterior band](../../../images/paper/rar_master_panel.png)
+
+Figure RAR. RAR master panel — SPARC selection (grey points) and DGG posterior band (magenta; median with 16–84% envelope) computed from the hierarchical log10 a0 posterior of the same run. The mapping is g_obs(g_bar; a0) = ξ(g_bar; a0) g_bar in SI units; the Newtonian limit g_obs ≈ g_bar holds for g_bar ≫ a0 and the asymptotic 1/2 slope emerges for g_bar ≪ a0. Source‑Data: results/next_steps/enhanced_20250805_115400/rar_master_panel_source.csv.
+
+![BTFR (subset)](../../../images/next_steps/enhanced_20250805_115400/btfr_baryonic.png)
+
+Figure BTFR. Baryonic Tully–Fisher relation for the selection used here. Points show M_b = M_* + 1.33 M_HI versus observed V_flat; the fitted slope is 3.184 [3.034, 3.332] (p50 [p16, p84]), with R^2 ≈ 0.885 and RMS ≈ 0.22 dex. Where shown, the shaded band indicates a bootstrap confidence interval. Source‑Data: results/next_steps/enhanced_20250805_115400/btfr_source.csv; fit summary: results/next_steps/enhanced_20250805_115400/btfr_fit_summary.json.
+
 ### 7.1 Milky Way
 
 Evidence: TFR‑S improves over GR by Δlog Z ≈ [to be inserted] and competes with NFW within [to be inserted].
