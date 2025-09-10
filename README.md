@@ -48,8 +48,6 @@ The empirical RAR/BTFR indicates that galaxy dynamics are largely fixed by the b
 4. Prediction. Rotation speed $V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)$. The same $\xi$ feeds lensing and vertical‑force predictions.
 5. Fit only $a_0$ (with fixed $D_{\max}$). We either grid‑scan $a_0$ per galaxy or fit a hierarchical population mean and scatter.
 
-> Why the plateau? Prior drafts used an unbounded boost; with real data the cap $D_{\max}=50$ avoids pathologies at extremely low $g_{\rm bar}$ yet leaves galaxy‑scale predictions unchanged over the measured range. Robust for $30\!\lesssim\!D_{\max}\!\lesssim\!80$; see lensing sensitivity analyses.
-
 Mathematically, one representation is a modified Poisson equation or GR‑style field equation with a nonlinear term that depends on the field strength and/or density:
 
 $$
@@ -89,8 +87,6 @@ $$
 \qquad
 V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
 $$
-
-> Sensitivity: In galaxy‑scale applications explored here, results are insensitive over $D_{\max}\in[30,80]$ (see SI).
 
 ### Relativistic weak‑field mapping
 
@@ -203,9 +199,9 @@ Caption: Lensing consistency on SLACS sample (N=70). Using the same $\xi$ (metri
 
 Caption: Population‑average lensing: the stacked prediction with a 16–84% band (posterior) has the right amplitude and radial trend; adding the data points from your stack completes the comparison.
 
-We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \theta_E^{\rm obs})$, together with stellar masses and sizes $(\log_{10} M_\star, R_e, n)$ compiled in our lens table. Source‑Data tables accompany the figures: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv` and `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`. Rows lacking required measured inputs are flagged and omitted from summary metrics until completed. Per‑lens panels (e.g., PG1115+080; B1608+656) appear in Extended Data:
-`images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,
-`images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`.
+We use measured lens properties from SLACS (Auger+ 2009; VizieR J/ApJ/705/1099): $(z_l, z_s, \theta_E^{\rm obs})$, together with stellar masses (Chabrier) and sizes $(R_e)$ compiled in our lens table. Source‑Data tables accompany the figures: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv` and `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`. Rows lacking required measured inputs are flagged and omitted from summary metrics until completed. Per‑lens panels (SLACS examples) appear in Extended Data:
+`images/next_steps/enhanced_20250805_115400/lensing_rar_J0037-0942.png`,
+`images/next_steps/enhanced_20250805_115400/lensing_rar_J1402+6321.png`.
 
 Uncertainties: where available, per‑lens $\theta_E$ uncertainties ($\sigma_{\theta_E}$) are included in `docs/lensing_targets.csv`; rows lacking uncertainties are omitted from weighted metrics. Residuals and a goodness‑of‑fit summary are written to `results/.../lensing_thetaE_residuals.csv` and `.../lensing_thetaE_metrics.json`.
 
@@ -265,8 +261,6 @@ PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\g
 **Model comparison.** Δlog Z histograms are reported as a BIC approximation; full evidences are produced when hierarchical runs are enabled.
 
 **NFW comparator priors.** For the NFW yardstick we adopt weak, non‑informative bounds on \(\log_{10} M_{200}\) and \(c\) consistent with a standard mass–concentration relation at \(z\simeq 0\). Fits are performed by \(\chi^2\) minimization on the same radii and velocity uncertainties as the DGG/GR fits; exact prior ranges and any mass–concentration hyper‑prior are listed in SI (Table Sx).
-
-> **Where to find in code:** the working implementation is `xi_rar_plateau_numpy(...)` and `solar_system_table(...)` in `scripts/next_steps_from_run.py`.
 
 ---
 
@@ -384,11 +378,11 @@ Updated SLACS outcome (N=70):
 
 | Model | RMSE_abs [arcsec] | MAE_abs [arcsec] | Bias_abs [arcsec] | RMSE_rel | MAE_rel | Bias_rel |
 |:------|-------------------:|-----------------:|------------------:|---------:|--------:|---------:|
-| RAR (baseline) | 3.610 | 3.311 | -3.311 | 0.808 | 0.803 | -0.803 |
-| GR (baryons)   | 3.712 | 3.416 | -3.416 | 0.836 | 0.832 | -0.832 |
-| RAR (κ_ext‑marg) | 3.610 | 3.311 | -3.311 | 0.808 | 0.803 | -0.803 |
+| RAR (baseline) | 0.553 | 0.519 | -0.519 | 0.440 | 0.426 | -0.426 |
+| GR (baryons)   | 0.655 | 0.624 | -0.624 | 0.523 | 0.513 | -0.513 |
+| RAR (κ_ext‑marg) | 0.553 | 0.520 | -0.520 | 0.440 | 0.426 | -0.426 |
 
-κ_ext prior: mean=0, σ=0.03, samples=2000.
+Definitions: RMSE_abs/MAE_abs/Bias_abs are in arcsec; Bias_abs = mean(pred − obs). RMSE_rel/MAE_rel/Bias_rel use residuals normalized by obs; Bias_rel = mean((pred − obs)/obs). We assume n_sersic=4 (ETG baseline); measured n≠4 would shift amplitudes at the O(10%) level. κ_ext prior: mean=0, σ=0.03, samples=2000.
 
 ### D_max plateau sweep (insensitivity across 30–∞)
 

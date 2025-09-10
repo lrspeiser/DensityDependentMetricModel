@@ -9,15 +9,21 @@ All notable changes to this repository will be documented in this file.
 - CLI knobs for MW baryon priors: `--mw-prior-samples`, `--mw-prior-ml-sigma`, `--mw-prior-gas-frac-sigma`, `--mw-prior-height-frac-sigma`, `--mw-prior-Rd-frac-sigma`, `--mw-prior-bulge-a-frac-sigma`, and `--mw-kz-zlist`.
 - README.md: expanded MW Kz section with assumptions (R0, z cuts, tracer‑kinematics) and description of the baryon‑prior band; lists Source‑Data CSVs.
 - REPRODUCIBLE.md: added one‑command example to generate the MW Kz prior band; clarified overlay CSV usage.
+- SLACS importer: `scripts/import_slacs_asu_tsv.py` to convert VizieR ASU‑TSV (Auger+ 2009; J/ApJ/705/1099) into curated/orchestrator CSVs.
 
 ### Changed
 - MW Kz baseline plot label now explicitly indicates “baseline baryons” when no band is requested.
+- Lensing docs aligned to SLACS (homogeneous) sample: updated README caption (N=70), metrics table, and per‑lens Extended Data examples (J0037‑0942; J1402+6321). Replaced CASTLES mentions for main figure to avoid mixed samples.
+- README lensing metrics table now states definitions (Bias_abs, Bias_rel) and notes n_sersic=4 ETG baseline.
+
+### Fixed
+- SLACS Einstein radius units: RE provided in kpc were previously treated as arcsec in the curated table, inflating observed θE and producing large residuals. Now converted kpc→arcsec using flat ΛCDM (H0=70, Ωm=0.3) before writing theta_E_obs_arcsec. Metrics recalculated (RAR RMSE_abs ≈ 0.553″; GR ≈ 0.655″).
 
 ### Rationale
-- Addresses reviewer request to show propagation of baryonic uncertainties through the full‑3D phantom density and to disclose assumptions (R0, z cuts, tracer kinematics).
+- Addresses reviewer request to use a homogeneous lens sample, clarify metric definitions, and ensure unit consistency.
 
 ### Notes
-- The bulge “flattening” is approximated via a fractional prior on the Hernquist scale radius a; a fully oblate bulge potential can be added in a future update. The impact on Kz at 0.5–2 kpc is modest within typical MW ranges.
+- No changes to formulas or the ξ(g) mapping. Changes are limited to data ingest correctness and documentation alignment.
 
 ## 2025-09-09
 
