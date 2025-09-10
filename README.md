@@ -211,6 +211,18 @@ Uncertainties: where available, per‑lens $\theta_E$ uncertainties ($\sigma_{\t
 
 We assess miscentering and external convergence $\kappa_\mathrm{ext}$ in SI; paper figures use the baseline unless stated. See REPRODUCIBLE.md and docs/lensing.md for exact flags and outputs.
 
+#### Homogeneous SLACS sample (Auger+ 2009)
+
+For a more homogeneous lens set, we provide a SLACS CSV converted from the VizieR ASU-TSV (Auger et al. 2009; J/ApJ/705/1099):
+- Source-like file (for curation/inspection): `docs/lensing_targets_slacs_sl2s.csv` (lens_name, survey, z_l, z_s, theta_E_arcsec, log10Mstar_chab, Re_arcsec, ...)
+- Orchestrator-ready file: `docs/lensing_targets_slacs.csv` (lens_id, z_l, z_s, log10M_star, Re_kpc, n_sersic=4, theta_E_obs_arcsec)
+
+Run the lensing step with this set by overriding LENS_CSV:
+```bash path=null start=null
+LENS_CSV=docs/lensing_targets_slacs.csv ./reproduce_paper.sh
+```
+Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave theta_E_obs_err_arcsec blank (metrics involving error weighting will omit those lenses). Re_kpc is converted from Re(I→V→B) arcsec using a flat ΛCDM (H0=70, Ωm=0.3). Axis ratio q and n are not provided in this table; we use n_sersic=4 as an ETG baseline.
+
 ---
 
 ## Discussion and Implications
@@ -223,7 +235,7 @@ We assess miscentering and external convergence $\kappa_\mathrm{ext}$ in SI; pap
 
 **Lensing under one metric.** Metric‑only predictions show the right order of magnitude for $\theta_E$ and stacked $\Delta\Sigma$ with measured lens inputs; residuals and RMSE are reported. A single‑theory lensing success is essential. **Sanity:** varying the stellar $M/L$ prior within the SED‑informed band shifts the amplitude of $\Delta\Sigma$ but not its slope over 0.05–300 kpc.
 
-**Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data. **Falsifiability:** a decisive failure would be a requirement for $D_{\max}\gg100$ to fit strong‑lensing scales or cluster dynamics under the same mapping, or a systematic misfit of the BTFR slope/scatter under standardized selections.
+**Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data. See `docs/dmax_cap.md` for details and sweep instructions. **Falsifiability:** a decisive failure would be a requirement for $D_{\max}\gg100$ to fit strong‑lensing scales or cluster dynamics under the same mapping, or a systematic misfit of the BTFR slope/scatter under standardized selections.
 
 ---
 
@@ -425,7 +437,7 @@ $$
 \end{aligned}
 $$
 
-*Optional plateau:* impose \(\xi\le D_{\max}\) if a finite cap is required observationally.
+*Optional plateau:* impose \(\xi\le D_{\max}\) if a finite cap is required observationally (see `docs/dmax_cap.md`).
 
 ### Appendix B — PPN and Cassini (screened Solar limit)
 
