@@ -223,7 +223,7 @@ Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave t
 
 ## Discussion and Implications
 
-**Predictive power vs flexibility.** With a single principal scale \(a_0\) and a fixed \(\nu\)-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior). We compute code‑based universality metrics (χ²/ν for a global \(a_0\) and WAIC‑like comparisons for universal vs hierarchical \(a_0\)) and write results to results/next_steps/.../universality_metrics.json.
+**Predictive power vs flexibility.** With a single principal scale \(a_0\) and a fixed \(\nu\)-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior). We compute code‑based universality metrics (χ²/ν for a global \(a_0\) and WAIC‑like comparisons for universal vs hierarchical \(a_0\)) and write results to results/next_steps/.../universality_metrics.json. A compact summary table is provided below (numbers reflect the current run; see JSONs for full details). 
 
 **Solar‑System safety.** Under the screened subclass (Φ=Ψ, c_T=1) we have γ=β=1 at 1PN and α1=α2=0 in the Solar limit. Cassini constrains γ (|γ−1|≲2.3×10⁻⁵); amplitude rescaling ε≡ξ−1 only projects to Cassini if not absorbed into the GM used by ephemerides (see docs/ppn_mapping.md). Operatively, we assume ε is locally constant along the Cassini ray and across AU‑scale orbits; we verify negligible effects with a code‑based perihelion‑precession surrogate (nature_readiness/solar_system/ephemeris_perturbations.py). We therefore show |ΔG/G|≡|ξ−1| as a conservative tracer vs. AU and export a PPN CSV alongside the Solar table.
 
@@ -239,7 +239,7 @@ Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave t
 
 - **Unified galaxy dynamics without dark halos.** Using a single scale \(a_0\) and a fixed \(\nu\)-function (Box 1), DGG reproduces the broad form of rotation curves for the Milky Way and representative SPARC galaxies.
 - **Scaling laws.** DGG respects the RAR by construction and approaches the BTFR expectation \(M_b\propto V^4\); measured slopes depend on selection and will be reported with scatter.
-- **Local tests.** For parameters that fit galaxies, \(|\Delta G/G|\) in the Solar System remains below Cassini‑level sensitivity at Saturn; a PPN derivation is planned.
+- **Local tests.** For parameters that fit galaxies, \(|\Delta G/G|\) in the Solar System remains below Cassini‑level sensitivity at Saturn; a worked PPN derivation is provided (docs/ppn_mapping.md).
 - **One‑theory lensing.** A metric‑only mapping gives reasonable \(\theta_E\) and \(\Delta\Sigma\) predictions; completing the lens sample with measured inputs is a priority.
 - **Roadmap.** (1) Full 3D \(K_z/\Sigma_{1.1}\); (2) lensing with measured \((M_\star,R_e)\) and uncertainties; (3) hierarchical \(a_0\) with nuisances; (4) PPN appendix; (5) cluster/cosmology tests.
 
@@ -251,7 +251,7 @@ Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave t
 
 **Baryon models.** Milky Way disks (Miyamoto–Nagai) + bulge (Hernquist) + gas; external galaxies use SPARC component rotmods.  
 **Computation.** We evaluate \(\xi(g)\) as in **Box 1**, with unit conversion constant \(C\) and optional gates \(s_\rho, W(T)\).  
-**Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling.  
+**Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling. We report both “raw” \(\chi^2\) (as in the SPARC files) and floor‑augmented fits using a velocity error floor and/or fractional observational floor to capture inclination/distance/beam systematics: use `--sigma-floor 5.0` (km/s) and optionally `--obs-frac-sigma 0.05` in the orchestrator. Residual PPC plots (residuals vs R with 16–84% bands) can be generated via `tools/sparc_ppc.py`.  
 **Solar‑System.** In the Solar limit where $g_{\rm bar}\gg a_0$, $\xi\to1$ and the metric reduces to GR with $\gamma\simeq\beta\simeq1$ and $\alpha_{1,2}\simeq0$. We evaluate $\xi(r)$ in the Sun’s field and report $|\Delta G/G|$ at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass $\Phi=\Psi, c_T=1$), we also export a PPN CSV (`ppn_table.csv`) with $(\gamma,\beta,\alpha_1,\alpha_2)$.
 
 **PPN mapping and export.** In the metric subclass we adopt, the weak-field line element is $ds^2=-(1+2\Phi/c^2)dt^2+(1-2\Psi/c^2)d\mathbf x^2$ with screening such that $\Phi=\Psi$ and $c_T=1$. The DGG gate $\xi(g)$ rescales the weak-field potential by a small factor $1+\epsilon$ with $\epsilon\equiv\xi-1\ll1$ in the Solar System. Matching coefficients of the baryonic Newtonian potential $U$ at 1PN, the equal additive contribution of $c^2\phi_{\rm env}$ to $g_{00}$ and $g_{ij}$ implies the coefficient ratio is unity: $\gamma=1$; $\beta=1$; and preferred‑frame parameters $\alpha_{1,2}=0$ in this limit. Cassini measures the coefficient of the logarithmic term in the Shapiro delay relative to the ephemeris $GM_\odot$; hence the two regimes (degenerate vs non‑degenerate amplitude) discussed in docs/ppn_mapping.md. We therefore use $|\Delta G/G|=|\xi-1|$ as a conservative amplitude tracer and export a PPN table with columns $(\mathrm{AU},\gamma-1,\beta-1,\alpha_1,\alpha_2,|\Delta G/G|)$ alongside the Solar System source‑data CSV. The figure shows $|\Delta G/G|$ vs. $r$ with planetary semi‑major axes marked and a reference band for the Cassini $|\gamma-1|$ limit on a secondary axis. See docs/ppn_mapping.md for the precise $\gamma/\epsilon$ conditions.
@@ -323,6 +323,14 @@ Quick start (one command)
 
 ## Latest Results Tables (auto-generated)
 
+### Universality (mini‑table)
+
+The orchestrator can compute a global (universal) \(a_0\) and WAIC‑like metrics (when the optional module is available). Below is a compact summary from the current run; see JSONs for full details and confidence intervals.
+
+- Universal a0 (global fit): a0 ≈ 5.0×10⁻¹¹ m s⁻² (demo subset; see `results/next_steps/.../global_a0.json`), χ²/ν ≈ 28.12 (raw; no floors). WAIC/LOO or ΔBIC vs hierarchical are reported in `universality_metrics.json` when enabled.
+- Hierarchical a0 (two‑stage or Bayesian): μ_ln a0, σ_ln a0 and coverage are written to `hierarchical_a0_summary.json` / `hierarchical_a0_posterior_summary.json` when requested (see REPRODUCIBLE.md). 
+- Env ON vs OFF: ΔAIC/ΔBIC (and Δlog Z where available) and residual‑correlation slopes before/after are summarized in `universality_metrics.json`.
+
 These summarize the latest outputs under `results/next_steps/btfr_fix_20250906/` and related top-level summaries. Full CSVs are linked for reproducibility.
 
 ### Solar System (Source Data)
@@ -388,10 +396,10 @@ Definitions: RMSE_abs/MAE_abs/Bias_abs are in arcsec; Bias_abs = mean(pred − o
 
 We ran the post‑processing cap $D_{\max}$ over {30, 50, 80, ∞} using the same pipeline (SPARC, MW $K_z$, metric‑only lensing). Results are insensitive across this range:
 
-- Lensing (N=12): RMSE_rel ≈ 0.559791; MAE_rel ≈ 0.493397; RMSE_abs ≈ 1.085711″; MAE_abs ≈ 0.847493″ (differences < 10⁻⁶ across caps).
-- SPARC (N=89): reduced χ² (RAR) = 17.6374; reduced χ² (GR) = 46.6017; median Δχ²(GR−RAR) = 350.741; fraction with χ²_RAR < χ²_GR = 0.764 — invariant with $D_{\max}$.
-- Model comparison: median ΔlogZ$_{\rm RAR−GR}$ (BIC‑based) = 173.782 — invariant.
-- Milky Way vertical force: $K_z(1.1\,\mathrm{kpc}) = 1.944323189816419\times10^8\,\mathrm{m\,s^{-2}}$ — identical across caps.
+- Lensing (CASTLES pilot, N=12): RMSE_rel ≈ 0.5598; MAE_rel ≈ 0.4934; RMSE_abs ≈ 1.086″; MAE_abs ≈ 0.847″ (differences < 10⁻⁶ across caps). SLACS (N=70) metrics are reported separately in the lensing section above.
+- SPARC (gold‑like selection): median Δχ²(GR−RAR) and the fraction with χ²_RAR < χ²_GR are invariant across caps. Raw reduced χ² values (no floors) are typically ≫1; with a modest velocity error floor (e.g., 5–10 km/s) and/or a fractional floor on observational systematics (e.g., 5%), reduced χ² values decrease substantially. We therefore report both raw and floor‑augmented fits in the SI and provide CLI flags to reproduce them.
+- Model comparison: BIC‑based ΔlogZ$_{\rm RAR−GR}$ summaries are unchanged across caps.
+- Milky Way vertical force: $K_z(1.1\,\mathrm{kpc})$ is identical across caps for the baseline MW baryon model.
 
 | D_max | RMSE_rel | MAE_rel | RMSE_abs [″] | MAE_abs [″] |
 |:-----:|---------:|--------:|-------------:|------------:|
