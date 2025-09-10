@@ -12,7 +12,7 @@ Artifacts:
 - Global a0: `results/next_steps/enhanced_20250805_115400/global_a0.json` (if present)
 
 Method Notes:
-- RAR-plateau: ξ(R) = 0.5 + sqrt(0.25 + a0_eff/g_bar), with an optional cap ξ ≤ D_max; V_model^2 = ξ · V_bar^2
+- RAR-plateau: D = 0.5 + sqrt(0.25 + a0_eff/g_bar); xi == D multiplies Vbar^2
 - g_bar = (Vbar^2 / R) × 3.240779289e-14 in SI (m/s^2) for V in km/s and R in kpc
 - a0_eff = a0 × (1 + zeta_env × s_rho × W(T)); see docs/cassini.md and docs/lensing.md
 - Lensing baselines (GR point-mass, SIS) use Planck-like flat-ΛCDM distances; see docs/lensing.md

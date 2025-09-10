@@ -1159,7 +1159,10 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                               *,
                               nfw_enable: bool = False,
                               nfw_mass_ratio: float = 50.0,
-                              nfw_c: float = 8.0) -> None:
+                              nfw_c: float = 8.0,
+                              coverage: bool = False,
+                              coverage_samples: int = 1000,
+                              sigmaK_sweep: bool = False) -> None:
     """Compute lensing for a CSV lens list using spherical baryons and RAR 'phantom mass' from xi.
     CSV columns (header required): lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
 
@@ -1222,6 +1225,10 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
         try:
             lens_id = row.get('lens_id', 'lens')
             z_l = float(row['z_l']); z_s = float(row['z_s'])
+            # Guard against missing required numeric fields
+            if (row.get('log10M_star','') in ('', 'nan', 'NaN')) or (row.get('Re_kpc','') in ('', 'nan', 'NaN')):
+                logging.warning(f"RAR lensing: skipping lens {lens_id} due to missing log10M_star or Re_kpc")
+                continue
             log10M = float(row['log10M_star'])
             Re = float(row['Re_kpc'])
             n = float(row.get('n_sersic', '4') or 4.0)
@@ -1491,6 +1498,161 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     logging.warning(f"κ_ext marginalization skipped: {_e}")
             (out_dir / 'lensing_thetaE_metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf-8')
             logging.info(f"θE metrics (RAR vs obs): {metrics}")
+            # Optional κ_ext σ sweep
+            if sigmaK_sweep:
+                try:
+                    sweep = {}
+                    for s in [0.00, 0.02, 0.03, 0.05]:
+                        rng = np.random.default_rng(42)
+                        k = rng.normal(float(SYS_CFG.kappa_ext_mean), float(s), size=int(max(500, coverage_samples)))
+                        k = np.clip(k, -0.1, 0.1)
+                        pr_mat = pr[None, :]
+                        th_samp = pr_mat / (1.0 - k[:, None])
+                        pr_med = np.nanmedian(th_samp, axis=0)
+                        resid_k = pr_med - obs
+                        rel_k = resid_k / np.where(obs!=0, obs, np.nan)
+                        sweep[f"sigma_{s:.3f}"] = {
+                            'RMSE_abs_arcsec': float(np.sqrt(np.nanmean(resid_k**2))),
+                            'MAE_abs_arcsec': float(np.nanmean(np.abs(resid_k))),
+                            'Bias_abs_arcsec': float(np.nanmean(resid_k)),
+                            'RMSE_rel': float(np.sqrt(np.nanmean(rel_k**2))),
+                            'MAE_rel': float(np.nanmean(np.abs(rel_k))),
+                            'Bias_rel': float(np.nanmean(rel_k)),
+                        }
+                    (out_dir / 'lensing_thetaE_sigmaK_sweep.json').write_text(json.dumps(sweep, indent=2), encoding='utf-8')
+                    try:
+                        # Use global matplotlib import to avoid shadowing issues
+                        xs = [0.00,0.02,0.03,0.05]
+                        rmse = [sweep[f"sigma_{x:.3f}"]['RMSE_abs_arcsec'] for x in xs]
+                        bias = [sweep[f"sigma_{x:.3f}"]['Bias_abs_arcsec'] for x in xs]
+                        plt.figure(figsize=(5.6,3.6))
+                        plt.plot(xs, rmse, 'o-', label='RMSE_abs [arcsec]')
+                        plt.plot(xs, bias, 's--', label='Bias_abs [arcsec]')
+                        plt.xlabel('σ_κ'); plt.ylabel('Metric'); plt.grid(alpha=0.3); plt.legend(frameon=False)
+                        plt.tight_layout(); plt.savefig(images_dir / 'lensing_thetaE_sigmaK_sweep.png', dpi=140); plt.close()
+                    except Exception as _e:
+                        logging.debug(f"sigmaK sweep plot skipped: {_e}")
+                except Exception as _e:
+                    logging.warning(f"σ_κ sweep failed: {_e}")
+            # Posterior-predictive coverage (θE) using κ_ext and θE_obs errors
+            if coverage:
+                try:
+                    rng = np.random.default_rng(123)
+                    S = int(max(500, coverage_samples))
+                    # build arrays from table for obs err
+                    err_obs = []
+                    lens_ids = []
+                    with out_csv.open('r', encoding='utf-8') as f2:
+                        hdr = f2.readline().strip().split(',')
+                        cm2 = {h:i for i,h in enumerate(hdr)}
+                        for line in f2:
+                            parts = [s.strip() for s in line.strip().split(',')]
+                            try:
+                                terr = float(parts[cm2['theta_E_obs_err_arcsec']]) if 'theta_E_obs_err_arcsec' in cm2 and parts[cm2['theta_E_obs_err_arcsec']] not in ('','nan','NaN') else float('nan')
+                                tobs = float(parts[cm2['theta_E_obs_arcsec']]) if 'theta_E_obs_arcsec' in cm2 and parts[cm2['theta_E_obs_arcsec']] not in ('','nan','NaN') else float('nan')
+                                lid = parts[cm2.get('lens_id',0)]
+                            except Exception:
+                                terr = float('nan'); tobs = float('nan'); lid = ''
+                            if np.isfinite(tobs):
+                                if not np.isfinite(terr) or terr<=0:
+                                    terr = 0.02 * tobs
+                                err_obs.append(terr); lens_ids.append(lid)
+                    err_obs = np.asarray(err_obs, float)
+                    # predicted samples from κ_ext
+                    k = rng.normal(float(SYS_CFG.kappa_ext_mean), float(SYS_CFG.kappa_ext_sigma), size=S)
+                    k = np.clip(k, -0.1, 0.1)
+                    th_samp = (pr[None, :] / (1.0 - k[:, None]))
+                    # add measurement noise
+                    noise = rng.normal(0.0, err_obs[None, :], size=(S, len(err_obs)))
+                    pred_y = th_samp + noise
+                    q16 = np.nanpercentile(pred_y, 16, axis=0)
+                    q84 = np.nanpercentile(pred_y, 84, axis=0)
+                    q025 = np.nanpercentile(pred_y, 2.5, axis=0)
+                    q975 = np.nanpercentile(pred_y, 97.5, axis=0)
+                    cover68 = float(np.nanmean((obs>=q16)&(obs<=q84)))
+                    cover95 = float(np.nanmean((obs>=q025)&(obs<=q975)))
+                    # PIT histogram
+                    from scipy.stats import rankdata
+                    pit = []
+                    for j in range(len(obs)):
+                        pit.append(float(np.mean(pred_y[:,j] <= obs[j])))
+                    cover = {
+                        'coverage_68': cover68,
+                        'coverage_95': cover95,
+                        'pit': pit[:],
+                        'lens_ids': lens_ids,
+                    }
+                    (out_dir / 'lensing_thetaE_coverage.json').write_text(json.dumps(cover, indent=2), encoding='utf-8')
+                    try:
+                        # Use global matplotlib import to avoid shadowing issues
+                        plt.figure(figsize=(5.6,3.2))
+                        plt.hist(pit, bins=10, range=(0,1), color='gray', alpha=0.8)
+                        plt.xlabel('PIT'); plt.ylabel('Count'); plt.title('θE posterior-predictive PIT')
+                        plt.grid(alpha=0.3); plt.tight_layout(); plt.savefig(images_dir / 'lensing_thetaE_coverage_pit.png', dpi=140); plt.close()
+                    except Exception as _e:
+                        logging.debug(f"PIT plot skipped: {_e}")
+                except Exception as _e:
+                    logging.warning(f"Coverage computation failed: {_e}")
+            # Amplitude diagnostics: f_M and f_theta
+            try:
+                import csv as _csv
+                out_diag = out_dir / 'lensing_thetaE_mass_ratios.csv'
+                with out_diag.open('w', encoding='utf-8') as df:
+                    df.write('lens_id,theta_E_obs_arcsec,theta_E_RAR_arcsec,f_theta,f_M\n')
+                    # rely on per-lens profiles for Σ_cr and mean_tot(R)
+                    for lid, tobs, trar in rows2:
+                        if not (isinstance(tobs, float) and np.isfinite(tobs) and isinstance(trar, float) and np.isfinite(trar)):
+                            continue
+                        # read profile csv
+                        pfile = out_dir / 'lensing_metric_profiles' / f"{lid}_profiles.csv"
+                        if not pfile.exists():
+                            continue
+                        with pfile.open('r', encoding='utf-8') as pf:
+                            rdr = _csv.DictReader(pf)
+                            R=[]; mean_tot=[]; Sigcr=[]
+                            for rr in rdr:
+                                try:
+                                    R.append(float(rr['R_kpc'])); mean_tot.append(float(rr['mean_tot'])); Sigcr.append(float(rr['Sigma_cr']))
+                                except Exception:
+                                    pass
+                        if not R:
+                            continue
+                        R = np.asarray(R,float); mean_tot = np.asarray(mean_tot,float); Sigcr = np.asarray(Sigcr,float)
+                        Sig_cr = float(np.nanmedian(Sigcr)) if np.all(np.isfinite(Sigcr)) else float('nan')
+                        # observed RE in kpc
+                        # Need D_l to convert: derive from Sigma_cr and z? We cannot invert easily, so approximate using profile grid mapping:
+                        # Interpolate mean_tot at the radius where predicted RAR θE occurs; for observed, approximate f_M via mean_tot(obs R) / Sig_cr
+                        # Convert observed θE (arcsec) to kpc using predicted mapping from RAR RE: R_E_pred_kpc and θE_pred arcsec => scale_kpc_per_arc = R_E_pred_kpc / θE_pred
+                        if trar>0:
+                            # find predicted RE in kpc from vline used earlier; we can approximate by locating where mean_tot == Sig_cr
+                            # fallback: use scale from profiles by computing kpc_per_arc from header via D_l which we don't have here; approximate using R at which mean_tot closest to Sig_cr
+                            idx_closest = int(np.argmin(np.abs(mean_tot - Sig_cr)))
+                            R_E_pred_kpc = float(R[idx_closest])
+                            kpc_per_arc = R_E_pred_kpc / trar if trar>0 else float('nan')
+                        else:
+                            kpc_per_arc = float('nan')
+                        if np.isfinite(kpc_per_arc):
+                            R_E_obs_kpc = tobs * kpc_per_arc
+                            # interpolate mean_tot at R_E_obs_kpc
+                            mt = float(np.interp(R_E_obs_kpc, R, mean_tot, left=mean_tot[0], right=mean_tot[-1]))
+                            f_M = mt / Sig_cr if (np.isfinite(mt) and np.isfinite(Sig_cr) and Sig_cr>0) else float('nan')
+                        else:
+                            f_M = float('nan')
+                        f_theta = trar / tobs if tobs>0 else float('nan')
+                        df.write(f"{lid},{tobs},{trar},{f_theta},{f_M}\n")
+                try:
+                    import pandas as _pd
+                    # Use global matplotlib import to avoid shadowing issues
+                    d=_pd.read_csv(out_dir / 'lensing_thetaE_mass_ratios.csv')
+                    plt.figure(figsize=(5.6,3.2))
+                    plt.hist(d['f_theta'].dropna(), bins=20, color='tab:red', alpha=0.7, label='f_theta')
+                    plt.axvline(1.0, color='k', ls=':')
+                    plt.xlabel('f_theta = θE_pred / θE_obs'); plt.ylabel('Count'); plt.grid(alpha=0.3); plt.legend(frameon=False)
+                    plt.tight_layout(); plt.savefig(images_dir / 'lensing_thetaE_mass_ratios_hist.png', dpi=140); plt.close()
+                except Exception as _e:
+                    logging.debug(f"Mass-ratio histogram skipped: {_e}")
+            except Exception as _e:
+                logging.warning(f"Amplitude diagnostics failed: {_e}")
             # Scatter plot with observed error bars if available
             plt.figure(figsize=(5.6, 5.6))
             # Re-parse table for aligned arrays (obs, err, GR, RAR, NFW)
@@ -1998,6 +2160,11 @@ def main():
     ap.add_argument('--kappa-ext-mean', type=float, default=0.0, help='Mean of κ_ext prior for θE mass-sheet marginalization.')
     ap.add_argument('--kappa-ext-sigma', type=float, default=0.0, help='Sigma of κ_ext prior; if 0, κ_ext marginalization is disabled.')
     ap.add_argument('--kappa-ext-samples', type=int, default=0, help='Number of κ_ext samples for marginalization (e.g., 2000). 0 disables marginalization.')
+    # Coverage and diagnostics
+    ap.add_argument('--coverage', action='store_true', help='Compute posterior-predictive coverage (θE) using κ_ext and measurement errors.')
+    ap.add_argument('--coverage-samples', type=int, default=1000, help='Samples for coverage (per lens). Uses κ_ext samples and Gaussian θE_obs errors.')
+    ap.add_argument('--sigmaK-sweep', action='store_true', help='Sweep σ_κ over {0.00,0.02,0.03,0.05} and record θE metrics.')
+    ap.add_argument('--use-circularized-Re', action='store_true', help='If Re and q are provided in the lens table, use circularized Re = Re*sqrt(q). If q missing, no-op.')
     # Milky Way vertical force Kz and Sigma_1.1
     ap.add_argument('--mw-kz', action='store_true', help='Compute Milky Way Kz(R0,z) and Σ_1.1 from a simple MN+Hernquist baryon model; also provide a D-scaled (RAR) approximation.')
     ap.add_argument('--mw-R0-kpc', type=float, default=8.2, help='Solar radius R0 (kpc) for Kz/Σ_1.1 calculation.')
@@ -2441,6 +2608,9 @@ def main():
                 nfw_enable=bool(args.nfw_enable),
                 nfw_mass_ratio=float(args.nfw_mass_ratio),
                 nfw_c=float(args.nfw_c),
+                coverage=bool(getattr(args,'coverage', False)),
+                coverage_samples=int(getattr(args,'coverage_samples', 1000)),
+                sigmaK_sweep=bool(getattr(args,'sigmaK_sweep', False)),
             )
         except Exception as e:
             logging.warning(f"Lensing step skipped: {e}")
