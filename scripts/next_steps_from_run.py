@@ -1912,7 +1912,7 @@ def kz_sigma_from_grid(
         lo = min(mid, jmax)
         hi = max(mid, jmax)
         sl = slice(lo, hi + 1)
-        Sigma = np.trapz(rho_tot_SI[iR0, sl], dx=dZ_m)
+        Sigma = np.trapezoid(rho_tot_SI[iR0, sl], dx=dZ_m)
         Kz = TWOPI_G * Sigma
         out.append({'z_kpc': float(z_abs), 'Sigma_SI': float(Sigma), 'Kz_m_s2': float(Kz)})
 
