@@ -1,9 +1,14 @@
 {
   "n_galaxies": 90,
   "n_points": 2488,
-  "chi2_red_median": 25.125673876665424,
-  "chi2_red_mean": 104.45462731438177,
-  "chi2_red_p16": 2.2744438584785613,
-  "chi2_red_p84": 119.56765238012177,
-  "notes": "Derived from per-galaxy overlay source CSVs; standardized residuals z=(Vobs-Vmodel)/sigma."
+  "chi2_red_median": 2.7592506729276076,
+  "chi2_red_mean": 6.439993814412599,
+  "chi2_red_p16": 0.5101335855466699,
+  "chi2_red_p84": 12.666086543099702,
+  "z_raw_p50": -1.170641545373337,
+  "z_raw_p16": -3.412735328898654,
+  "z_raw_p84": 0.17546672744886582,
+  "sigma_floor_kms": 6.0,
+  "obs_frac_sigma": 0.05,
+  "notes": "Standardized residuals z=(Vobs\u2212Vmodel)/sqrt(\u03c3^2 + \u03c3_floor^2 + (f\u00b7V_obs)^2). Histogram clipped to [\u22125,5] for display."
 }

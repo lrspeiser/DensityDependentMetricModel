@@ -202,6 +202,7 @@ def write_table_md(rows: list[dict]):
 
 
 def write_delta_aic(delta_chi2: Optional[float], out_json: str):
+    # Deprecated: left for backward compatibility
     payload = {
         "delta_chi2": delta_chi2,
         "delta_aic": (None if delta_chi2 is None else float(delta_chi2 + 2.0)),
@@ -298,7 +299,11 @@ def write_manuscript_snippets(table_rows: list[dict], delta_aic_json: str):
         "Coverage improves and bias is reduced (Chab: ",        cov_fmt(cov_chab), "; Salp: ", cov_fmt(cov_sal), ").",
     ]
     if delta and delta.get("delta_aic") is not None:
-        para_lines.append(f" The ΔAIC favoring δIMF=+0.23 over 0.00 is {delta['delta_aic']:.2f} (Δχ²={delta['delta_chi2']:.2f} + 2).")
+        extra = f" The ΔAIC favoring δIMF=+0.23 over 0.00 is {delta['delta_aic']:.2f} (Δχ²={delta['delta_chi2']:.2f} + 2)."
+        n_ch = delta.get("n_eff_chab"); n_sa = delta.get("n_eff_sal")
+        if isinstance(n_ch, int) or isinstance(n_sa, int):
+            extra += f" Computed on N_eff={n_ch if n_ch is not None else 'N/A'} (Chab) and N_eff={n_sa if n_sa is not None else 'N/A'} (Sal)."
+        para_lines.append(extra)
     paragraph = "".join(para_lines) + "\n"
     para_path = os.path.join(DOCS_ROOT, "paper_snippets", "lensing_imf_paragraph.md")
     with open(para_path, "w") as f:
@@ -320,6 +325,7 @@ def main() -> int:
     rows = []
     ftheta_by_variant: Dict[str, np.ndarray] = {}
     chi2_map: Dict[str, Optional[float]] = {}
+    n_map: Dict[str, Optional[int]] = {}
     for label, sub in VARIANTS.items():
         vp = resolve_variant_paths(latest, sub)
         if not os.path.exists(vp.metrics_json) or not os.path.exists(vp.coverage_json):
@@ -375,8 +381,10 @@ def main() -> int:
                 ftheta_by_variant[label] = f
             chi2, n = compute_chi2(df)
             chi2_map[label] = chi2
+            n_map[label] = n
         else:
             chi2_map[label] = None
+            n_map[label] = None
 
     # Write table
     table_path = write_table_md(rows)
@@ -388,8 +396,20 @@ def main() -> int:
         c_chab = chi2_map.get("Chabrier (δ=0.00)")
         if c_sal is not None and c_chab is not None:
             delta_chi2 = c_sal - c_chab
+    # Record effective N used in chi2 per variant
+    n_eff_chab = n_map.get("Chabrier (δ=0.00)")
+    n_eff_sal = n_map.get("Salpeter-like (δ=+0.23)")
     delta_json = os.path.join(DOCS_ROOT, "metrics", "lensing_imf_delta_aic.json")
-    write_delta_aic(delta_chi2, delta_json)
+    # Extend JSON with effective N values
+    payload = {
+        "delta_chi2": delta_chi2,
+        "delta_aic": (None if delta_chi2 is None else float(delta_chi2 + 2.0)),
+        "definition": "ΔAIC = Δχ² + 2 (one added population-level parameter δIMF)",
+        "n_eff_chab": int(n_eff_chab) if isinstance(n_eff_chab, (int, float)) and n_eff_chab is not None else None,
+        "n_eff_sal": int(n_eff_sal) if isinstance(n_eff_sal, (int, float)) and n_eff_sal is not None else None,
+    }
+    with open(delta_json, "w") as f:
+        json.dump(payload, f, indent=2)
 
     # Histogram
     hist_png = os.path.join(DOCS_ROOT, "figures", "lensing_imf_f_theta_hist.png")

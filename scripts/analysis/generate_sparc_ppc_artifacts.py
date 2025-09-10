@@ -66,14 +66,18 @@ def main() -> int:
             elif cl in ("r_kpc", "r"):
                 rename[c] = "R_kpc"
         df = df.rename(columns=rename)
-        for needed in ("V_obs", "e_V_obs", "V_model"):
-            if needed not in df.columns:
-                print(f"[warn] Missing column {needed} in {f.name}")
-                continue
+        missing = [k for k in ("V_obs", "e_V_obs", "V_model") if k not in df.columns]
+        if missing:
+            print(f"[warn] Skipping {f.name}: missing columns {missing}")
+            continue
         v_obs = pd.to_numeric(df["V_obs"], errors="coerce")
         v_mod = pd.to_numeric(df["V_model"], errors="coerce")
         e_v = pd.to_numeric(df["e_V_obs"], errors="coerce")
-        z = (v_obs - v_mod) / e_v.replace(0, np.nan)
+        # Apply headline floor policy for standardization
+        SIGMA_FLOOR = 6.0
+        FRAC_FLOOR = 0.05
+        sigma_eff = np.sqrt(e_v**2 + SIGMA_FLOOR**2 + (FRAC_FLOOR * v_obs)**2)
+        z = (v_obs - v_mod) / sigma_eff.replace(0, np.nan)
         z = z.replace([np.inf, -np.inf], np.nan)
         zc = z.dropna()
         if len(zc) == 0:
@@ -99,13 +103,19 @@ def main() -> int:
         "chi2_red_mean": float(np.mean(per_gal_stats)),
         "chi2_red_p16": float(np.percentile(per_gal_stats, 16)),
         "chi2_red_p84": float(np.percentile(per_gal_stats, 84)),
-        "notes": "Derived from per-galaxy overlay source CSVs; standardized residuals z=(Vobs-Vmodel)/sigma.",
+        "z_raw_p50": float(np.median(z_all)),
+        "z_raw_p16": float(np.percentile(z_all, 16)),
+        "z_raw_p84": float(np.percentile(z_all, 84)),
+        "sigma_floor_kms": 6.0,
+        "obs_frac_sigma": 0.05,
+        "notes": "Standardized residuals z=(Vobs−Vmodel)/sqrt(σ^2 + σ_floor^2 + (f·V_obs)^2). Histogram clipped to [−5,5] for display.",
     }
     (DOCS/"metrics"/"sparc_fit_quality.json").write_text(json.dumps(fit_json, indent=2))
 
     # Histogram panel
     DOCS.joinpath("figures").mkdir(parents=True, exist_ok=True)
-    counts, edges = np.histogram(z_all.clip(-5, 5), bins=30, density=True)
+    z_clip = z_all.clip(-5, 5)
+    counts, edges = np.histogram(z_clip, bins=30, density=True)
     x = 0.5 * (edges[:-1] + edges[1:])
     plt.figure(figsize=(6.4, 4.2))
     plt.bar(x, counts, width=(edges[1]-edges[0]), alpha=0.6, color="tab:blue", label="SPARC standardized residuals")
