@@ -133,7 +133,7 @@ def main():
         name = (r.get("SDSS") or "").strip()
         z_l = safe_float(r.get("zlens"))
         z_s = safe_float(r.get("zsrc"))
-        RE = safe_float(r.get("RE"))  # arcsec (per SLACS table conventions)
+        RE_kpc = safe_float(r.get("RE"))  # SLACS table provides Einstein radius in kpc
         logMc = safe_float(r.get("logMc"))
         elogMc = safe_float(r.get("e_logMc"))
         # Choose Re in band priority I, V, B
@@ -153,12 +153,18 @@ def main():
         notes = f"SLACS Auger+2009; MType={mtype}{'; companion' if comp=='c' else ''}; Re_band={band}"
 
         # 1) Source-like CSV row
+        # Convert RE_kpc to arcsec if possible
+        th_arc = None
+        if (RE_kpc is not None) and (z_l is not None):
+            kpc_per_arc = kpc_per_arcsec_flatlcdm(z_l)
+            if kpc_per_arc is not None and kpc_per_arc > 0:
+                th_arc = RE_kpc / kpc_per_arc
         src_row = [
             name,
             "SLACS",
             f"{z_l if z_l is not None else ''}",
             f"{z_s if z_s is not None else ''}",
-            f"{RE if RE is not None else ''}",
+            f"{th_arc if th_arc is not None else ''}",
             "",  # theta_E_err_arcsec unknown in table
             f"{logMc if logMc is not None else ''}",
             f"{elogMc if elogMc is not None else ''}",
@@ -166,7 +172,7 @@ def main():
             "4",  # n_sersic default (ETG)
             "",   # q_axis_ratio not provided here
             band,
-            notes,
+            notes + "; RE_kpc from SLACS converted to arcsec",
         ]
         src_lines.append(",".join(src_row))
 
@@ -183,10 +189,10 @@ def main():
             f"{logMc if logMc is not None else ''}",
             f"{Re_kpc if Re_kpc is not None else ''}",
             "4",  # n_sersic default
-            f"{RE if RE is not None else ''}",
+            f"{th_arc if th_arc is not None else ''}",
             "",  # theta_E_obs_err_arcsec unknown
             "sersic",
-            notes,
+            notes + "; RE_kpc from SLACS converted to arcsec",
         ]
         orch_lines.append(",".join(orch_row))
 
