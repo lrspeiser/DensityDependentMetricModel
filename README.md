@@ -150,10 +150,15 @@ We selected representative spirals spanning mass and surface brightness. For eac
 
 Caption: Generalization test: the same gate form explains diverse rotation‑curve shapes. Titles show best‑fit $a_0$ and $\Delta\chi^2$ vs GR. A summary table of $\Delta\chi^2$ vs GR and an NFW yardstick (standard priors) is provided (see `model_comparison_bic.csv`); selection criteria appear in Methods.
 
-**RAR master panel** (optional ΛCDM band) is available at  
-`images/next_steps/rar_plateau_mw_full/rar_master_panel.png`.
+**RAR master panel** (optional ΛCDM band).
+
+![RAR master panel — SPARC selection with DGG posterior band](images/paper/rar_master_panel.png)
+
+Source‑Data: `results/next_steps/enhanced_20250805_115400/rar_master_panel_source.csv`.
 
 **BTFR outcome.** On a working subset (N≈89) using $M_b=M_\star+1.33\,M_{\mathrm{HI}}$ and observed $V_{\rm flat}$, a simple log–log fit yields slope $3.184\,[3.034,\,3.332]$ (p50 [p16, p84]); $R^2\approx0.885$ and RMS scatter $\approx0.22$ dex (see `btfr_fit_summary.json`). The deep‑regime prediction from the $\nu$‑function approaches $M_b\propto V^4$; selection criteria and goodness‑of‑fit metrics are documented (Methods), and we compare slope/scatter to SPARC BTFR results (SI).
+
+![BTFR (subset)](images/next_steps/btfr_fix_20250906/btfr_baryonic.png)
 
 Caption: Scaling law: slope $3.18[3.03,3.33]$ (p50 [p16, p84]); RMS $\approx0.22$ dex. Band shows bootstrap CI. Selection and flatness criteria are specified in Methods.
 
@@ -353,6 +358,18 @@ Aggregate summary: `results/mw_kz_sigma.csv`
 - Figure: `results/next_steps/btfr_fix_20250906/combined/global_alpha/lensing_global_alpha_pred_vs_obs.png`
 
 > CASTLES conversion used: `results/next_steps/btfr_fix_20250906/lenses_castles_small_converted.csv`.
+
+### Dmax plateau sweep (SI; lensing sensitivity)
+
+Small summary from three runs with $D_{\max}\in\{30,50,80\}$ (paper preset uses 50). Lensing θ_E metrics are unchanged across this range (expected: Dmax primarily affects extreme low‑g tail beyond our data domain).
+
+| Dmax | RMSE_rel | MAE_rel | RMSE_abs_arcsec | MAE_abs_arcsec |
+|-----:|---------:|--------:|----------------:|---------------:|
+| 30 | 0.4873 | 0.3981 | 1.2263 | 0.8841 |
+| 50 | 0.4873 | 0.3981 | 1.2263 | 0.8841 |
+| 80 | 0.4873 | 0.3981 | 1.2263 | 0.8841 |
+
+Source‑Data: `results/dmax_sweep/dmax_summary.csv`.
 
 ## Reproducibility (SI §R)
 
