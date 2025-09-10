@@ -101,3 +101,19 @@ File/code pointers
 - core/density_metric_cupy.py: xi_rar_plateau_cupy (no internal cap)
 - tools/summarize_dmax_sweep.py: summary aggregator (extended to include SPARC and MW Kz)
 
+Empirical sweep results (this repo snapshot)
+- Combined summary CSV (tracked): docs/dmax_sweep_summary.csv
+- Lensing (N_lens = 12):
+  - RMSE_rel spans 0.5597909–0.5597935 (<0.001% delta).
+  - MAE_rel spans 0.49339736–0.49339899 (<0.001% delta).
+  - RMSE_abs_arcsec ≈ 1.085711 ± 0.000002; MAE_abs_arcsec ≈ 0.847493 ± 0.000002.
+- SPARC rotation curves (N = 89):
+  - Reduced χ² (RAR) = 17.6374; Reduced χ² (GR) = 46.6017; invariant across D_max ∈ {30, 50, 80, ∞}.
+  - Median Δχ² (GR − RAR) = 350.741; fraction of galaxies with χ²_RAR < χ²_GR = 0.764; invariant across the sweep.
+- Model comparison proxy:
+  - Median ΔlogZ_RAR−GR (BIC-based) = 173.782; identical across D_max.
+- Milky Way vertical force:
+  - Kz at z ≈ 1.1 kpc = 1.944323189816419e8 m s⁻²; identical across D_max.
+
+Interpretation
+- Within D_max ∈ {30, 50, 80, ∞}, the cap does not materially affect SPARC fits, lensing θE, or MW Kz at the precision of our pipeline. Typical datasets do not probe the ultra-deep regime where a plateau would bind. Using the paper default D_max = 50 is therefore safe for the analyses reported here; we disclose the chosen value and provide the sweep for transparency.
