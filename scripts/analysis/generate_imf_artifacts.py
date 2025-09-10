@@ -327,15 +327,23 @@ def main() -> int:
             continue
         m = load_json(vp.metrics_json)
         c = load_json(vp.coverage_json)
+        # Support both legacy and current key styles
+        N = m.get("N", m.get("n_lenses"))
+        RMSE_abs = m.get("RMSE_abs_arcsec", m.get("rmse_abs_arcsec"))
+        MAE_abs = m.get("MAE_abs_arcsec", m.get("mae_abs_arcsec"))
+        Bias_abs = m.get("Bias_abs_arcsec", m.get("bias_abs_arcsec"))
+        RMSE_rel = m.get("RMSE_rel", m.get("rmse_rel"))
+        MAE_rel = m.get("MAE_rel", m.get("mae_rel"))
+        Bias_rel = m.get("Bias_rel", m.get("bias_rel"))
         rows.append({
             "IMF variant": label,
-            "N": m.get("n_lenses"),
-            "RMSE_abs [arcsec]": round(m.get("rmse_abs_arcsec", float('nan')), 3),
-            "MAE_abs [arcsec]": round(m.get("mae_abs_arcsec", float('nan')), 3),
-            "Bias_abs [arcsec]": round(m.get("bias_abs_arcsec", float('nan')), 3),
-            "RMSE_rel": round(m.get("rmse_rel", float('nan')), 3),
-            "MAE_rel": round(m.get("mae_rel", float('nan')), 3),
-            "Bias_rel": round(m.get("bias_rel", float('nan')), 3),
+            "N": int(N) if isinstance(N, (int, float)) and np.isfinite(N) else N,
+            "RMSE_abs [arcsec]": round(float(RMSE_abs), 3) if RMSE_abs is not None else None,
+            "MAE_abs [arcsec]": round(float(MAE_abs), 3) if MAE_abs is not None else None,
+            "Bias_abs [arcsec]": round(float(Bias_abs), 3) if Bias_abs is not None else None,
+            "RMSE_rel": round(float(RMSE_rel), 3) if RMSE_rel is not None else None,
+            "MAE_rel": round(float(MAE_rel), 3) if MAE_rel is not None else None,
+            "Bias_rel": round(float(Bias_rel), 3) if Bias_rel is not None else None,
             "Coverage_68": round(c.get("coverage_68", float('nan')), 3) if isinstance(c.get("coverage_68"), (int, float)) else c.get("coverage_68"),
             "Coverage_95": round(c.get("coverage_95", float('nan')), 3) if isinstance(c.get("coverage_95"), (int, float)) else c.get("coverage_95"),
         })

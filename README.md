@@ -192,7 +192,13 @@ We map surface brightness to stellar mass using an SED‑informed $M/L$ prior (b
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
 
-Caption: Lensing consistency on SLACS sample (N=70). Using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Summary metrics (RAR vs GR): RMSE$_{\rm abs}$ = 3.610″ vs 3.712″; RMSE$_{\rm rel}$ = 0.808 vs 0.836. With modest external‑convergence marginalization ($\kappa_{\rm ext}\sim\mathcal N(0,0.03)$, 2000 samples), RAR metrics change negligibly (RMSE$_{\rm abs}^{\kappa}$ = 3.610″; RMSE$_{\rm rel}^{\kappa}$ = 0.808). Residual panels accompany the figure. Methods caveat: spherical Sérsic baseline; axis ratio $q$ not modeled here; circularized‑radius correction and axisymmetric deprojection planned in SI.
+Caption: Lensing consistency on SLACS sample (N=70). Using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Summary metrics (RAR vs GR; Chabrier baseline): RMSE$_{\rm abs}$ = 0.553″ vs 0.655″; RMSE$_{\rm rel}$ = 0.440 vs 0.523; MAE$_{\rm abs}$ = 0.519″ vs 0.624″; Bias$_{\rm abs}$ = −0.519″ vs −0.624″. With modest external‑convergence marginalization ($\kappa_{\rm ext}\sim\mathcal N(0,0.03)$, 2000 samples), RAR metrics are unchanged at the $10^{-3}$ level (RMSE$_{\rm abs}^{\kappa}\!\approx\!0.553\,\!\!$″; RMSE$_{\rm rel}^{\kappa}\!\approx\!0.440$). Figure shown uses Chabrier ($\delta_{\rm IMF}=0.00$) masses; a Salpeter‑like population offset $\delta_{\rm IMF}=+0.23$ brings the amplitude into closer agreement and improves calibration—see “IMF normalization for SLACS ETGs” below. Circularized $R_e$ using axis ratio $q$ is enabled in the paper preset; see run metadata.
+
+**IMF normalization for SLACS ETGs.** With SED masses on a Chabrier IMF prior, the metric‑only GG prediction underestimates Einstein radii (high‑$g$; $\xi\simeq1$). Introducing a single population‑level offset $\delta_{\rm IMF}$ for early‑type lenses (Salpeter‑like, +0.23 dex) brings the amplitude into agreement without changing $\xi(g)$. Coverage improves and bias is reduced (Chab: 68% = 0.014, 95% = 0.100; Salp: 68% = 0.500, 95% = 0.800). See also:
+- Table: `docs/tables/lensing_imf_comparison.md`
+- Histogram: `docs/figures/lensing_imf_f_theta_hist.png`
+- ΔAIC JSON: `docs/metrics/lensing_imf_delta_aic.json`
+- q‑axis summary: `docs/stats/lensing_q_axis_ratio_summary.json`
 
 [Theoretical stacked ΔΣ moved to supplemental] See docs/supplemental_lensing_stack.md for the theory‑only stack (with GR vs RAR overlay), code references, and source tables. We omit it from the main paper because no observed stack is overlaid here; accuracy is judged instead via the θ_E comparison (predicted vs observed), for which metrics and scatter are included above.
 
@@ -261,7 +267,7 @@ Importer sanity checks (applied in scripts/tools):
 **PPN mapping and export.** In the metric subclass we adopt, the weak-field line element is $ds^2=-(1+2\Phi/c^2)dt^2+(1-2\Psi/c^2)d\mathbf x^2$ with screening such that $\Phi=\Psi$ and $c_T=1$. The DGG gate $\xi(g)$ rescales the weak-field potential by a small factor $1+\epsilon$ with $\epsilon\equiv\xi-1\ll1$ in the Solar System. Matching coefficients of the baryonic Newtonian potential $U$ at 1PN, the equal additive contribution of $c^2\phi_{\rm env}$ to $g_{00}$ and $g_{ij}$ implies the coefficient ratio is unity: $\gamma=1$; $\beta=1$; and preferred‑frame parameters $\alpha_{1,2}=0$ in this limit. Cassini measures the coefficient of the logarithmic term in the Shapiro delay relative to the ephemeris $GM_\odot$; hence the two regimes (degenerate vs non‑degenerate amplitude) discussed in docs/ppn_mapping.md. We therefore use $|\Delta G/G|=|\xi-1|$ as a conservative amplitude tracer and export a PPN table with columns $(\mathrm{AU},\gamma-1,\beta-1,\alpha_1,\alpha_2,|\Delta G/G|)$ alongside the Solar System source‑data CSV. The figure shows $|\Delta G/G|$ vs. $r$ with planetary semi‑major axes marked and a reference band for the Cassini $|\gamma-1|$ limit on a secondary axis. See docs/ppn_mapping.md for the precise $\gamma/\epsilon$ conditions.
 
 PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\gamma$ is the ratio of the coefficients of $U$ in $g_{ij}$ vs $g_{00}$. In our subclass with screening and $\Phi=\Psi$, both potentials receive the same additive $c^2\phi_{\rm env}$ at 1PN, so the coefficients of $U$ match and $\gamma=1$, while light‑deflection and Shapiro‑delay amplitudes scale with $(1+\gamma)U\to (1+\gamma)(1+\epsilon)U$. Because Cassini determines this coefficient relative to the ephemeris $GM_\odot$, a uniform $\epsilon$ absorbed into $GM_\odot$ leaves $\gamma$ unchanged (degenerate regime); if not absorbed, $|\gamma-1|$ projects to $|\epsilon|$ at the $\sim10^{-5}$ level along the ray. We therefore use $|\Delta G/G|$ as a conservative tracer and refer to docs/ppn_mapping.md for details; in the screened Solar limit both $\epsilon$ and $|\gamma-1|$ approach zero, consistent with the CSV export (ε treated as locally constant over 1–30 AU).
-**Lensing (metric‑only).** We adopt a metric‑only mapping with $\Phi=\Psi$; the deflection potential is $2\Phi$, so the same $\xi(g)$ that boosts dynamics boosts lensing. Critical surface density $\Sigma_{\rm cr}(z_l, z_s)$ and distances use a flat $\Lambda$CDM cosmology with $H_0=70\,\mathrm{km\,s^{-1}\,Mpc^{-1}}$ and $\Omega_m=0.3$. Stellar masses come from SED‑based $M/L$ (prior specified in Supplement), and sizes $(R_e, n)$ are measured from the discovery images or follow‑ups listed in the lens table. Residuals and goodness‑of‑fit metrics for $\theta_E$ are written to `lensing_thetaE_residuals.csv` and `lensing_thetaE_metrics.json`.  
+**Lensing (metric‑only).** We adopt a metric‑only mapping with $\Phi=\Psi$; the deflection potential is $2\Phi$, so the same $\xi(g)$ that boosts dynamics boosts lensing. Critical surface density $\Sigma_{\rm cr}(z_l, z_s)$ and distances use a flat $\Lambda$CDM cosmology with $H_0=70\,\mathrm{km\,s^{-1}\,Mpc^{-1}}$ and $\Omega_m=0.3$. Stellar masses come from SED‑based $M/L$ (prior specified in Supplement), and sizes $(R_e, n)$ are measured from the discovery images or follow‑ups listed in the lens table. Residuals and goodness‑of‑fit metrics for $\theta_E$ are written to `lensing_thetaE_residuals.csv` and `lensing_thetaE_metrics.json`. The ETG mass normalization $\delta_{\rm IMF}$ is a single population‑level parameter applied to all SLACS lenses; it is not a per‑lens degree of freedom. For fairness, we apply the same IMF choice to the GR+baryons baseline.  
 **Model comparison.** Δlog Z histograms are reported as a BIC approximation; full evidences are produced when hierarchical runs are enabled.
 
 **NFW comparator priors.** For the NFW yardstick we adopt weak, non‑informative bounds on \(\log_{10} M_{200}\) and \(c\) consistent with a standard mass–concentration relation at \(z\simeq 0\). Fits are performed by \(\chi^2\) minimization on the same radii and velocity uncertainties as the DGG/GR fits; exact prior ranges and any mass–concentration hyper‑prior are listed in SI (Table Sx).
@@ -277,10 +283,12 @@ PPN mapping (sketch). In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\g
 Quick start (one command)
 - From repo root, with paper run NPZ and SPARC rotmods available:
   ```bash
-  RUN_DIR=runs/enhanced_20250805_115400 \
+RUN_DIR=runs/enhanced_20250805_115400 \
   SPARC_DIR=external_data/Rotmod_LTG \
-  LENS_CSV=docs/lensing_targets.csv \
+  LENS_CSV=docs/lensing_targets_slacs.csv \
   ./reproduce_paper.sh
+  # Paper preset: circularized Re (q) enabled and δIMF=+0.23 (ETG) by default; override via
+  #   --use-circularized-Re=false or --delta-imf-dex 0.0 for Chabrier variant.
   ```
 - Docker (CPU-first):
   ```bash
@@ -288,7 +296,7 @@ Quick start (one command)
   docker run --rm -it \
     -e RUN_DIR=runs/enhanced_20250805_115400 \
     -e SPARC_DIR=external_data/Rotmod_LTG \
-    -e LENS_CSV=docs/lensing_targets.csv \
+-e LENS_CSV=docs/lensing_targets_slacs.csv \
     -v "$PWD/runs:/app/runs" \
     -v "$PWD/external_data/Rotmod_LTG:/app/external_data/Rotmod_LTG:ro" \
     -v "$PWD/results:/app/results" \
@@ -334,8 +342,6 @@ For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 
 
 - JSON: `results/next_steps/enhanced_20250805_115400/sparc_fit_quality.json` (raw vs floor)
 - Figure: `images/next_steps/enhanced_20250805_115400/sparc_ppc_panel.png`
-
-### Universality (mini‑table)
 
 ### Universality (mini‑table)
 
