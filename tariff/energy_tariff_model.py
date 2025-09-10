@@ -231,6 +231,8 @@ def main(argv: List[str] | None = None) -> int:
                     help="Photon energy density u_γ in eV/cm^3 (CMB+EBL proxy); used if --energy-coupled")
     ap.add_argument("--E0-evcm3", type=float, default=0.26,
                     help="Reference energy density E0 in eV/cm^3; used if --energy-coupled")
+    ap.add_argument("--plot-energy-balance", action="store_true",
+                    help="Plot E_emit (normalized), E_obs^data=1/(1+z), and E_obs^model(r_data) vs distance from Pantheon+ μ")
     args = ap.parse_args(argv)
 
     # Calibrate or accept k
@@ -349,6 +351,50 @@ def main(argv: List[str] | None = None) -> int:
         out_hd = "hubble_diagram_with_data.png"
         plt.savefig(out_hd, dpi=150)
         print(f"Saved Hubble Diagram: {out_hd}")
+
+    # Optional: Energy balance plot using Pantheon+ distances
+    if args.plot_energy_balance:
+        try:
+            z_data, mu_data, mu_err = load_pantheon_data(args.data_file)
+            print(f"Loaded Pantheon+ data: N={len(z_data)} from '{args.data_file}' for energy plot")
+        except FileNotFoundError:
+            print(f"Pantheon+ data file not found: '{args.data_file}'")
+            return 1
+        # Filter finite
+        mask = np.isfinite(z_data) & np.isfinite(mu_data)
+        z_use = z_data[mask]
+        mu_use = mu_data[mask]
+        # Convert μ to distance (pc → Mpc) under Euclidean static mapping
+        d_pc = 10.0 ** ((mu_use + 5.0) / 5.0)
+        r_mpc = d_pc / 1.0e6
+        # Compute per-photon energy ratios
+        E_emit = np.ones_like(r_mpc)
+        E_obs_data = 1.0 / (1.0 + z_use)
+        # Model-predicted z at same distances
+        z_model = np.array([sim.redshift(float(r), steps=4000) for r in r_mpc])
+        E_obs_model = 1.0 / (1.0 + z_model)
+        # Sort by distance for nicer lines
+        idx = np.argsort(r_mpc)
+        r_sorted = r_mpc[idx]
+        E_emit_s = E_emit[idx]
+        E_obs_data_s = E_obs_data[idx]
+        E_obs_model_s = E_obs_model[idx]
+        # Plot
+        plt.figure(figsize=(12, 7))
+        plt.plot(r_sorted, E_emit_s, '-', color='black', lw=1.5, label='E_emit (normalized)')
+        plt.plot(r_sorted, E_obs_data_s, '-', color='steelblue', lw=2.0, label='E_obs from data (1/(1+z))')
+        plt.plot(r_sorted, E_obs_model_s, '-', color='crimson', lw=2.0, label='E_obs from model at r(μ)')
+        plt.xlabel('Distance r from μ (Mpc)')
+        plt.ylabel('Per-photon energy (normalized to E_emit=1)')
+        plt.title('Energy balance vs distance: E_emit, E_obs(data), E_obs(model)')
+        plt.grid(True, ls='--', alpha=0.5)
+        plt.legend()
+        out_energy = 'energy_balance_plot.png'
+        plt.savefig(out_energy, dpi=150)
+        # Simple metric
+        rmse = float(np.sqrt(np.mean((E_obs_model - E_obs_data) ** 2)))
+        print(f"Saved energy balance plot: {out_energy}")
+        print(f"RMSE(E_obs_model vs E_obs_data) = {rmse:.6e}")
 
     return 0
 
