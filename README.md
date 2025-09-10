@@ -322,6 +322,15 @@ docker run --rm -it \
 7. Will, C. M., The Confrontation between General Relativity and Experiment, Living Reviews in Relativity (2014, 2018 update).
 8. Auger, M. W., et al. (2009), The Sloan Lens ACS Survey. IX. Colors, Lensing, and Stellar Masses of Early-type Galaxies, ApJ 705, 1099.
 9. Bolton, A. S., et al. (2008), The Sloan Lens ACS Survey. V. The Full ACS Strong-Lens Sample, ApJ 682, 964.
+10. Shapiro, I. I. (1964): Fourth Test of General Relativity. Phys. Rev. Lett. 13, 789.
+11. Milgrom, M. (2010): Quasi-linear formulation of MOND (QUMOND). MNRAS 403, 886.
+12. Famaey, B. & McGaugh, S. (2012): Modified Newtonian Dynamics (MOND): Observational Phenomenology and Relativistic Extensions. Living Reviews in Relativity 15, 10.
+13. Skordis, C. & Zlosnik, T. (2021): A New Relativistic Theory for MOND with Positive Energy. Phys. Rev. Lett. 127, 161302.
+14. Abbott, B. P., et al. (LIGO/Virgo, 2017): GW170817: Observation of Gravitational Waves from a Binary Neutron Star Inspiral. Phys. Rev. Lett. 119, 161101; and associated multi-messenger constraints on c_T.
+15. Miyamoto, M. & Nagai, R. (1975): Three-dimensional models for the distribution of mass in galaxies. PASJ 27, 533.
+16. Hernquist, L. (1990): An analytical model for spherical galaxies and bulges. ApJ 356, 359.
+17. Sérsic, J. L. (1968): Atlas de Galaxias Australes. Observatorio Astronómico, Córdoba.
+18. Bartelmann, M. & Schneider, P. (2001): Weak gravitational lensing. Physics Reports 340, 291–472.
 
 ---
 
