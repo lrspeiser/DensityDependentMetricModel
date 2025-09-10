@@ -390,17 +390,23 @@ Updated SLACS outcome (N=70):
 
 κ_ext prior: mean=0, σ=0.03, samples=2000.
 
-### Dmax plateau sweep (SI; lensing sensitivity)
+### D_max plateau sweep (insensitivity across 30–∞)
 
-Small summary from three runs with $D_{\max}\in\{30,50,80\}$ (paper preset uses 50). Lensing θ_E metrics are unchanged across this range (expected: Dmax primarily affects extreme low‑g tail beyond our data domain).
+We ran the post‑processing cap $D_{\max}$ over {30, 50, 80, ∞} using the same pipeline (SPARC, MW $K_z$, metric‑only lensing). Results are insensitive across this range:
 
-| Dmax | RMSE_rel | MAE_rel | RMSE_abs_arcsec | MAE_abs_arcsec |
-|-----:|---------:|--------:|----------------:|---------------:|
-| 30 | 0.4873 | 0.3981 | 1.2263 | 0.8841 |
-| 50 | 0.4873 | 0.3981 | 1.2263 | 0.8841 |
-| 80 | 0.4873 | 0.3981 | 1.2263 | 0.8841 |
+- Lensing (N=12): RMSE_rel ≈ 0.559791; MAE_rel ≈ 0.493397; RMSE_abs ≈ 1.085711″; MAE_abs ≈ 0.847493″ (differences < 10⁻⁶ across caps).
+- SPARC (N=89): reduced χ² (RAR) = 17.6374; reduced χ² (GR) = 46.6017; median Δχ²(GR−RAR) = 350.741; fraction with χ²_RAR < χ²_GR = 0.764 — invariant with $D_{\max}$.
+- Model comparison: median ΔlogZ$_{\rm RAR−GR}$ (BIC‑based) = 173.782 — invariant.
+- Milky Way vertical force: $K_z(1.1\,\mathrm{kpc}) = 1.944323189816419\times10^8\,\mathrm{m\,s^{-2}}$ — identical across caps.
 
-Source‑Data: `results/dmax_sweep/dmax_summary.csv`.
+| D_max | RMSE_rel | MAE_rel | RMSE_abs [″] | MAE_abs [″] |
+|:-----:|---------:|--------:|-------------:|------------:|
+| 30 | 0.5597935 | 0.4933990 | 1.0857125 | 0.8474946 |
+| 50 | 0.5597909 | 0.4933974 | 1.0857106 | 0.8474927 |
+| 80 | 0.5597909 | 0.4933974 | 1.0857106 | 0.8474927 |
+| ∞ | 0.5597909 | 0.4933974 | 1.0857106 | 0.8474927 |
+
+Full details and rationale: see docs/dmax_cap.md. Combined summary CSV: docs/dmax_sweep_summary.csv.
 
 ## Reproducibility (SI §R)
 
