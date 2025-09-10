@@ -197,7 +197,7 @@ We map surface brightness to stellar mass using an SED‑informed $M/L$ prior (b
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
 
-Caption: Lensing consistency on CASTLES sample (N=12). Using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Error bars are drawn when $\sigma_{\theta_E}$ is provided. Summary metrics (RAR vs GR): RMSE$_{\rm abs}$ = 1.086″ vs 1.193″; RMSE$_{\rm rel}$ = 0.560 vs 0.620. With modest external‑convergence marginalization ($\kappa_{\rm ext}\sim\mathcal N(0,0.03)$, 2000 samples), RAR metrics change negligibly (RMSE$_{\rm abs}^{\kappa}$ = 1.086″; RMSE$_{\rm rel}^{\kappa}$ = 0.560). Residual panels accompany the figure.
+Caption: Lensing consistency on SLACS sample (N=70). Using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Summary metrics (RAR vs GR): RMSE$_{\rm abs}$ = 3.610″ vs 3.712″; RMSE$_{\rm rel}$ = 0.808 vs 0.836. With modest external‑convergence marginalization ($\kappa_{\rm ext}\sim\mathcal N(0,0.03)$, 2000 samples), RAR metrics change negligibly (RMSE$_{\rm abs}^{\kappa}$ = 3.610″; RMSE$_{\rm rel}^{\kappa}$ = 0.808). Residual panels accompany the figure.
 
 ![Stacked ΔΣ from metric predictions](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
 
@@ -371,7 +371,7 @@ Aggregate summary: `results/mw_kz_sigma.csv`
 
 ---
 
-### Lensing metrics (CASTLES sample; paper preset)
+### Lensing metrics (SLACS sample; paper preset)
 
 - Per‑lens table: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv`
 - Summary metrics JSON: `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`
@@ -380,17 +380,15 @@ Aggregate summary: `results/mw_kz_sigma.csv`
   `images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,  
   `images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`
 
-Updated CASTLES outcome (N=12):
+Updated SLACS outcome (N=70):
 
 | Model | RMSE_abs [arcsec] | MAE_abs [arcsec] | Bias_abs [arcsec] | RMSE_rel | MAE_rel | Bias_rel |
 |:------|-------------------:|-----------------:|------------------:|---------:|--------:|---------:|
-| RAR (baseline) | 1.086 | 0.847 | -0.822 | 0.560 | 0.493 | -0.455 |
-| GR (baryons)   | 1.193 | 0.953 | -0.946 | 0.620 | 0.559 | -0.548 |
-| RAR (κ_ext‑marg) | 1.086 | 0.848 | -0.822 | 0.560 | 0.494 | -0.456 |
+| RAR (baseline) | 3.610 | 3.311 | -3.311 | 0.808 | 0.803 | -0.803 |
+| GR (baryons)   | 3.712 | 3.416 | -3.416 | 0.836 | 0.832 | -0.832 |
+| RAR (κ_ext‑marg) | 3.610 | 3.311 | -3.311 | 0.808 | 0.803 | -0.803 |
 
 κ_ext prior: mean=0, σ=0.03, samples=2000.
-
-> CASTLES conversion used: `results/next_steps/castles_converted_20250909_204106.csv` (derived from `docs/castles_multiply_imaged_systems.csv`).
 
 ### Dmax plateau sweep (SI; lensing sensitivity)
 
