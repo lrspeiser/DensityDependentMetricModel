@@ -1162,7 +1162,11 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                               nfw_c: float = 8.0,
                               coverage: bool = False,
                               coverage_samples: int = 1000,
-                              sigmaK_sweep: bool = False) -> None:
+                              sigmaK_sweep: bool = False,
+                              delta_imf_dex: float = 0.0,
+                              use_circularized_Re: bool = False,
+                              mstar_sigma_dex: float = 0.10,
+                              Re_frac_sigma: float = 0.035) -> None:
     """Compute lensing for a CSV lens list using spherical baryons and RAR 'phantom mass' from xi.
     CSV columns (header required): lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
 
@@ -1229,8 +1233,18 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             if (row.get('log10M_star','') in ('', 'nan', 'NaN')) or (row.get('Re_kpc','') in ('', 'nan', 'NaN')):
                 logging.warning(f"RAR lensing: skipping lens {lens_id} due to missing log10M_star or Re_kpc")
                 continue
-            log10M = float(row['log10M_star'])
+            # Global IMF offset (ETG normalization)
+            log10M = float(row['log10M_star']) + float(delta_imf_dex)
             Re = float(row['Re_kpc'])
+            # Optionally circularize Re if q present
+            if use_circularized_Re:
+                q_raw = (row.get('q_axis_ratio', '') or row.get('q', '') or '').strip()
+                try:
+                    qv = float(q_raw) if q_raw not in ('', 'nan', 'NaN') else float('nan')
+                except Exception:
+                    qv = float('nan')
+                if np.isfinite(qv) and qv > 0.0 and qv <= 1.0:
+                    Re = float(Re) * float(np.sqrt(qv))
             n = float(row.get('n_sersic', '4') or 4.0)
             # Optional halo inputs for NFW baseline
             halo_logM = row.get('halo_M200_log10', '')
@@ -1534,14 +1548,15 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                         logging.debug(f"sigmaK sweep plot skipped: {_e}")
                 except Exception as _e:
                     logging.warning(f"σ_κ sweep failed: {_e}")
-            # Posterior-predictive coverage (θE) using κ_ext and θE_obs errors
+            # Posterior-predictive coverage (θE) using κ_ext, θE_obs errors, and M*,Re uncertainties (sensitivity-based)
             if coverage:
                 try:
                     rng = np.random.default_rng(123)
                     S = int(max(500, coverage_samples))
-                    # build arrays from table for obs err
+                    # build arrays from table for obs err and retrieve per-lens props for sensitivities
                     err_obs = []
                     lens_ids = []
+                    ZL=[]; ZS=[]; LOGM=[]; RE=[]; NN=[]; PRBASE=[]
                     with out_csv.open('r', encoding='utf-8') as f2:
                         hdr = f2.readline().strip().split(',')
                         cm2 = {h:i for i,h in enumerate(hdr)}
@@ -1551,19 +1566,51 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                                 terr = float(parts[cm2['theta_E_obs_err_arcsec']]) if 'theta_E_obs_err_arcsec' in cm2 and parts[cm2['theta_E_obs_err_arcsec']] not in ('','nan','NaN') else float('nan')
                                 tobs = float(parts[cm2['theta_E_obs_arcsec']]) if 'theta_E_obs_arcsec' in cm2 and parts[cm2['theta_E_obs_arcsec']] not in ('','nan','NaN') else float('nan')
                                 lid = parts[cm2.get('lens_id',0)]
+                                thrar = float(parts[cm2['theta_E_RAR_arcsec']]) if 'theta_E_RAR_arcsec' in cm2 and parts[cm2['theta_E_RAR_arcsec']] not in ('','nan','NaN') else float('nan')
+                                zl = float(parts[cm2['z_l']]) if 'z_l' in cm2 else float('nan')
+                                zs = float(parts[cm2['z_s']]) if 'z_s' in cm2 else float('nan')
+                                lgm = float(parts[cm2['log10M_star']]) if 'log10M_star' in cm2 else float('nan')
+                                rek = float(parts[cm2['Re_kpc']]) if 'Re_kpc' in cm2 else float('nan')
+                                nn = float(parts[cm2['n_sersic']]) if 'n_sersic' in cm2 else 4.0
                             except Exception:
-                                terr = float('nan'); tobs = float('nan'); lid = ''
-                            if np.isfinite(tobs):
+                                terr=tobs=thrar=zl=zs=lgm=rek=float('nan'); lid=''; nn=4.0
+                            if np.isfinite(tobs) and np.isfinite(thrar):
                                 if not np.isfinite(terr) or terr<=0:
                                     terr = 0.02 * tobs
                                 err_obs.append(terr); lens_ids.append(lid)
+                                ZL.append(zl); ZS.append(zs); LOGM.append(lgm); RE.append(rek); NN.append(nn); PRBASE.append(thrar)
                     err_obs = np.asarray(err_obs, float)
-                    # predicted samples from κ_ext
+                    ZL = np.asarray(ZL,float); ZS=np.asarray(ZS,float); LOGM=np.asarray(LOGM,float); RE=np.asarray(RE,float); NN=np.asarray(NN,float); PRBASE=np.asarray(PRBASE,float)
+                    Nl = len(PRBASE)
+                    # Sensitivity coefficients per lens
+                    dM = 0.02  # dex step
+                    dR = 0.02  # fractional step
+                    aM = np.zeros(Nl, float)
+                    aR = np.zeros(Nl, float)
+                    for j in range(Nl):
+                        try:
+                            _, thMp = _theta_E_from_profile_with_xi(LOGM[j]+dM, RE[j], ZL[j], ZS[j], rar_params, n=NN[j], use_rar=True, density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
+                            _, thMm = _theta_E_from_profile_with_xi(LOGM[j]-dM, RE[j], ZL[j], ZS[j], rar_params, n=NN[j], use_rar=True, density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
+                            aM[j] = (thMp - thMm) / (2.0*dM)
+                        except Exception:
+                            aM[j] = 0.0
+                        try:
+                            _, thRp = _theta_E_from_profile_with_xi(LOGM[j], RE[j]*(1.0+dR), ZL[j], ZS[j], rar_params, n=NN[j], use_rar=True, density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
+                            _, thRm = _theta_E_from_profile_with_xi(LOGM[j], RE[j]*max(1.0-dR, 1e-6), ZL[j], ZS[j], rar_params, n=NN[j], use_rar=True, density_profile=density_profile, sigma_cr_scale=float(sigma_cr_scale))
+                            aR[j] = (thRp - thRm) / (2.0*dR)
+                        except Exception:
+                            aR[j] = 0.0
+                    # Draw κ_ext and param noises
                     k = rng.normal(float(SYS_CFG.kappa_ext_mean), float(SYS_CFG.kappa_ext_sigma), size=S)
                     k = np.clip(k, -0.1, 0.1)
-                    th_samp = (pr[None, :] / (1.0 - k[:, None]))
+                    dm = rng.normal(0.0, float(mstar_sigma_dex), size=(S, Nl))
+                    dr = rng.normal(0.0, float(Re_frac_sigma), size=(S, Nl))
+                    base = PRBASE[None, :]
+                    th_no_k = base + aM[None,:]*dm + aR[None,:]*dr
+                    th_no_k = np.maximum(th_no_k, 1e-6)
+                    th_samp = th_no_k / (1.0 - k[:, None])
                     # add measurement noise
-                    noise = rng.normal(0.0, err_obs[None, :], size=(S, len(err_obs)))
+                    noise = rng.normal(0.0, err_obs[None, :], size=(S, Nl))
                     pred_y = th_samp + noise
                     q16 = np.nanpercentile(pred_y, 16, axis=0)
                     q84 = np.nanpercentile(pred_y, 84, axis=0)
@@ -1572,15 +1619,18 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
                     cover68 = float(np.nanmean((obs>=q16)&(obs<=q84)))
                     cover95 = float(np.nanmean((obs>=q025)&(obs<=q975)))
                     # PIT histogram
-                    from scipy.stats import rankdata
                     pit = []
-                    for j in range(len(obs)):
+                    # Note: obs array matches the lenses used to build PRBASE, by construction
+                    for j in range(Nl):
                         pit.append(float(np.mean(pred_y[:,j] <= obs[j])))
                     cover = {
                         'coverage_68': cover68,
                         'coverage_95': cover95,
                         'pit': pit[:],
                         'lens_ids': lens_ids,
+                        'mstar_sigma_dex': float(mstar_sigma_dex),
+                        'Re_frac_sigma': float(Re_frac_sigma),
+                        'delta_imf_dex': float(delta_imf_dex),
                     }
                     (out_dir / 'lensing_thetaE_coverage.json').write_text(json.dumps(cover, indent=2), encoding='utf-8')
                     try:
@@ -2145,12 +2195,14 @@ def main():
     ap.add_argument('--out-root', default=None, help='Output results root, default results/next_steps/<run_name>')
     ap.add_argument('--images-root', default=None, help='Images root, default images/next_steps/<run_name>')
     ap.add_argument('--hierarchical-a0', action='store_true', help='After per-galaxy scans, perform a two-stage hierarchical fit for a0 across the sample (lognormal prior).')
-    ap.add_argument('--lensing-sample-csv', default=None, help='CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec] for RAR lensing prediction')
+    ap.add_argument('--lensing-sample-csv', default=None, help='CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec,q_axis_ratio] for RAR lensing prediction')
     ap.add_argument('--alpha-lens-ph', type=float, default=1.0, help='Lensing-only scale on Σ_ph (phantom)')
     ap.add_argument('--zeta-env-lens', type=float, default=0.0, help='Lensing-only environment amplitude on Σ_ph via (1+ζ_env f(R))')
     ap.add_argument('--env-profile', choices=['constant','tapered'], default='constant', help='Environment radial profile f(R) for lensing-only phantom scaling')
     ap.add_argument('--density-profile', choices=['sersic','hernquist','jaffe'], default='sersic', help='Stellar 3D profile for lensing deprojection (lensing-only)')
     ap.add_argument('--sigma-cr-scale', type=float, default=1.0, help='Multiplicative factor on Σ_cr (lensing-only, distances sensitivity)')
+    ap.add_argument('--delta-imf-dex', type=float, default=0.0, help='Global IMF offset (dex) added to log10 M_* for all lenses (ETG normalization).')
+    ap.add_argument('--run-imf-variants', action='store_true', help='Run both IMF cases: δ=0.00 (Chabrier) and δ=+0.23 (Salpeter-like), into subfolders imf_chab/imf_sal.')
     ap.add_argument('--metric-lensing-only', action='store_true', default=True, help='If set, compute lensing strictly from the metric (Φ+Ψ via xi) and disable any α_lens_ph or ζ_env_lens scaling in outputs (paper build path).')
     ap.add_argument('--allow-pilot-lensing', action='store_true', default=False, help='Allow lensing-only phantom scaling (α_lens_ph, ζ_env_lens) for pilot studies. Default False for paper builds.')
     ap.add_argument('--rar-dmax', type=float, default=None, help='Optional finite plateau cap D_max for xi (nu). If unset, no cap is applied.')
@@ -2166,6 +2218,9 @@ def main():
     ap.add_argument('--kappa-ext-mean', type=float, default=0.0, help='Mean of κ_ext prior for θE mass-sheet marginalization.')
     ap.add_argument('--kappa-ext-sigma', type=float, default=0.0, help='Sigma of κ_ext prior; if 0, κ_ext marginalization is disabled.')
     ap.add_argument('--kappa-ext-samples', type=int, default=0, help='Number of κ_ext samples for marginalization (e.g., 2000). 0 disables marginalization.')
+    # Structural uncertainty for coverage
+    ap.add_argument('--mstar-sigma-dex', type=float, default=0.10, help='Stellar mass prior σ (dex) propagated in coverage.')
+    ap.add_argument('--Re-frac-sigma', type=float, default=0.035, help='Re fractional σ propagated in coverage.')
     # Coverage and diagnostics
     ap.add_argument('--coverage', action='store_true', help='Compute posterior-predictive coverage (θE) using κ_ext and measurement errors.')
     ap.add_argument('--coverage-samples', type=int, default=1000, help='Samples for coverage (per lens). Uses κ_ext samples and Gaussian θE_obs errors.')
@@ -2207,6 +2262,12 @@ def main():
         args.max_quality = min(args.max_quality, 2)
         if args.rar_dmax in (None, 0.0):
             args.rar_dmax = 50.0
+        # Default to Salpeter-like ETG normalization unless explicitly overridden
+        try:
+            if float(getattr(args, 'delta_imf_dex', 0.0) or 0.0) == 0.0:
+                args.delta_imf_dex = 0.23
+        except Exception:
+            args.delta_imf_dex = 0.23
         # Enable modest κ_ext marginalization by default (reduces bias; configurable via CLI)
         try:
             args.kappa_ext_mean = float(getattr(args, 'kappa_ext_mean', 0.0) or 0.0)
@@ -2603,21 +2664,40 @@ def main():
             enforce_metric = bool(args.metric_lensing_only) and (not bool(args.allow_pilot_lensing))
             alpha_lens_ph = 1.0 if enforce_metric else float(args.alpha_lens_ph)
             zeta_env_lens = 0.0 if enforce_metric else float(args.zeta_env_lens)
-            run_lensing_rar_from_csv(
-                results_root, images_root, Path(args.lensing_sample_csv), rar_params,
-                alpha_lens_ph=alpha_lens_ph,
-                zeta_env_lens=zeta_env_lens,
-                env_profile=str(args.env_profile),
-                density_profile=str(args.density_profile),
-                sigma_cr_scale=float(args.sigma_cr_scale),
-                metric_only=bool(args.metric_lensing_only),
-                nfw_enable=bool(args.nfw_enable),
-                nfw_mass_ratio=float(args.nfw_mass_ratio),
-                nfw_c=float(args.nfw_c),
-                coverage=bool(getattr(args,'coverage', False)),
-                coverage_samples=int(getattr(args,'coverage_samples', 1000)),
-                sigmaK_sweep=bool(getattr(args,'sigmaK_sweep', False)),
-            )
+            # IMF variant handling
+            variants = []
+            if bool(getattr(args, 'run_imf_variants', False)):
+                variants = [(0.0, 'imf_chab'), (0.23, 'imf_sal')]
+            else:
+                variants = [(float(getattr(args, 'delta_imf_dex', 0.0) or 0.0), None)]
+            for delta_imf_dex in variants:
+                if isinstance(delta_imf_dex, tuple):
+                    dval, tag = delta_imf_dex
+                else:
+                    dval, tag = float(delta_imf_dex), None
+                out_dir_var = results_root / tag if tag else results_root
+                images_dir_var = images_root / tag if tag else images_root
+                out_dir_var.mkdir(parents=True, exist_ok=True)
+                images_dir_var.mkdir(parents=True, exist_ok=True)
+                run_lensing_rar_from_csv(
+                    out_dir_var, images_dir_var, Path(args.lensing_sample_csv), rar_params,
+                    alpha_lens_ph=alpha_lens_ph,
+                    zeta_env_lens=zeta_env_lens,
+                    env_profile=str(args.env_profile),
+                    density_profile=str(args.density_profile),
+                    sigma_cr_scale=float(args.sigma_cr_scale),
+                    metric_only=bool(args.metric_lensing_only),
+                    nfw_enable=bool(args.nfw_enable),
+                    nfw_mass_ratio=float(args.nfw_mass_ratio),
+                    nfw_c=float(args.nfw_c),
+                    coverage=bool(getattr(args,'coverage', False)),
+                    coverage_samples=int(getattr(args,'coverage_samples', 1000)),
+                    sigmaK_sweep=bool(getattr(args,'sigmaK_sweep', False)),
+                    delta_imf_dex=float(dval),
+                    use_circularized_Re=bool(getattr(args,'use_circularized_Re', False)),
+                    mstar_sigma_dex=float(getattr(args,'mstar_sigma_dex', 0.10)),
+                    Re_frac_sigma=float(getattr(args,'Re_frac_sigma', 0.035)),
+                )
         except Exception as e:
             logging.warning(f"Lensing step skipped: {e}")
 

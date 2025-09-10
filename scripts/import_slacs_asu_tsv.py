@@ -126,7 +126,7 @@ def main():
         "lens_name,survey,z_l,z_s,theta_E_arcsec,theta_E_err_arcsec,log10Mstar_chab,log10Mstar_chab_err,Re_arcsec,n_sersic,q_axis_ratio,band_for_Re,notes"
     ]
     orch_lines = [
-        "lens_id,z_l,z_s,log10M_star,Re_kpc,n_sersic,theta_E_obs_arcsec,theta_E_obs_err_arcsec,profile,notes"
+        "lens_id,z_l,z_s,log10M_star,Re_kpc,n_sersic,theta_E_obs_arcsec,theta_E_obs_err_arcsec,profile,notes,q_axis_ratio"
     ]
 
     for r in rows:
@@ -151,6 +151,21 @@ def main():
         mtype = (r.get("MType") or "").strip()
         comp = (r.get("f_MType") or "").strip()
         notes = f"SLACS Auger+2009; MType={mtype}{'; companion' if comp=='c' else ''}; Re_band={band}"
+        # Try to recover axis ratio q from common variants if present
+        q_candidates = []
+        for key in r.keys():
+            lk = key.lower()
+            if lk in ("q", "axisratio", "b/a") or lk.startswith("q(") or "axis" in lk or "b/a" in lk or "ellip" in lk:
+                q_candidates.append(key)
+        q_axis = None
+        for k in q_candidates:
+            try:
+                v = safe_float(r.get(k))
+                if v is not None and v > 0 and v <= 1.0:
+                    q_axis = v
+                    break
+            except Exception:
+                pass
 
         # 1) Source-like CSV row
         # Convert RE_kpc to arcsec if possible
@@ -170,7 +185,7 @@ def main():
             f"{elogMc if elogMc is not None else ''}",
             f"{Re_arcsec if Re_arcsec is not None else ''}",
             "4",  # n_sersic default (ETG)
-            "",   # q_axis_ratio not provided here
+            f"{q_axis if q_axis is not None else ''}",
             band,
             notes + "; RE_kpc from SLACS converted to arcsec",
         ]
@@ -193,6 +208,7 @@ def main():
             "",  # theta_E_obs_err_arcsec unknown
             "sersic",
             notes + "; RE_kpc from SLACS converted to arcsec",
+            f"{q_axis if q_axis is not None else ''}",
         ]
         orch_lines.append(",".join(orch_row))
 
