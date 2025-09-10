@@ -186,13 +186,13 @@ We map surface brightness to stellar mass using an SED‑informed $M/L$ prior (b
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
 
-Caption: Lensing consistency: using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Error bars show observational uncertainties; residual panels accompany the figure in the paper PDF.
+Caption: Lensing consistency on CASTLES sample (N=12). Using the same $\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. Error bars are drawn when $\sigma_{\theta_E}$ is provided. Summary metrics (RAR vs GR): RMSE$_{\rm abs}$ = 1.086″ vs 1.193″; RMSE$_{\rm rel}$ = 0.560 vs 0.620. With modest external‑convergence marginalization ($\kappa_{\rm ext}\sim\mathcal N(0,0.03)$, 2000 samples), RAR metrics change negligibly (RMSE$_{\rm abs}^{\kappa}$ = 1.086″; RMSE$_{\rm rel}^{\kappa}$ = 0.560). Residual panels accompany the figure.
 
 ![Stacked ΔΣ from metric predictions](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
 
 Caption: Population‑average lensing: the stacked prediction with a 16–84% band (posterior) has the right amplitude and radial trend; adding the data points from your stack completes the comparison.
 
-We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \theta_E^{\rm obs})$, together with stellar masses and sizes $(\log_{10} M_\star, R_e, n)$ compiled in our lens table. Source‑Data tables accompany the figures: `results/next_steps/btfr_fix_20250906/lensing_table.csv` and `results/next_steps/btfr_fix_20250906/lensing_rar_table.csv`. Rows lacking required measured inputs are flagged and omitted from summary metrics until completed. Per‑lens panels (e.g., PG1115+080; B1608+656) appear in Extended Data:
+We use measured lens properties from CASTLES (and follow‑ups): $(z_l, z_s, \theta_E^{\rm obs})$, together with stellar masses and sizes $(\log_{10} M_\star, R_e, n)$ compiled in our lens table. Source‑Data tables accompany the figures: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv` and `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`. Rows lacking required measured inputs are flagged and omitted from summary metrics until completed. Per‑lens panels (e.g., PG1115+080; B1608+656) appear in Extended Data:
 `images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,
 `images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`.
 
@@ -349,15 +349,24 @@ Aggregate summary: `results/mw_kz_sigma.csv`
 
 ### Lensing metrics (CASTLES sample; paper preset)
 
-- Per-lens tables: `results/next_steps/btfr_fix_20250906/lensing_table.csv`
-- RAR lens metrics: `results/next_steps/btfr_fix_20250906/lensing_rar_table.csv`
-- Combined pivots and summaries:  
-  - `results/next_steps/btfr_fix_20250906/combined/lensing_summary_pivot_RAR.csv`  
-  - `results/next_steps/btfr_fix_20250906/combined/lensing_summary_pivot_GR.csv`  
-  - `results/next_steps/btfr_fix_20250906/combined/global_alpha/lensing_global_alpha_metrics.csv`
-- Figure: `results/next_steps/btfr_fix_20250906/combined/global_alpha/lensing_global_alpha_pred_vs_obs.png`
+- Per‑lens table: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv`
+- Summary metrics JSON: `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`
+- Figure (scatter): `images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png`
+- Extended per‑lens panels (examples):  
+  `images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png`,  
+  `images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png`
 
-> CASTLES conversion used: `results/next_steps/btfr_fix_20250906/lenses_castles_small_converted.csv`.
+Updated CASTLES outcome (N=12):
+
+| Model | RMSE_abs [arcsec] | MAE_abs [arcsec] | Bias_abs [arcsec] | RMSE_rel | MAE_rel | Bias_rel |
+|:------|-------------------:|-----------------:|------------------:|---------:|--------:|---------:|
+| RAR (baseline) | 1.086 | 0.847 | -0.822 | 0.560 | 0.493 | -0.455 |
+| GR (baryons)   | 1.193 | 0.953 | -0.946 | 0.620 | 0.559 | -0.548 |
+| RAR (κ_ext‑marg) | 1.086 | 0.848 | -0.822 | 0.560 | 0.494 | -0.456 |
+
+κ_ext prior: mean=0, σ=0.03, samples=2000.
+
+> CASTLES conversion used: `results/next_steps/castles_converted_20250909_204106.csv` (derived from `docs/castles_multiply_imaged_systems.csv`).
 
 ### Dmax plateau sweep (SI; lensing sensitivity)
 
