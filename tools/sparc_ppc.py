@@ -1,12 +1,18 @@
 # tools/sparc_ppc.py
+import argparse
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
-def main():
-    res_path = Path("results/next_steps/enhanced_20250805_115400/sparc_residuals.csv")
-    out = Path("results/qa"); out.mkdir(parents=True, exist_ok=True)
 
+def main():
+    ap = argparse.ArgumentParser(description="SPARC PPC summary from residuals CSV")
+    ap.add_argument("--in", dest="inp", default="results/next_steps/enhanced_20250805_115400/sparc_residuals.csv", help="Input residuals CSV path")
+    ap.add_argument("--out-dir", default="results/qa", help="Output directory")
+    args = ap.parse_args()
+
+    res_path = Path(args.inp)
+    out = Path(args.out_dir); out.mkdir(parents=True, exist_ok=True)
     if not res_path.exists():
         print(f"[warn] Missing {res_path}; provide a per-point residuals CSV with columns: galaxy,R_kpc,v_obs,v_mod,sigma_v")
         return 1

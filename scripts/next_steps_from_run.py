@@ -79,6 +79,11 @@ ACC_M_S2_PER_KMS2_PER_KPC = 3.240779289e-14  # m/s^2 per [(km/s)^2/kpc]
 KMPS2_PER_KPC_TO_M_S2 = ACC_M_S2_PER_KMS2_PER_KPC  # alias for clarity
 TWOPI_G = 2.0 * np.pi * G_SI  # SI
 CASSINI_BOUND_GAMMA = 2.3e-5
+# Cosmology constants for lensing distances and Σ_cr (locked for reproducibility)
+LENSING_COSMO = {
+    'H0': 70.0,   # km/s/Mpc
+    'Om0': 0.3,   # Ω_m
+}
 
 
 # ---------- Utilities -----------------------------------------------------------------
@@ -796,7 +801,7 @@ def solar_system_posterior_bands(
 
 # ---------- Lensing baseline (anchored GR + SIS) ---------------------------------------
 
-def _ang_dists(z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> Tuple[float, float, float]:
+def _ang_dists(z_l: float, z_s: float, H0: float = LENSING_COSMO['H0'], Om0: float = LENSING_COSMO['Om0']) -> Tuple[float, float, float]:
     """Angular diameter distances (Dl, Ds, Dls) in meters.
     Tries astropy; falls back to a simple flat-ΛCDM integral if not available.
     See docs/lensing.md and README (lensing baselines and cosmology setup).
@@ -821,7 +826,7 @@ def _ang_dists(z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> Tu
         D_ls = (Dc(z_s)-Dc(z_l))/(1+z_s)
         return D_l, D_s, D_ls
 
-def theta_E_pointmass_arcsec(M_Msun: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
+def theta_E_pointmass_arcsec(M_Msun: float, z_l: float, z_s: float, H0: float = LENSING_COSMO['H0'], Om0: float = LENSING_COSMO['Om0']) -> float:
     c = 299792458.0
     D_l, D_s, D_ls = _ang_dists(z_l, z_s, H0, Om0)
     if not (D_l > 0 and D_s > 0 and D_ls > 0):
@@ -831,7 +836,7 @@ def theta_E_pointmass_arcsec(M_Msun: float, z_l: float, z_s: float, H0: float = 
     theta = math.sqrt(max(term, 0.0))  # radians
     return float(theta * 206265.0)
 
-def theta_E_sis_arcsec(Vflat_kms: float, z_l: float, z_s: float, H0: float = 70.0, Om0: float = 0.3) -> float:
+def theta_E_sis_arcsec(Vflat_kms: float, z_l: float, z_s: float, H0: float = LENSING_COSMO['H0'], Om0: float = LENSING_COSMO['Om0']) -> float:
     # SIS: theta_E = 4π (σ^2 / c^2) D_ls / D_s with V_c ≈ sqrt(2) σ
     c_kms = 299792.458
     sigma = max(float(Vflat_kms), 0.0) / math.sqrt(2.0)
@@ -943,7 +948,7 @@ def _rho_crit_z(H0: float, Om0: float, z: float) -> float:
     Hz = _H_of_z(H0, Om0, z)  # s^-1
     return 3.0 * Hz*Hz / (8.0 * math.pi * G)  # kg/m^3
 
-def _nfw_rho_kpc(M200_Msun: float, c: float, z_l: float, r_kpc: np.ndarray, H0: float = 70.0, Om0: float = 0.3) -> np.ndarray:
+def _nfw_rho_kpc(M200_Msun: float, c: float, z_l: float, r_kpc: np.ndarray, H0: float = LENSING_COSMO['H0'], Om0: float = LENSING_COSMO['Om0']) -> np.ndarray:
     """Return ρ_NFW(r) in Msun/kpc^3 for given M200, c at redshift z_l."""
     M200 = float(M200_Msun) * M_SUN  # kg
     c = max(float(c), 1.0)
@@ -966,7 +971,7 @@ def _nfw_rho_kpc(M200_Msun: float, c: float, z_l: float, r_kpc: np.ndarray, H0: 
     return rho_msun_kpc3
 
 
-def _nfw_vcirc_kms(R_kpc: np.ndarray, M200_Msun: float, c: float, z: float = 0.0, H0: float = 70.0, Om0: float = 0.3) -> np.ndarray:
+def _nfw_vcirc_kms(R_kpc: np.ndarray, M200_Msun: float, c: float, z: float = 0.0, H0: float = LENSING_COSMO['H0'], Om0: float = LENSING_COSMO['Om0']) -> np.ndarray:
     """Return circular speed contribution (km/s) from an NFW halo at radii R_kpc.
     Uses enclosed mass M(<r) = M200 * g(x)/g(c) with x = r/rs.
     """
@@ -1001,7 +1006,7 @@ def _einstein_radius_from_surface_density(R_kpc: np.ndarray, Sigma_Msun_per_kpc2
     sigma_cr_scale: optional multiplicative factor on Σ_cr for controlled distance sensitivity tests.
     """
     # Critical surface density Σ_cr in Msun/kpc^2
-    D_l, D_s, D_ls = _ang_dists(z_l, z_s)
+    D_l, D_s, D_ls = _ang_dists(z_l, z_s, H0=LENSING_COSMO['H0'], Om0=LENSING_COSMO['Om0'])
     if not (D_l > 0 and D_s > 0 and D_ls > 0):
         return float('nan'), float('nan')
     KPC_M = 3.085677581491367e19
@@ -1279,7 +1284,7 @@ def run_lensing_rar_from_csv(out_dir: Path, images_dir: Path, csv_path: Path, ra
             rho_eff = np.maximum(dM, 0.0) / (4.0 * math.pi * np.maximum(r, 1e-9)**2)
             Rr, Sig_r = _project_surface_density_abel(r, rho_eff)
             # Σ_cr and mean profiles
-            D_l, D_s, D_ls = _ang_dists(z_l, z_s)
+            D_l, D_s, D_ls = _ang_dists(z_l, z_s, H0=LENSING_COSMO['H0'], Om0=LENSING_COSMO['Om0'])
             Sigma_cr_SI = (299792458.0**2) / (4.0 * math.pi * G_SI) * (D_s / (D_l * D_ls))
             Sigma_cr = float(sigma_cr_scale) * (Sigma_cr_SI * (KPC_M*KPC_M) / M_SUN)
             M2D_g = 2.0 * math.pi * _cumtrapz(Sig_g * Rg, Rg)
@@ -2022,14 +2027,25 @@ def main():
                 'samples': int(getattr(SYS_CFG, 'kappa_ext_samples', 0) or 0),
             },
         },
-        'env': {
+'env': {
             'python': sys.version.split()[0],
             'numpy': np.__version__,
+        },
+        'lensing_cosmology': {
+            'H0_km_s_Mpc': float(LENSING_COSMO['H0']),
+            'Omega_m': float(LENSING_COSMO['Om0']),
         },
         # Use timezone-aware UTC; keep 'Z' suffix for backward compatibility
         'timestamp_utc': datetime.datetime.now(datetime.UTC).isoformat().replace('+00:00', 'Z'),
     }
     (results_root / 'run_metadata.json').write_text(json.dumps(run_meta, indent=2), encoding='utf-8')
+    # Write an environment snapshot (installed packages) for reproducibility
+    try:
+        import importlib.metadata as _md
+        pkgs = sorted([f"{d.metadata['Name']}=={d.version}" for d in _md.distributions() if d.metadata and d.metadata.get('Name') and d.version])
+        (results_root / 'env_snapshot.txt').write_text('\n'.join(pkgs), encoding='utf-8')
+    except Exception as _e:
+        logging.debug(f"Env snapshot write skipped: {_e}")
 
     # 2) SPARC a0 universality (initial or filtered subset)
     if args.galaxies:

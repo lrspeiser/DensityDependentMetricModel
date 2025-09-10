@@ -20,7 +20,7 @@ def main():
             {"run":"baseline", **pick(mb)},
             {"run":"systematics", **pick(ms)},
         ])
-        theta_summary.to_csv(out/"thetaE_metrics_comparison.csv", index=False)
+theta_summary.to_csv(out/"thetaE_metrics_comparison.csv", index=False)
         print(f"[ok] wrote {out/'thetaE_metrics_comparison.csv'}")
     else:
         print("[warn] Missing one of the thetaE metrics JSONs; skipping θE comparison.")
