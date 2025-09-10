@@ -133,6 +133,8 @@ Figure RAR. RAR master panel — SPARC selection (grey points) and DGG posterior
 
 Figure BTFR. Baryonic Tully–Fisher relation for the selection used here. Points show M_b = M_* + 1.33 M_HI versus observed V_flat; the fitted slope is 3.184 [3.034, 3.332] (p50 [p16, p84]), with R^2 ≈ 0.885 and RMS ≈ 0.22 dex. Where shown, the shaded band indicates a bootstrap confidence interval. Source‑Data: results/next_steps/enhanced_20250805_115400/btfr_source.csv; fit summary: results/next_steps/enhanced_20250805_115400/btfr_fit_summary.json.
 
+
+
 ### 7.1 Milky Way
 
 Evidence: TFR‑S improves over GR by Δlog Z ≈ [to be inserted] and competes with NFW within [to be inserted].
@@ -148,6 +150,32 @@ Cohort summary: median Δlog Z(TFR‑S–GR) > 0 with [to be inserted] spread;
 Diagnostics: Residual histograms and QQ‑plots show well‑calibrated dispersion with modest tails; robustness to tidal proxy reported in Table ED‑T.
 
 Key point: flat outer curves are reproduced without halos across many systems without forcing 𝜉→1 at the edge.
+
+### 7.3 Solar‑System constraints
+
+![Solar‑System constraints](../../../images/next_steps/enhanced_20250805_115400/solar_rar_plateau.png)
+
+Figure Solar. Solar‑System constraints. The DGG gate remains close to unity in the Sun’s field. We plot |ΔG/G| ≡ |ξ−1| versus orbital distance from 1–30 AU (log scale). Vertical markers indicate the semi‑major axes of Jupiter (5.2 AU), Saturn (9.5 AU), Uranus (19.2 AU), and Neptune (30.1 AU). A secondary right‑hand axis shows the Cassini bound |γ−1| < 2.3×10⁻⁵ as a reference band; in our adopted metric subclass γ ≡ 1 in the screened limit, so the |ΔG/G| curve is a conservative proxy for weak‑field amplitude changes. Source‑Data: results/next_steps/enhanced_20250805_115400/solar_system_table.csv (AU, g_bar, ξ_gated, ξ_worst, …); results/next_steps/enhanced_20250805_115400/ppn_table.csv (AU, γ−1, β−1, α₁, α₂, |ΔG/G|).
+
+Inline summary tables (manuscript convenience; see Source‑Data for full precision):
+
+| AU | dG/G (gated) | dG/G (worst) | Cassini bound |
+|---:|--------------:|-------------:|---------------:|
+| 1.0 | 2.0235e-08 | 2.0235e-08 | 2.3e-05 |
+| 5.0 | 5.0588e-07 | 5.0588e-07 | 2.3e-05 |
+| 10.0 | 2.0235e-06 | 2.0235e-06 | 2.3e-05 |
+| 20.0 | 8.0940e-06 | 8.0940e-06 | 2.3e-05 |
+| 30.0 | 1.8211e-05 | 1.8211e-05 | 2.3e-05 |
+
+PPN export (screened subclass; γ=β=1, α₁=α₂=0 by construction):
+
+| AU | γ−1 | β−1 | α₁ | α₂ | dG/G (gated) |
+|---:|:---:|:---:|:--:|:--:|-------------:|
+| 1.0 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 2.02e-08 |
+| 5.0 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 5.06e-07 |
+| 10.0 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 2.02e-06 |
+| 20.0 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 8.09e-06 |
+| 30.0 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 0.00e+00 | 1.82e-05 |
 
 ## 8. Discussion
 
