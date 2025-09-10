@@ -1,7 +1,9 @@
-"""Cassini Shapiro delay (non-interactive)
-Compute the standard Shapiro time delay for a Solar conjunction and show how an
+"""Cassini Shapiro delay (non-interactive, reproducible)
+Computes the standard Shapiro time delay for a Solar conjunction and shows how an
 amplitude rescaling ε≡ξ−1 would project if γ=1, clarifying the GM degeneracy.
-No web/API usage here. If external ephemerides are added, see nature_readiness/data/README_DATA.md.
+No web/API usage here. For any ephemeris data, see nature_readiness/data/README_DATA.md.
+
+This module is code-only; figures/CSV are produced by callers in scripts or notebooks.
 """
 from __future__ import annotations
 from typing import Dict, Any
@@ -33,9 +35,7 @@ def simulate_cassini_shapiro() -> Dict[str, Any]:
     # impact parameter ~ a few solar radii; we approximate R ≈ r_E + r_R (small angle).
     r_E = 1.0 * AU
     r_R = 9.5 * AU
-    # Small-angle approximation: R ≈ r_E + r_R − (b^2)/(2 r_E) − (b^2)/(2 r_R);
-    # here we just use an extreme-close pass proxy R' = r_E + r_R − δ with δ ≪ r_E+r_R
-    # to avoid denominator singularities while yielding a reasonable ln factor.
+    # Small-angle approximation: R ≈ r_E + r_R − δ with δ ≪ r_E+r_R to avoid singularity
     delta = 0.01 * AU
     R = r_E + r_R - delta
 
@@ -47,7 +47,7 @@ def simulate_cassini_shapiro() -> Dict[str, Any]:
 
     # Apparent-γ mapping if light path sees (1+ε) GM but ephemerides use GM (non-degenerate case)
     # Then γ_app ≈ 1 + ε when fitting Cassini with fixed GM.
-    eps_example = 2.3e-5  # Cassini 1σ order-of-magnitude
+    eps_example = 2.3e-5  # Cassini-level
     two_way_eps = 2.0 * shapiro_one_way_seconds(r_E, r_R, R, GM * (1.0 + eps_example), gamma=1.0)
     gamma_apparent = (two_way_eps / two_way_gr) - 1.0  # ≈ ε
 
@@ -66,14 +66,4 @@ def simulate_cassini_shapiro() -> Dict[str, Any]:
 if __name__ == "__main__":
     out = simulate_cassini_shapiro()
     print({k: (round(v, 6) if isinstance(v, float) else v) for k, v in out.items()})
-No web/API usage here. If external ephemerides are added, see nature_readiness/data/README_DATA.md.
-"""
-from __future__ import annotations
-from typing import Dict, Any
-
-def simulate_cassini_shapiro() -> Dict[str, Any]:
-    return {
-        "status": "TODO",
-        "summary": "Compute two-way Shapiro delay and |γ-1| bound; expect margin ≪ 2.3e-5.",
-    }
 

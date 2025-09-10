@@ -2588,6 +2588,7 @@ def main():
     if args.fit_global_a0 and len(galaxy_store) > 0:
         a0_grid = 10 ** np.linspace(-10.5, -9.3, 80)
         totals: List[float] = []
+        npts_total = 0
         for a0 in a0_grid:
             tot = 0.0
             for (_gid, R, Vbar, Vobs, eV, _a0best) in galaxy_store:
@@ -2598,8 +2599,45 @@ def main():
         a0_grid = np.asarray(a0_grid, float)
         totals = np.asarray(totals, float)
         a0_global, a0_sigma = fit_a0_err_from_grid(a0_grid, totals)
-        (results_root/'global_a0.json').write_text(json.dumps({'a0_m_s2': a0_global, 'sigma': a0_sigma, 'n_gal': len(galaxy_store)}, indent=2), encoding='utf-8')
-        logging.info(f"Global a0 ~ {a0_global:.3e} ± {a0_sigma if np.isfinite(a0_sigma) else float('nan'):.1e} m/s^2 over {len(galaxy_store)} galaxies")
+        # Compute reduced chi2 at global a0
+        chi2_global = 0.0
+        npts_total = 0
+        for (_gid, R, Vbar, Vobs, eV, _a0best) in galaxy_store:
+            xi, _ = xi_rar_plateau_numpy(Vbar, R, a0_m_s2=float(a0_global), D_max=rar_params.get('D_max', None))
+            Vmod = np.sqrt(np.maximum(Vbar, 0.0)**2 * xi)
+            chi2_global += chi2_velocity(Vobs, Vmod, eV, sigma_floor=float(args.sigma_floor))
+            npts_total += int(len(R))
+        dof = max(int(npts_total) - 1, 1)
+        red_chi2 = float(chi2_global) / float(dof)
+        (results_root/'global_a0.json').write_text(json.dumps({'a0_m_s2': a0_global, 'sigma': a0_sigma, 'n_gal': len(galaxy_store), 'chi2': float(chi2_global), 'nu': int(dof), 'chi2_reduced': red_chi2}, indent=2), encoding='utf-8')
+        logging.info(f"Global a0 ~ {a0_global:.3e} ± {a0_sigma if np.isfinite(a0_sigma) else float('nan'):.1e} m/s^2; χ²/ν={red_chi2:.3f} over ν={dof}")
+
+    # Universality metrics (WAIC-like) from saved grids
+    try:
+        from nature_readiness.bayes.cross_validation import compute_waic_rotation_curves, write_waic_report
+        grids_dir = results_root / 'sparc_a0_grids'
+        a0_global_in = None
+        hier_mu = None
+        hier_sigma = None
+        try:
+            obj = json.loads((results_root/'global_a0.json').read_text())
+            a0_global_in = float(obj.get('a0_m_s2', float('nan')))
+        except Exception:
+            pass
+        try:
+            hj = json.loads((results_root/'hierarchical_a0_summary.json').read_text())
+            hier_mu = float(hj.get('mu', float('nan')))
+            hier_sigma = float(hj.get('sigma', float('nan')))
+        except Exception:
+            pass
+        # Build sample labels from earlier selection_info
+        sample_ids = [d['galaxy'] for d in selection_info]
+        rep = compute_waic_rotation_curves(sample_ids, sparc_dir, grids_dir, a0_global_in, hier_mu, hier_sigma,
+                                           D_max=rar_params.get('D_max', None), sigma_floor=float(args.sigma_floor), posterior_samples=64)
+        write_waic_report(results_root / 'universality_metrics.json', rep)
+        logging.info(f"Universality metrics written: {results_root/'universality_metrics.json'}")
+    except Exception as e:
+        logging.warning(f"Universality (WAIC) metrics step skipped: {e}")
 
     # Optional: two-stage hierarchical a0 across sample (MLE grid search)
     if args.hierarchical_a0 and len(list((results_root/'sparc_a0_grids').glob('*.csv'))) > 0:

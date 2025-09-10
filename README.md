@@ -168,7 +168,7 @@ Caption: Scaling law: slope $3.18[3.03,3.33]$ (p50 [p16, p84]); RMS $\approx0.22
 
 ## Solar‑System Constraints
 
-Any modified gravity must clear Solar‑System bounds. We evaluate the same $\xi(r)$ in the Sun’s Kepler field $g_N(r)=GM_\odot/r^2$ and report
+Any modified gravity must clear Solar‑System bounds. We evaluate the same $\xi(r)$ in the Sun’s Kepler field $g_N(r)=GM_\odot/r^2$ and report. Operative assumption: in the screened Solar limit, $\epsilon\equiv\xi-1$ is locally constant along the Cassini ray and across the AU‑scale orbits used by ephemerides; see docs/ppn_mapping.md for the scaling $|\epsilon|\sim a_0/g$ and nature_readiness/solar_system/ephemeris_perturbations.py for a code‑based perihelion‑precession surrogate.
 
 $$
 \left|\frac{\Delta G}{G}\right| \;\equiv\; \left|\xi(r)-1\right|
@@ -206,9 +206,9 @@ We assess miscentering and external convergence $\kappa_\mathrm{ext}$ in SI; pap
 
 ## Discussion and Implications
 
-**Predictive power vs flexibility.** With a single principal scale \(a_0\) and a fixed \(\nu\)-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior).
+**Predictive power vs flexibility.** With a single principal scale \(a_0\) and a fixed \(\nu\)-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior). We compute code‑based universality metrics (χ²/ν for a global \(a_0\) and WAIC‑like comparisons for universal vs hierarchical \(a_0\)) and write results to results/next_steps/.../universality_metrics.json.
 
-**Solar‑System safety.** Under the screened subclass (Φ=Ψ, c_T=1) we have γ=β=1 at 1PN and α1=α2=0 in the Solar limit. Cassini constrains γ (|γ−1|≲2.3×10⁻⁵); amplitude rescaling ε≡ξ−1 only projects to Cassini if not absorbed into the GM used by ephemerides (see docs/ppn_mapping.md). We therefore show |ΔG/G|≡|ξ−1| as a conservative tracer vs. AU and export a PPN CSV alongside the Solar table.
+**Solar‑System safety.** Under the screened subclass (Φ=Ψ, c_T=1) we have γ=β=1 at 1PN and α1=α2=0 in the Solar limit. Cassini constrains γ (|γ−1|≲2.3×10⁻⁵); amplitude rescaling ε≡ξ−1 only projects to Cassini if not absorbed into the GM used by ephemerides (see docs/ppn_mapping.md). Operatively, we assume ε is locally constant along the Cassini ray and across AU‑scale orbits; we verify negligible effects with a code‑based perihelion‑precession surrogate (nature_readiness/solar_system/ephemeris_perturbations.py). We therefore show |ΔG/G|≡|ξ−1| as a conservative tracer vs. AU and export a PPN CSV alongside the Solar table.
 
 **Vertical forces and local surface density.** A decisive check is \(K_z(R_0,z)\) and \(\Sigma_{1.1}\). We use the **full 3‑D** DGG contribution throughout the paper preset.
 
