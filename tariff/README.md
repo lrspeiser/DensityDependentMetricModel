@@ -2,10 +2,9 @@
 
 A Worked Add‑On to Gravity Gates (Optional; does not alter galaxy/lensing results)
 
-Authors: (Project team)
+Author: Leonard Speiser, Independent Researcher
 
-Abstract
-We propose and test an optional cosmological mechanism—an energy→gravity reciprocity—that operates only in low‑acceleration environments. The same gate ξ(ḡ) used in the core Gravity Gates framework regulates a tiny, cumulative energy tariff along photon paths in void‑like regions. Integrating this tariff yields a redshift–distance relation z(r) without invoking expansion kinematics. Using a minimal environmental mix and calibrating the coupling k to preserve the local slope, we demonstrate: (i) an excellent Hubble Diagram overlay against Pantheon+ (reduced χ² ≈ 0.777); (ii) a close per‑photon energy balance against 1/(1+z) (RMSE ≈ 0.0146); (iii) CMB spectral preservation under Liouville‑respecting transport (rms residuals ≲ 2×10⁻¹⁶), while a naive energy‑only mapping fails FIRAS by orders of magnitude; and (iv) reasonable BAO/chronometer proxy trends after adopting a redshift‑dependent environment mix and a monotone z↔r inversion. All galaxy‑scale dynamical and lensing results in the main repository are unchanged by this optional section.
+**Abstract** — We posit an energy–gravity reciprocity that operates only in low‑acceleration environments. The same gate $\xi(\bar g)$ used in the Gravity Gates framework regulates a tiny, cumulative energy drain (“energy tariff”) along photon paths in void‑like regions. Integrating the tariff yields a redshift–distance relation $z(r)$ without assuming FRW expansion kinematics. Using a minimal environmental mix and calibrating the coupling $k$ to preserve the local Hubble slope, we obtain: (i) an excellent Supernova Hubble‑diagram overlay on Pantheon+ (reduced $\chi^2 \approx 0.777$); (ii) a close per‑photon energy balance against $1/(1+z)$ (RMSE $\approx 1.46\times10^{-2}$); (iii) CMB spectral preservation under Liouville‑respecting transport (rms residuals $\lesssim 2\times10^{-16}$—a naive energy‑only mapping fails by orders of magnitude); and (iv) BAO/chronometer proxy trends that improve once we adopt a redshift‑dependent environmental mix and a monotone $z\leftrightarrow r$ inversion. All galaxy and lensing results elsewhere are unchanged by this optional add‑on.
 
 Keywords: gravity gates; RAR/BTFR; low‑acceleration regime; energy–gravity reciprocity; supernova Hubble diagram; CMB spectral invariance; BAO proxies; Tolman test
 
@@ -90,9 +89,12 @@ Heff(z), DM(z), DH(z) are produced from the monotone inversion; optional rd fit 
 - BAO/chronometers: adopting fenv(z) and a monotone inversion improves trends versus naive finite‑difference mappings; testing against public BAO compilations is the next step.
 - Distinct predictions: weak correlations of SN residuals with line‑of‑sight structure are a targeted falsification test.
 
+Energy accounting (order‑of‑magnitude). The cumulative energy removed from photons along a sphere of radius r is 
+$\dot E_\gamma(r) \sim \int d\Omega \int_0^r k\,[\xi(l)-1]\,f_{\rm env}(l)\,I_\nu(l)\, dl$, where $I_\nu$ includes the CMB and EBL. In our baseline, the inferred loss fraction per Gpc is $\ll 1$ for optical SNe, while the CMB dominates the global budget; the induced‑gravity sector stores an energy density $u_C \simeq V(C)+\tfrac12\alpha(\nabla C)^2$, which we require to track the integrated loss. A quantitative bound will be reported in the Supplement.
+
 6. Limitations and Caveats
 
-- The μ(z) comparison is a static‑geometry proxy for shape tests, not a claim of full cosmological distance modelling.   
+- Our μ(z) comparison is a shape test using a static mapping; it is not a full FRW distance‑ladder replacement. We therefore restrict claims to the empirical adequacy of Eqs. (1)–(2) for SN phenomenology.  
 - Results depend on the environmental mix; fenv(z) captures an increasing void fraction with redshift but is an effective description.
 - Time‑dilation and LOS correlation tests require external CSVs; hooks are provided.
 
@@ -127,4 +129,17 @@ python3.11 -m venv .venv
 Notes
 - Pantheon+ data path: external_data/pantheon/Pantheon+SH0ES.dat (in‑repo).   
 - PNGs are saved at repo root by default from these scripts and tracked by Git LFS per .gitattributes.
+
+8. Readiness Checklist
+
+| Status | Item | Current state | Next action |
+|---|---|---|---|
+| Green | SN Hubble diagram and energy balance | Metrics and figures reproduced (χ²≈0.777; RMSE≈1.46×10⁻²) | Keep as baseline reference |
+| Green | CMB spectral invariance (Liouville) | Spectral residuals ≲2×10⁻¹⁶; energy‑only fails as expected | Include diagnostic figure and note |
+| Green | Optional section independence | Does not alter galaxy/lensing results | Leave scope clearly optional |
+| Amber | BAO/chronometers | Proxy curves in place with f_env(z) and PCHIP inversion | Fit to public BAO compilation with free r_d; report χ²/dof |
+| Amber | Tolman exponent p | Harness implemented; run produces example p | Run on deep photometry sample; then quote p with χ²/dof |
+| Amber | LOS correlation | Harness implemented | Add LOS proxy CSV; report Pearson r and p‑value |
+| Red | SN time‑dilation p_t | Not yet run on real light‑curve table | Add CSV (z, timescale/stretch, errors); show p_t≈1 within errors |
+| Red | Energy budget bound | Only qualitative paragraph added | Provide back‑of‑envelope quantitative bound in Supplement |
 
