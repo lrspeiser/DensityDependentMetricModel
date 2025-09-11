@@ -48,23 +48,29 @@ which captures the empirical fact that typical long sightlines intersect structu
 
 We keep the same gate $\xi(g_{\rm bar})$ used for rotation curves, vertical forces, and lensing in the main text (metric subclass with $\Phi=\Psi$). Calibrating $k$ on a small‑$z$ window to preserve the local Hubble slope and sweeping $(D_{\max},\,g_{\rm bar,void},\,r_0,\,\gamma)$, we find families of solutions that reproduce the **Pantheon+** Hubble diagram with excellent fidelity.
 
-A representative fit is
+A representative fit (this run)
 
 $$
 D_{\max}=30,\quad g_{\rm bar,void}=10^{-15}\ {\rm m\,s^{-2}},\quad
 r_0=2000\ {\rm Mpc},\ \gamma=1.5,\quad
-k\simeq 7.8\times10^{-6}\ {\rm Mpc}^{-1},
+k\simeq 7.75\times10^{-6}\ {\rm Mpc}^{-1},
 $$
 
-yielding a **reduced $\chi^2\approx0.78$** for $\mu(z)$ under our static mapping convention, and an **energy‑balance RMSE $\approx 0.015$** for $E_{\rm obs}=1/(1+z)$ vs distance. Nearby parameter choices perform comparably, indicating that the **shape parameters** $(r_0,\gamma)$ lift the far‑tail without disturbing the local slope, whereas $k$ and $D_{\max}$ are largely degenerate once the small‑$z$ calibration is fixed.
+produced the following metrics directly from the scripts in this folder:
+
+- Hubble Diagram (Pantheon+ overlay): **reduced $\chi^2 = 0.777$** using `external_data/pantheon/Pantheon+SH0ES.dat`.
+- Energy balance (comparing $E_{\rm obs}^{\rm model}=1/(1+z_{\rm model}(r_\mu))$ to data $E_{\rm obs}^{\rm data}=1/(1+z)$): **RMSE = 0.0146**.
+- CMB spectral-shape check at 14 Gpc: expansion-like mapping is essentially Planckian (rms $\sim 2\times10^{-16}$), while an energy-only mapping yields large distortions (rms $\sim 1.8\times10^{-1}$), echoing FIRAS constraints.
+- BAO proxy curves `H_\mathrm{eff}(z), D_M(z), D_H(z)` generated for reference.
 
 **Figures (this section):**
 
 * **Fig. X** — *Hubble Diagram (Pantheon+ vs Energy‑Tariff)*: `hubble_diagram_with_data.png`.
 * **Fig. Y** — *Per‑Photon Energy Balance*: `energy_balance_plot.png`.
 * **Fig. Z** — *Predicted $z(r)$ vs linear Hubble lines*: `energy_tariff_redshift_model.png`.
+* **Fig. W** — *BAO/chronometer proxies*: `bao_proxies.png`.
 
-*(Captions: Fig. X shows agreement with the SN locus; Fig. Y shows modelled $E_{\rm obs}(r)$ tracking empirical $1/(1+z)$; Fig. Z illustrates how the environmental mix flattens the far‑tail.)*
+*(Captions: Fig. X shows the SN locus and model overlay; Fig. Y compares energy tracks vs distance; Fig. Z illustrates environmental‑mix effects on the far tail; Fig. W shows derived proxy curves.)*
 
 ---
 
@@ -94,4 +100,29 @@ We fit $k$ on a small‑$z$ window and then sweep $(D_{\max}, g_{\rm bar,void}, 
 ## Open Issues and Next Steps
 
 See `issues.md` in this folder for a full list of outstanding theoretical and observational checks (time‑dilation, CMB spectrum, Tolman test, BAO/chronometers, LSS consistency, lensing time delays, and parameter identifiability), along with a concrete work plan and submission criteria. The present README focuses on the hypothesis, construction, and results summary.
+
+---
+
+## Reproducibility (commands)
+
+All figures and metrics above were generated with a fresh Python 3.11 venv using the following commands from the repository root:
+
+```bash
+python3.11 -m venv .venv
+./.venv/bin/python -m pip install --upgrade pip
+./.venv/bin/python -m pip install numpy matplotlib pandas scipy dynesty
+
+# Hubble diagram, energy balance, and z(r) plot (saves three PNGs)
+./.venv/bin/python tariff/energy_tariff_model.py --distance-max 4000 --steps 200 --preset best --plot-hubble --plot-energy-balance --data-file external_data/pantheon/Pantheon+SH0ES.dat
+
+# CMB spectral-shape test (saves cmb_distortion_test.png)
+./.venv/bin/python tariff/tariff_major_tests.py cmb --distance-mpc 14000 --k 7.75e-6 --dmax 30 --gbar-void 1e-15 --r0-void 2000 --gamma-void 1.5 --steps 4000
+
+# BAO/chronometer proxy curves (saves bao_proxies.png)
+./.venv/bin/python tariff/tariff_major_tests.py bao --k 7.75e-6 --dmax 30 --gbar-void 1e-15 --r0-void 2000 --gamma-void 1.5 --steps 4000 --rmax-mpc 6000 --zmax 2.5
+```
+
+Notes:
+- Pantheon+ data path: `external_data/pantheon/Pantheon+SH0ES.dat` is included in-repo.
+- PNGs are stored at repo root by default from these scripts and are tracked under Git LFS per `.gitattributes`.
 
