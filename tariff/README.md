@@ -72,6 +72,43 @@ produced the following metrics directly from the scripts in this folder:
 
 *(Captions: Fig. X shows the SN locus and model overlay; Fig. Y compares energy tracks vs distance; Fig. Z illustrates environmental‑mix effects on the far tail; Fig. W shows derived proxy curves.)*
 
+## Major Observational Checks — Issues and Results
+
+### 1) Hubble Diagram consistency (Pantheon+SH0ES)
+- Data: `external_data/pantheon/Pantheon+SH0ES.dat` (comments starting with `#` and the header row starting with `CID` are ignored). The loader uses the zHD, MU_SH0ES, and MU_SH0ES_ERR_DIAG columns.
+- Method: predict μ(z) from the model by inverting z(r) (monotonic lookup) rather than using a static Euclidean approximation; overlay against Pantheon+SH0ES with uncertainties and compute χ².
+- Parameters (preset “best”): D_max=30, g_bar_void=1e-15 m/s², r0_void=2000 Mpc, gamma_void=1.5; energy-coupled enabled (ζ=1.0, β=2.0). Coupling calibrated to k≈7.75×10⁻⁶ 1/Mpc.
+- Result: reduced χ² ≈ 0.777 for μ(z) across the usable SN sample; figure saved as `hubble_diagram_with_data.png`.
+- Note on pitfalls: when we temporarily compared μ(r) via a static Euclidean law at large z and/or deviated from the tuned preset, the fit degraded substantially (reduced χ² ≈ 54.6). Using μ(z) from the inverse z(r) mapping and the tuned preset resolves this.
+
+### 2) Per‑photon energy balance versus μ‑derived distances
+- Method: convert μ to distance r (Euclidean), set E_emit=1, compare E_obs^data=1/(1+z) to E_obs^model(r) with the same r-sampling.
+- Result: RMSE(E_obs_model vs E_obs_data) ≈ 1.46×10⁻² with preset "best"; earlier exploratory tuning yielded ≈ 7.76×10⁻².
+- Figure: `energy_balance_plot.png`.
+
+### 3) CMB spectral shape (FIRAS‑like constraint)
+- Setup: r=14,000 Mpc, same parameters as above. We compare two mappings of an emitted Planck spectrum I_ν: (A) expansion‑like I/(1+z)³; (B) energy‑only I/(1+z).
+- Result: (A) is essentially Planckian with rms fractional residual ≈ 2×10⁻¹⁶; (B) shows large distortions with rms ≈ 1.8×10⁻¹—well above FIRAS tolerances.
+- Figure: `cmb_distortion_test.png`.
+
+### 4) Tolman surface‑brightness scaling
+- Model comparison: fit p in d_L = r (1+z)^p from μ(z).
+- Result from our run: p ≈ 0.401 with χ²/dof ≈ 1.318.
+- Repro command shown below (tolman subcommand).
+
+### 5) BAO and chronometer proxies
+- We compute effective H(z) ≡ c d/dz ln(1+z(r)), plus D_M(z) and D_H(z), and save `bao_proxies.png`.
+- Optional: if a BAO CSV is provided, we fit the sound horizon r_d and report χ²/dof (not included in the baseline run here).
+
+### 6) Strong‑lens time delays (qualitative check)
+- Under an energy‑only tariff with group speed = c and unchanged Fermat potential, differential time delays are unchanged. The demo prints the SIS toy Δφ; no figure is produced.
+
+### 7) SN time‑dilation scaling (status)
+- Harness exists to fit p_t in t_obs ∝ (1+z)^{p_t} from light‑curve summaries. We have not executed it yet in this baseline; a CSV is required.
+
+### Data handling notes (Pantheon+)
+- The loader reads zHD, MU_SH0ES, MU_SH0ES_ERR_DIAG from the `.dat` file, skipping `#` comment lines and the header row beginning with `CID`. If the upstream file format changes, update `load_pantheon_data()` in `tariff/energy_tariff_model.py` accordingly.
+
 ---
 
 ## Why This Extends—But Does Not Alter—Our Main Results
@@ -120,6 +157,15 @@ python3.11 -m venv .venv
 
 # BAO/chronometer proxy curves (saves bao_proxies.png)
 ./.venv/bin/python tariff/tariff_major_tests.py bao --k 7.75e-6 --dmax 30 --gbar-void 1e-15 --r0-void 2000 --gamma-void 1.5 --steps 4000 --rmax-mpc 6000 --zmax 2.5
+
+# Tolman surface-brightness exponent p (prints best-fit p and χ²/dof)
+./.venv/bin/python tariff/tariff_major_tests.py tolman --k 7.75e-6 --dmax 30 --gbar-void 1e-15 --r0-void 2000 --gamma-void 1.5 --steps 4000
+
+# Strong-lens time-delay toy check (prints Δφ; delays unchanged under energy-only tariff)
+./.venv/bin/python tariff/tariff_major_tests.py timedelay
+
+# SN time-dilation (requires your CSV with z and timescale/stretch columns)
+# ./.venv/bin/python tariff/tariff_major_tests.py sntd --data path/to/sntd_summary.csv
 ```
 
 Notes:
