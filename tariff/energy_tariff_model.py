@@ -258,18 +258,38 @@ def main(argv: List[str] | None = None) -> int:
                     help="Reference energy density E0 in eV/cm^3; used if --energy-coupled")
     ap.add_argument("--plot-energy-balance", action="store_true",
                     help="Plot E_emit (normalized), E_obs^data=1/(1+z), and E_obs^model(r_data) vs distance from Pantheon+ μ")
+    ap.add_argument("--preset", type=str, default=None, choices=['best'],
+                    help="Use tuned preset; flags differing from defaults override preset values")
     args = ap.parse_args(argv)
+
+    # Apply preset (only where user hasn't explicitly changed from defaults)
+    if args.preset == 'best':
+        # tuned values: D_max=30, gbar_void=1e-15, r0_void=2000, gamma_void=1.5, energy-coupled on
+        if float(args.dmax) == float(D_MAX):
+            args.dmax = 30.0
+        # gbar_void best equals default 1e-15; leave unless user changed it
+        # r0_void default is 0.0 (disabled) → enable with 2000 if unchanged
+        if float(args.r0_void) == 0.0:
+            args.r0_void = 2000.0
+        if float(args.gamma_void) == 1.0:
+            args.gamma_void = 1.5
+        if not bool(args.energy_coupled):
+            args.energy_coupled = True
+        # zeta_energy=1.0, beta_energy=2.0 already match defaults
+        print("Preset 'best' applied (D_max=30, r0_void=2000, gamma_void=1.5, energy-coupled=on).")
 
     # Calibrate or accept k
     if args.k_mpc_inv is None or not math.isfinite(args.k_mpc_inv) or args.k_mpc_inv <= 0:
         # k = H0 / [ c * (D_max - 1) ]  (H0 in km/s/Mpc, c in km/s → k in 1/Mpc)
-        k_val = float(args.anchor_h0) / (C_KM_S * (D_MAX - 1.0))
-        print(f"Calibrated k from H0={args.anchor_h0} km/s/Mpc => k = {k_val:.9e} 1/Mpc")
+        # Calibrate k from H0 and the selected plateau cap (dmax)
+        cap = max(float(args.dmax), 1.0)
+        k_val = float(args.anchor_h0) / (C_KM_S * (cap - 1.0)) if cap > 1.0 else 0.0
+        print(f"Calibrated k from H0={args.anchor_h0} km/s/Mpc with D_max={cap:g} => k = {k_val:.9e} 1/Mpc")
         print(f"Per‑Mpc fractional energy loss (H0/c): {(args.anchor_h0/C_KM_S)*100.0:.6f}%/Mpc")
     else:
         k_val = float(args.k_mpc_inv)
-        h0_smallz = C_KM_S * k_val * (D_MAX - 1.0)
-        print(f"Using user k = {k_val:.9e} 1/Mpc (small‑z slope implies H0 ≈ {h0_smallz:.6f} km/s/Mpc)")
+        h0_smallz = C_KM_S * k_val * (float(args.dmax) - 1.0)
+        print(f"Using user k = {k_val:.9e} 1/Mpc (small‑z slope implies H0 ≈ {h0_smallz:.6f} km/s/Mpc with D_max={float(args.dmax):g})")
 
     # Build simulator
     energy_params = EnergyCouplingParams(
