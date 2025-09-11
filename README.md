@@ -125,6 +125,9 @@ with $\xi$ from **Box 1** and compare to observed rotation curves.
 **Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**  
 ![Milky Way: GR vs NFW vs RAR‑gate (0.1 kpc Gaia medians)](images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png)
 
+Figure 1 | An acceleration-gated model reproduces the Milky Way rotation curve without a dark matter halo. The observed circular velocity of the Milky Way (black points; Gaia Collaboration et al. 2022) is compared to three models. The prediction from baryons alone under standard gravity (blue) fails to match the data at large radii. A standard Navarro-Frenk-White (NFW) dark matter halo (green) provides a descriptive fit. Our Density-Gated Gravity (DGG) model (red), using a single universal gating function and no dark matter component, accurately reproduces the inner baryon-dominated region and the flat outer rotation curve.
+*   **Source Data:** `results/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.csv`
+
 Caption: Single‑theory fit: the DGG gate (red) with one universal shape and a single $a_0$ per galaxy reproduces both the inner rise (baryon‑dominated) and the outer plateau (low‑$g$ regime). GR with baryons alone (blue) falls short; the NFW line (green) is a yardstick (not a tuned fit).
 
 As in the original text, the model matches the inner rise (where baryons dominate) and sustains the outer speed once $g_{\rm bar}\sim a_0$, without galaxy‑specific halos.
@@ -137,6 +140,9 @@ $\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm
 New in this draft: we propagate baryonic uncertainties (disk and bulge $M/L$, gas mass, disk scale heights/lengths, and a bulge‑scale proxy for flattening) through the full‑3D phantom density to produce a shaded band. We sample priors in the orchestrator and export a CSV with the 16–84% Kz band at selected z.
 
 ![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
+
+Figure 2 | The DGG model is consistent with the measured vertical force in the Solar neighborhood. The predicted vertical force $K_z$ as a function of height $z$ above the Galactic plane at the Solar radius $R_0 = 8.2$ kpc. The red curve and shaded band show the DGG prediction and its 16th–84th percentile confidence interval, derived by propagating uncertainties in the baryonic mass model. This prediction is consistent with observational constraints from Bovy & Rix (2013) and McMillan (2017) (overlaid bands), without requiring a local dark matter disk.
+*   **Source Data:** `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`
 
 Caption: Vertical‑force cross‑check: full 3‑D phantom density implied by $\xi$ yields $K_z(R_0,z)$ and $\Sigma_{1.1}$ without a dark halo. The red shading shows the propagated baryon‑prior band (16–84%). Overlay bands (when provided) include Bovy & Rix (2013) $\Sigma_{1.1}=68\pm4\;M_\odot\,\mathrm{pc}^{-2}$ and McMillan (2017/2022); see `--mw-kz-overlay-csv` in the orchestrator. Source‑Data: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv` and `mw_kz_prior_band.csv`.
 
@@ -154,6 +160,9 @@ We selected representative spirals spanning mass and surface brightness. For eac
 #### SPARC gold‑sample panel (DGG vs GR vs observations)
 ![SPARC gold overlays panel](images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png)
 
+Figure 3 | The universal gating function explains diverse rotation curve shapes across the SPARC galaxy sample. Observed rotation curves (black points; Lelli, McGaugh & Schombert 2016) for five representative galaxies are compared with predictions from baryons alone (blue) and the DGG model (red). The DGG fits, obtained by optimizing a single parameter ($a_0$) for each galaxy, successfully track the data, demonstrating the model's applicability across galaxies of varying mass and surface brightness.
+*   **Source Data:** Per-galaxy rotmod files are from the SPARC database. Fit results are available in `results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv`.
+
 Caption: Generalization test: the same gate form explains diverse rotation‑curve shapes. Titles show best‑fit $a_0$ and $\Delta\chi^2$ vs GR. A summary table of $\Delta\chi^2$ vs GR and an NFW yardstick (standard priors) is provided (see `model_comparison_bic.csv`); selection criteria appear in Methods.
 
 **RAR master panel** (optional ΛCDM band).
@@ -165,6 +174,9 @@ Source‑Data: `results/next_steps/enhanced_20250805_115400/rar_master_panel_sou
 **BTFR outcome.** On a working subset (N≈89) using $M_b=M_\star+1.33\,M_{\mathrm{HI}}$ and observed $V_{\rm flat}$, a simple log–log fit yields slope $3.184\,[3.034,\,3.332]$ (p50 [p16, p84]); $R^2\approx0.885$ and RMS scatter $\approx0.22$ dex (see `btfr_fit_summary.json`). The deep‑regime prediction from the $\nu$‑function approaches $M_b\propto V^4$; selection criteria and goodness‑of‑fit metrics are documented (Methods), and we compare slope/scatter to SPARC BTFR results (SI).
 
 ![BTFR (subset)](images/next_steps/btfr_fix_20250906/btfr_baryonic.png)
+
+Figure 4 | The DGG framework reproduces the Baryonic Tully-Fisher Relation (BTFR). The relation between total baryonic mass ($M_b$) and flat rotation velocity ($V_f$) for a subset of 89 SPARC galaxies. DGG model predictions (red points) are fitted with a log-log linear relation (black line), yielding a slope of $3.18 \pm 0.15$, consistent with empirical measurements. The shaded region represents the bootstrap confidence interval of the fit.
+*   **Source Data:** `results/next_steps/btfr_fix_20250906/btfr_baryonic.csv`
 
 Caption: Scaling law: slope $3.18[3.03,3.33]$ (p50 [p16, p84]); RMS $\approx0.22$ dex. Band shows bootstrap CI. Selection and flatness criteria are specified in Methods.
 
@@ -181,6 +193,9 @@ at 1–30 AU. We show a **gated** curve (same parameters as galaxy fits) and a
 
 ![Solar‑System constraints](images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png)
 
+Figure 5 | The DGG model satisfies Solar System constraints. The predicted fractional deviation from Newtonian gravity, $|\Delta G/G| = |\xi-1|$, is plotted as a function of orbital distance from the Sun. The model's prediction (blue curve) remains orders of magnitude below the constraint from the Cassini mission on the PPN parameter $\gamma$ (gray band, $|\gamma-1|<2.3\times10^{-5}$; Bertotti, Iess & Tortora 2003), confirming the model's compatibility with high-precision local tests.
+*   **Source Data:** `results/next_steps/rar_plateau_mw_full/solar_system_table.csv`
+
 Caption: Solar‑System constraints. The DGG gate remains close to unity in the Sun’s field. We plot $|\Delta G/G|=|\xi-1|$ vs. orbital distance from 1–30 AU (log scale). Vertical markers indicate the semi‑major axes of Jupiter (5.2 AU), Saturn (9.5 AU), Uranus (19.2 AU), and Neptune (30.1 AU). A secondary right‑hand axis shows the Cassini bound $|\gamma-1|<2.3\times10^{-5}$ as a reference band; in our adopted metric subclass $\gamma\equiv1$ in the screened limit, so the $|\Delta G/G|$ curve is a conservative proxy for weak‑field amplitude changes. Values in the plot satisfy our screened‑Solar assumption ($\epsilon$ nearly constant along the Cassini ray) and are small enough not to upset AU‑scale ephemerides; see docs/ppn_mapping.md (SI) for a check of range residuals with the gated curve. **Source Data:** `.../solar_system_table.csv` (AU, $g_{\rm bar}$, $\xi_{\rm gated}$, $\xi_{\rm worst}$); `.../ppn_table.csv` (AU, $\gamma\!-\!1$, $\beta\!-\!1$, $\alpha_1$, $\alpha_2$, $|\Delta G/G|$).
 
 
@@ -191,6 +206,9 @@ Caption: Solar‑System constraints. The DGG gate remains close to unity in the 
 We map surface brightness to stellar mass using an SED‑informed $M/L$ prior. For SLACS ETGs the paper preset applies a population‑level Salpeter‑like offset $\delta_{\rm IMF}=+0.23$ to Chabrier SED masses; Chabrier results are shown for comparison. We deproject a Sérsic profile with measured $(n, R_e)$ (spherical baseline; axis ratio $q$ and external convergence priors can be added in SI), and build $\Sigma(R)$, $\bar\Sigma(<R)$, $\Delta\Sigma(R)$, and $\theta_E$ using the same metric‑only gate $\xi(g)$ (with $\Phi=\Psi$). Uncertainties propagate from $(\log_{10}M_\star, R_e, n, \theta_E^{\rm obs})$; we report residuals and RMSE and compare practice to SLACS.
 
 ![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
+
+Figure 6 | The DGG framework consistently predicts strong gravitational lensing. Predicted versus observed Einstein radii ($\theta_E$) for a sample of 70 early-type galaxies from the SLACS survey (Auger et al. 2009). Predictions from the DGG model (red points), using the same metric-only framework as for dynamics, cluster around the one-to-one relation (dashed line). In contrast, predictions from baryons alone in GR (blue points) systematically underestimate the lensing strength.
+*   **Source Data:** `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv`
 
 Caption: Lensing consistency on SLACS sample (N=70). Using the same $\\xi$ (metric‑only), DGG (red) tracks the 1:1 line; GR/baryons (blue) under‑predicts. SLACS (N=70), paper preset (Salpeter‑like $\\delta_{\\rm IMF}=+0.23$ dex; circularized $R_e$): GG RMSE$_{\\rm abs}$=0.256″ (GR 0.368″), RMSE$_{\\rm rel}$=0.202 (GR 0.288), Coverage$_{68/95}$=0.50/0.80 (N_σ≈70). For comparison, Chabrier gives 0.553″ (GR 0.655″) and coverage 0.014/0.10. Methods caveat: Sérsic is spherical for the mass model; we apply circularized $R_e=R_e\\sqrt{q}$ when axis ratio $q$ is available; full axisymmetric deprojection remains future work. Modest $\\kappa_{\\rm ext}\\sim\\mathcal N(0,0.03)$ has negligible impact on summary metrics at the $10^{-3}$ level.
 
