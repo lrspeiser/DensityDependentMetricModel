@@ -43,6 +43,12 @@ from typing import Callable, List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
+# Optional monotone interpolator for z(r) <-> r(z)
+try:
+    from scipy.interpolate import PchipInterpolator
+except Exception:
+    PchipInterpolator = None
+
 # Import energy-coupled gate (support package or direct file import)
 try:
     from tariff.energy_coupled_gate import (
@@ -124,6 +130,7 @@ class PhotonJourney:
     """Simulate a photon’s redshift via the Energy Tariff principle along a path.
 
     1 + z = exp( k * ∫ (xi(r) - 1) dr ), with r in Mpc and k in 1/Mpc.
+    Environmental mix can be a function of distance r (legacy) or redshift z (recommended for BAO).
     """
 
     def __init__(self, k_coupling_mpc_inv: float,
@@ -132,7 +139,10 @@ class PhotonJourney:
                  g_bar_void: float = G_BAR_VOID_DEFAULT,
                  galaxy_shell_mpc: float = 0.05,
                  r0_void: float = 0.0,
-                 gamma_void: float = 1.0):
+                 gamma_void: float = 1.0,
+                 void_mix_mode: str = "distance",
+                 zstar: float = 0.5,
+                 eta: float = 1.5):
         self.k = float(k_coupling_mpc_inv)
         self.a0 = float(A0)
         self.d_max = float(d_max)
@@ -140,6 +150,9 @@ class PhotonJourney:
         self.galaxy_shell_mpc = float(galaxy_shell_mpc)
         self.r0_void = float(r0_void)
         self.gamma_void = float(gamma_void)
+        self.void_mix_mode = str(void_mix_mode)
+        self.zstar = float(zstar)
+        self.eta = float(eta)
         self.energy_params = energy_params or EnergyCouplingParams(enabled=False)
         self._lookup: Tuple[np.ndarray, np.ndarray] | None = None  # (distances, z)
 
@@ -163,35 +176,55 @@ class PhotonJourney:
 
         return g_bar_at
 
-    def f_void(self, r_mpc: float) -> float:
-        """Effective fraction of the path in void at distance r. If r0_void<=0, return 1.0."""
+    def f_env_r(self, r_mpc: float) -> float:
+        """Environmental mix as a function of distance r (legacy behavior).
+        If r0_void<=0, return 1.0.
+        """
         r0 = float(self.r0_void)
         if r0 <= 0.0:
             return 1.0
         g = max(float(self.gamma_void), 0.0)
         return 1.0 / (1.0 + (max(r_mpc, 0.0) / r0) ** g)
 
+    def f_env_z(self, z_now: float) -> float:
+        """Environmental mix as a function of current redshift z.
+        Increases with z: f_env(z) = 1 / (1 + (z*/z)^eta), tends to 0 near z~0 and →1 at high z.
+        """
+        zstar = max(self.zstar, 1e-9)
+        eta = max(self.eta, 0.0)
+        zc = max(float(z_now), 0.0)
+        if zc <= 0.0:
+            # Avoid singular at z=0
+            return 1.0 / (1.0 + (zstar / 1e-9) ** eta)
+        return 1.0 / (1.0 + (zstar / zc) ** eta)
+
     def redshift(self, distance_mpc: float, steps: int = 4000) -> float:
         """Numerically integrate to compute z for a source at distance_mpc.
-        Uses simple Riemann sum: ∫(xi-1)dr ≈ Σ (xi(r_i)-1) Δr.
+        Uses simple Riemann sum with a running redshift to support f_env(z):
+        ∫(xi-1)dr ≈ Σ (xi(r_i)-1) f_env(r_i or z_i) Δr.
         """
         if distance_mpc <= 0.0:
             return 0.0
         steps = int(max(steps, 10))
         dr = float(distance_mpc) / steps
         g_bar_fn = self.piecewise_environment(distance_mpc)
-        accum = 0.0
+        accum = 0.0  # accumulates ∫ (xi-1) f_env dl
         r = 0.0
+        z_running = 0.0
         for _ in range(steps):
             r += dr
             g_local = g_bar_fn(r)
             xi = xi_rar_plateau_energy_coupled(
                 g_local, self.a0, self.d_max, self.energy_params
             )
-            eff = self.f_void(r) * (xi - 1.0)
-            accum += eff * dr
-        expo = self.k * accum
-        return float(np.exp(expo) - 1.0)
+            if self.void_mix_mode == "redshift":
+                f_eff = self.f_env_z(z_running)
+            else:
+                f_eff = self.f_env_r(r)
+            accum += (xi - 1.0) * f_eff * dr
+            # Update current redshift from cumulative integral
+            z_running = math.expm1(self.k * accum)
+        return float(z_running)
 
     # ---------- Inverse: μ(z) via a precomputed lookup of z(r) ----------
 
@@ -200,13 +233,16 @@ class PhotonJourney:
             return
         d_grid = np.linspace(0.0, max(1.0, float(max_dist_mpc)), int(max(n_points, 100)))
         z_grid = np.array([self.redshift(d, steps=3000) for d in d_grid], dtype=float)
-        # Ensure monotonic by slight smoothing if needed (model is monotonic; guard against tiny FP noise)
-        z_grid = np.maximum.accumulate(z_grid)
+        # Enforce strict monotonicity with minimal epsilon adjustments
+        eps = 1e-12
+        for i in range(1, len(z_grid)):
+            if z_grid[i] <= z_grid[i-1]:
+                z_grid[i] = z_grid[i-1] + eps
         self._lookup = (d_grid, z_grid)
 
     def distance_modulus_at_z(self, z_values: np.ndarray) -> np.ndarray:
         """Predict μ(z) using inverse of z(r):
-        - Build a lookup (r, z(r)) and linearly interpolate r for each z.
+        - Build a lookup (r, z(r)); invert with monotone PCHIP if available, else linear.
         - Convert r [Mpc] → parsecs and then μ = 5 log10(d_pc) − 5.
         """
         self._ensure_lookup()
@@ -215,7 +251,17 @@ class PhotonJourney:
         # Clamp z within table range
         z_min, z_max = float(z_grid[0]), float(z_grid[-1])
         z_safe = np.clip(z_values, z_min, z_max)
-        r_mpc = np.interp(z_safe, z_grid, d_grid)
+        # Ensure strictly increasing z for interpolation
+        z_mono = np.array(z_grid, dtype=float)
+        eps = 1e-12
+        for i in range(1, len(z_mono)):
+            if z_mono[i] <= z_mono[i-1]:
+                z_mono[i] = z_mono[i-1] + eps
+        if PchipInterpolator is not None:
+            r_of_z = PchipInterpolator(z_mono, d_grid)
+            r_mpc = r_of_z(z_safe)
+        else:
+            r_mpc = np.interp(z_safe, z_mono, d_grid)
         d_pc = r_mpc * 1.0e6
         mu = np.full_like(d_pc, np.nan)
         mask = d_pc > 0
@@ -258,6 +304,10 @@ def main(argv: List[str] | None = None) -> int:
                     help="Reference energy density E0 in eV/cm^3; used if --energy-coupled")
     ap.add_argument("--plot-energy-balance", action="store_true",
                     help="Plot E_emit (normalized), E_obs^data=1/(1+z), and E_obs^model(r_data) vs distance from Pantheon+ μ")
+    ap.add_argument("--void-mix-mode", choices=['distance','redshift'], default='distance',
+                    help="Environmental mix mode: distance-based f_env(r) or redshift-based f_env(z)")
+    ap.add_argument("--zstar", type=float, default=0.5, help="Transition redshift z* for f_env(z)")
+    ap.add_argument("--eta", type=float, default=1.5, help="Power η in f_env(z) = 1/(1 + (z*/z)^η)")
     ap.add_argument("--preset", type=str, default=None, choices=['best'],
                     help="Use tuned preset; flags differing from defaults override preset values")
     args = ap.parse_args(argv)
@@ -312,6 +362,9 @@ def main(argv: List[str] | None = None) -> int:
         galaxy_shell_mpc=float(args.galaxy_shell_mpc),
         r0_void=float(args.r0_void),
         gamma_void=float(args.gamma_void),
+        void_mix_mode=str(args.void_mix_mode),
+        zstar=float(args.zstar),
+        eta=float(args.eta),
     )
 
     # Distance grid for z(distance) curve

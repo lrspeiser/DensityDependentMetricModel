@@ -38,6 +38,11 @@ except Exception:
     curve_fit = None
     stats = None
 
+try:
+    from scipy.interpolate import PchipInterpolator
+except Exception:
+    PchipInterpolator = None
+
 # Constants
 C = 299_792.458  # km/s
 H0_PLANCK = 67.4  # km/s/Mpc
@@ -99,7 +104,10 @@ def test_cmb_spectral_shape(args):
                             d_max=args.dmax,
                             g_bar_void=args.gbar_void,
                             r0_void=args.r0_void,
-                            gamma_void=args.gamma_void)
+                            gamma_void=args.gamma_void,
+                            void_mix_mode=getattr(args, "void_mix_mode", "redshift"),
+                            zstar=getattr(args, "zstar", 0.5),
+                            eta=getattr(args, "eta", 1.5))
     z = sim.redshift(args.distance_mpc, steps=args.steps)
     s = 1.0 + z
 
@@ -107,25 +115,25 @@ def test_cmb_spectral_shape(args):
     nu = np.linspace(60e9, 630e9, 800)
     I_em = planck_I_nu(nu * s, T_CMB)
 
-    # A) Expansion-like mapping → Planck with T' = T/(1+z)
-    I_obs_A = I_em / (s ** 3)
-    T_A, rms_A = fit_planck_temperature(nu, I_obs_A)
+    # Transport selection: liouville preserves I_nu/nu^3; energy-only divides intensity by (1+z)
+    if getattr(args, "transport", "liouville") == "liouville":
+        I_obs = I_em / (s ** 3)
+        transport_label = "Liouville (I/(1+z)^3)"
+    else:
+        I_obs = I_em / s
+        transport_label = "Energy-only (I/(1+z))"
 
-    # B) Energy-only mapping (no number/area/time dilution)
-    I_obs_B = I_em / s
-    T_B, rms_B = fit_planck_temperature(nu, I_obs_B)
+    T_fit, rms = fit_planck_temperature(nu, I_obs)
 
     print(f"[CMB] r={args.distance_mpc:.0f} Mpc → z={z:.3f} (1+z={s:.3f})")
-    print(f"  Expansion-like:   T'={T_A:.4f} K, rms_frac_resid={rms_A:.3e}")
-    print(f"  Energy-only:      T'={T_B:.4f} K, rms_frac_resid={rms_B:.3e}")
+    print(f"  {transport_label}: T'={T_fit:.4f} K, rms_frac_resid={rms:.3e}")
     print("  (FIRAS tolerances are ~few×1e-5 in fractional residuals.)")
 
     plt.figure(figsize=(10,6))
     plt.title("CMB Spectral Shape under Tariff Mapping")
-    plt.plot(nu/1e9, I_obs_A/np.max(I_obs_A), label="Expansion-like (I/(1+z)^3)", lw=2)
-    plt.plot(nu/1e9, I_obs_B/np.max(I_obs_B), label="Energy-only (I/(1+z))", lw=2, ls="--")
-    I_fitB = planck_I_nu(nu, T_B)
-    plt.plot(nu/1e9, I_fitB/np.max(I_fitB), label=f"Best-fit Planck to energy-only (T'={T_B:.3f}K)", lw=1.5)
+    plt.plot(nu/1e9, I_obs/np.max(I_obs), label=transport_label, lw=2)
+    I_fit = planck_I_nu(nu, T_fit)
+    plt.plot(nu/1e9, I_fit/np.max(I_fit), label=f"Best-fit Planck (T'={T_fit:.3f}K)", lw=1.5)
     plt.xlabel("Frequency [GHz]"); plt.ylabel("Normalized intensity")
     plt.legend(); plt.grid(True, alpha=0.25)
     out = "cmb_distortion_test.png"
@@ -153,11 +161,14 @@ def test_tolman(args):
         mu_err = df['mu_err'].to_numpy(float)
 
     # Build z(r) grid and invert to r(z)
-    sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
+sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
                             d_max=args.dmax,
                             g_bar_void=args.gbar_void,
                             r0_void=args.r0_void,
-                            gamma_void=args.gamma_void)
+                            gamma_void=args.gamma_void,
+                            void_mix_mode=getattr(args, "void_mix_mode", "redshift"),
+                            zstar=getattr(args, "zstar", 0.5),
+                            eta=getattr(args, "eta", 1.5))
     r_grid = np.linspace(0.0, 6000.0, 6001)
     z_grid = np.array([sim.redshift(float(r), steps=args.steps) for r in r_grid])
     z_grid = np.maximum.accumulate(z_grid)
@@ -236,22 +247,35 @@ def test_bao_proxies(args):
                             d_max=args.dmax,
                             g_bar_void=args.gbar_void,
                             r0_void=args.r0_void,
-                            gamma_void=args.gamma_void)
+                            gamma_void=args.gamma_void,
+                            void_mix_mode=getattr(args, "void_mix_mode", "redshift"),
+                            zstar=getattr(args, "zstar", 0.5),
+                            eta=getattr(args, "eta", 1.5))
 
     r = np.linspace(0.0, args.rmax_mpc, int(args.rmax_mpc)+1)
     z = np.array([sim.redshift(float(rr), steps=args.steps) for rr in r])
-    ln1pz = np.log1p(z)
-    dln1pz_dr = np.gradient(ln1pz, r)
-    H_eff = C * dln1pz_dr
 
-    # Monotonic mapping
-    z_mono = np.maximum.accumulate(z)
-
-    def H_of_z(zz):
-        return np.interp(zz, z_mono, H_eff)
-
+    # Prefer monotone PCHIP inversion z(r) <-> r(z) if available
     z_grid = np.linspace(0.0, args.zmax, 2000)
-    Hz = H_of_z(z_grid)
+    if PchipInterpolator is not None:
+        z_mono = np.array(z, dtype=float)
+        eps = 1e-12
+        for i in range(1, len(z_mono)):
+            if z_mono[i] <= z_mono[i-1]:
+                z_mono[i] = z_mono[i-1] + eps
+        # r(z) and its derivative
+        r_of_z = PchipInterpolator(z_mono, r)
+        dr_dz = r_of_z.derivative()(z_grid)
+        dz_dr = 1.0 / np.clip(dr_dz, 1e-30, np.inf)
+        Hz = C * (dz_dr / (1.0 + z_grid))
+    else:
+        # Fallback: finite-difference d ln(1+z) / dr, then map by interp
+        ln1pz = np.log1p(z)
+        dln1pz_dr = np.gradient(ln1pz, r)
+        H_eff = C * dln1pz_dr
+        z_mono = np.maximum.accumulate(z)
+        Hz = np.interp(z_grid, z_mono, H_eff)
+
     with np.errstate(divide='ignore', invalid='ignore'):
         invH = np.where(Hz > 0, 1.0/Hz, np.nan)
     DM = C * np.cumsum(invH) * (z_grid[1]-z_grid[0])
@@ -334,11 +358,14 @@ def test_los_correlation(args):
     mod = _import_user_model()
     if mod is None:
         return 2
-    sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
+sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
                             d_max=args.dmax,
                             g_bar_void=args.gbar_void,
                             r0_void=args.r0_void,
-                            gamma_void=args.gamma_void)
+                            gamma_void=args.gamma_void,
+                            void_mix_mode=getattr(args, "void_mix_mode", "redshift"),
+                            zstar=getattr(args, "zstar", 0.5),
+                            eta=getattr(args, "eta", 1.5))
     z_grid = np.linspace(np.min(z), np.max(z), 2000)
     mu_model_grid = sim.distance_modulus_at_z(z_grid)
     mu_model = np.interp(z, z_grid, mu_model_grid)
@@ -418,17 +445,21 @@ def main():
     ap = argparse.ArgumentParser(description="Major-issues test harness for the Energy Tariff model")
     sp = ap.add_subparsers(dest="cmd", required=True)
 
-    def add_model_args(p):
+def add_model_args(p):
         p.add_argument("--k", type=float, default=7.75e-6, help="Coupling k [1/Mpc]")
         p.add_argument("--dmax", type=float, default=30.0, help="RAR plateau cap D_max")
         p.add_argument("--gbar-void", dest="gbar_void", type=float, default=1e-15, help="Void g_bar [m/s^2]")
         p.add_argument("--r0-void", dest="r0_void", type=float, default=2000.0, help="Void fraction scale r0 [Mpc]")
         p.add_argument("--gamma-void", dest="gamma_void", type=float, default=1.5, help="Void fraction exponent gamma")
+        p.add_argument("--void-mix-mode", choices=["distance","redshift"], default="redshift", help="Environmental mix domain: distance-based f_env(r) or redshift-based f_env(z)")
+        p.add_argument("--zstar", type=float, default=0.5, help="Transition redshift z* for f_env(z)")
+        p.add_argument("--eta", type=float, default=1.5, help="Power eta in f_env(z) = 1 / (1 + (z*/z)^eta)")
         p.add_argument("--steps", type=int, default=4000, help="Integration steps for z(r)")
 
     # 1) CMB
-    p1 = sp.add_parser("cmb", help="CMB spectral-shape test under tariff")
+p1 = sp.add_parser("cmb", help="CMB spectral-shape test under tariff")
     add_model_args(p1)
+    p1.add_argument("--transport", choices=["liouville","energy-only"], default="liouville", help="CMB transport mapping: 'liouville' preserves I_nu/nu^3; 'energy-only' divides intensity by (1+z)")
     p1.add_argument("--distance-mpc", type=float, default=14000.0, help="Propagation distance for the CMB test [Mpc]")
     p1.set_defaults(func=test_cmb_spectral_shape)
 
