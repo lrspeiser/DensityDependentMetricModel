@@ -2,6 +2,47 @@
 
 This note describes how to reproduce the main figures and tables in this repository with exact commands, package versions, and data artifacts. Update the DOI placeholders after minting Zenodo records.
 
+## Latest Results Tables and Figures
+
+- Figures overview (paths only):
+  - Fig. 1 Milky Way rotation — images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png
+  - Fig. 2 MW (K_z)/(Σ_1.1) — images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png
+  - Fig. 3 SPARC panel — images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png
+  - Fig. 4 BTFR subset — images/next_steps/btfr_fix_20250906/btfr_baryonic.png
+  - Fig. 5 Solar |ΔG/G| — images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png
+  - Fig. 6 Lensing θ_E scatter (SLACS, N≈70) — images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+  - Ext. Fig. Δlog Z histograms — images/next_steps/enhanced_20250805_115400/model_comparison/delta_logZ_hist.png
+
+- SPARC Fit Quality
+  - JSON: docs/metrics/sparc_fit_quality.json
+  - Figure: docs/figures/sparc_ppc_panel.png
+
+- Universality Metrics
+  - Universal a0 (global fit): results/next_steps/.../global_a0.json
+  - Hierarchical summaries: hierarchical_a0_summary.json / hierarchical_a0_posterior_summary.json
+  - Env ON/OFF deltas: universality_metrics.json
+
+- Solar System Source Data
+  - results/next_steps/btfr_fix_20250906/solar_system_table.csv
+  - Example table columns: AU, dG/G (gated), dG/G (worst), gamma−1, Cassini bound
+
+- SPARC per‑galaxy a0 summary (subset)
+  - results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
+
+- Milky Way vertical force Kz (full 3‑D phantom)
+  - results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv
+  - Aggregate: results/mw_kz_sigma.csv
+
+- Lensing metrics (SLACS sample; paper preset)
+  - Per‑lens table: results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv
+  - Summary JSON: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
+  - Figure (scatter): images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+  - Extended examples: images/next_steps/enhanced_20250805_115400/lensing_rar_J0037-0942.png, images/next_steps/enhanced_20250805_115400/lensing_rar_J1402+6321.png
+
+- D_max plateau sweep
+  - docs/dmax_cap.md
+  - docs/dmax_sweep_summary.csv
+
 ## Single-command reproduction (recommended)
 
 - From repo root (host):

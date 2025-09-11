@@ -1,5 +1,10 @@
 # Gravity Gates: An Acceleration-Gated Alternative to Dark Matter
 
+Leonard Speiser (Independent Researcher)
+
+## Abstract
+The Radial Acceleration Relation (RAR)—a tight empirical correlation between baryonic content and observed gravitational acceleration across galaxies—challenges standard cosmological models that rely on bespoke, non-baryonic dark matter halos. This tension highlights a fundamental trade-off between the flexibility of tunable halo models and the predictive rigidity of modified gravity. Here, we propose and test a framework, termed Gravity Gates (GG), where the effective gravitational response is gated by the local acceleration strength. This mechanism recovers General Relativity in the well-tested high-acceleration regime of the Solar System while producing an enhanced force in the low-acceleration environments of galactic outskirts. We demonstrate that a single, universal gating function, tied deterministically to the baryonic mass distribution, simultaneously predicts the rotation curves of the Milky Way and a diverse sample of external galaxies. The same framework correctly reproduces local vertical stellar forces, remains consistent with stringent Solar System ephemeris tests, and, under a simple metric mapping, accounts for the observed magnitude of strong gravitational lensing. By replacing per-galaxy halo freedom with a falsifiable physical principle, this work shows that an acceleration-gated theory of gravity can provide a unified and predictively rigid account of phenomena typically attributed to dark matter.
+
 ## Introduction
 
 Galactic rotation curves continue to strain the standard picture in which galaxies live inside massive, non‑baryonic dark‑matter halos. Halos can be tuned to fit individual systems, but doing so typically introduces one bespoke mass profile per galaxy and requires tight, system‑by‑system coordination between baryons and dark matter. A central empirical clue is the **radial acceleration relation (RAR)**: across hundreds of disks the observed centripetal acceleration $g_{\rm obs}$ correlates closely with the acceleration predicted by baryons alone $g_{\rm bar}$, with scatter comparable to measurement uncertainties. Any successful framework must either explain why dark halos conspire to follow the baryons so closely, or modify the low‑acceleration law of gravity itself in a way that **predicts** the RAR.
@@ -107,18 +112,6 @@ $$
 
 with $\xi$ from **Box 1** and compare to observed rotation curves.
 
-### Figure‑by‑Figure Guide (what each plot proves)
-
-| Figure | What question does it answer? | What to look for / success criterion | Why it matters to the paper’s claims |
-|---|---|---|---|
-| MW rotation (GR vs NFW vs DGG) | Can one set of DGG parameters match the Milky Way without a dark halo? | Red DGG curve follows the data in the inner Galaxy and sustains the outer speed once $g_{\rm bar}\sim a_0$; blue (baryons‑only) falls short; NFW is a yardstick only. | Establishes core claim: a single gate, not a custom halo, captures the shape. |
-| MW $K_z$ (full‑3D) | Is the vertical force at $R_0$ consistent with measurements? | Red full‑3D DGG curve lies inside the Bovy & Rix / McMillan bands (overlay these); quote $\Sigma_{1.1}$. | Cross‑check of a different field component; prevents “in‑plane tuning” and uses the full‑3D figure/CSV. |
-| SPARC panel (5 exemplars) | Does the same gate shape work across galaxies of very different surface brightness? | Red DGG lines broadly track black points; residuals correlate with known systematics (inclination, gas). | Demonstrates generality with one functional form; avoids per‑galaxy halo freedom. |
-| BTFR with bootstrap band | Do DGG predictions respect the baryonic Tully–Fisher slope and scatter? | Slope $3.184\,[3.034,\,3.332]$, RMS $\sim0.22$ dex; band from bootstrap. | Connects to the RAR/BTFR “natural law”; shows we’re in the correct phenomenology with few knobs. |
-| Solar‑System ($\Delta G/G$) | Is the gate invisible where GR is well tested? | Curve remains below the Cassini bound at Saturn; $\Delta G/G\ll10^{-5}$ over 1–30 AU. | Confirms Solar‑System safety under the same mapping used for galaxies. |
-| $\theta_E$: predicted vs observed | Does the same $\xi$ (metric‑only, $\Phi=\Psi$) reproduce strong‑lensing scales? | Red points cluster around the 1:1 line with errors; blue (baryons‑only) under‑predicts; include per‑lens residuals. | Puts DGG on the same footing as halo models for lensing—critical for credibility. |
-| Stacked $\Delta\Sigma$ (metric) | Is the average projected signal roughly correct over 0.05–300 kpc? | Solid curve with 16–84% band sits in the ballpark of literature stacks alongside the data points. | Shows the global profile is captured without non‑baryonic mass. |
-| Wide‑binary (Extended Data) | Does DGG avoid order‑unity deviations at $10^3$–$10^4$ AU? | Predicted statistic $\xi-1$ stays modest; compare to Gaia analyses. | Complements Solar constraints in a distinct low‑$g$ environment. |
 
 ### Milky Way: A Case Study
 
@@ -352,21 +345,7 @@ docker run --rm -it \
 
 ---
 
-## Figures
-
-- **Fig. 1** Milky Way rotation — `images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png`  
-- **Fig. 2** MW \(K_z\) / \(\Sigma_{1.1}\) — `images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png`
-- **Fig. 3** SPARC panel — `images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png`  
-- **Fig. 4** BTFR subset — `images/next_steps/btfr_fix_20250906/btfr_baryonic.png`  
-- **Fig. 5** Solar \(|\Delta G/G|\) — `images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png`  
-- **Fig. 6** Lensing \(\theta_E\) scatter (SLACS, N≈70) — `images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png`  
-- **Ext. Fig.** Model comparison Δlog Z histograms (BIC approximation) — `images/next_steps/enhanced_20250805_115400/model_comparison/delta_logZ_hist.png`
-
----
-
-## Latest Results Tables
-
-### SPARC Fit Quality
+For extended figures, latest results tables, and detailed reproducibility instructions, see REPRODUCIBLE.md.
 
 For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets. The aggregator standardizes residuals with $\sigma_{\rm eff}=\sqrt{\sigma^2+6^2+(0.05\,V_{\rm obs})^2}$ and records these floor settings in `docs/metrics/sparc_fit_quality.json`.
 
@@ -460,11 +439,6 @@ We ran the post‑processing cap $D_{\max}$ over {30, 50, 80, ∞} using the sam
 
 Full details and rationale: see docs/dmax_cap.md. Combined summary CSV: docs/dmax_sweep_summary.csv.
 
-## Reproducibility
-
-Some tables reference a later run folder for Solar data; both runs use the same paper preset and flags.
-
-Code and data to reproduce figures are provided; see REPRODUCIBLE.md and docs/next_steps.md for one‑command runs, data DOIs, and exact environment notes.
 
 ## Appendices
 
