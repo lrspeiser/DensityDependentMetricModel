@@ -1,8 +1,4 @@
-Below is a **publication‑ready, self‑contained section** you can drop into the paper. It introduces the high‑level hypothesis (why “gates” might exist), shows one concrete cosmological consequence (redshift from an energy→gravity transfer), and then folds in the quantitative model and figures you already produced. It is explicitly **optional** and does not alter the validity of the rest of the paper.
-
----
-
-## Optional Cosmological Hypothesis (independent of core results)
+# Optional Cosmological Hypothesis (independent of core results)
 
 ### Why a Gravity “Gate” Might Exist: Energy–Gravity Reciprocity
 
@@ -95,39 +91,7 @@ We fit $k$ on a small‑$z$ window and then sweep $(D_{\max}, g_{\rm bar,void}, 
 
 ---
 
-## Editorial assessment (Nature Physics level) and recommended next steps
+## Open Issues and Next Steps
 
-**Strengths for a top‑tier submission**
-
-* **Single mechanism, cross‑scale reach.** A unified gate explains both galactic “extra gravity” and the SN Hubble diagram without adding dark components.
-* **Tight link to data.** The redshift construction is minimal (Eqs. 1–3) and already gives a competitive $\chi^2$ on Pantheon+; the energy‑balance figure is a clear, independent check.
-* **Falsifiability.** Predicts line‑of‑sight–dependent residuals and fixes relationships among $\{k,D_{\max}\}$ once the local slope and outer‑disk phenomenology are set.
-
-**Major issues to address pre‑submission**
-
-1. **SN time‑dilation.** Type Ia light curves exhibit $(1+z)$ time dilation. A static tariff must **either** reproduce the same dilation (via an independent mechanism) **or** show that light‑curve standardization pipelines do not bias the test. *Action:* reprocess a subset of SN light curves with explicit time‑domain fits under the tariff hypothesis.
-
-2. **CMB blackbody and spectral distortions.** Any energy‑loss mechanism must preserve the CMB’s near‑perfect blackbody spectrum. *Action:* compute the transformation of a Planck distribution under Eq. (1). If necessary, constrain $k$–$\xi$ evolution with redshift and include photon‑number effects so the spectrum remains Planckian to FIRAS limits.
-
-3. **Tolman surface‑brightness and $d_L$–$d_A$ duality.** Expansion predicts $S\!\propto\!(1+z)^{-4}$. In a static framework you must specify the luminosity‑distance mapping $d_L=r(1+z)^p$ and test $p$ jointly with deep‑imaging surface‑brightness data. *Action:* add $p$ to the inference and confront the latest Tolman tests.
-
-4. **BAO and cosmic chronometers.** BAO set a standard ruler; chronometers measure $H(z)$. *Action:* derive the predicted $z(r)$ and inferred “effective” $H(z)$ under the tariff and test BAO peak positions and chronometer data.
-
-5. **Large‑scale‑structure consistency.** The same gate modifies the Poisson equation in voids. *Action:* ray‑trace through N‑body mocks to compute a *first‑principles* $f_{\rm void}(r)$ and the predicted correlation between SN residuals and LOS density contrast.
-
-6. **Lensing time delays and strong‑lens cosmography.** Determine whether the tariff changes photon flight times in a way that biases time‑delay distances. *Action:* compute Fermat‑potential integrals with/without tariff and test against well‑measured systems.
-
-7. **Parameter identifiability and degeneracies.** Quantify the $k$–$D_{\max}$ degeneracy (given the local slope) and report marginalized posteriors for $(r_0,\gamma)$ from joint fits to SNe + lensing + RAR.
-
-**Concrete research plan (short‑term)**
-
-* **A. Joint inference.** Fit $(k,D_{\max},r_0,\gamma,p)$ to Pantheon+ with explicit treatment of time‑dilation and K‑corrections; report Bayesian evidence vs $\Lambda$CDM.
-* **B. Structure‑correlation test.** Cross‑correlate SN residuals with tomographic LOS densities (DES/KiDS/SDSS), predicting the sign and amplitude from ray‑traced $f_{\rm void}$.
-* **C. CMB spectrum check.** Compute CMB spectral distortions from Eq. (1) along a realistic thermal history and compare to COBE/FIRAS bounds; if needed, constrain allowed $k(z)$.
-* **D. Lensing & dynamics coherence.** With the same $\xi$, re‑validate galaxy–galaxy lensing amplitudes and outer‑disk $K_z$ while scanning the SN‑permitted band of $(r_0,\gamma)$.
-* **E. Public release.** Package the tariff integrator and the parameter sweep (`sweep_results.csv`) with a reproducible notebook and figure scripts.
-
-**Go/no‑go criterion for submission**
-
-* Green‑light once (i) SN time‑dilation is matched without ad‑hoc fixes, (ii) CMB blackbody is preserved within FIRAS limits, and (iii) at least one environment‑dependence prediction (LOS correlation of SN residuals) is borne out at $>2\sigma$.
+See `issues.md` in this folder for a full list of outstanding theoretical and observational checks (time‑dilation, CMB spectrum, Tolman test, BAO/chronometers, LSS consistency, lensing time delays, and parameter identifiability), along with a concrete work plan and submission criteria. The present README focuses on the hypothesis, construction, and results summary.
 
