@@ -12,7 +12,7 @@ Galactic rotation curves continue to strain the standard picture in which galaxi
 
 Two broad approaches have emerged. In ΛCDM, increasingly sophisticated formation models attempt to imprint the observed baryon–halo coupling through feedback, assembly histories, and environment. This is flexible, but the cost is many latent degrees of freedom. On the other side are **MOND‑like** ideas that introduce a characteristic acceleration scale $a_0$ and were prescient in anticipating the RAR. These are predictively rigid on galaxy scales, but classic formulations are not manifestly relativistic and face challenges in clusters and cosmology. The tension between **flexibility** (fit anything) and **rigidity** (predict many things with few knobs) is the fundamental issue.
 
-Our guiding idea is that gravity’s **effective response may depend on environment**, much as other fundamental interactions do. In quantum field theory, couplings “run” with scale, and the strong force presents different faces in different regimes (asymptotic freedom vs. confinement). We do **not** claim an identity with QCD, but we adopt the same organizing principle: the **measured strength** of the interaction can change with conditions. If gravity’s weak‑field response is **gated** by local acceleration (and, by extension, by typical densities or tidal scales), then observers like us—residing in a **high‑acceleration** region (Solar neighborhood, deep potentials)—naturally see standard GR. In the **low‑acceleration** outskirts of galaxies, however, the gate opens and an enhanced response emerges. Cosmologically, such gating would tend to **promote aggregation** in diffuse regions rather than hinder it, a qualitative feature that is at least directionally compatible with the observed prevalence of bound structure. In this paper we do not model early‑universe dynamics; we focus on quantifying the weak‑field, quasi‑static consequences in galaxies and the Solar System.
+Our guiding idea is that gravity’s **effective response may depend on environment**, much as other fundamental interactions do. In quantum field theory, couplings "run" with scale, and the strong force presents different faces in different regimes (asymptotic freedom vs. confinement). We do **not** claim an identity with QCD, but we adopt the same organizing principle: the **measured strength** of the interaction can change with conditions. If gravity’s weak‑field response is **gated** by local acceleration (and, by extension, by typical densities or tidal scales), then observers like us—residing in a **high‑acceleration** region (Solar neighborhood, deep potentials)—naturally see standard GR. In the **low‑acceleration** outskirts of galaxies, however, the gate opens and an enhanced response emerges. Cosmologically, such gating would tend to **promote aggregation** in diffuse regions rather than hinder it, a qualitative feature that is at least directionally compatible with the observed prevalence of bound structure. In this paper we do not model early‑universe dynamics; we focus on quantifying the weak‑field, quasi‑static consequences in galaxies and the Solar System.
 
 We formalize this idea as **Gravity Gates (GG)**: a weak‑field framework in which the gravitational response is a deterministic function of the local field strength (and, optionally, simple environmental proxies). We instantiate a **density‑gated** subclass (**DGG**) for empirical tests. The gate $\xi(g_{\rm bar})$ multiplies the baryonic prediction, is **unity** in the high‑acceleration limit (recovering Newton/GR and Solar‑System tests), and increases smoothly toward a finite plateau at low acceleration to reproduce the RAR/BTFR phenomenology while avoiding pathologies at extremely small $g_{\rm bar}$. Crucially, **the same gate**—with a single scale $a_0$ and a fixed functional form—is used to predict **rotation curves, vertical forces $K_z$, strong‑lensing Einstein radii $\theta_E$, and stacked weak‑lensing $\Delta\Sigma$** under a metric subclass with $\Phi=\Psi$. This preserves **predictive rigidity** without the per‑galaxy halo freedom.
 
@@ -46,7 +46,7 @@ A further failure would be a requirement for $D_{\max}\!\gg\!100$ to match lensi
 
 ## 2. The RAR‑Gated Gravity Model
 
-In RAR‑gated gravity, the departure from Newton’s law is governed by an interpolating “gating” function that depends on the local gravitational acceleration (and/or local mass distribution). Conceptually, one can think of the model as modifying the effective gravitational constant or the relationship between the matter distribution and the curvature of spacetime, such that:
+In RAR‑gated gravity, the departure from Newton’s law is governed by an interpolating "gating" function that depends on the local gravitational acceleration (and/or local mass distribution). Conceptually, one can think of the model as modifying the effective gravitational constant or the relationship between the matter distribution and the curvature of spacetime, such that:
 
 - **High‑acceleration limit** ($g\gg a_0$) — The gate suppresses modifications, restoring Newton/GR and passing Solar‑System tests.
 - **Low‑acceleration limit** ($g\ll a_0$) — The gate enhances the effective force in a way tuned to reproduce the RAR (and hence the BTFR).
@@ -60,7 +60,7 @@ The empirical RAR/BTFR indicates that galaxy dynamics are largely fixed by the b
 
 - In high‑acceleration regions, gravity behaves like ordinary GR/Newton.
 - In low‑acceleration regions (galaxy outskirts), gravity gets a boost. The size of the boost is set by a single universal scale $a_0$ and capped by a plateau $D_{\max}$ to prevent unphysical divergence.
-- Practically, we compute the Newtonian acceleration from baryons ($g_{\rm bar}$) and then multiply by a boost factor $\xi$ (the “gate”). This $\xi$ depends only on the local field strength (and, optionally, a mild environment term), not on a custom dark halo for each galaxy.
+- Practically, we compute the Newtonian acceleration from baryons ($g_{\rm bar}$) and then multiply by a boost factor $\xi$ (the "gate"). This $\xi$ depends only on the local field strength (and, optionally, a mild environment term), not on a custom dark halo for each galaxy.
 - The same $\xi$ is used consistently for rotation curves, vertical forces in the Milky Way, Solar‑System checks, and gravitational lensing (via a metric‑only mapping with $\Phi=\Psi$).
 
 ### Five‑step recipe (what the code actually does)
@@ -100,6 +100,7 @@ $$
 s_\rho(\rho;\rho_c,\gamma)=\frac{1}{1+(\rho/\rho_c)^\gamma}\in[0,1],\qquad
 W(T;T_0,\sigma_{\ln T},w_{\min})=w_{\min}+(1-w_{\min})\exp\!\left[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\right],
 $$
+
 with $T\equiv V_{\rm bar}^2/R^2$ used purely as a tidal proxy.
 
 **Effective acceleration scale:**
@@ -108,7 +109,7 @@ $$
  a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
 $$
 
-**Boost (“$\nu$” function) used throughout.**
+**Boost ("$\nu$" function) used throughout.**
 
 $$
 \xi(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],\qquad D_{\max}=50~\text{(fiducial)}.\\[3pt]
@@ -123,7 +124,7 @@ $$
 \nabla^2\Phi \;=\; \nabla\!\cdot\!\big[\nu(g_{\rm bar}/a_0)\,\nabla\Phi_b\big],\quad \nu\equiv \xi,
 $$
 
-the effective (“phantom”) density is
+the effective ("phantom") density is
 
 $$
 \rho_{\rm ph} \;=\; (\xi-1)\,\rho_b \;+\; \frac{1}{4\pi G}\,\nabla\xi\!\cdot\!\nabla\Phi_b 
@@ -214,6 +215,7 @@ Any modified gravity must clear Solar‑System bounds. We evaluate the same $\xi
 $$
 \left|\frac{\Delta G}{G}\right| \;\equiv\; \left|\xi(r)-1\right|
 $$
+
 at 1–30 AU. We show a **gated** curve (same parameters as galaxy fits) and a **worst‑case** curve (no screening).
 
 ![Solar‑System constraints](images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png)
@@ -288,7 +290,7 @@ Importer sanity checks (applied in scripts/tools):
 
 ### Outlook — cosmological extension (separate paper)
 
-Because $\xi(g)$ is local, it can be coupled to line‑of‑sight integrals to build a redshift–distance mapping without assuming FRW kinematics. We have explored an **energy–gravity reciprocity** (“energy tariff”) where a tiny cumulative energy drain along low‑$g$ sightlines yields a phenomenological $z(r)$ consistent with SN Hubble‑diagram curvature and Liouville‑preserving CMB transport. These results **do not** alter any galaxy/lensing conclusions here and will be presented in a **companion paper**.
+Because $\xi(g)$ is local, it can be coupled to line‑of‑sight integrals to build a redshift–distance mapping without assuming FRW kinematics. We have explored an **energy–gravity reciprocity** ("energy tariff") where a tiny cumulative energy drain along low‑$g$ sightlines yields a phenomenological $z(r)$ consistent with SN Hubble‑diagram curvature and Liouville‑preserving CMB transport. These results **do not** alter any galaxy/lensing conclusions here and will be presented in a **companion paper**.
 
 ---
 
@@ -307,8 +309,8 @@ Because $\xi(g)$ is local, it can be coupled to line‑of‑sight integrals to b
 **Hierarchical $a_0$ (optional).** When enabled, we infer a population‑level mean and scatter in $\ln a_0$ from per‑galaxy grids (dynesty nested sampling). We report $(\mu,\sigma)$ posteriors in `hierarchical_a0_posterior_summary.json` and a heatmap at `images/.../hierarchical_a0_posterior_heatmap.png`.  
 
 **Baryon models.** Milky Way disks (Miyamoto–Nagai) + bulge (Hernquist) + gas; external galaxies use SPARC component rotmods.  
-**Computation.** We evaluate \(\xi(g)\) as in **Box 1**, with unit conversion constant \(C\) and optional gates \(s_\rho, W(T)\).  
-**Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling. We report both “raw” \(\chi^2\) (as in the SPARC files) and floor‑augmented fits using a velocity error floor and/or fractional observational floor to capture inclination/distance/beam systematics. For headline SPARC reduced‑\(\chi^2\) we adopt `--sigma-floor 6.0` (km/s) and `--obs-frac-sigma 0.05` unless otherwise stated; raw values (no floors) are reported alongside in SI. Residual PPC plots (residuals vs R with 16–84% bands) can be generated via `tools/sparc_ppc.py`.  
+**Computation.** We evaluate $\xi(g)$ as in **Box 1**, with unit conversion constant \(C\) and optional gates \(s_\rho, W(T)\).  
+**Fitting \(a_0\).** Per‑galaxy **grid** \(\log_{10} a_0\in[-10.5,-9.3]\) (60 points) minimizing \(\chi^2\); optional **hierarchical** log‑normal prior for \(a_0\) with nested sampling. We report both "raw" \(\chi^2\) (as in the SPARC files) and floor‑augmented fits using a velocity error floor and/or fractional observational floor to capture inclination/distance/beam systematics. For headline SPARC reduced‑\(\chi^2\) we adopt `--sigma-floor 6.0` (km/s) and `--obs-frac-sigma 0.05` unless otherwise stated; raw values (no floors) are reported alongside in SI. Residual PPC plots (residuals vs R with 16–84% bands) can be generated via `tools/sparc_ppc.py`.  
 **Solar‑System.** In the Solar limit where $g_{\rm bar}\gg a_0$, $\xi\to1$ and the metric reduces to GR with $\gamma\simeq\beta\simeq1$ and $\alpha_{1,2}\simeq0$. We evaluate $\xi(r)$ in the Sun’s field and report $|\Delta G/G|$ at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass $\Phi=\Psi, c_T=1$), we also export a PPN CSV (`ppn_table.csv`) with $(\gamma,\beta,\alpha_1,\alpha_2)$.
 
 **PPN mapping and export.** In the metric subclass we adopt, the weak-field line element is $ds^2=-(1+2\Phi/c^2)dt^2+(1-2\Psi/c^2)d\mathbf x^2$ with screening such that $\Phi=\Psi$ and $c_T=1$. The DGG gate $\xi(g)$ rescales the weak-field potential by a small factor $1+\epsilon$ with $\epsilon\equiv\xi-1\ll1$ in the Solar System. Matching coefficients of the baryonic Newtonian potential $U$ at 1PN, the equal additive contribution of $c^2\phi_{\rm env}$ to $g_{00}$ and $g_{ij}$ implies the coefficient ratio is unity: $\gamma=1$; $\beta=1$; and preferred‑frame parameters $\alpha_{1,2}=0$ in this limit. Cassini measures the coefficient of the logarithmic term in the Shapiro delay relative to the ephemeris $GM_\odot$; hence the two regimes (degenerate vs non‑degenerate amplitude) discussed in docs/ppn_mapping.md. We therefore use $|\Delta G/G|=|\xi-1|$ as a conservative amplitude tracer and export a PPN table with columns $(\mathrm{AU},\gamma-1,\beta-1,\alpha_1,\alpha_2,|\Delta G/G|)$ alongside the Solar System source‑data CSV. The figure shows $|\Delta G/G|$ vs. $r$ with planetary semi‑major axes marked and a reference band for the Cassini $|\gamma-1|$ limit on a secondary axis. See docs/ppn_mapping.md for the precise $\gamma/\epsilon$ conditions.
