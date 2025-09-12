@@ -1,145 +1,156 @@
-# Energy–Gravity Reciprocity and the Cosmological “Energy Tariff”
+Awesome—here’s a clean, drop‑in **Introduction + Background/Method** package for your cosmology add‑on, written to the tone of Paper II (or a clearly labeled Section in the SI/Appendix of Paper I). It assumes standard expansion, briefly motivates it (redshift–distance, CMB), gives a short history of “energy → gravity” ideas (including Zwicky’s tired light and why that fails), and then explains **how you apply the concept within Gravity Gates** to test whether **void‑weighted light paths** correlate with **extra redshift** via your gated loss law. I’ve kept your notation ($\xi, a_0, D_{\max}$, $f_{\rm env}$, $k$) and integrated your blackbody‑preserving derivation and the $T_{\rm LSS}\!\to\!T_0$ path‑length calibration. Citations to your two documents are included. 
 
-A Worked Add‑On to Gravity Gates (Optional; does not alter galaxy/lensing results)
+I also cite a few standard cosmology references (Hubble–Lemaître law, FIRAS CMB temperature, SN time‑dilation, Tolman test, BAO) for context. ([PNAS][1])
 
-Author: Leonard Speiser, Independent Researcher
+---
 
-**Abstract** — We posit an energy–gravity reciprocity that operates only in low‑acceleration environments. The same gate $\xi(\bar g)$ used in the Gravity Gates framework regulates a tiny, cumulative energy drain (“energy tariff”) along photon paths in void‑like regions. Integrating the tariff yields a redshift–distance relation $z(r)$ without assuming FRW expansion kinematics. Using a minimal environmental mix and calibrating the coupling $k$ to preserve the local Hubble slope, we obtain: (i) an excellent Supernova Hubble‑diagram overlay on Pantheon+ (reduced $\chi^2 \approx 0.777$); (ii) a close per‑photon energy balance against $1/(1+z)$ (RMSE $\approx 1.46\times10^{-2}$); (iii) CMB spectral preservation under Liouville‑respecting transport (rms residuals $\lesssim 2\times10^{-16}$—a naive energy‑only mapping fails by orders of magnitude); and (iv) BAO/chronometer proxy trends that improve once we adopt a redshift‑dependent environmental mix and a monotone $z\leftrightarrow r$ inversion. All galaxy and lensing results elsewhere are unchanged by this optional add‑on.
+# 1. Introduction (Cosmology Context)
 
-Keywords: gravity gates; RAR/BTFR; low‑acceleration regime; energy–gravity reciprocity; supernova Hubble diagram; CMB spectral invariance; BAO proxies; Tolman test
+We assume the universe is expanding. Empirically, the **redshift–distance relation**—first assembled by Hubble (building on Lemaître’s interpretation)—shows that more distant galaxies exhibit systematically larger redshifts, establishing a nearly linear relation at low redshift $v\simeq H_0 d$ and motivating an expanding background. ([PNAS][1])  Independent evidence comes from the **cosmic microwave background (CMB)**: a near‑perfect blackbody today at $T_0 = 2.7255\pm0.0006$ K (COBE/FIRAS recalibrated), with deviations $<\!10^{-4}$ across 0.5–5 mm—the textbook fossil of an early hot phase redshifting as the universe expands. ([arXiv][2])  Additional, independent expansion tests include **SN Ia time‑dilation** of light curves (stretch $\propto 1+z$), the **Tolman surface‑brightness** dimming ($\propto (1+z)^{-4}$, modulated by evolution), and the **BAO** standard‑ruler feature in galaxy clustering. ([arXiv][3])
 
-1. Introduction
+Motivated by our **Gravity Gates** framework—where the weak‑field response depends on local acceleration—we ask a narrower question: *if* low‑acceleration environments also mediate a tiny, cumulative **energy→gravity reciprocity** for radiation, can a strictly frequency‑proportional “tariff” along **void‑weighted** sightlines (i) reproduce the **shape** of the SN Hubble diagram and (ii) remain consistent with the CMB’s blackbody spectrum, *without* altering any of our galaxy/lens results? We keep standard expansion as background and use the reciprocity as a controlled phenomenology layered on top. (The gated gravity model itself—used for galaxies, $K_z$, Solar‑System safety, and lensing—is summarized in Paper I. )
 
-Gravity Gates posit a weak‑field response that depends on local acceleration. In high‑g regions (Solar System, inner galaxies) ξ→1 and GR is recovered; in low‑g regions ξ rises smoothly and saturates at a finite plateau Dmax. The cosmological add‑on asserts a reciprocity: when the induced gravitational stiffness is under‑supplied, a tiny energy drain from traversing radiation sustains it. This “energy tariff” integrates to a measurable redshift only along long, predominantly void sightlines, and is negligible where GR is well tested.
+---
 
-2. Theory
+# 2. Background: “Energy Converts to Gravity” (what we mean—and don’t)
 
-2.1 Gate used throughout
+**Energy gravitates.** In GR, the source of gravity is the stress‑energy tensor; energy density and pressure both curve spacetime. In that sense, “energy → gravity” is embedded in the field equations, and redshift in FRW follows from geometry.
 
-ξ(ḡ) = min[ 1/2 + sqrt(1/4 + a0/ḡ), Dmax ].
+**Historic photon‑loss proposals.** Zwicky’s 1929 **tired‑light** idea posited that photons *lose* energy en route, producing a redshift–distance relation in a static spacetime. Such mechanisms are **ruled out** by multiple observations (image blurring from scattering, failure to reproduce SN time‑dilation and Tolman dimming, and CMB blackbody/anisotropy constraints). Our construction explicitly avoids those pathologies by (i) assuming expansion and (ii) imposing a **strictly proportional** loss law that preserves blackbody shape and is **gated** to operate only in **low‑acceleration** regions, leaving dense regions and the Solar System essentially untouched. ([arXiv][4])
 
-2.2 Energy tariff and accumulated redshift
+**Our framing.** Within **Gravity Gates**, the same gate $\xi(g)$ that enhances weak‑field gravitational response (Paper I) also controls a tiny, *environment‑weighted* photon energy loss rate. This *reciprocity* provides a single control variable for both dynamics and a phenomenological redshift contribution. We emphasize: the **galaxy, $K_z$**, Solar‑System, and **lensing** results from Gravity Gates stand **independently** of this cosmology add‑on.
 
-(1)   d lnE / dr = − α(r),     α(r) = k [ξ(r) − 1] fenv(r)
-(2)   1 + z(r) = exp( k ∫₀^r [ξ(l) − 1] fenv(l) dl )
+---
 
-2.3 Environmental mix (two domains)
+# 3. Gated energy‑to‑gravity reciprocity: model summary
 
-Legacy (distance‑based):   fenv(r) = 1 / [1 + (r/r0)^γ].
-Redshift‑based (recommended for BAO):   fenv(z) = 1 / [1 + (z*/z)^η], increasing with z and tending to 1 at high z.
+We adopt the Gravity Gates gate $\xi(g_{\rm bar};a_0,D_{\max})$ from Paper I and use it to **modulate** a line‑of‑sight energy‑loss coefficient $\alpha(l)$. The loss is **proportional to photon energy** (no frequency dependence), so an initial energy $E_0$ evolves as
 
-2.4 CMB spectral transport
+$$
+\frac{dE}{dl}=-\alpha(l)\,E \quad\Rightarrow\quad E(l)=E_0\,e^{-\tau(l)},\quad \tau(l)=\int_0^l \alpha(l')\,dl'.
+$$
 
-To respect Liouville’s theorem, Iν/ν³ is invariant. A blackbody emitted at T transforms to an observed Planck spectrum with T′ = T/(1+z) when Iobs = Iem/(1+z)³. A naive energy‑only mapping I/(1+z) spoils the spectrum and is rejected by FIRAS; we keep it only as a diagnostic toggle.
+Because $E\propto \nu$ for photons, this implies a **pure redshift** contribution without spectral distortion:
 
-3. Data and Methods
+$$
+1+z(l)\;=\;e^{\tau(l)}.
+$$
 
-3.1 Dataset and loader
+We **gate** $\alpha$ by the low‑acceleration response and a simple environment weight $f_{\rm env}$:
 
-Pantheon+SH0ES: external_data/pantheon/Pantheon+SH0ES.dat (ASCII; comment lines “#”; header row “CID …”). Columns used: zHD (index 2), MU_SH0ES (index 10), MU_SH0ES_ERR_DIAG (index 11). The loader in tariff/energy_tariff_model.py parses these by position and filters NaNs and nonpositive uncertainties.
+$$
+\boxed{\ \n\alpha(l)=k\,[\xi(l)-1]\;f_{\rm env}(l)\ },
+\qquad 
+1+z(r)=\exp\!\left(k\int_0^r [\xi(l)-1]f_{\rm env}(l)\,dl\right).
+$$
 
-3.2 Coupling calibration and integration
+Here $k$ is a small coupling to be fitted (or anchored locally), and $f_{\rm env}\in[0,1]$ is a void weight that increases when the photon path threads underdense, low‑$g$ regions. Two useful parameterizations are:
+**distance‑based:** $f_{\rm env}(r)=\bigl[1+(r/r_0)^\gamma\bigr]^{-1}$;
+**redshift‑based:** $f_{\rm env}(z)=\bigl[1+(z_\star/z)^\eta\bigr]^{-1}$ (rises toward unity at high $z$).
+Implementation details, data hooks, and prior runs are given in your add‑on note.
 
-We calibrate k to preserve the small‑z slope implied by the chosen anchor H0 (unless k is provided directly). Redshift is obtained by numerically integrating (ξ−1)fenv along the line of sight with fine uniform steps. To enable fenv(z), we maintain a running redshift during integration.
+> **Link to Gravity Gates.** $\xi(g)$ is **large** (gate “open”) only when $g\ll a_0$, i.e., in **void‑like** environments; it is $\simeq 1$ (gate “closed”) in dense regions and in the Solar System. This naturally predicts stronger line‑of‑sight tariff in void‑weighted sightlines, and negligible effects in high‑$g$ locales—exactly the phenomenology you test.
 
-3.3 Inversion and distances
+---
 
-We tabulate z(r) on a dense grid and invert monotonically using a piecewise cubic Hermite (PCHIP) interpolator when SciPy is available; otherwise we fall back to linear interpolation after enforcing strict monotonicity with an ε‑jitter. Distance modulus μ(z) is computed from r(z) via Euclidean conversion to parsecs (paper‑neutral proxy for comparing curves).
+## Box A — Preserving a blackbody (why the loss must be $\propto E$)
 
-3.4 BAO/chronometer proxies
+To avoid FIRAS‑level CMB spectral distortions, the loss law must be **linear in $E$** (no extra frequency dependence). Then a blackbody emitted at temperature $T_{\rm em}$ remains a blackbody with
 
-We define an effective H(z) ≡ c d/dz ln(1+z(r)) by differentiating the monotone inverse r(z). From H(z) we construct DM(z) and DH(z) for reference curves and, when a BAO CSV is provided, fit the sound horizon rd in a single‑parameter regression with χ²/dof reported.
+$$
+T_{\rm obs}=\frac{T_{\rm em}}{1+z} = T_{\rm em}\,e^{-\tau},
+\quad \text{with } \tau=\!\int \alpha\,dl,
+$$
 
-3.5 Ancillary tests
+and phase‑space density $I_\nu/\nu^3$ (Liouville) remains invariant under a pure rescaling of $\nu$. This is the minimal, CMB‑safe loss law you sketched; we adopt it throughout. (FIRAS: $T_0=2.7255$ K with rms deviations $\lesssim 10^{-4}$.) ([arXiv][2])
 
-Tolman test: fit p in dL = r (1+z)^p from μ(z).   SN time dilation: fit pt in t ∝ (1+z)^pt from light‑curve timescales.   Strong‑lens time delays: invariance under energy‑only tariff (group speed c; Fermat potential unchanged).
+---
 
-Implementation references
-- tariff/energy_tariff_model.py — simulator and μ(z) prediction; Pantheon loader
-- tariff/tariff_major_tests.py — batteries for CMB, Tolman, SN time dilation, BAO proxies, LOS correlation, time delays
+## Box B — Calibrating the CMB temperature drop ($\sim\!3000$ K $\to$ 2.725 K)
 
-4. Results (this run)
+Taking $T_{\rm LSS}\!\approx\!3000$ K at last scattering and $T_0=2.725$ K today,
 
-Preset (“best”): Dmax = 30, ḡvoid = 1×10⁻¹⁵ m s⁻², r0 = 2000 Mpc, γ = 1.5; energy coupling enabled (ζ=1.0, β=2.0); k ≈ 7.75×10⁻⁶ Mpc⁻¹.
+$$
+\tau_{\rm CMB}\;=\;\ln\!\frac{T_{\rm LSS}}{T_0}\;\approx\;\ln(1100)\;\approx\;7.0.
+$$
 
-4.1 Supernova Hubble diagram
+If the tariff acts only along a fraction $f_{\rm void}$ of the comoving line‑of‑sight distance to last scattering $D_{\rm LSS}\simeq 14~\mathrm{Gpc}$, then
 
-Reduced χ² ≈ 0.777 for μ(z) versus Pantheon+ (usable sample; see loader notes). Figure: hubble_diagram_with_data.png.
+$$
+\alpha_{\rm eff} \;\equiv\; \frac{\tau_{\rm CMB}}{f_{\rm void}\,D_{\rm LSS}}
+\;\approx\; \frac{7}{0.8\times 14\ \mathrm{Gpc}}
+\;\approx\;0.63~\mathrm{Gpc^{-1}} \;\;(0.19~\mathrm{Gly^{-1}}).
+$$
 
-4.2 Per‑photon energy balance
+In our gated model, $\alpha(l)=k[\xi(l)-1]f_{\rm env}(l)$. Thus **one parameter** $k$ is set by requiring $\int\alpha\,dl=\tau_{\rm CMB}$ (or, in practice, by matching the local Hubble‑diagram slope and then verifying the CMB constraint). This is the clean calibration route you proposed.
 
-RMSE(Eobs,model vs 1/(1+z)) ≈ 1.46×10⁻² using μ‑derived distances r(μ). Figure: energy_balance_plot.png.
+---
 
-4.3 CMB spectral shape
+# 4. Observational program and falsifiable signatures
 
-With Liouville‑preserving transport, the observed spectrum remains Planckian with rms fractional residuals ≲ 2×10⁻¹⁶ at 14 Gpc (diagnostic: energy‑only mapping yields ≈ 1.8×10⁻¹). Figure: cmb_distortion_test.png.
+**(A) Supernova Hubble diagram (shape test).**
+With a monotone inversion $r(z)$ from $1+z=\exp\!\int \alpha dl$, compute $\mu(z)$ and compare to Pantheon+; fit only $k$ (and, if used, $f_{\rm env}$ hyper‑parameters) after anchoring the small‑$z$ slope. Your implementation already reports reduced $\chi^2$ and provides a PCHIP inversion path.
 
-4.4 Tolman surface‑brightness
+**(B) Line‑of‑sight environment correlation (distinctive prediction).**
+Define the **gated path integral**
 
-Best‑fit p ≈ 0.401 with χ²/dof ≈ 1.318.
+$$
+S \;\equiv\; \int_0^{r(z)} [\xi(l)-1]f_{\rm env}(l)\,dl.
+$$
 
-4.5 BAO/chronometer proxies
+Then test whether SN residuals $\Delta\mu$ correlate with $S$ (or with a void‑fraction proxy along the line of sight). A **positive slope** would indicate extra tariff where the gate opens (void‑weighted paths), whereas **no correlation** falsifies the reciprocity at the reported sensitivity. (Your harness has LOS correlation hooks.)
 
-Heff(z), DM(z), DH(z) are produced from the monotone inversion; optional rd fit is available given a BAO CSV. Figure: bao_proxies.png.
+**(C) CMB blackbody/anisotropy safety (hard constraint).**
+Because the loss is $\propto E$ and nearly isotropic on large scales, the **shape** of the blackbody is preserved (FIRAS), and small‑scale anisotropies are not blurred by scattering. You already enforce Liouville‑respecting transport in code and flag that a naive intensity‑only mapping fails by orders of magnitude.   ([LAMBDA][5])
 
-5. Discussion
+**(D) Time‑dilation and Tolman checks.**
+Your pipeline includes tests for **SN stretch $\propto 1+z$** and **Tolman $(1+z)^{-4}$** behavior; those must match expansion expectations (the tariff alone cannot produce the correct scalings). ([arXiv][3])
 
-- SNe and energy balance: the gate‑driven z(r) reproduces the curvature of μ(z) and the per‑photon trend without altering galaxy/lensing results.
-- CMB: Liouville preservation is non‑negotiable; the tariff affects z(r) but not the blackbody form, consistent with FIRAS when transport is handled correctly.
-- BAO/chronometers: adopting fenv(z) and a monotone inversion improves trends versus naive finite‑difference mappings; testing against public BAO compilations is the next step.
-- Distinct predictions: weak correlations of SN residuals with line‑of‑sight structure are a targeted falsification test.
+**(E) BAO/chronometer proxies (shape only).**
+From the inferred $H_{\rm eff}(z)\equiv c\,d\!\ln(1+z)/dz$, compute $D_M(z)$ and $D_H(z)$ and compare **shape** to BAO compilations; fit only an overall $r_d$ if desired. ([arXiv][6])
 
-Energy accounting (order‑of‑magnitude). The cumulative energy removed from photons along a sphere of radius r is 
-$\dot E_\gamma(r) \sim \int d\Omega \int_0^r k\,[\xi(l)-1]\,f_{\rm env}(l)\,I_\nu(l)\, dl$, where $I_\nu$ includes the CMB and EBL. In our baseline, the inferred loss fraction per Gpc is $\ll 1$ for optical SNe, while the CMB dominates the global budget; the induced‑gravity sector stores an energy density $u_C \simeq V(C)+\tfrac12\alpha(\nabla C)^2$, which we require to track the integrated loss. A quantitative bound will be reported in the Supplement.
+---
 
-6. Limitations and Caveats
+# 5. Relation to Gravity Gates (Paper I)
 
-- Our μ(z) comparison is a shape test using a static mapping; it is not a full FRW distance‑ladder replacement. We therefore restrict claims to the empirical adequacy of Eqs. (1)–(2) for SN phenomenology.  
-- Results depend on the environmental mix; fenv(z) captures an increasing void fraction with redshift but is an effective description.
-- Time‑dilation and LOS correlation tests require external CSVs; hooks are provided.
+* **Single control function.** The same $\xi(g)$ that fits **galaxy rotation curves**, **MW $K_z$**, **Solar‑System safety**, and **strong‑lensing** amplitudes (metric‑only mapping with $\Phi=\Psi$) also gates the cosmological tariff. No per‑object tweaking is introduced here.
+* **Screening.** In high‑$g$ regimes (Solar System, galaxy interiors), $\xi\!\to\!1$ and $\alpha\!\to\!0$, automatically keeping local tests intact.
+* **Scope.** This section **does not** claim a replacement for FRW/CMB/BAO; it asks whether a *small, gated* reciprocity can (i) follow the SN‑Hubble shape and (ii) remain CMB‑, Tolman‑, and time‑dilation‑safe, thereby offering a *phenomenological* link between cosmic web environment and residual redshift trends. (Full cosmology is deferred to a companion study.)
 
-7. Reproducibility
+---
 
-All figures and metrics were generated on Python 3.11 with numpy, matplotlib, pandas, scipy, dynesty. Commands below reproduce the headline plots and numbers.
+## Methods snapshot (for the cosmology add‑on)
 
-```bash
-python3.11 -m venv .venv
-./.venv/bin/python -m pip install --upgrade pip
-./.venv/bin/python -m pip install numpy matplotlib pandas scipy dynesty
+1. **Gate & environment.** $\xi(g)=\tfrac12+\sqrt{\tfrac14+a_0/g}$ (capped by $D_{\max}$) from Paper I; environment weights $f_{\rm env}(r)$ or $f_{\rm env}(z)$.
+2. **Loss law.** $\alpha(l)=k[\xi(l)-1]f_{\rm env}(l)$; integrate to get $1+z=\exp\!\int\alpha\,dl$.
+3. **Calibration.** Fit $k$ to preserve the **local Hubble slope** (small $z$) and verify $\int\alpha\,dl\approx \ln(1100)$ to satisfy the **CMB temperature drop** if treating the tariff as cosmologically relevant over the full path.
+4. **Inversion.** Build a monotone $z(r)$ grid; invert for $r(z)$ via PCHIP; compute $\mu(z)$.
+5. **Tests.** SN Hubble diagram (shape), LOS‑environment correlation, CMB blackbody check (Liouville), Tolman $p$, SN time‑dilation $p_t$, and BAO/chronometer proxies—exactly as your codebase implements.
 
-# Hubble diagram, energy balance, and z(r) plot (saves three PNGs)
-./.venv/bin/python tariff/energy_tariff_model.py --distance-max 4000 --steps 200 --preset best --plot-hubble --plot-energy-balance --data-file external_data/pantheon/Pantheon+SH0ES.dat
+---
 
-# CMB spectral-shape test (Liouville by default)
-./.venv/bin/python tariff/tariff_major_tests.py cmb --transport liouville --distance-mpc 14000 --k 7.75e-6 --dmax 30 --gbar-void 1e-15 --r0-void 2000 --gamma-void 1.5 --steps 4000
+### Notes on positioning and prior art
 
-# BAO/chronometer proxies with redshift-based f_env(z) and PCHIP inversion
-./.venv/bin/python tariff/tariff_major_tests.py bao --void-mix-mode redshift --zstar 0.5 --eta 1.5 --k 7.75e-6 --dmax 30 --gbar-void 1e-15 --r0-void 2000 --gamma-void 1.5 --steps 4000 --rmax-mpc 6000 --zmax 2.5
+* Our gated reciprocity is **not** the Zwicky‑style tired‑light scattering: it is expansion‑compatible, **frequency‑proportional**, near‑isotropic, and **screened** in high‑$g$ regions; it therefore avoids blurring and preserves the blackbody form by construction. ([arXiv][4])
+* The novelty is the **link to a weak‑field gravity gate** already audited on galaxies/lensing, yielding *one function* $\xi(g)$ that controls both dynamics and a small, testable, environment‑dependent redshift contribution.
 
-# Tolman p
-./.venv/bin/python tariff/tariff_major_tests.py tolman --k 7.75e-6 --dmax 30 --gbar-void 1e-15 --r0-void 2000 --gamma-void 1.5 --steps 4000
+---
 
-# Time delays (SIS toy)
-./.venv/bin/python tariff/tariff_major_tests.py timedelay
+## (Optional) One‑paragraph “Scope and limitations” for the end of the Intro
 
-# SN time dilation (requires your CSV)
-# ./.venv/bin/python tariff/tariff_major_tests.py sntd --data path/to/sntd_summary.csv
-```
+**Scope and limitations.** We retain the expanding FRW background and test a **small, gated** energy‑to‑gravity reciprocity layered on top. We do **not** attempt full‑fidelity fits to CMB/BAO or a global replacement of FRW; cluster‑scale dynamics are also out of scope. The tariff is constrained to be $\propto E$ (blackbody‑safe), screened in high‑$g$ regimes, and weak enough to satisfy SN time‑dilation and Tolman tests; violations would falsify the mechanism.
 
-Notes
-- Pantheon+ data path: external_data/pantheon/Pantheon+SH0ES.dat (in‑repo).   
-- PNGs are saved at repo root by default from these scripts and tracked by Git LFS per .gitattributes.
+---
 
-8. Readiness Checklist
+### Where to paste
 
-| Status | Item | Current state | Next action |
-|---|---|---|---|
-| Green | SN Hubble diagram and energy balance | Metrics and figures reproduced (χ²≈0.777; RMSE≈1.46×10⁻²) | Keep as baseline reference |
-| Green | CMB spectral invariance (Liouville) | Spectral residuals ≲2×10⁻¹⁶; energy‑only fails as expected | Include diagnostic figure and note |
-| Green | Optional section independence | Does not alter galaxy/lensing results | Leave scope clearly optional |
-| Amber | BAO/chronometers | Proxy curves in place with f_env(z) and PCHIP inversion | Fit to public BAO compilation with free r_d; report χ²/dof |
-| Amber | Tolman exponent p | Harness implemented; run produces example p | Run on deep photometry sample; then quote p with χ²/dof |
-| Amber | LOS correlation | Harness implemented | Add LOS proxy CSV; report Pearson r and p‑value |
-| Red | SN time‑dilation p_t | Not yet run on real light‑curve table | Add CSV (z, timescale/stretch, errors); show p_t≈1 within errors |
-| Red | Energy budget bound | Only qualitative paragraph added | Provide back‑of‑envelope quantitative bound in Supplement |
+* If you’re preparing **Paper II**, keep Sections 1–5 as your Introduction & Model.
+* If you’re appending to **Paper I**, insert **Section “Outlook / Cosmology Add‑On”** with a shortened version of Sections 1–3, and point readers to a companion manuscript for the full program. (The galaxy/lens results remain unchanged.)
+
+[1]: https://www.pnas.org/doi/10.1073/pnas.15.3.168?utm_source=chatgpt.com "A relation between distance and radial velocity among ..."
+[2]: https://arxiv.org/abs/0911.1955?utm_source=chatgpt.com "The Temperature of the Cosmic Microwave Background"
+[3]: https://arxiv.org/abs/astro-ph/9602124?utm_source=chatgpt.com "[astro-ph/9602124] Observation of Cosmological Time Dilation using ..."
+[4]: https://arxiv.org/abs/astro-ph/0106566?utm_source=chatgpt.com "The Tolman Surface Brightness Test for the Reality of the Expansion. IV. A Measurement of the Tolman Signal and the Luminosity Evolution of Early-Type Galaxies"
+[5]: https://lambda.gsfc.nasa.gov/product/cobe/about_firas.html?utm_source=chatgpt.com "The COBE Far Infrared Absolute Spectrophotometer (FIRAS)"
+[6]: https://arxiv.org/abs/astro-ph/0501171?utm_source=chatgpt.com "[astro-ph/0501171] Detection of the Baryon Acoustic Peak ..."
 
