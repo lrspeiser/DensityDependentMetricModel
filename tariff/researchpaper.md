@@ -1,6 +1,12 @@
-Awesome—here’s a clean, drop‑in **Introduction + Background/Method** package for your cosmology add‑on, written to the tone of Paper II (or a clearly labeled Section in the SI/Appendix of Paper I). It assumes standard expansion, briefly motivates it (redshift–distance, CMB), gives a short history of “energy → gravity” ideas (including Zwicky’s tired light and why that fails), and then explains **how you apply the concept within Gravity Gates** to test whether **void‑weighted light paths** correlate with **extra redshift** via your gated loss law. I’ve kept your notation ($\xi, a_0, D_{\max}$, $f_{\rm env}$, $k$) and integrated your blackbody‑preserving derivation and the $T_{\rm LSS}\!\to\!T_0$ path‑length calibration. Citations to your two documents are included. 
+# A Unified Gate Linking Weak-Field Dynamics and Photon Energy Loss
 
-I also cite a few standard cosmology references (Hubble–Lemaître law, FIRAS CMB temperature, SN time‑dilation, Tolman test, BAO) for context. ([PNAS][1])
+Authors: [To be completed]
+Affiliations: [To be completed]
+
+Abstract
+We introduce a unified gate, G(y, ργ), that ties weak-field dynamical enhancements (RAR-like behavior) to a strictly energy-proportional photon tariff along void-weighted lines of sight. The gate depends on the baryon-only acceleration y ≡ gbar/a0 and the ambient photon energy density ργ (CMB+EBL), ensuring Solar-System safety (G→1 at high g) and CMB spectral purity (loss ∝ E). In the weak field, dynamics follow gobs = G gbar, while photons obey d ln E/dℓ = −κ(G − 1). Using tariff-only tooling, we (i) establish GR baselines from data (Hubble small‑z slope, CMB Planck fit, Tolman p, SN time‑dilation pt), and (ii) test the unified gate by overlaying μ(z) on Pantheon+ with χ², and by deriving Heff(z) and BAO shape-only overlays with an r_d fit. All analyses and plots are confined to tariff/; a JSON metrics file summarizes outcomes. This construction is compatible with a minimal scalar–tensor wrapper that preserves FRW, Φ=Ψ, and c_T=1 in screened regimes.
+
+Keywords: Modified gravity; RAR; CMB; Supernovae; BAO; Weak field; Conformal drift; Energy–gravity reciprocity
 
 ---
 
