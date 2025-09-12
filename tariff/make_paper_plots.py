@@ -29,11 +29,13 @@ except Exception:
     from analysis_unified_gate import analyze_unified_gate
     from unified_gate_scaffold import GateParams, calibrate_kappa_to_cmb
 
-PANTHEON = os.path.join('external_data','pantheon','Pantheon+SH0ES.dat')
-CMB_CSV = os.path.join('tariff','data','cmb_firas_like.csv')
-TOLMAN_CSV = os.path.join('tariff','data','tolman_sb.csv')
-SNTD_CSV = os.path.join('tariff','data','sn_timedilation.csv')
-BAO_CSV = os.path.join('tariff','data','bao_compilation.csv')
+from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PANTHEON = str(REPO_ROOT / 'external_data' / 'pantheon' / 'Pantheon+SH0ES.dat')
+CMB_CSV = str(REPO_ROOT / 'tariff' / 'data' / 'cmb_firas_like.csv')
+TOLMAN_CSV = str(REPO_ROOT / 'tariff' / 'data' / 'tolman_sb.csv')
+SNTD_CSV = str(REPO_ROOT / 'tariff' / 'data' / 'sn_timedilation.csv')
+BAO_CSV = str(REPO_ROOT / 'tariff' / 'data' / 'bao_compilation.csv')
 
 def main():
     # Baselines (always run Hubble; optional others if files present)

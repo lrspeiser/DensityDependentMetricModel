@@ -227,3 +227,8 @@ runs/
 !images/paper/**/*.png
 !images/rar_plateau_analysis/**/*.png
 !images/rar_plateau_mw_full/**/*.png
+
+# Allow tariff paper assets (figures and JSON summaries)
+!tariff/images/*.png
+!tariff/images/**/*.png
+!tariff/results/**/*.json

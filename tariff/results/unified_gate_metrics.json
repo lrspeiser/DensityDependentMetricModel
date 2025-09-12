@@ -1,0 +1,20 @@
+{
+  "params": {
+    "eta": 3.0,
+    "p": 1.5,
+    "q": 1.0,
+    "rho_star_evcm3": 0.26,
+    "kappa_per_Mpc": 0.0006252737016773627,
+    "sigma": 0.0,
+    "enable_backreaction": false
+  },
+  "hubble": {
+    "hubble_plot": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/unified_gate_hubble_overlay.png",
+    "chi2": 439135.3398618815,
+    "red_chi2": 258.31490580110676,
+    "dof": 1700
+  },
+  "bao": {
+    "bao_plot": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/unified_gate_bao_proxies.png"
+  }
+}

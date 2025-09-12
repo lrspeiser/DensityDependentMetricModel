@@ -169,9 +169,21 @@ def frw_shape_DM_DH(z: np.ndarray, H0: float = 67.4, Omega_m: float = 0.315, c_k
     return DM, DH
 
 if __name__ == '__main__':
-    # Example minimal baseline run (adjust paths as needed)
-    pantheon = os.path.join('external_data','pantheon','Pantheon+SH0ES.dat')
-    baseline_hubble(pantheon)
-    # fit_cmb_temperature(os.path.join('tariff','data','cmb_firas_like.csv'))
-    # fit_tolman_exponent(os.path.join('tariff','data','tolman_sb.csv'))
-    # fit_sntd_exponent(os.path.join('tariff','data','sn_timedilation.csv'))
+    # Resolve repo root relative to this file (tariff/parent)
+    try:
+        from pathlib import Path
+        REPO_ROOT = Path(__file__).resolve().parents[1]
+        pantheon = str(REPO_ROOT / 'external_data' / 'pantheon' / 'Pantheon+SH0ES.dat')
+        baseline_hubble(pantheon)
+        # Optional baselines if CSVs are present
+        cmb_csv = REPO_ROOT / 'tariff' / 'data' / 'cmb_firas_like.csv'
+        tolman_csv = REPO_ROOT / 'tariff' / 'data' / 'tolman_sb.csv'
+        sntd_csv = REPO_ROOT / 'tariff' / 'data' / 'sn_timedilation.csv'
+        if cmb_csv.exists():
+            fit_cmb_temperature(str(cmb_csv))
+        if tolman_csv.exists():
+            fit_tolman_exponent(str(tolman_csv))
+        if sntd_csv.exists():
+            fit_sntd_exponent(str(sntd_csv))
+    except Exception as e:
+        print(f"[WARN] Baseline run failed to resolve paths: {e}")

@@ -183,8 +183,10 @@ def analyze_unified_gate(pantheon_path: str, bao_csv_path: str | None, params: G
 
 
 if __name__ == '__main__':
-    pantheon = os.path.join('external_data','pantheon','Pantheon+SH0ES.dat')
-    bao_csv = os.path.join('tariff','data','bao_compilation.csv')
+    from pathlib import Path
+    REPO_ROOT = Path(__file__).resolve().parents[1]
+    pantheon = str(REPO_ROOT / 'external_data' / 'pantheon' / 'Pantheon+SH0ES.dat')
+    bao_csv_path = REPO_ROOT / 'tariff' / 'data' / 'bao_compilation.csv'
     kappa_guess = calibrate_kappa_to_cmb(f_void=0.8, D_LSS_Mpc=14000.0, G_cap_minus1=1.0)
     params = GateParams(eta=3.0, p=1.5, q=1.0, rho_star_evcm3=0.26, kappa_per_Mpc=kappa_guess)
-    analyze_unified_gate(pantheon, bao_csv if os.path.exists(bao_csv) else None, params)
+    analyze_unified_gate(pantheon, str(bao_csv_path) if bao_csv_path.exists() else None, params)
