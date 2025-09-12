@@ -165,7 +165,7 @@ def test_tolman(args):
         mu_err = df['mu_err'].to_numpy(float)
 
     # Build z(r) grid and invert to r(z)
-sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
+    sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
                             d_max=args.dmax,
                             g_bar_void=args.gbar_void,
                             r0_void=args.r0_void,
@@ -362,7 +362,7 @@ def test_los_correlation(args):
     mod = _import_user_model()
     if mod is None:
         return 2
-sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
+    sim = mod.PhotonJourney(k_coupling_mpc_inv=args.k,
                             d_max=args.dmax,
                             g_bar_void=args.gbar_void,
                             r0_void=args.r0_void,
@@ -445,23 +445,25 @@ def test_posteriors(args):
 
 # ---------- CLI ----------
 
+
+def add_model_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--k", type=float, default=7.75e-6, help="Coupling k [1/Mpc]")
+    p.add_argument("--dmax", type=float, default=30.0, help="RAR plateau cap D_max")
+    p.add_argument("--gbar-void", dest="gbar_void", type=float, default=1e-15, help="Void g_bar [m/s^2]")
+    p.add_argument("--r0-void", dest="r0_void", type=float, default=2000.0, help="Void fraction scale r0 [Mpc]")
+    p.add_argument("--gamma-void", dest="gamma_void", type=float, default=1.5, help="Void fraction exponent gamma")
+    p.add_argument("--void-mix-mode", choices=["distance","redshift"], default="redshift", help="Environmental mix domain: distance-based f_env(r) or redshift-based f_env(z)")
+    p.add_argument("--zstar", type=float, default=0.5, help="Transition redshift z* for f_env(z)")
+    p.add_argument("--eta", type=float, default=1.5, help="Power eta in f_env(z) = 1 / (1 + (z*/z)^eta)")
+    p.add_argument("--steps", type=int, default=4000, help="Integration steps for z(r)")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Major-issues test harness for the Energy Tariff model")
     sp = ap.add_subparsers(dest="cmd", required=True)
 
-def add_model_args(p):
-        p.add_argument("--k", type=float, default=7.75e-6, help="Coupling k [1/Mpc]")
-        p.add_argument("--dmax", type=float, default=30.0, help="RAR plateau cap D_max")
-        p.add_argument("--gbar-void", dest="gbar_void", type=float, default=1e-15, help="Void g_bar [m/s^2]")
-        p.add_argument("--r0-void", dest="r0_void", type=float, default=2000.0, help="Void fraction scale r0 [Mpc]")
-        p.add_argument("--gamma-void", dest="gamma_void", type=float, default=1.5, help="Void fraction exponent gamma")
-        p.add_argument("--void-mix-mode", choices=["distance","redshift"], default="redshift", help="Environmental mix domain: distance-based f_env(r) or redshift-based f_env(z)")
-        p.add_argument("--zstar", type=float, default=0.5, help="Transition redshift z* for f_env(z)")
-        p.add_argument("--eta", type=float, default=1.5, help="Power eta in f_env(z) = 1 / (1 + (z*/z)^eta)")
-        p.add_argument("--steps", type=int, default=4000, help="Integration steps for z(r)")
-
     # 1) CMB
-p1 = sp.add_parser("cmb", help="CMB spectral-shape test under tariff")
+    p1 = sp.add_parser("cmb", help="CMB spectral-shape test under tariff")
     add_model_args(p1)
     p1.add_argument("--transport", choices=["liouville","energy-only"], default="liouville", help="CMB transport mapping: 'liouville' preserves I_nu/nu^3; 'energy-only' divides intensity by (1+z)")
     p1.add_argument("--distance-mpc", type=float, default=14000.0, help="Propagation distance for the CMB test [Mpc]")
@@ -504,6 +506,7 @@ p1 = sp.add_parser("cmb", help="CMB spectral-shape test under tariff")
 
     args = ap.parse_args()
     return args.func(args)
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
