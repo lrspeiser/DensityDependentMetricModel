@@ -105,9 +105,15 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 # Figures and Tables (auto-generated from tariff/)
 
 - Hubble baseline (GR): ![](images/baseline_hubble.png)
-- CMB spectral shape baseline: ![](images/baseline_cmb_spectrum.png)
-- Tolman test baseline: ![](images/baseline_tolman.png)
-- SN time-dilation baseline: ![](images/baseline_sntd.png)
+- CMB spectral shape baseline:
+  - If present: ![](images/baseline_cmb_spectrum.png)
+  - If missing: data file tariff/data/cmb_firas_like.csv not found (figure not generated)
+- Tolman test baseline:
+  - If present: ![](images/baseline_tolman.png)
+  - If missing: data file tariff/data/tolman_sb.csv not found (figure not generated)
+- SN time-dilation baseline:
+  - If present: ![](images/baseline_sntd.png)
+  - If missing: data file tariff/data/sn_timedilation.csv not found (figure not generated)
 - Unified gate μ(z) overlay: ![](images/unified_gate_hubble_overlay.png)
 - Unified gate H_eff(z) and BAO proxies: ![](images/unified_gate_bao_proxies.png)
 
