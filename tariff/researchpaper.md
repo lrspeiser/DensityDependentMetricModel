@@ -4,6 +4,73 @@ I also cite a few standard cosmology references (Hubble–Lemaître law, FIRAS C
 
 ---
 
+## Unified Gate Law and Relativistic Scaffolding (addendum)
+
+This section fuses our gated RAR gravity with a photon energy→gravity tariff using a single control function. It provides both a drop-in model and a relativistic wrapper so the mechanism is testable and spectrum-safe.
+
+### A) Unified Gate Law (drop-in model)
+
+Let g_bar(x) be the baryon-only Newtonian field, y ≡ g_bar/a0 (RAR handle), and ρ_γ(x) the local background photon energy density (CMB+EBL). Define one gate G that strengthens gravity when acceleration and ambient photon energy are both low:
+
+G(y, ρ_γ) = 1 + η · (1 + y^p)^(-1) · (1 + (ρ_γ/ρ_⋆)^q)^(-1),  with p,q ≳ 1, η > 0.
+
+Tie dynamics and tariff to the same gate:
+- Gravity (RAR form): g_obs = ν g_bar, with ν ≡ G(y, ρ_γ). This reduces to standard RAR interpolation when ρ_γ is uniform (q=0), and automatically boosts gravity in low-ρ_γ voids.
+- Photon tariff (blackbody-safe): along a photon path with affine length ℓ,
+  d ln E / dℓ = −κ [G − 1]  ⇒  E(ℓ) = E0 · exp[−τ(ℓ)],  with  τ(ℓ) = κ ∫ (G − 1) dℓ.
+  Calibrate κ so that τ ≃ ln(T_LSS/T0) ≈ ln(3000/2.725) ≈ 7 (CMB temperature drop). In high-g or high-ρ_γ regions, G→1 and the tariff vanishes.
+- Optional back-reaction (gentle self-reinforcement): accumulate a gate potential ψ via dψ/dℓ = γ [G − 1] and let G → G · f(ψ) with f(ψ)=exp(σψ) or f(ψ)=1+σψ (σ small), keeping galaxy fits intact while allowing slight cosmology-level drift.
+
+Why this works: one gate G controls both weak-field dynamics and a uniform (E-proportional) cooling along light paths, preserving blackbody shape and passing Solar-System constraints (G→1 as y→∞).
+
+### B) Relativistic and quantum-compatible scaffolding
+
+To keep conservation laws and the equivalence principle intact, wrap the gate in a mild scalar–tensor structure. Let φ be a light scalar activated in low-gate regions. Baryons see g_{μν}; photons see \tilde g^{(γ)}_{μν} = A^2(φ, χ) g_{μν}, where the environmental invariant χ encapsulates the gate handle, e.g. χ = (|∇Φ_bar|/a0) · (1+ρ_γ/ρ_⋆)^(−1).
+
+Essentials in the weak field:
+- Modified Poisson: ∇·[ G(χ) ∇Φ ] = 4πG ρ_b, with G(χ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) f(φ).
+- Photon energy drift: d ln E / dℓ = − d ln A / dℓ ≡ −κ [G − 1] by design, reproducing the tariff law with κ ∼ (1/2) α ∂_ℓ φ.
+- Total energy conservation: ∇_μ T^{μν}_{(γ)} = −Q^ν, ∇_μ T^{μν}_{(φ)} = +Q^ν with Q^ν = κ [G − 1] T^{μν}_{(γ)} u_μ. Photons ‘feed’ φ; φ raises G via f(φ).
+- Mode-level statement: d ln ω̂_k / dℓ = −κ [G(χ) − 1] — a dilaton-like conformal drift (no scattering), hence no spectral distortion beyond a uniform rescaling (FIRAS-safe for smooth κ[G−1]).
+
+### C) How to calculate this in our pipeline (practical plan)
+
+1) Gate evaluation
+- Compute y(R) = g_bar/a0 from the baryon-only Newtonian field already available in our runners (v_baryon^2/R → g_bar). We will reuse T ≡ v_baryon^2/R^2 if convenient and convert to g_bar as needed.
+- Set ρ_γ to a spatially uniform baseline (ρ_CMB today), then allow simple perturbations for EBL or void-modulation if desired. Start with ρ_γ = ρ_⋆ = 0.26 eV/cm^3 (today’s CMB) so the energy factor is unity, turning on q>0 later to probe sensitivity.
+- Evaluate G(y, ρ_γ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) [× f(ψ) if enabled].
+
+2) Dynamics (galaxy fits)
+- Replace the enhancement factor in our acceleration-space RAR bridge with ν ≡ G(y, ρ_γ) when testing gate variants; keep published xi for reproducibility unless explicitly flagged as experimental.
+- Diagnostics: re-check BTFR slope and Solar-System screening (G→1 for y≫1), and ensure lensing mapping Φ+Ψ uses φ_env = 1/2 ln ξ consistently when interpreting G as an effective ξ.
+
+3) Tariff integration (cosmology add-on)
+- Along a path parameterized by comoving distance r (Mpc), integrate τ(r) = κ ∫_0^r [G(y(l), ρ_γ(l)) − 1] dl using the same LOS logic as energy_tariff_model.py.
+- Calibrate κ from the CMB: for a void-weighted LOS fraction f_void to last scattering (D_LSS ≈ 14 Gpc), set κ ≈ τ_CMB / [ (D_max−1) f_void D_LSS ] in the saturated G limit, then refine on actual G(y, ρ_γ) profiles.
+- Build a monotone z(r) table: 1+z = exp[τ(r)], invert via PCHIP to obtain r(z) and μ(z) for Pantheon+ comparisons.
+
+4) Optional back-reaction ψ
+- Integrate dψ/dℓ = γ [G−1] with small σ in f(ψ) to keep galaxy-scale effects negligible while allowing late-time void enhancement. Log and bound ψ to avoid runaways; turn off by default.
+
+5) Tests (pass/fail dials)
+- Blackbody purity: tariff ∝ E ensures no frequency-dependent distortions; check residuals vs Planck fit (FIRAS tolerances ~few×10^−5).
+- Time-dilation and Tolman: verify stretch ∝ (1+z) and surface brightness S ∝ (1+z)^−4 remain intact in the add-on framing.
+- BAO/chronometer proxies: compute H_eff(z) = c d ln(1+z)/dz and compare D_M(z), D_H(z) shape to BAO; fit only an overall r_d if desired.
+- Local tests: ensure G→1 in high-g settings (Solar System, lab) and that our PPN table remains GR under screening.
+
+### D) Implementation mapping (tariff-only code scaffold)
+
+- New module tariff/unified_gate_scaffold.py provides:
+  - GateParams(η, p, q, ρ_⋆, κ, σ, enable_backreaction): parameter dataclass.
+  - gate_G(y, rho_gamma, params, psi=None) → G.
+  - tariff_dlnE_dell(y, rho_gamma, params, psi=None) = −κ [G−1].
+  - integrate_tau(path_sampler, params) → τ and (optionally) ψ; path_sampler supplies (y, ρ_γ, dl).
+  - calibrate_kappa_to_cmb(f_void, D_LSS, G_cap) → κ to reach τ≈ln(1100).
+
+All of this remains confined to tariff/ and is wired for our existing LOS machinery.
+
+---
+
 # 1. Introduction (Cosmology Context)
 
 We assume the universe is expanding. Empirically, the **redshift–distance relation**—first assembled by Hubble (building on Lemaître’s interpretation)—shows that more distant galaxies exhibit systematically larger redshifts, establishing a nearly linear relation at low redshift $v\simeq H_0 d$ and motivating an expanding background. ([PNAS][1])  Independent evidence comes from the **cosmic microwave background (CMB)**: a near‑perfect blackbody today at $T_0 = 2.7255\pm0.0006$ K (COBE/FIRAS recalibrated), with deviations $<\!10^{-4}$ across 0.5–5 mm—the textbook fossil of an early hot phase redshifting as the universe expands. ([arXiv][2])  Additional, independent expansion tests include **SN Ia time‑dilation** of light curves (stretch $\propto 1+z$), the **Tolman surface‑brightness** dimming ($\propto (1+z)^{-4}$, modulated by evolution), and the **BAO** standard‑ruler feature in galaxy clustering. ([arXiv][3])
