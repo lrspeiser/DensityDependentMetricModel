@@ -1,12 +1,20 @@
 # A Unified Gate Linking Weak-Field Dynamics and Photon Energy Loss
 
-Authors: [To be completed]
-Affiliations: [To be completed]
+**Authors:** [To be completed]
+**Affiliations:** [To be completed]
+**Correspondence:** [To be completed]
 
-Abstract
-We introduce a unified gate, G(y, ργ), that ties weak-field dynamical enhancements (RAR-like behavior) to a strictly energy-proportional photon tariff along void-weighted lines of sight. The gate depends on the baryon-only acceleration y ≡ gbar/a0 and the ambient photon energy density ργ (CMB+EBL), ensuring Solar-System safety (G→1 at high g) and CMB spectral purity (loss ∝ E). In the weak field, dynamics follow gobs = G gbar, while photons obey d ln E/dℓ = −κ(G − 1). Using tariff-only tooling, we (i) establish GR baselines from data (Hubble small‑z slope, CMB Planck fit, Tolman p, SN time‑dilation pt), and (ii) test the unified gate by overlaying μ(z) on Pantheon+ with χ², and by deriving Heff(z) and BAO shape-only overlays with an r_d fit. All analyses and plots are confined to tariff/; a JSON metrics file summarizes outcomes. This construction is compatible with a minimal scalar–tensor wrapper that preserves FRW, Φ=Ψ, and c_T=1 in screened regimes.
+## Abstract
 
-Keywords: Modified gravity; RAR; CMB; Supernovae; BAO; Weak field; Conformal drift; Energy–gravity reciprocity
+We propose a **unified gate** $G(y,\rho_\gamma)$ that links weak-field dynamical enhancements (RAR-like behavior) to a strictly **energy-proportional** photon energy loss (“tariff”) that accumulates along **void-weighted** lines of sight. The gate depends on the baryon-only acceleration ratio $y\equiv g_{\rm bar}/a_0$ and the ambient photon energy density $\rho_\gamma$ (CMB+EBL). By construction, $G\!\to\!1$ in high-acceleration regions (Solar-System safety) and the tariff is $\propto E$ (CMB spectral purity). In the weak field, we take
+
+$$
+ g_{\rm obs} \;=\; G\, g_{\rm bar}, \qquad \frac{d\ln E}{d\ell} \;=\; -\kappa\,[G-1].
+$$
+
+We outline a tariff-only analysis track that (i) establishes GR **baselines** from data (small-$z$ Hubble slope, CMB blackbody fit, Tolman exponent, SN time-dilation), and (ii) tests the unified gate by overlaying $\mu(z)$ on Pantheon+ with $\chi^2$, and by deriving $H_{\rm eff}(z)$ and BAO **shape-only** overlays with a fitted $r_d$. A minimal scalar–tensor wrapper preserves FRW dynamics, $\Phi=\Psi$, and $c_T=1$ in screened regimes. We enumerate **falsifiable** predictions and provide clear locations where numbers must be run.
+
+**Keywords:** modified gravity; RAR; CMB; supernovae; BAO; weak field; conformal drift; energy–gravity reciprocity
 
 ---
 
@@ -107,11 +115,13 @@ Metrics (JSON): results/unified_gate_metrics.json (χ², reduced χ², fitted r_
 
 ---
 
-# 1. Introduction (Cosmology Context)
+## 1. Introduction
 
-We assume the universe is expanding. Empirically, the **redshift–distance relation**—first assembled by Hubble (building on Lemaître’s interpretation)—shows that more distant galaxies exhibit systematically larger redshifts, establishing a nearly linear relation at low redshift $v\simeq H_0 d$ and motivating an expanding background. ([PNAS][1])  Independent evidence comes from the **cosmic microwave background (CMB)**: a near‑perfect blackbody today at $T_0 = 2.7255\pm0.0006$ K (COBE/FIRAS recalibrated), with deviations $<\!10^{-4}$ across 0.5–5 mm—the textbook fossil of an early hot phase redshifting as the universe expands. ([arXiv][2])  Additional, independent expansion tests include **SN Ia time‑dilation** of light curves (stretch $\propto 1+z$), the **Tolman surface‑brightness** dimming ($\propto (1+z)^{-4}$, modulated by evolution), and the **BAO** standard‑ruler feature in galaxy clustering. ([arXiv][3])
+The **radial acceleration relation (RAR)** ties the observed centripetal acceleration $g_{\rm obs}$ to the baryon-predicted $g_{\rm bar}$ with remarkably small scatter, challenging halo-tuning in ΛCDM and motivating weak-field modifications. Separately, the **CMB** is a near-perfect blackbody at $T_0\simeq2.725$ K, interpreted as relic radiation stretched by expansion from $T_{\rm LSS}\!\sim\!3000$ K.
 
-Motivated by our **Gravity Gates** framework—where the weak‑field response depends on local acceleration—we ask a narrower question: *if* low‑acceleration environments also mediate a tiny, cumulative **energy→gravity reciprocity** for radiation, can a strictly frequency‑proportional “tariff” along **void‑weighted** sightlines (i) reproduce the **shape** of the SN Hubble diagram and (ii) remain consistent with the CMB’s blackbody spectrum, *without* altering any of our galaxy/lens results? We keep standard expansion as background and use the reciprocity as a controlled phenomenology layered on top. (The gated gravity model itself—used for galaxies, $K_z$, Solar‑System safety, and lensing—is summarized in Paper I. )
+We explore whether a **single gate** $G$ can (i) reproduce weak-field dynamical phenomenology already captured by RAR-like laws and (ii) supply a tiny, **spectrum-safe** photon tariff that accumulates primarily in **voids**. We **retain** the expanding FRW background; the tariff is a **phenomenological overlay** controlled by the same gate that governs dynamics. This paper defines the model, its relativistic scaffolding, the observational program, and explicit pass/fail dials.
+
+> **Scope**: We do **not** claim a replacement for FRW/CMB/BAO nor cluster-scale success without extra mass; we present a tightly-constrained reciprocity that is independently falsifiable.
 
 ---
 
