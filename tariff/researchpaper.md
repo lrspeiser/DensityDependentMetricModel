@@ -59,7 +59,7 @@ Baselines (what GR must match):
 
 Unified gate + tariff tests:
 - μ(z) overlay and χ²: build z(r), invert to r(z), compute μ(z), overlay vs Pantheon+, report χ²/dof and write unified_gate_hubble_overlay.png.
-- H_eff(z) and BAO shape-only overlays: derive H_eff(z)=c d ln(1+z)/dz from z(r), integrate D_M(z), compute D_H(z), and fit r_d to BAO compilations; write unified_gate_bao_proxies.png and metrics to JSON.
+- H_eff(z) and BAO shape-only overlays: compute H_eff(z)=c dz/dr from z(r), set D_M(z)=r(z) and D_H(z)=c/H_eff(z); fit r_d to BAO compilations; write unified_gate_bao_proxies.png and metrics to JSON.
 
 1) Gate evaluation
 - Compute y(R) = g_bar/a0 from the baryon-only Newtonian field already available in our runners (v_baryon^2/R → g_bar). We will reuse T ≡ v_baryon^2/R^2 if convenient and convert to g_bar as needed.
@@ -81,7 +81,7 @@ Unified gate + tariff tests:
 5) Tests (pass/fail dials)
 - Blackbody purity: tariff ∝ E ensures no frequency-dependent distortions; check residuals vs Planck fit (FIRAS tolerances ~few×10^−5).
 - Time-dilation and Tolman: verify stretch ∝ (1+z) and surface brightness S ∝ (1+z)^−4 remain intact in the add-on framing.
-- BAO/chronometer proxies: compute H_eff(z) = c d ln(1+z)/dz and compare D_M(z), D_H(z) shape to BAO; fit only an overall r_d if desired.
+- BAO/chronometer proxies: compute H_eff(z) = c dz/dr and compare D_M(z)=r(z), D_H(z)=c/H_eff(z) shape to BAO; fit only an overall r_d if desired.
 - Local tests: ensure G→1 in high-g settings (Solar System, lab) and that our PPN table remains GR under screening.
 
 ### D) Implementation mapping (tariff-only code scaffold)
