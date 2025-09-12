@@ -109,7 +109,7 @@ $$
  a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
 $$
 
-**Boost ("$\nu$" function) used throughout.**
+**Boost (" $\nu$ " function) used throughout.**
 
 $$
 \xi(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],\qquad D_{\max}=50~\text{(fiducial)}.\\[3pt]
@@ -274,7 +274,7 @@ Importer sanity checks (applied in scripts/tools):
 
 ## 6. Discussion and Implications
 
-**Predictive power vs flexibility.** With a single principal scale \(a_0\) and a fixed \(\nu\)-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior). We compute code‑based universality metrics (χ²/ν for a global \(a_0\) and WAIC‑like comparisons for universal vs hierarchical \(a_0\)) and write results to results/next_steps/.../universality_metrics.json. A compact summary table is provided below (numbers reflect the current run; see JSONs for full details). 
+**Predictive power vs flexibility.** With a single principal scale $a_0$ and a fixed \(\nu\)-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior). We compute code‑based universality metrics (χ²/ν for a global \(a_0\) and WAIC‑like comparisons for universal vs hierarchical \(a_0\)) and write results to results/next_steps/.../universality_metrics.json. A compact summary table is provided below (numbers reflect the current run; see JSONs for full details). 
 
 **Solar‑System safety.** Under the screened subclass (Φ=Ψ, c_T=1) we have γ=β=1 at 1PN and α1=α2=0 in the Solar limit. Cassini constrains γ (|γ−1|≲2.3×10⁻⁵); amplitude rescaling ε≡ξ−1 only projects to Cassini if not absorbed into the GM used by ephemerides (see docs/ppn_mapping.md). Operatively, we assume ε is locally constant along the Cassini ray and across AU‑scale orbits; we verify negligible effects with a code‑based perihelion‑precession surrogate (nature_readiness/solar_system/ephemeris_perturbations.py). We therefore show |ΔG/G|≡|ξ−1| as a conservative tracer vs. AU and export a PPN CSV alongside the Solar table.
 
