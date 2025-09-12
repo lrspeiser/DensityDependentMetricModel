@@ -52,7 +52,8 @@ def r_of_z(z_grid: np.ndarray, r: np.ndarray, z_vals: np.ndarray) -> np.ndarray:
 def mu_from_unified_gate(z_grid: np.ndarray, params: GateParams, y_value: float, rho_gamma_evcm3: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     r, z_vals = build_z_of_r(params, y_value, rho_gamma_evcm3)
     r_mpc = r_of_z(z_grid, r, z_vals)
-    d_pc = r_mpc * 1.0e6
+    # Luminosity distance in the tariff-only track (flat): D_L(z) = (1+z) * r(z)
+    d_pc = (1.0 + z_grid) * r_mpc * 1.0e6
     mu = np.full_like(z_grid, np.nan)
     mask = d_pc > 0
     mu[mask] = 5.0 * np.log10(d_pc[mask]) - 5.0
@@ -90,35 +91,36 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
 
 # ---------- H_eff and BAO shape overlays ----------
 
-def heff_from_z_of_r(r: np.ndarray, z_of_r: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Return (z grid, H_eff(z) [km/s/Mpc])."""
-    # Prefer monotone r(z) with derivative
+def heff_from_z_of_r(r: np.ndarray, z_of_r: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return (z grid, H_eff(z) [km/s/Mpc], r(z) on that grid).
+
+    Correct BAO proxy: H_eff(z) = c * dz/dr; D_M(z) = r(z); D_H(z) = c / H_eff(z).
+    """
     # Build a dense z grid across available range (avoid zeros)
     z_grid = np.linspace(max(1e-6, float(z_of_r[1])), float(z_of_r[-1]), 2000)
     # r(z) via interp
     r_of_z_grid = np.interp(z_grid, z_of_r, r)
     dr_dz = np.gradient(r_of_z_grid, z_grid)
     dz_dr = 1.0 / np.clip(dr_dz, 1e-30, np.inf)
-    H_eff = C_KM_S * dz_dr / (1.0 + z_grid)
-    return z_grid, H_eff
+    H_eff = C_KM_S * dz_dr
+    return z_grid, H_eff, r_of_z_grid
 
 
 def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | None) -> dict:
-    z_grid, H_eff = heff_from_z_of_r(r, z_of_r)
-    # Integrate DM(z) = ∫ c/H dz
-    invH = np.where(H_eff > 0, 1.0/H_eff, np.nan)
-    DM = C_KM_S * np.cumsum(invH) * (z_grid[1]-z_grid[0])
+    z_grid, H_eff, r_of_z_grid = heff_from_z_of_r(r, z_of_r)
+    # Correct BAO proxies
+    DM = r_of_z_grid
     DH = C_KM_S / H_eff
 
     plt.figure(figsize=(10,8))
     plt.subplot(2,1,1)
-    plt.title('Unified Gate — H_eff(z) and BAO proxies')
-    plt.plot(z_grid, H_eff, lw=2, label='H_eff(z)')
+    plt.title('Unified Gate — H_eff(z) and BAO proxies (corrected)')
+    plt.plot(z_grid, H_eff, lw=2, label='H_eff(z) = c dz/dr')
     plt.ylabel('H_eff [km/s/Mpc]'); plt.grid(alpha=0.3); plt.legend()
 
     plt.subplot(2,1,2)
-    plt.plot(z_grid, DM, lw=2, label='D_M(z)')
-    plt.plot(z_grid, DH, lw=2, label='D_H(z)')
+    plt.plot(z_grid, DM, lw=2, label='D_M(z) = r(z)')
+    plt.plot(z_grid, DH, lw=2, label='D_H(z) = c/H_eff')
     plt.xlabel('z'); plt.ylabel('Distance [Mpc]')
     plt.grid(alpha=0.3); plt.legend()
 
@@ -128,6 +130,12 @@ def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | Non
 
     metrics = {
         'bao_plot': out,
+        'H_eff_summary': {
+            'z': z_grid.tolist(),
+            'H_eff': H_eff.tolist(),
+            'D_M': DM.tolist(),
+            'D_H': DH.tolist(),
+        },
     }
 
     if bao_csv_path is not None and os.path.exists(bao_csv_path):
@@ -170,10 +178,50 @@ def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | Non
 def analyze_unified_gate(pantheon_path: str, bao_csv_path: str | None, params: GateParams, y_value: float = 0.1, rho_gamma_evcm3: float = 0.26):
     overlay_metrics, (r_grid, z_of_r) = overlay_hubble_unified(pantheon_path, params, y_value, rho_gamma_evcm3)
     bao_metrics = bao_shape_overlay(z_of_r, r_grid, bao_csv_path)
+
+    # Consistency checks/invariants
+    # 1) derivative identity: d ln(1+z)/dr = alpha_est; H_eff via two ways should agree
+    z_arr = np.asarray(z_of_r, float)
+    r_arr = np.asarray(r_grid, float)
+    alpha_est = np.gradient(np.log1p(z_arr), r_arr)
+    H_via_dzdr = C_KM_S * np.gradient(z_arr, r_arr)
+    H_via_alpha = C_KM_S * (1.0 + z_arr) * alpha_est
+    # Compute RMS relative difference over valid range
+    valid = np.isfinite(H_via_dzdr) & np.isfinite(H_via_alpha) & (H_via_dzdr > 0) & (H_via_alpha > 0)
+    rel_diff = np.zeros_like(H_via_dzdr)
+    rel_diff[valid] = np.abs(H_via_dzdr[valid] - H_via_alpha[valid]) / np.maximum(H_via_dzdr[valid], 1e-30)
+    heff_identity_rms = float(np.sqrt(np.mean(rel_diff[valid]**2))) if np.any(valid) else float('nan')
+
+    # 2) distance duality check at Pantheon z grid used in overlay
+    try:
+        z_data, _, _ = load_pantheon(pantheon_path)
+        # r(z) from our z(r)
+        r_at_data = np.interp(z_data, z_of_r, r_grid)
+        DL_from_duality = (1.0 + z_data) * r_at_data  # Mpc
+        mu_from_duality = 5.0 * np.log10(DL_from_duality * 1.0e6) - 5.0
+        # Compare to model mu at data
+        z_grid_overlay = np.logspace(-3.0, np.log10(max(z_data.max(), 1e-3)), 600)
+        mu_model, _, _, _ = mu_from_unified_gate(z_grid_overlay, params, y_value, rho_gamma_evcm3)
+        mu_model_at_data = np.interp(z_data, z_grid_overlay, mu_model)
+        dd_rms = float(np.sqrt(np.mean((mu_from_duality - mu_model_at_data)**2)))
+        distance_duality_ok = dd_rms < 1e-6  # should be numerically identical after our fix
+    except Exception:
+        distance_duality_ok = False
+        dd_rms = float('nan')
+
+    consistency = {
+        'heff_identity_rms': heff_identity_rms,
+        'distance_duality_ok': distance_duality_ok,
+        'distance_duality_mu_rms': dd_rms,
+        'tolman_p': None,
+        'time_dilation_p': None,
+    }
+
     summary = {
         'params': vars(params),
         'hubble': overlay_metrics,
         'bao': bao_metrics,
+        'consistency': consistency,
     }
     out_json = os.path.join(RESULTS_DIR, 'unified_gate_metrics.json')
     with open(out_json, 'w') as f:
