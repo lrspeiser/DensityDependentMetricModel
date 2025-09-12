@@ -35,6 +35,18 @@ Essentials in the weak field:
 
 ### C) How to calculate this in our pipeline (practical plan)
 
+We separate (i) baseline expectations under GR from current data (quantum/CMB/expansion tests), and (ii) unified gate tests.
+
+Baselines (what GR must match):
+- Hubble diagram (small-z linear slope, μ_lin): compare Pantheon+ vs μ_lin(z; H0=67.4,73.0); produce baseline_hubble.png.
+- CMB spectral purity: fit Planck T′ to a FIRAS-like spectrum; report T′ and rms fractional residuals; baseline_cmb_spectrum.png.
+- Tolman surface brightness: fit S ∝ (1+z)−p; report p and baseline_tolman.png.
+- SN time dilation: fit t ∝ (1+z)pt; report pt and baseline_sntd.png.
+
+Unified gate + tariff tests:
+- μ(z) overlay and χ²: build z(r), invert to r(z), compute μ(z), overlay vs Pantheon+, report χ²/dof and write unified_gate_hubble_overlay.png.
+- H_eff(z) and BAO shape-only overlays: derive H_eff(z)=c d ln(1+z)/dz from z(r), integrate D_M(z), compute D_H(z), and fit r_d to BAO compilations; write unified_gate_bao_proxies.png and metrics to JSON.
+
 1) Gate evaluation
 - Compute y(R) = g_bar/a0 from the baryon-only Newtonian field already available in our runners (v_baryon^2/R → g_bar). We will reuse T ≡ v_baryon^2/R^2 if convenient and convert to g_bar as needed.
 - Set ρ_γ to a spatially uniform baseline (ρ_CMB today), then allow simple perturbations for EBL or void-modulation if desired. Start with ρ_γ = ρ_⋆ = 0.26 eV/cm^3 (today’s CMB) so the energy factor is unity, turning on q>0 later to probe sensitivity.
@@ -66,6 +78,11 @@ Essentials in the weak field:
   - tariff_dlnE_dell(y, rho_gamma, params, psi=None) = −κ [G−1].
   - integrate_tau(path_sampler, params) → τ and (optionally) ψ; path_sampler supplies (y, ρ_γ, dl).
   - calibrate_kappa_to_cmb(f_void, D_LSS, G_cap) → κ to reach τ≈ln(1100).
+
+- Baselines and unified-gate analysis (plots + metrics):
+  - tariff/analysis_baselines.py: GR baselines — Hubble μ_lin(z), CMB Planck fit (FIRAS-like), Tolman p, SN p_t; writes images/baseline_*.png
+  - tariff/analysis_unified_gate.py: Unified gate μ(z) overlay vs Pantheon+ with χ², H_eff(z) and BAO proxy overlays with r_d fit; writes
+    images/unified_gate_hubble_overlay.png, images/unified_gate_bao_proxies.png and results/unified_gate_metrics.json.
 
 All of this remains confined to tariff/ and is wired for our existing LOS machinery.
 

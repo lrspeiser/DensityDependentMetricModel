@@ -3,56 +3,67 @@
 analysis_unified_gate.py — tariff-only comparison harness for the unified gate + energy tariff.
 
 - Overlays μ(z) from unified gate + tariff against Pantheon+
-- Uses unified_gate_scaffold for G, tariff integration, and κ calibration
+- Computes χ² and reduced χ² for the overlay
+- Derives H_eff(z) from z(r) and, if a BAO CSV is provided, fits r_d and reports χ²/dof
+- Writes plots under tariff/images/ and a JSON summary under tariff/results/
 """
 from __future__ import annotations
 
+import json
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .data_ingest import load_pantheon
-from .unified_gate_scaffold import GateParams, gate_G, integrate_tau, calibrate_kappa_to_cmb, uniform_void_sampler
+from .data_ingest import load_pantheon, load_bao_csv
+from .unified_gate_scaffold import GateParams, integrate_tau, calibrate_kappa_to_cmb, uniform_void_sampler
 
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), 'images')
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results')
 os.makedirs(IMAGES_DIR, exist_ok=True)
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 C_KM_S = 299_792.458
 
+# ---------- Core builders ----------
 
-def build_z_of_r(params: GateParams, y_value: float, rho_gamma_evcm3: float, D_max_Mpc: float = 6000.0) -> tuple[np.ndarray,np.ndarray]:
-    # Build a monotone z(r) lookup for a uniform path sampler (demonstration)
-    r = np.linspace(0.0, D_max_Mpc, 1201)
+def build_z_of_r(params: GateParams, y_value: float, rho_gamma_evcm3: float, D_max_Mpc: float = 8000.0) -> tuple[np.ndarray,np.ndarray]:
+    """Return (r grid in Mpc, z(r)) monotonically increasing."""
+    r = np.linspace(0.0, D_max_Mpc, 1601)
     z_vals = np.zeros_like(r)
     for i, rr in enumerate(r):
         sampler = uniform_void_sampler(y_value, rho_gamma_evcm3, rr, n_steps=2000)
         tau, _ = integrate_tau(sampler, params, with_psi=False)
         z_vals[i] = np.expm1(tau)
-    # enforce strict monotonicity
     z_vals = np.maximum.accumulate(z_vals)
     return r, z_vals
 
 
 def r_of_z(z_grid: np.ndarray, r: np.ndarray, z_vals: np.ndarray) -> np.ndarray:
-    # monotone inverse by interpolation
     return np.interp(z_grid, z_vals, r)
 
 
-def mu_from_unified_gate(z_grid: np.ndarray, params: GateParams, y_value: float, rho_gamma_evcm3: float) -> tuple[np.ndarray, np.ndarray]:
+def mu_from_unified_gate(z_grid: np.ndarray, params: GateParams, y_value: float, rho_gamma_evcm3: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     r, z_vals = build_z_of_r(params, y_value, rho_gamma_evcm3)
     r_mpc = r_of_z(z_grid, r, z_vals)
     d_pc = r_mpc * 1.0e6
     mu = np.full_like(z_grid, np.nan)
     mask = d_pc > 0
     mu[mask] = 5.0 * np.log10(d_pc[mask]) - 5.0
-    return mu, r_mpc
+    return mu, r_mpc, r, z_vals
 
+# ---------- Hubble overlay and chi-squared ----------
 
 def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: float = 0.1, rho_gamma_evcm3: float = 0.26):
     z_data, mu_data, mu_err = load_pantheon(pantheon_path)
-    z_grid = np.logspace(-3.0, np.log10(max(z_data.max(), 1e-3)), 400)
+    z_grid = np.logspace(-3.0, np.log10(max(z_data.max(), 1e-3)), 600)
 
-    mu_model, r_mpc = mu_from_unified_gate(z_grid, params, y_value, rho_gamma_evcm3)
+    mu_model, _, r_grid, z_of_r = mu_from_unified_gate(z_grid, params, y_value, rho_gamma_evcm3)
+    # Interpolate model onto data z for chi-squared
+    mu_model_at_data = np.interp(z_data, z_grid, mu_model)
+    valid = np.isfinite(mu_model_at_data) & np.isfinite(mu_data) & np.isfinite(mu_err) & (mu_err > 0)
+    dof = max(int(np.count_nonzero(valid) - 1), 1)
+    chi2 = float(np.sum(((mu_data[valid] - mu_model_at_data[valid]) / mu_err[valid])**2))
+    red_chi2 = chi2 / dof
 
     plt.figure(figsize=(10,6))
     plt.errorbar(z_data, mu_data, yerr=mu_err, fmt='.', color='gray', alpha=0.45, label='Pantheon+SH0ES')
@@ -63,10 +74,110 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
     plt.tight_layout(); plt.savefig(out, dpi=150); plt.close()
     print(f"Saved {out}")
 
+    return {
+        'hubble_plot': out,
+        'chi2': chi2,
+        'red_chi2': red_chi2,
+        'dof': dof,
+    }, (r_grid, z_of_r)
+
+# ---------- H_eff and BAO shape overlays ----------
+
+def heff_from_z_of_r(r: np.ndarray, z_of_r: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return (z grid, H_eff(z) [km/s/Mpc])."""
+    # Prefer monotone r(z) with derivative
+    # Build a dense z grid across available range (avoid zeros)
+    z_grid = np.linspace(max(1e-6, float(z_of_r[1])), float(z_of_r[-1]), 2000)
+    # r(z) via interp
+    r_of_z_grid = np.interp(z_grid, z_of_r, r)
+    dr_dz = np.gradient(r_of_z_grid, z_grid)
+    dz_dr = 1.0 / np.clip(dr_dz, 1e-30, np.inf)
+    H_eff = C_KM_S * dz_dr / (1.0 + z_grid)
+    return z_grid, H_eff
+
+
+def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | None) -> dict:
+    z_grid, H_eff = heff_from_z_of_r(r, z_of_r)
+    # Integrate DM(z) = ∫ c/H dz
+    invH = np.where(H_eff > 0, 1.0/H_eff, np.nan)
+    DM = C_KM_S * np.cumsum(invH) * (z_grid[1]-z_grid[0])
+    DH = C_KM_S / H_eff
+
+    plt.figure(figsize=(10,8))
+    plt.subplot(2,1,1)
+    plt.title('Unified Gate — H_eff(z) and BAO proxies')
+    plt.plot(z_grid, H_eff, lw=2, label='H_eff(z)')
+    plt.ylabel('H_eff [km/s/Mpc]'); plt.grid(alpha=0.3); plt.legend()
+
+    plt.subplot(2,1,2)
+    plt.plot(z_grid, DM, lw=2, label='D_M(z)')
+    plt.plot(z_grid, DH, lw=2, label='D_H(z)')
+    plt.xlabel('z'); plt.ylabel('Distance [Mpc]')
+    plt.grid(alpha=0.3); plt.legend()
+
+    out = os.path.join(IMAGES_DIR, 'unified_gate_bao_proxies.png')
+    plt.tight_layout(); plt.savefig(out, dpi=150); plt.close()
+    print(f"Saved {out}")
+
+    metrics = {
+        'bao_plot': out,
+    }
+
+    if bao_csv_path is not None and os.path.exists(bao_csv_path):
+        try:
+            bao = load_bao_csv(bao_csv_path)
+            z_b = bao['z']
+            # Try DM/DH first
+            if 'D_M_over_rd' in bao and 'D_H_over_rd' in bao:
+                DM_b = bao['D_M_over_rd']; DH_b = bao['D_H_over_rd']
+                eDM = bao.get('D_M_err', np.ones_like(DM_b)*0.05)
+                eDH = bao.get('D_H_err', np.ones_like(DH_b)*0.05)
+                DM_m = np.interp(z_b, z_grid, DM)
+                DH_m = np.interp(z_b, z_grid, DH)
+                A = np.concatenate([DM_m/eDM, DH_m/eDH])
+                y = np.concatenate([DM_b/eDM, DH_b/eDH])
+                inv_rd = (A @ y) / (A @ A + 1e-300)
+                rd_best = 1.0 / inv_rd
+                chi2 = np.sum(((DM_m/rd_best - DM_b)/eDM)**2 + ((DH_m/rd_best - DH_b)/eDH)**2)
+                dof = max(1, 2*len(z_b) - 1)
+                metrics.update({'rd_best_Mpc': float(rd_best), 'bao_chi2': float(chi2), 'bao_red_chi2': float(chi2/dof), 'bao_dof': int(dof)})
+            elif 'DV_over_rd' in bao:
+                DV_b = bao['DV_over_rd']
+                eDV = bao.get('DV_err', np.ones_like(DV_b)*0.05)
+                DM_m = np.interp(z_b, z_grid, DM)
+                DH_m = np.interp(z_b, z_grid, DH)
+                DV_m = ( (z_b**2) * (DM_m**2) * DH_m ) ** (1.0/3.0)
+                A = DV_m / eDV
+                y = DV_b / eDV
+                inv_rd = (A @ y) / (A @ A + 1e-300)
+                rd_best = 1.0 / inv_rd
+                chi2 = np.sum(((DV_m/rd_best - DV_b)/eDV)**2)
+                dof = max(1, len(z_b) - 1)
+                metrics.update({'rd_best_Mpc': float(rd_best), 'bao_chi2': float(chi2), 'bao_red_chi2': float(chi2/dof), 'bao_dof': int(dof)})
+        except Exception as e:
+            print(f"[WARN] BAO overlay failed: {e}")
+    return metrics
+
+# ---------- Orchestrator ----------
+
+def analyze_unified_gate(pantheon_path: str, bao_csv_path: str | None, params: GateParams, y_value: float = 0.1, rho_gamma_evcm3: float = 0.26):
+    overlay_metrics, (r_grid, z_of_r) = overlay_hubble_unified(pantheon_path, params, y_value, rho_gamma_evcm3)
+    bao_metrics = bao_shape_overlay(z_of_r, r_grid, bao_csv_path)
+    summary = {
+        'params': vars(params),
+        'hubble': overlay_metrics,
+        'bao': bao_metrics,
+    }
+    out_json = os.path.join(RESULTS_DIR, 'unified_gate_metrics.json')
+    with open(out_json, 'w') as f:
+        json.dump(summary, f, indent=2)
+    print(f"Wrote {out_json}")
+    return out_json
+
 
 if __name__ == '__main__':
     pantheon = os.path.join('external_data','pantheon','Pantheon+SH0ES.dat')
-    # calibrate kappa for demonstration (assume nearly saturated G-1 ~ 1 and f_void ~ 0.8)
+    bao_csv = os.path.join('tariff','data','bao_compilation.csv')
     kappa_guess = calibrate_kappa_to_cmb(f_void=0.8, D_LSS_Mpc=14000.0, G_cap_minus1=1.0)
     params = GateParams(eta=3.0, p=1.5, q=1.0, rho_star_evcm3=0.26, kappa_per_Mpc=kappa_guess)
-    overlay_hubble_unified(pantheon, params)
+    analyze_unified_gate(pantheon, bao_csv if os.path.exists(bao_csv) else None, params)
