@@ -88,6 +88,19 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 
 ---
 
+# Figures and Tables (auto-generated from tariff/)
+
+- Hubble baseline (GR): ![](images/baseline_hubble.png)
+- CMB spectral shape baseline: ![](images/baseline_cmb_spectrum.png)
+- Tolman test baseline: ![](images/baseline_tolman.png)
+- SN time-dilation baseline: ![](images/baseline_sntd.png)
+- Unified gate μ(z) overlay: ![](images/unified_gate_hubble_overlay.png)
+- Unified gate H_eff(z) and BAO proxies: ![](images/unified_gate_bao_proxies.png)
+
+Metrics (JSON): results/unified_gate_metrics.json (χ², reduced χ², fitted r_d if BAO is provided)
+
+---
+
 # 1. Introduction (Cosmology Context)
 
 We assume the universe is expanding. Empirically, the **redshift–distance relation**—first assembled by Hubble (building on Lemaître’s interpretation)—shows that more distant galaxies exhibit systematically larger redshifts, establishing a nearly linear relation at low redshift $v\simeq H_0 d$ and motivating an expanding background. ([PNAS][1])  Independent evidence comes from the **cosmic microwave background (CMB)**: a near‑perfect blackbody today at $T_0 = 2.7255\pm0.0006$ K (COBE/FIRAS recalibrated), with deviations $<\!10^{-4}$ across 0.5–5 mm—the textbook fossil of an early hot phase redshifting as the universe expands. ([arXiv][2])  Additional, independent expansion tests include **SN Ia time‑dilation** of light curves (stretch $\propto 1+z$), the **Tolman surface‑brightness** dimming ($\propto (1+z)^{-4}$, modulated by evolution), and the **BAO** standard‑ruler feature in galaxy clustering. ([arXiv][3])
