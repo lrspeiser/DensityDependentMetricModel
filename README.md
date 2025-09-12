@@ -69,9 +69,9 @@ The empirical RAR/BTFR indicates that galaxy dynamics are largely fixed by the b
 2. Environment (optional). Adjust $a_0$ to $a_0^{\rm eff}$ with a density/tidal proxy (defaults are conservative).
 3. Gate/boost.
 
-   $$
-   \xi(R)=\min\!\left[\,\tfrac{1}{2}+\sqrt{\tfrac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\,,\,D_{\max}\right],\qquad D_{\max}=50\;\text{(paper preset)}.
-   $$
+$$
+\xi(R)=\min\!\left[\,\tfrac{1}{2}+\sqrt{\tfrac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\,,\,D_{\max}\right],\qquad D_{\max}=50\;\text{(paper preset)}.
+$$
 
 4. Prediction. Rotation speed $V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)$. The same $\xi$ feeds lensing and vertical‑force predictions.
 5. Fit only $a_0$ (with fixed $D_{\max}$). We either grid‑scan $a_0$ per galaxy or fit a hierarchical population mean and scatter.
