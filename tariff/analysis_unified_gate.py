@@ -14,8 +14,15 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .data_ingest import load_pantheon, load_bao_csv
-from .unified_gate_scaffold import GateParams, integrate_tau, calibrate_kappa_to_cmb, uniform_void_sampler
+# Robust imports for package or script execution
+try:
+    from .data_ingest import load_pantheon, load_bao_csv
+except Exception:
+    from data_ingest import load_pantheon, load_bao_csv
+try:
+    from .unified_gate_scaffold import GateParams, integrate_tau, calibrate_kappa_to_cmb, uniform_void_sampler
+except Exception:
+    from unified_gate_scaffold import GateParams, integrate_tau, calibrate_kappa_to_cmb, uniform_void_sampler
 
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), 'images')
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results')

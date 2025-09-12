@@ -18,13 +18,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import log10
 
-from .data_ingest import (
-    load_pantheon,
-    load_cmb_spectrum_csv,
-    load_bao_csv,
-    load_tolman_csv,
-    load_sntd_csv,
-)
+# Robust import whether run as package or script
+try:
+    from .data_ingest import (
+        load_pantheon,
+        load_cmb_spectrum_csv,
+        load_bao_csv,
+        load_tolman_csv,
+        load_sntd_csv,
+    )
+except Exception:
+    from data_ingest import (
+        load_pantheon,
+        load_cmb_spectrum_csv,
+        load_bao_csv,
+        load_tolman_csv,
+        load_sntd_csv,
+    )
 
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), 'images')
 os.makedirs(IMAGES_DIR, exist_ok=True)
