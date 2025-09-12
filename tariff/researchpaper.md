@@ -4,10 +4,10 @@ Leonard Speiser, Independent Researcher
 
 ## Abstract
 
-We propose a **unified gate** $G(y,\rho_\gamma)$ that links weak-field dynamical enhancements (RAR-like behavior) to a strictly **energy-proportional** photon energy loss (“tariff”) that accumulates along **void-weighted** lines of sight. The gate depends on the baryon-only acceleration ratio $y\equiv g_{\rm bar}/a_0$ and the ambient photon energy density $\rho_\gamma$ (CMB+EBL). By construction, $G\!\to\!1$ in high-acceleration regions (Solar-System safety) and the tariff is $\propto E$ (CMB spectral purity). In the weak field, we take
+We propose a **unified gate** $\mathcal{G}(y,\rho_\gamma)$ that links weak-field dynamical enhancements (RAR-like behavior) to a strictly **energy-proportional** photon energy loss (“tariff”) that accumulates along **void-weighted** lines of sight. The gate depends on the baryon-only acceleration ratio $y\equiv g_{\rm bar}/a_0$ and the ambient photon energy density $\rho_\gamma$ (CMB+EBL). By construction, $\mathcal{G}\!\to\!1$ in high-acceleration regions (Solar-System safety) and the tariff is $\propto E$ (CMB spectral purity). In the weak field, we take
 
 $$
- g_{\rm obs} \;=\; G\, g_{\rm bar}, \qquad \frac{d\ln E}{d\ell} \;=\; -\kappa\,[G-1].
+ g_{\rm obs} \;=\; \nu\, g_{\rm bar},\quad \nu\equiv\mathcal{G}(y,\rho_\gamma), \qquad \frac{d\ln E}{d\ell} \;=\; -\kappa\,[\mathcal{G}-1].
 $$
 
 We outline a tariff-only analysis track that (i) establishes GR **baselines** from data (small-$z$ Hubble slope, CMB blackbody fit, Tolman exponent, SN time-dilation), and (ii) tests the unified gate by overlaying $\mu(z)$ on Pantheon+ with $\chi^2$, and by deriving $H_{\rm eff}(z)$ and BAO **shape-only** overlays with a fitted $r_d$. A minimal scalar–tensor wrapper preserves FRW dynamics, $\Phi=\Psi$, and $c_T=1$ in screened regimes. We enumerate **falsifiable** predictions and provide clear locations where numbers must be run.
@@ -22,18 +22,20 @@ This section fuses our gated RAR gravity with a photon energy→gravity tariff u
 
 ### A) Unified Gate Law (drop-in model)
 
-Let g_bar(x) be the baryon-only Newtonian field, y ≡ g_bar/a0 (RAR handle), and ρ_γ(x) the local background photon energy density (CMB+EBL). Define one gate G that strengthens gravity when acceleration and ambient photon energy are both low:
+Let g_bar(x) be the baryon-only Newtonian field, y ≡ g_bar/a0 (RAR handle), and ρ_γ(x) the local background photon energy density (CMB+EBL). Define one gate 𝒢 that strengthens gravity when acceleration and ambient photon energy are both low:
 
-G(y, ρ_γ) = 1 + η · (1 + y^p)^(-1) · (1 + (ρ_γ/ρ_⋆)^q)^(-1),  with p,q ≳ 1, η > 0.
+𝒢(y, ρ_γ) = 1 + η · (1 + y^p)^(-1) · (1 + (ρ_γ/ρ_⋆)^q)^(-1),  with p,q ≳ 1, η > 0.
 
 Tie dynamics and tariff to the same gate:
-- Gravity (RAR form): g_obs = ν g_bar, with ν ≡ G(y, ρ_γ). This reduces to standard RAR interpolation when ρ_γ is uniform (q=0), and automatically boosts gravity in low-ρ_γ voids.
+- Gravity (RAR form): g_obs = ν g_bar, with ν ≡ 𝒢(y, ρ_γ). This reduces to standard RAR interpolation when ρ_γ is uniform (q=0), and automatically boosts gravity in low-ρ_γ voids.
 - Photon tariff (blackbody-safe): along a photon path with affine length ℓ,
-  d ln E / dℓ = −κ [G − 1]  ⇒  E(ℓ) = E0 · exp[−τ(ℓ)],  with  τ(ℓ) = κ ∫ (G − 1) dℓ.
-  Calibrate κ so that τ ≃ ln(T_LSS/T0) ≈ ln(3000/2.725) ≈ 7 (CMB temperature drop). In high-g or high-ρ_γ regions, G→1 and the tariff vanishes.
-- Optional back-reaction (gentle self-reinforcement): accumulate a gate potential ψ via dψ/dℓ = γ [G − 1] and let G → G · f(ψ) with f(ψ)=exp(σψ) or f(ψ)=1+σψ (σ small), keeping galaxy fits intact while allowing slight cosmology-level drift.
+  d ln E / dℓ = −κ [𝒢 − 1]  ⇒  E(ℓ) = E0 · exp[−τ(ℓ)],  with  τ(ℓ) = κ ∫ (𝒢 − 1) dℓ.
+  In high-g or high-ρ_γ regions, 𝒢→1 and the tariff vanishes.
+- Optional back-reaction (gentle self-reinforcement): accumulate a gate potential ψ via dψ/dℓ = γ [𝒢 − 1] and let 𝒢 → 𝒢 · f(ψ) with f(ψ)=exp(σψ) or f(ψ)=1+σψ (σ small), keeping galaxy fits intact while allowing slight cosmology-level drift.
 
-Why this works: one gate G controls both weak-field dynamics and a uniform (E-proportional) cooling along light paths, preserving blackbody shape and passing Solar-System constraints (G→1 as y→∞).
+Equivalence to Paper I. When ρ_γ is held fixed, identify 𝒢(y) ≡ ξ(g) from Paper I via y=g_bar/a0; in plots we continue to report the enhancement as ν≡𝒢.
+
+Why this works: one gate 𝒢 controls both weak-field dynamics and a uniform (E-proportional) cooling along light paths, preserving blackbody shape and passing Solar-System constraints (𝒢→1 as y→∞).
 
 ### B) Relativistic and quantum-compatible scaffolding (EEP-safe framing)
 
@@ -275,17 +277,6 @@ Broader landscape (one‑sentence context):
 * The novelty is the **link to a weak‑field gravity gate** already audited on galaxies/lensing, yielding *one function* $\xi(g)$ that controls both dynamics and a small, testable, environment‑dependent redshift contribution.
 
 ---
-
-## (Optional) One‑paragraph “Scope and limitations” for the end of the Intro
-
-**Scope and limitations.** We retain the expanding FRW background and test a **small, gated** energy‑to‑gravity reciprocity layered on top. We do **not** attempt full‑fidelity fits to CMB/BAO or a global replacement of FRW; cluster‑scale dynamics are also out of scope. The tariff is constrained to be $\propto E$ (blackbody‑safe), screened in high‑$g$ regimes, and weak enough to satisfy SN time‑dilation and Tolman tests; violations would falsify the mechanism.
-
----
-
-### Where to paste
-
-* If you’re preparing **Paper II**, keep Sections 1–5 as your Introduction & Model.
-* If you’re appending to **Paper I**, insert **Section “Outlook / Cosmology Add‑On”** with a shortened version of Sections 1–3, and point readers to a companion manuscript for the full program. (The galaxy/lens results remain unchanged.)
 
 [1]: https://www.pnas.org/doi/10.1073/pnas.15.3.168 "A relation between distance and radial velocity among ..."
 [2]: https://arxiv.org/abs/0911.1955 "The Temperature of the Cosmic Microwave Background"
