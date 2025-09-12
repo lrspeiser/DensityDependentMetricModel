@@ -42,6 +42,11 @@ from typing import Callable, List, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+
+# Ensure images directory exists under this folder
+IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+os.makedirs(IMAGES_DIR, exist_ok=True)
 
 # Optional monotone interpolator for z(r) <-> r(z)
 try:
@@ -397,7 +402,7 @@ def main(argv: List[str] | None = None) -> int:
     plt.xlim(0, dmax)
     ymax = max(np.max(z_vals), np.max(z_planck), np.max(z_shoes))
     plt.ylim(0, ymax * 1.1 if ymax > 0 else 1)
-    out_png = "energy_tariff_redshift_model.png"
+    out_png = os.path.join(IMAGES_DIR, "energy_tariff_redshift_model.png")
     plt.savefig(out_png, dpi=150)
     print(f"Saved plot: {out_png}")
 
@@ -454,7 +459,7 @@ def main(argv: List[str] | None = None) -> int:
         plt.title('Hubble Diagram: Pantheon+ vs Energy Tariff (RAR‑plateau)')
         plt.grid(True, which='both', ls='--', alpha=0.5)
         plt.legend()
-        out_hd = "hubble_diagram_with_data.png"
+        out_hd = os.path.join(IMAGES_DIR, "hubble_diagram_with_data.png")
         plt.savefig(out_hd, dpi=150)
         print(f"Saved Hubble Diagram: {out_hd}")
 
@@ -495,7 +500,7 @@ def main(argv: List[str] | None = None) -> int:
         plt.title('Energy balance vs distance: E_emit, E_obs(data), E_obs(model)')
         plt.grid(True, ls='--', alpha=0.5)
         plt.legend()
-        out_energy = 'energy_balance_plot.png'
+        out_energy = os.path.join(IMAGES_DIR, 'energy_balance_plot.png')
         plt.savefig(out_energy, dpi=150)
         # Simple metric
         rmse = float(np.sqrt(np.mean((E_obs_model - E_obs_data) ** 2)))

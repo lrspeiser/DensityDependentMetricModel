@@ -52,6 +52,10 @@ T_CMB = 2.7255  # K
 _THIS_DIR = Path(__file__).resolve().parent
 _MODEL_PATH = _THIS_DIR / "energy_tariff_model.py"
 
+# Images directory under tariff
+IMAGES_DIR = _THIS_DIR / "images"
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
 def _import_user_model():
     if not _MODEL_PATH.exists():
         print(f"[ERROR] energy_tariff_model.py not found at {_MODEL_PATH}", file=sys.stderr)
@@ -136,7 +140,7 @@ def test_cmb_spectral_shape(args):
     plt.plot(nu/1e9, I_fit/np.max(I_fit), label=f"Best-fit Planck (T'={T_fit:.3f}K)", lw=1.5)
     plt.xlabel("Frequency [GHz]"); plt.ylabel("Normalized intensity")
     plt.legend(); plt.grid(True, alpha=0.25)
-    out = "cmb_distortion_test.png"
+    out = str(IMAGES_DIR / "cmb_distortion_test.png")
     plt.savefig(out, dpi=150)
     print(f"Saved figure: {out}")
     return 0
@@ -292,7 +296,7 @@ def test_bao_proxies(args):
     plt.plot(z_grid, DH, lw=2, label="D_H(z)")
     plt.xlabel("z"); plt.ylabel("Distance [Mpc]")
     plt.grid(alpha=0.3); plt.legend()
-    out = "bao_proxies.png"
+    out = str(IMAGES_DIR / "bao_proxies.png")
     plt.tight_layout(); plt.savefig(out, dpi=150)
     print(f"Saved BAO proxy curves: {out}")
 
@@ -435,8 +439,8 @@ def test_posteriors(args):
     for ax,(c,lbl) in zip(axs.flatten(), cols):
         hist_plot(ax,c,lbl)
     fig.suptitle("Sweep Posterior Summaries (weighted by exp(-Δχ^2/2))")
-    plt.tight_layout(); plt.savefig("sweep_posteriors.png", dpi=150)
-    print("Saved: sweep_posteriors.png")
+    plt.tight_layout(); plt.savefig(str(IMAGES_DIR / "sweep_posteriors.png"), dpi=150)
+    print(f"Saved: {str(IMAGES_DIR / 'sweep_posteriors.png')}")
     return 0
 
 # ---------- CLI ----------
