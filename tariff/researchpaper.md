@@ -35,14 +35,14 @@ Tie dynamics and tariff to the same gate:
 
 Why this works: one gate G controls both weak-field dynamics and a uniform (E-proportional) cooling along light paths, preserving blackbody shape and passing Solar-System constraints (G→1 as y→∞).
 
-### B) Relativistic and quantum-compatible scaffolding
+### B) Relativistic and quantum-compatible scaffolding (EEP-safe framing)
 
-To keep conservation laws and the equivalence principle intact, wrap the gate in a mild scalar–tensor structure. Let φ be a light scalar activated in low-gate regions. Baryons see g_{μν}; photons see \tilde g^{(γ)}_{μν} = A^2(φ, χ) g_{μν}, where the environmental invariant χ encapsulates the gate handle, e.g. χ = (|∇Φ_bar|/a0) · (1+ρ_γ/ρ_⋆)^(−1).
+To keep conservation laws and the equivalence principle intact, we use a conservative conformal-drift framing. All species share one physical metric g_{μν} (EEP-safe); the tariff acts as an effective conformal drift of the photon distribution function with a slowly varying factor A(φ,χ) such that d ln A/dℓ = 1/2 κ [G(χ)-1] along null rays. This preserves c_T=1 in screened regimes and avoids species-dependent violations.
 
 Essentials in the weak field:
 - Modified Poisson: ∇·[ G(χ) ∇Φ ] = 4πG ρ_b, with G(χ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) f(φ).
-- Photon energy drift: d ln E / dℓ = − d ln A / dℓ ≡ −κ [G − 1] by design, reproducing the tariff law with κ ∼ (1/2) α ∂_ℓ φ.
-- Total energy conservation: ∇_μ T^{μν}_{(γ)} = −Q^ν, ∇_μ T^{μν}_{(φ)} = +Q^ν with Q^ν = κ [G − 1] T^{μν}_{(γ)} u_μ. Photons ‘feed’ φ; φ raises G via f(φ).
+- Photon energy and period drift (time-dilation safety): d ln E / dℓ = − d ln A / dℓ ≡ −κ [G − 1] and d ln(Δt) / dℓ = + d ln A / dℓ ≡ +κ [G − 1]. Energy and arrival periods rescale inversely with the same A, preserving SN time dilation and Tolman when expressed in terms of the observed 1+z.
+- Total energy conservation (phenomenological): ∇_μ T^{μν}_{(γ)} = −Q^ν, ∇_μ T^{μν}_{(φ)} = +Q^ν with a null-aligned exchange Q^ν ∝ κ [G − 1] T^{νλ}_{(γ)} k_λ (k^μ: photon wavevector). We avoid over-specifying frame-dependent couplings.
 - Mode-level statement: d ln ω̂_k / dℓ = −κ [G(χ) − 1] — a dilaton-like conformal drift (no scattering), hence no spectral distortion beyond a uniform rescaling (FIRAS-safe for smooth κ[G−1]).
 
 ### C) How to calculate this in our pipeline (practical plan)
@@ -57,20 +57,20 @@ Baselines (what GR must match):
 
 Unified gate + tariff tests:
 - μ(z) overlay and χ²: build z(r), invert to r(z), compute μ(z), overlay vs Pantheon+, report χ²/dof and write unified_gate_hubble_overlay.png.
-- H_eff(z) and BAO shape-only overlays: compute H_eff(z)=c dz/dr from z(r), set D_M(z)=r(z) and D_H(z)=c/H_eff(z); fit r_d to BAO compilations; write unified_gate_bao_proxies.png and metrics to JSON.
+- H_eff(z) and BAO shape-only overlays (FRW + small overlay recommended): map 1+z_obs = (1+z_FRW) e^{τ(z_FRW)}, r(z_obs) = ∫ c/H_FRW dz_FRW, then H_eff(z_obs) = H_FRW(z_FRW) e^{τ} [1 + (1+z_FRW) τ'(z_FRW)]. Report D_M(z)=r(z), D_H(z)=c/H_eff(z); fit r_d to BAO compilations; write unified_gate_bao_proxies.png and metrics to JSON.
 
 1) Gate evaluation
 - Compute y(R) = g_bar/a0 from the baryon-only Newtonian field already available in our runners (v_baryon^2/R → g_bar). We will reuse T ≡ v_baryon^2/R^2 if convenient and convert to g_bar as needed.
 - Set ρ_γ to a spatially uniform baseline (ρ_CMB today), then allow simple perturbations for EBL or void-modulation if desired. Start with ρ_γ = ρ_⋆ = 0.26 eV/cm^3 (today’s CMB) so the energy factor is unity, turning on q>0 later to probe sensitivity.
-- Evaluate G(y, ρ_γ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) [× f(ψ) if enabled].
+- Evaluate G(y, ρ_γ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) [× f(ψ) if enabled). For the main analysis set q=0 (drop ρ_γ handle) and control environment via y and an explicit f_env(z, LOS).
 
 2) Dynamics (galaxy fits)
 - Replace the enhancement factor in our acceleration-space RAR bridge with ν ≡ G(y, ρ_γ) when testing gate variants; keep published xi for reproducibility unless explicitly flagged as experimental.
 - Diagnostics: re-check BTFR slope and Solar-System screening (G→1 for y≫1), and ensure lensing mapping Φ+Ψ uses φ_env = 1/2 ln ξ consistently when interpreting G as an effective ξ.
 
 3) Tariff integration (cosmology add-on)
-- Along a path parameterized by comoving distance r (Mpc), integrate τ(r) = κ ∫_0^r [G(y(l), ρ_γ(l)) − 1] dl using the same LOS logic as energy_tariff_model.py.
-- Calibrate κ from the CMB: for a void-weighted LOS fraction f_void to last scattering (D_LSS ≈ 14 Gpc), set κ ≈ τ_CMB / [ (D_max−1) f_void D_LSS ] in the saturated G limit, then refine on actual G(y, ρ_γ) profiles.
+- Along a path parameterized by comoving distance r (Mpc), integrate τ(r) = κ ∫_0^r [G(y(l), ρ_γ(l)) − 1] dl using the same LOS logic as energy_tariff_model.py. In FRW + overlay, map 1+z_obs=(1+z_FRW) e^{τ(z_FRW)} and r(z_obs)=∫ c/H_FRW dz_FRW before forming H_eff and distances.
+- Calibration: anchor the small‑z slope (H0 or M_B) first; treat κ as a small overlay parameter such that |τ(z≲2)| ≪ 1. The “τ≈ln(1100)” route is an appendix scenario (speculative), not the mainline hypothesis.
 - Build a monotone z(r) table: 1+z = exp[τ(r)], invert via PCHIP to obtain r(z) and μ(z) for Pantheon+ comparisons.
 
 4) Optional back-reaction ψ
@@ -79,7 +79,7 @@ Unified gate + tariff tests:
 5) Tests (pass/fail dials)
 - Blackbody purity: tariff ∝ E ensures no frequency-dependent distortions; check residuals vs Planck fit (FIRAS tolerances ~few×10^−5).
 - Time-dilation and Tolman: verify stretch ∝ (1+z) and surface brightness S ∝ (1+z)^−4 remain intact in the add-on framing.
-- BAO/chronometer proxies: compute H_eff(z) = c dz/dr and compare D_M(z)=r(z), D_H(z)=c/H_eff(z) shape to BAO; fit only an overall r_d if desired.
+- BAO/chronometer proxies: in FRW + overlay, use H_eff(z_obs) = H_FRW(z_FRW) e^{τ} [1+(1+z_FRW) τ'(z_FRW)] and compare D_M(z)=r(z), D_H(z)=c/H_eff(z) shapes to BAO; fit only an overall r_d if desired. For tariff-only comparisons, also show ratios to FRW to highlight shape impact.
 - Local tests: ensure G→1 in high-g settings (Solar System, lab) and that our PPN table remains GR under screening.
 
 ### D) Implementation mapping (tariff-only code scaffold)
@@ -100,7 +100,7 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 
 ### E) Methodological checks (code-verified invariants and metrics)
 
-- H_eff identity (BAO proxy): with z = z(r), we enforce the identity H_eff(z) ≡ c·dz/dr = c·(1+z)·d ln(1+z)/dr. We record the RMS relative difference as heff_identity_rms in results/unified_gate_metrics.json; numerical targets are ≲ 1e−6 after tabulation smoothing.
+- H_eff identity (BAO proxy): with z = z(r) or the FRW+overlay mapping, we enforce H_eff(z) ≡ c·dz/dr and its equivalence to c·(1+z)·d ln(1+z)/dr in the tariff-only limit. We record the RMS relative difference as heff_identity_rms in results/unified_gate_metrics.json; numerical targets are ≲ 1e−6 after tabulation smoothing.
 - Distance duality and luminosity distance: in the flat case we use D_L(z) = (1+z)·D_M(z) with D_M(z) = r(z). We compute μ(z) from D_L and also recompute via the duality relation on the Pantheon grid; we store distance_duality_ok and distance_duality_mu_rms.
 - BAO shape-only fit: after constructing H_eff(z) = c·dz/dr, we take D_M(z) = r(z) and D_H(z) = c/H_eff(z) and fit a single sound-horizon r_d to BAO compilations; metrics include rd_best_Mpc, bao_chi2, bao_red_chi2, and bao_dof.
 - Small‑z slope anchor (optional): verify dμ/dz|_{z→0} = (5/ln 10)·c/H0 when the local H0 anchor is applied.
@@ -234,7 +234,7 @@ Because the loss is $\propto E$ and nearly isotropic on large scales, the **shap
 Your pipeline includes tests for **SN stretch $\propto 1+z$** and **Tolman $(1+z)^{-4}$** behavior; those must match expansion expectations (the tariff alone cannot produce the correct scalings). ([arXiv][3])
 
 **(E) BAO/chronometer proxies (shape only).**
-From the inferred $H_{\rm eff}(z)\equiv c\,d\!\ln(1+z)/dz$, compute $D_M(z)$ and $D_H(z)$ and compare **shape** to BAO compilations; fit only an overall $r_d$ if desired. ([arXiv][6])
+Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW})}$, $r(z_{\rm obs})=\int c/H_{\rm FRW}\,dz_{\rm FRW}}$, and $H_{\rm eff}(z_{\rm obs}) = H_{\rm FRW}(z_{\rm FRW}) e^{\tau}\,[1+(1+z_{\rm FRW})\,\tau'(z_{\rm FRW})]$. Then compare $D_M(z)=r(z)$ and $D_H(z)=c/H_{\rm eff}(z)$ shapes to BAO; fit only an overall $r_d$ if desired. ([arXiv][6])
 
 ---
 

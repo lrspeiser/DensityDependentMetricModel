@@ -34,7 +34,10 @@ C_KM_S = 299_792.458
 # ---------- Core builders ----------
 
 def build_z_of_r(params: GateParams, y_value: float, rho_gamma_evcm3: float, D_max_Mpc: float = 8000.0) -> tuple[np.ndarray,np.ndarray]:
-    """Return (r grid in Mpc, z(r)) monotonically increasing."""
+    """Return (r grid in Mpc, z(r)) monotonically increasing.
+
+    Tariff-only path: 1+z = exp(tau(r)).
+    """
     r = np.linspace(0.0, D_max_Mpc, 1601)
     z_vals = np.zeros_like(r)
     for i, rr in enumerate(r):
@@ -49,23 +52,57 @@ def r_of_z(z_grid: np.ndarray, r: np.ndarray, z_vals: np.ndarray) -> np.ndarray:
     return np.interp(z_grid, z_vals, r)
 
 
-def mu_from_unified_gate(z_grid: np.ndarray, params: GateParams, y_value: float, rho_gamma_evcm3: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    r, z_vals = build_z_of_r(params, y_value, rho_gamma_evcm3)
-    r_mpc = r_of_z(z_grid, r, z_vals)
-    # Luminosity distance in the tariff-only track (flat): D_L(z) = (1+z) * r(z)
-    d_pc = (1.0 + z_grid) * r_mpc * 1.0e6
-    mu = np.full_like(z_grid, np.nan)
-    mask = d_pc > 0
-    mu[mask] = 5.0 * np.log10(d_pc[mask]) - 5.0
-    return mu, r_mpc, r, z_vals
+def mu_from_unified_gate(z_grid: np.ndarray, params: GateParams, y_value: float, rho_gamma_evcm3: float, mode: str = 'tariff_only') -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compute mu(z) for overlay.
+    - mode 'tariff_only': 1+z = exp(tau), D_L=(1+z) r(z)
+    - mode 'frw_overlay': 1+z_obs = (1+z_frw) * exp(tau(z_frw)), r = ∫ c/H_FRW dz_frw
+    """
+    if mode == 'frw_overlay':
+        # Build a FRW z_frw grid and accumulate tau along comoving distance
+        z_frw = np.linspace(0.0, 2.5, 3001)
+        # FRW H(z) (flat LCDM; shape-only helper consistent with analysis_baselines)
+        H0, Om = 67.4, 0.315
+        E = np.sqrt(Om*(1+z_frw)**3 + (1-Om))
+        H_frw = H0 * E
+        # comoving distance r(z_frw)
+        r = np.cumsum((C_KM_S / np.maximum(H_frw, 1e-9)) * np.gradient(z_frw))
+        r[0] = 0.0
+        # integrate tau along r using uniform sampler up to each r
+        z_obs = np.zeros_like(z_frw)
+        tau_arr = np.zeros_like(z_frw)
+        for i in range(len(z_frw)):
+            rr = float(r[i])
+            sampler = uniform_void_sampler(y_value, rho_gamma_evcm3, rr, n_steps=1000)
+            tau, _ = integrate_tau(sampler, params, with_psi=False)
+            tau_arr[i] = tau
+            z_obs[i] = (1.0 + z_frw[i]) * np.exp(tau) - 1.0
+        # Invert z_obs→r by monotone interpolation
+        z_mon = np.maximum.accumulate(z_obs)
+        # Build output on requested z_grid
+        r_mpc = np.interp(z_grid, z_mon, r)
+        d_pc = (1.0 + z_grid) * r_mpc * 1.0e6
+        mu = np.full_like(z_grid, np.nan)
+        mask = d_pc > 0
+        mu[mask] = 5.0 * np.log10(d_pc[mask]) - 5.0
+        return mu, r_mpc, r, z_mon
+    else:
+        r, z_vals = build_z_of_r(params, y_value, rho_gamma_evcm3)
+        r_mpc = r_of_z(z_grid, r, z_vals)
+        # Luminosity distance in the tariff-only track (flat): D_L(z) = (1+z) * r(z)
+        d_pc = (1.0 + z_grid) * r_mpc * 1.0e6
+        mu = np.full_like(z_grid, np.nan)
+        mask = d_pc > 0
+        mu[mask] = 5.0 * np.log10(d_pc[mask]) - 5.0
+        return mu, r_mpc, r, z_vals
 
 # ---------- Hubble overlay and chi-squared ----------
 
-def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: float = 0.1, rho_gamma_evcm3: float = 0.26):
+def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: float = 0.1, rho_gamma_evcm3: float = 0.26, mode: str = 'tariff_only'):
     z_data, mu_data, mu_err = load_pantheon(pantheon_path)
     z_grid = np.logspace(-3.0, np.log10(max(z_data.max(), 1e-3)), 600)
 
-    mu_model, _, r_grid, z_of_r = mu_from_unified_gate(z_grid, params, y_value, rho_gamma_evcm3)
+    mu_model, _, r_grid, z_of_r = mu_from_unified_gate(z_grid, params, y_value, rho_gamma_evcm3, mode=mode)
     # Interpolate model onto data z for chi-squared
     mu_model_at_data = np.interp(z_data, z_grid, mu_model)
     valid = np.isfinite(mu_model_at_data) & np.isfinite(mu_data) & np.isfinite(mu_err) & (mu_err > 0)
@@ -91,23 +128,44 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
 
 # ---------- H_eff and BAO shape overlays ----------
 
-def heff_from_z_of_r(r: np.ndarray, z_of_r: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def heff_from_z_of_r(r: np.ndarray, z_of_r: np.ndarray, mode: str = 'tariff_only') -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return (z grid, H_eff(z) [km/s/Mpc], r(z) on that grid).
 
-    Correct BAO proxy: H_eff(z) = c * dz/dr; D_M(z) = r(z); D_H(z) = c / H_eff(z).
+    - 'tariff_only': H_eff = c * dz/dr, D_M = r(z), D_H = c/H_eff.
+    - 'frw_overlay': use FRW mapping: z_obs=(1+z_frw)exp(tau)-1 and r(z_obs)=∫ c/H_frw dz_frw.
     """
-    # Build a dense z grid across available range (avoid zeros)
-    z_grid = np.linspace(max(1e-6, float(z_of_r[1])), float(z_of_r[-1]), 2000)
-    # r(z) via interp
-    r_of_z_grid = np.interp(z_grid, z_of_r, r)
-    dr_dz = np.gradient(r_of_z_grid, z_grid)
-    dz_dr = 1.0 / np.clip(dr_dz, 1e-30, np.inf)
-    H_eff = C_KM_S * dz_dr
-    return z_grid, H_eff, r_of_z_grid
+    if mode == 'frw_overlay':
+        z_frw = np.linspace(0.0, 2.5, 3001)
+        H0, Om = 67.4, 0.315
+        E = np.sqrt(Om*(1+z_frw)**3 + (1-Om))
+        H_frw = H0 * E
+        r_frw = np.cumsum((C_KM_S / np.maximum(H_frw, 1e-9)) * np.gradient(z_frw)); r_frw[0]=0.0
+        # Build z_obs via tau(r)
+        # Approximate tau as function of r using the existing z(r) tariff-only builder at small kappa
+        r_tariff, z_tariff = r, z_of_r
+        # Interpolate tau(r) = ln(1+z_tariff)
+        tau_of_r = np.log1p(z_tariff)
+        # Map each z_frw to r_frw then tau, then z_obs
+        tau_frw = np.interp(r_frw, r_tariff, tau_of_r)
+        z_obs = (1.0 + z_frw) * np.exp(tau_frw) - 1.0
+        z_grid = np.maximum.accumulate(z_obs)
+        r_of_z_grid = np.interp(z_grid, z_obs, r_frw)
+        dr_dz = np.gradient(r_of_z_grid, z_grid)
+        dz_dr = 1.0 / np.clip(dr_dz, 1e-30, np.inf)
+        H_eff = C_KM_S * dz_dr
+        return z_grid, H_eff, r_of_z_grid
+    else:
+        # tariff-only
+        z_grid = np.linspace(max(1e-6, float(z_of_r[1])), float(z_of_r[-1]), 2000)
+        r_of_z_grid = np.interp(z_grid, z_of_r, r)
+        dr_dz = np.gradient(r_of_z_grid, z_grid)
+        dz_dr = 1.0 / np.clip(dr_dz, 1e-30, np.inf)
+        H_eff = C_KM_S * dz_dr
+        return z_grid, H_eff, r_of_z_grid
 
 
-def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | None) -> dict:
-    z_grid, H_eff, r_of_z_grid = heff_from_z_of_r(r, z_of_r)
+def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | None, mode: str = 'tariff_only') -> dict:
+    z_grid, H_eff, r_of_z_grid = heff_from_z_of_r(r, z_of_r, mode=mode)
     # Correct BAO proxies
     DM = r_of_z_grid
     DH = C_KM_S / H_eff
@@ -175,9 +233,9 @@ def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | Non
 
 # ---------- Orchestrator ----------
 
-def analyze_unified_gate(pantheon_path: str, bao_csv_path: str | None, params: GateParams, y_value: float = 0.1, rho_gamma_evcm3: float = 0.26):
-    overlay_metrics, (r_grid, z_of_r) = overlay_hubble_unified(pantheon_path, params, y_value, rho_gamma_evcm3)
-    bao_metrics = bao_shape_overlay(z_of_r, r_grid, bao_csv_path)
+def analyze_unified_gate(pantheon_path: str, bao_csv_path: str | None, params: GateParams, y_value: float = 0.1, rho_gamma_evcm3: float = 0.26, mode: str = 'tariff_only'):
+    overlay_metrics, (r_grid, z_of_r) = overlay_hubble_unified(pantheon_path, params, y_value, rho_gamma_evcm3, mode=mode)
+    bao_metrics = bao_shape_overlay(z_of_r, r_grid, bao_csv_path, mode=mode)
 
     # Consistency checks/invariants
     # 1) derivative identity: d ln(1+z)/dr = alpha_est; H_eff via two ways should agree
@@ -201,7 +259,7 @@ def analyze_unified_gate(pantheon_path: str, bao_csv_path: str | None, params: G
         mu_from_duality = 5.0 * np.log10(DL_from_duality * 1.0e6) - 5.0
         # Compare to model mu at data
         z_grid_overlay = np.logspace(-3.0, np.log10(max(z_data.max(), 1e-3)), 600)
-        mu_model, _, _, _ = mu_from_unified_gate(z_grid_overlay, params, y_value, rho_gamma_evcm3)
+        mu_model, _, _, _ = mu_from_unified_gate(z_grid_overlay, params, y_value, rho_gamma_evcm3, mode=mode)
         mu_model_at_data = np.interp(z_data, z_grid_overlay, mu_model)
         dd_rms = float(np.sqrt(np.mean((mu_from_duality - mu_model_at_data)**2)))
         distance_duality_ok = dd_rms < 1e-6  # should be numerically identical after our fix
@@ -235,6 +293,6 @@ if __name__ == '__main__':
     REPO_ROOT = Path(__file__).resolve().parents[1]
     pantheon = str(REPO_ROOT / 'external_data' / 'pantheon' / 'Pantheon+SH0ES.dat')
     bao_csv_path = REPO_ROOT / 'tariff' / 'data' / 'bao_compilation.csv'
-    kappa_guess = calibrate_kappa_to_cmb(f_void=0.8, D_LSS_Mpc=14000.0, G_cap_minus1=1.0)
-    params = GateParams(eta=3.0, p=1.5, q=1.0, rho_star_evcm3=0.26, kappa_per_Mpc=kappa_guess)
-    analyze_unified_gate(pantheon, str(bao_csv_path) if bao_csv_path.exists() else None, params)
+    # Small-overlay default: q=0, small kappa; FRW+tariff overlay mode
+    params = GateParams(eta=3.0, p=1.5, q=0.0, rho_star_evcm3=0.26, kappa_per_Mpc=1e-5)
+    analyze_unified_gate(pantheon, str(bao_csv_path) if bao_csv_path.exists() else None, params, mode='frw_overlay')

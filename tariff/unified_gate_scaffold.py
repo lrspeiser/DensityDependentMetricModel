@@ -23,9 +23,9 @@ import math
 class GateParams:
     eta: float = 3.0           # amplitude of enhancement (dimensionless)
     p: float = 1.5             # RAR gate exponent
-    q: float = 1.0             # photon-energy gate exponent
+    q: float = 0.0             # photon-energy gate exponent (default to 0: drop ργ handle by default)
     rho_star_evcm3: float = 0.26  # reference photon energy density (eV/cm^3), ~CMB today
-    kappa_per_Mpc: float = 1e-5   # tariff coupling κ in 1/Mpc
+    kappa_per_Mpc: float = 1e-5   # tariff coupling κ in 1/Mpc (small overlay)
     sigma: float = 0.0            # tiny back-reaction strength in f(psi)
     enable_backreaction: bool = False
 
