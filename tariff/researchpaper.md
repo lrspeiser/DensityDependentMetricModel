@@ -1,8 +1,6 @@
 # A Unified Gate Linking Weak-Field Dynamics and Photon Energy Loss
 
-**Authors:** [To be completed]
-**Affiliations:** [To be completed]
-**Correspondence:** [To be completed]
+Leonard Speiser, Independent Researcher
 
 ## Abstract
 
@@ -99,6 +97,16 @@ Unified gate + tariff tests:
     images/unified_gate_hubble_overlay.png, images/unified_gate_bao_proxies.png and results/unified_gate_metrics.json.
 
 All of this remains confined to tariff/ and is wired for our existing LOS machinery.
+
+### E) Methodological checks (code-verified invariants and metrics)
+
+- H_eff identity (BAO proxy): with z = z(r), we enforce the identity H_eff(z) ≡ c·dz/dr = c·(1+z)·d ln(1+z)/dr. We record the RMS relative difference as heff_identity_rms in results/unified_gate_metrics.json; numerical targets are ≲ 1e−6 after tabulation smoothing.
+- Distance duality and luminosity distance: in the flat case we use D_L(z) = (1+z)·D_M(z) with D_M(z) = r(z). We compute μ(z) from D_L and also recompute via the duality relation on the Pantheon grid; we store distance_duality_ok and distance_duality_mu_rms.
+- BAO shape-only fit: after constructing H_eff(z) = c·dz/dr, we take D_M(z) = r(z) and D_H(z) = c/H_eff(z) and fit a single sound-horizon r_d to BAO compilations; metrics include rd_best_Mpc, bao_chi2, bao_red_chi2, and bao_dof.
+- Small‑z slope anchor (optional): verify dμ/dz|_{z→0} = (5/ln 10)·c/H0 when the local H0 anchor is applied.
+- Blackbody purity (optional): the tariff ∝ E preserves a blackbody; we fit a Planck curve to a FIRAS-like spectrum and record rms_frac_resid.
+- Data dependencies: optional baselines require CSVs under tariff/data (see README_DATA.md).
+- Reproducibility: plots are written under tariff/images/ and metrics to tariff/results/unified_gate_metrics.json.
 
 ---
 
