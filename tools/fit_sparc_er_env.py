@@ -391,20 +391,20 @@ def main():
     m_out = ~m_in
     if np.any(m_in):
         if model == 'er':
-            plt.plot(R_grid[m_in], curve_in[m_in], 'r-', lw=2.5, label='ER — constrained')
+            plt.plot(R_grid[m_in], curve_in[m_in], 'r-', lw=2.5, label='RAR Plateau — constrained')
         elif model == 'nfw':
             plt.plot(R_grid[m_in], curve_in[m_in], color='green', ls='-.', lw=2.5, label='NFW (ΛCDM)')
         else:
             plt.plot(R_grid[m_in], curve_in[m_in], 'b--', lw=2.5, label='GR (baryons)')
     if np.any(m_out):
         if model == 'er':
-            plt.plot(R_grid[m_out], curve_out[m_out], color='#FF8C00', ls='--', lw=2.5, label='ER — extrapolation')
+            plt.plot(R_grid[m_out], curve_out[m_out], color='#FF8C00', ls='--', lw=2.5, label='RAR Plateau — extrapolation')
             plt.axvspan(R_data_max, R_grid.max(), color='#FFA500', alpha=0.08)
     plt.axvline(R_data_max, color='k', ls=':', alpha=0.6, label=f"Max data R ≈ {R_data_max:.1f} kpc")
 
     plt.xlabel('R (kpc)')
     plt.ylabel('Vc (km s^{-1})')
-    plt.title(f'{name}: SPARC env-ER fit (chi2/dof={chi2_best/dof:.2f})')
+    plt.title(f'{name}: SPARC RAR Plateau fit (chi2/dof={chi2_best/dof:.2f})')
     plt.grid(True, alpha=0.3)
     plt.legend(frameon=False)
     plt.xlim(0, max(R.max()*1.2, R.max()+5))

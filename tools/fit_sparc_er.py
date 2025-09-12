@@ -160,15 +160,15 @@ def main():
     m_in = R_grid <= R_data_max
     m_out = ~m_in
     if np.any(m_in):
-        plt.plot(R_grid[m_in], ver_g[m_in], 'r-', lw=2.5, label='ER — constrained')
+        plt.plot(R_grid[m_in], ver_g[m_in], 'r-', lw=2.5, label='RAR Plateau — constrained')
     if np.any(m_out):
-        plt.plot(R_grid[m_out], ver_g[m_out], color='#FF8C00', ls='--', lw=2.5, label='ER — extrapolation')
+        plt.plot(R_grid[m_out], ver_g[m_out], color='#FF8C00', ls='--', lw=2.5, label='RAR Plateau — extrapolation')
         plt.axvspan(R_data_max, R_grid.max(), color='#FFA500', alpha=0.08)
     plt.axvline(R_data_max, color='k', ls=':', alpha=0.6, label=f"Max data R ≈ {R_data_max:.1f} kpc")
 
     plt.xlabel('Radius R (kpc)')
     plt.ylabel('Circular speed v (km/s)')
-    plt.title(f'{name}: SPARC fit (chi2/dof={chi2_best/dof:.2f})')
+    plt.title(f'{name}: SPARC RAR Plateau fit (chi2/dof={chi2_best/dof:.2f})')
     plt.grid(True, alpha=0.3)
     plt.legend(frameon=False)
     plt.xlim(0, max(R.max()*1.2, R.max()+5))

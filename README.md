@@ -193,6 +193,12 @@ We selected representative spirals spanning mass and surface brightness. For eac
 Figure 3 | The universal gating function explains diverse rotation curve shapes across the SPARC galaxy sample. Observed rotation curves (black points; Lelli, McGaugh & Schombert 2016) for five representative galaxies are compared with predictions from baryons alone (blue) and the DGG model (red). The DGG fits, obtained by optimizing a single parameter ($a_0$) for each galaxy, successfully track the data, demonstrating the model's applicability across galaxies of varying mass and surface brightness.
 *   **Source Data:** Per-galaxy rotmod files are from the SPARC database. Fit results are available in `results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv`.
 
+#### Dual‑case panel: LSB vs HSB (RAR Plateau vs GR vs NFW)
+![SPARC dual cases — LSB vs HSB](images/next_steps/enhanced_20250805_115400/sparc_panel_dual_cases.png)
+
+Figure 3a | RAR Plateau captures both low‑surface‑brightness (LSB), extended, flat‑outer rotation curves and high/typical‑surface‑brightness (HSB) systems. Left: LSB extended galaxies (examples: UGC 00128, UGC 05005, UGC 01230) selected by SBdisk0 ≤ 120 L☉/pc², Rmax/Rd ≥ 8, and flat outer slopes (|dV/dR| ≤ 1.5 km s⁻¹ kpc⁻¹; outer ΔV/V ≤ 0.15). Right: representative HSB/typical spirals (examples: NGC 5055, NGC 2841, NGC 3198). Curves show Observed (black), GR (blue), NFW (green, quick‑fit), and RAR Plateau (red). The same gating function is used for both groups; only per‑galaxy a0 is scanned within the paper preset. Minor tensions at extreme radii (very outer points) are discussed below.
+*   Selection details: thresholds follow tools/find_sparc_lsb_extended_flat.py; see code for exact formulas and CSV at `results/lsb_extended_flat_candidates.csv`.
+
 **RAR master panel** (optional ΛCDM band).
 
 ![RAR master panel — SPARC selection with DGG posterior band](images/paper/rar_master_panel.png)
@@ -286,6 +292,12 @@ Importer sanity checks (applied in scripts/tools):
 
 **Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data. See `docs/dmax_cap.md` for details and sweep instructions. **Falsifiability:** a decisive failure would be a requirement for $D_{\max}\gg100$ to fit strong‑lensing scales or cluster dynamics under the same mapping, or a systematic misfit of the BTFR slope/scatter under standardized selections.
 
+#### On minor mismatches at extreme radii (outermost points)
+- Beam smearing and asymmetric drift corrections can degrade rotation‑curve reliability at low surface brightness and large radii (inclination systematics and non‑circular motions increase fractional errors). SPARC files report quality flags Q; many LSB extended systems are Q=2.
+- Distance and inclination uncertainties feed directly into V_obs and can bias the outer slope by several km/s, particularly for near face‑on systems.
+- Our overlays use component rotmods and reconstruct gas surface density when _HIrad profiles are missing (documented in code logs). This reconstruction can affect the precise v_bar tail, but the effect on RAR Plateau overlays is modest relative to observational systematics at the farthest radii.
+- The paper preset does not tune parameters radius‑by‑radius; we scan only a0 per galaxy with a fixed gate and a finite plateau. Residual tensions at the last point or two are expected within the quoted error budgets and selection floors. We therefore refrain from ad‑hoc tweaks and disclose the floors used (σ_floor, obs_frac_sigma) and Q.
+
 ---
 
 ### Outlook — cosmological extension (separate paper)
@@ -361,26 +373,7 @@ docker run --rm -it \
 
 ## 9. References
 
-- CASTLES: The CfA-Arizona Space Telescope LEns Survey of gravitational lenses. URL: https://www.cfa.harvard.edu/castles/ (accessed).
-
-1. McGaugh, Lelli & Schombert (2016): The Radial Acceleration Relation in Rotationally Supported Galaxies.  
-2. Lelli, McGaugh & Schombert (2016): SPARC mass models.  
-3. Milgrom (1983–2014): MOND framework and predictions.  
-4. Bertotti, Iess & Tortora (2003): Cassini bound on $|\gamma-1|$.  
-5. Bovy & Rix (2013); McMillan (2017/2022): MW $\Sigma_{1.1}$ and mass model.  
-6. Additional RAR/BTFR and lensing references as in the repository’s bibliography.
-7. Will, C. M., The Confrontation between General Relativity and Experiment, Living Reviews in Relativity (2014, 2018 update).
-8. Auger, M. W., et al. (2009), The Sloan Lens ACS Survey. IX. Colors, Lensing, and Stellar Masses of Early-type Galaxies, ApJ 705, 1099.
-9. Bolton, A. S., et al. (2008), The Sloan Lens ACS Survey. V. The Full ACS Strong-Lens Sample, ApJ 682, 964.
-10. Shapiro, I. I. (1964): Fourth Test of General Relativity. Phys. Rev. Lett. 13, 789.
-11. Milgrom, M. (2010): Quasi-linear formulation of MOND (QUMOND). MNRAS 403, 886.
-12. Famaey, B. & McGaugh, S. (2012): Modified Newtonian Dynamics (MOND): Observational Phenomenology and Relativistic Extensions. Living Reviews in Relativity 15, 10.
-13. Skordis, C. & Zlosnik, T. (2021): A New Relativistic Theory for MOND with Positive Energy. Phys. Rev. Lett. 127, 161302.
-14. Abbott, B. P., et al. (LIGO/Virgo, 2017): GW170817: Observation of Gravitational Waves from a Binary Neutron Star Inspiral. Phys. Rev. Lett. 119, 161101; and associated multi-messenger constraints on c_T.
-15. Miyamoto, M. & Nagai, R. (1975): Three-dimensional models for the distribution of mass in galaxies. PASJ 27, 533.
-16. Hernquist, L. (1990): An analytical model for spherical galaxies and bulges. ApJ 356, 359.
-17. Sérsic, J. L. (1968): Atlas de Galaxias Australes. Observatorio Astronómico, Córdoba.
-18. Bartelmann, M. & Schneider, P. (2001): Weak gravitational lensing. Physics Reports 340, 291–472.
+(finalizing this list)
 
 ---
 
