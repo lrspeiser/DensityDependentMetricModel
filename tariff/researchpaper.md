@@ -256,6 +256,19 @@ Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW}
 
 ---
 
+## Related Work: Skordis & Złośnik (AeST) and alternatives
+
+Our proposal differs from relativistic MOND frameworks such as the Aether–Scalar–Tensor (AeST) theory of Skordis & Złośnik. AeST augments GR with a unit‑timelike vector and a scalar while keeping a single metric and Φ=Ψ; it was designed to satisfy c_T=c and to match Planck‑era observables on linear scales, with the scalar behaving effectively as dust so that CMB and matter power spectra can be fitted without particle CDM. [SZ‑PRL][SZ-PRL], [SZ‑PRD][SZ-PRD], [SZ‑arXiv][SZ-ARXIV]
+
+In contrast, our unified gate uses the same weak‑field control function that boosts low‑g dynamics to modulate a tiny, energy‑proportional photon‑energy loss that accumulates primarily in voids; dense, high‑g regions are screened (G→1), preserving Solar‑System tests. This mechanism adds path‑dependent redshift on top of FRW expansion while preserving the CMB blackbody (no frequency dependence). A distinctive prediction is a correlation between SN residuals and a void‑weighted line‑of‑sight gate integral, which AeST (lacking any tariff) does not predict.
+
+Broader landscape (one‑sentence context):
+- Superfluid dark matter (Berezhiani & Khoury): a DM component whose phonons mediate MOND‑like forces in galaxies; cosmology remains essentially ΛCDM‑like. [SFDM][SFDM-PRD]
+- Dipolar dark matter (Blanchet & Le Tiec): a polarizable DM fluid reproducing MOND phenomenology while keeping standard cosmology. [DDM][DDM-PRD]
+- MOG/STVG (Moffat): modified‑gravity field content for galaxy/cluster dynamics with proposed CMB treatments; distinct predictions from both AeST and our reciprocity. [MOG][MOG-MDPI]
+
+---
+
 ### Notes on positioning and prior art
 
 * Our gated reciprocity is **not** the Zwicky‑style tired‑light scattering: it is expansion‑compatible, **frequency‑proportional**, near‑isotropic, and **screened** in high‑$g$ regions; it therefore avoids blurring and preserves the blackbody form by construction. ([arXiv][4])
@@ -274,10 +287,17 @@ Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW}
 * If you’re preparing **Paper II**, keep Sections 1–5 as your Introduction & Model.
 * If you’re appending to **Paper I**, insert **Section “Outlook / Cosmology Add‑On”** with a shortened version of Sections 1–3, and point readers to a companion manuscript for the full program. (The galaxy/lens results remain unchanged.)
 
-[1]: https://www.pnas.org/doi/10.1073/pnas.15.3.168?utm_source=chatgpt.com "A relation between distance and radial velocity among ..."
-[2]: https://arxiv.org/abs/0911.1955?utm_source=chatgpt.com "The Temperature of the Cosmic Microwave Background"
-[3]: https://arxiv.org/abs/astro-ph/9602124?utm_source=chatgpt.com "[astro-ph/9602124] Observation of Cosmological Time Dilation using ..."
-[4]: https://arxiv.org/abs/astro-ph/0106566?utm_source=chatgpt.com "The Tolman Surface Brightness Test for the Reality of the Expansion. IV. A Measurement of the Tolman Signal and the Luminosity Evolution of Early-Type Galaxies"
-[5]: https://lambda.gsfc.nasa.gov/product/cobe/about_firas.html?utm_source=chatgpt.com "The COBE Far Infrared Absolute Spectrophotometer (FIRAS)"
-[6]: https://arxiv.org/abs/astro-ph/0501171?utm_source=chatgpt.com "[astro-ph/0501171] Detection of the Baryon Acoustic Peak ..."
+[1]: https://www.pnas.org/doi/10.1073/pnas.15.3.168 "A relation between distance and radial velocity among ..."
+[2]: https://arxiv.org/abs/0911.1955 "The Temperature of the Cosmic Microwave Background"
+[3]: https://arxiv.org/abs/astro-ph/9602124 "[astro-ph/9602124] Observation of Cosmological Time Dilation using ..."
+[4]: https://arxiv.org/abs/astro-ph/0106566 "The Tolman Surface Brightness Test for the Reality of the Expansion. IV. A Measurement of the Tolman Signal and the Luminosity Evolution of Early-Type Galaxies"
+[5]: https://lambda.gsfc.nasa.gov/product/cobe/about_firas.html "The COBE Far Infrared Absolute Spectrophotometer (FIRAS)"
+[6]: https://arxiv.org/abs/astro-ph/0501171 "[astro-ph/0501171] Detection of the Baryon Acoustic Peak ..."
+
+[SZ-PRL]: https://link.aps.org/doi/10.1103/PhysRevLett.127.161302
+[SZ-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.100.104013
+[SZ-ARXIV]: https://arxiv.org/abs/2007.00082
+[SFDM-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.92.103510
+[DDM-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.80.023524
+[MOG-MDPI]: https://www.mdpi.com/2075-4434/1/1/65
 
