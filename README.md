@@ -451,6 +451,30 @@ python scripts/cluster_clusters_plus_stars.py \
   --images images/next_steps/cluster_rar_plus_stars
 ```
 
+### Galaxy clusters — CLASH × ACCEPT (defensible)
+
+Setup. CLASH NFW totals (Umetsu et al. 2016) matched to ACCEPT ICM gas shells; baryons = ICM + a global BCG+ICL Hernquist template; cosmology and constants pinned in summary.json. We cut to 0.05 ≤ r/R200c ≤ 0.8, weight clusters equally, and fit with a robust Huber loss.
+
+RAR‑plateau (best‑fit a0): a0 ≈ 1.737×10⁻⁷ cgs; RMS = 0.113 dex.
+GR (baryons‑only): RMS = 1.014 dex.
+Residual vs radius: Δlog10 g ≈ 0.178 − 0.81 x, with x ≡ r/R200c; zero ≈ 0.22. Inner/outer medians: +0.083 dex (x≤0.2), −0.108 dex (x>0.2).
+Fixed‑a0 cross‑domain: with a0 = 1.93×10⁻⁷ cgs, RMS = 0.115 dex; same trend/coverage (≈54% within ±0.1 dex; ≈94% within ±0.2 dex).
+
+Null tests: radial scramble flattens slope; cluster cross‑match inflates RMS to ≈ 0.16 dex.
+
+Reproduce (paper preset):
+```bash
+python scripts/cluster_rar_pipeline.py \
+  --accept external_data/accept_database.dat \
+  --results results/cluster_rar_defensible \
+  --images  images/cluster_rar_defensible \
+  --equal-cluster-weight \
+  --xmin 0.05 --xmax 0.8 \
+  --robust-loss huber --huber-delta 0.2 \
+  --jackknife-by-cluster --bootstrap-points 200 --null-tests \
+  --stars-csv external_data/clash_stars.csv
+```
+
 ```bash
 # venv (Python 3.11)
 python3.11 -m venv .venv && source .venv/bin/activate
