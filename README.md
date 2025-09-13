@@ -371,6 +371,54 @@ docker run --rm -it \
 
 ---
 
+## 3.1 Galaxy clusters — CLASH × ACCEPT (raw-data‑validated)
+
+We test the RAR‑gated framework on galaxy clusters using published total mass models from **Umetsu et al. (2016)** (CLASH; NFW fits per cluster) and gas‑only baryons from your **ACCEPT** database (external_data/accept_database.dat). The pipeline:
+- validates the raw ACCEPT shells (monotonic radii, filtered overlaps, non‑finite or non‑physical ne removed),
+- computes gas mass and $g_{\rm bar}$ per shell, and
+- compares to the CLASH NFW $g_{\rm tot}$.
+
+Figure: GR vs RAR vs CLASH NFW
+
+![Cluster RAR: NFW data vs GR and RAR plateau](images/next_steps/cluster_rar/cluster_rar_scatter.png)
+
+Source‑data (all under results/cluster_rar/):
+- cluster_rar_points.csv — columns: cluster, z, r_kpc, log10_gbar, log10_gNFWtot, log10_gGR, log10_gRAR
+- diagnostics.csv — per‑cluster raw‑data hygiene and quick sanity: n_shells, n_used, min/max ne, and gas fractions at 0.5 R200 and R200
+- metrics.json — RMS in log10 space vs GR and RAR‑plateau, and the fitted $a_0$ (Dmax=50)
+- summary.json — matched count and fitted $a_0$ for multiple theory curves
+
+Current run (this repo):
+- matched_clusters = 7; n_points = 220
+- Best‑fit RAR‑plateau (global): $a_0 \approx 1.93\times10^{-7}$ cgs, RMS ≈ 0.146 dex
+- GR baseline RMS ≈ 1.014 dex (baryons‑only)
+
+Raw‑data checks (diagnostics.csv):
+- Shells are enforced monotonic in $R_{\rm out}$. Rows indicate any removed overlaps or bad densities. We also list gas fractions $f_{\rm gas}(<0.5\,R_{200c})$ and $f_{\rm gas}(<R_{200c})$ computed from ACCEPT vs the CLASH NFW $M(<r)$ as a quick sanity; values are broadly in the 0.07–0.16 range for the matched set in this run.
+
+Reproduce locally
+
+```bash
+# venv (Python 3.11)
+python3.11 -m venv .venv && source .venv/bin/activate
+python -m pip install numpy matplotlib
+python scripts/cluster_rar_pipeline.py \
+  --accept external_data/accept_database.dat \
+  --results results/cluster_rar \
+  --images images/cluster_rar
+```
+
+Notes
+- Total accelerations are from CLASH NFW (Table 2 of Umetsu+2016) at the paper cosmology ($H_0=70,\, \Omega_m=0.27,\, \Omega_\Lambda=0.73$).
+- Baryons are gas‑only from ACCEPT shells using $\rho_{\rm gas}=\mu_e m_p n_e$ with $\mu_e=1.17$.
+- The figure overlays:
+  - CLASH NFW points (log10 $g_{\rm bar}$ vs log10 $g_{\rm tot}$),
+  - GR baseline (one‑to‑one), and
+  - RAR‑plateau (global $a_0$, $D_{\max}=50$).
+- The raw‑data hygiene and $f_{\rm gas}$ sanity are reported per cluster; inspect diagnostics.csv to flag suspect inputs.
+
+---
+
 ## 9. References
 
 (finalizing this list)

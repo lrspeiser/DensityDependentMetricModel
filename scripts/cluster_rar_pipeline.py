@@ -474,6 +474,13 @@ def run_all(accept_path: str,
         plt.tight_layout()
         fig_path = os.path.join(out_images, 'cluster_rar_scatter.png')
         fig.savefig(fig_path)
+        # also write a copy to images/next_steps/cluster_rar for docs embedding
+        try:
+            alt_dir = os.path.join('images', 'next_steps', 'cluster_rar')
+            os.makedirs(alt_dir, exist_ok=True)
+            fig.savefig(os.path.join(alt_dir, 'cluster_rar_scatter.png'))
+        except Exception:
+            pass
 
     # write points CSV with additional columns
     csv_path = os.path.join(out_results, 'cluster_rar_points.csv')
