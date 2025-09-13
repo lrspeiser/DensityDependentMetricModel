@@ -12119,8 +12119,7 @@
         133.76826888962006
       ]
     },
-    "bao_fit_available": false,
-    "note": "Provide tariff/data/bao_compilation.csv with columns z and D_M_over_rd/D_H_over_rd or DV_over_rd to enable shape-only fit."
+    "bao_fit_available": true
   },
   "consistency": {
     "heff_identity_rms": 1.09039026574216e-05,

@@ -37,38 +37,56 @@ def load_pantheon(path: str):
 
 
 def try_load_pantheon_cov(path: str):
-    """Attempt to load a Pantheon(+SH0ES) covariance matrix that matches the rows in `path`.
-    Returns C (NxN) or None if not found. Supported sidecar filenames in the same directory:
+    """Attempt to load a Pantheon(+SH0ES) full STAT+SYS covariance next to the table.
+    Returns C (NxN) or None if not found.
+
+    Supported sidecar filenames in the same directory (searched in this order):
       - Pantheon+SH0ES_cov.npy (NumPy array)
       - Pantheon+SH0ES_cov.csv (CSV with N rows of N comma-separated values)
+      - Pantheon+SH0ES_STAT+SYS.cov (ASCII whitespace-delimited matrix from Pantheon+ release)
+      - Pantheon+SH0ES_STAT+SYS_cov.txt/.csv (ASCII/CSV variants)
     """
     import os
-    import csv
     base_dir = os.path.dirname(os.path.abspath(path))
     candidates = [
         os.path.join(base_dir, 'Pantheon+SH0ES_cov.npy'),
         os.path.join(base_dir, 'Pantheon+SH0ES_cov.csv'),
+        os.path.join(base_dir, 'Pantheon+SH0ES_STAT+SYS.cov'),
+        os.path.join(base_dir, 'Pantheon+SH0ES_STAT+SYS_cov.txt'),
+        os.path.join(base_dir, 'Pantheon+SH0ES_STAT+SYS_cov.csv'),
     ]
     for cand in candidates:
-        if os.path.exists(cand) and cand.endswith('.npy'):
-            try:
+        if not os.path.exists(cand):
+            continue
+        try:
+            if cand.endswith('.npy'):
                 C = np.load(cand)
-                return C
-            except Exception:
-                continue
-        if os.path.exists(cand) and cand.endswith('.csv'):
-            try:
+            elif cand.endswith('.csv'):
+                import csv as _csv
                 rows = []
                 with open(cand, 'r', newline='') as f:
-                    reader = csv.reader(f)
+                    reader = _csv.reader(f)
                     for row in reader:
                         if not row:
                             continue
                         rows.append([float(x) for x in row])
                 C = np.array(rows, dtype=float)
-                return C
-            except Exception:
+            else:
+                # ASCII whitespace-delimited
+                rows = []
+                with open(cand, 'r') as f:
+                    for line in f:
+                        s = line.strip()
+                        if not s or s.startswith('#'):
+                            continue
+                        rows.append([float(x) for x in s.replace(',', ' ').split()])
+                C = np.array(rows, dtype=float)
+            # sanity: square matrix
+            if C.ndim != 2 or C.shape[0] != C.shape[1]:
                 continue
+            return C
+        except Exception:
+            continue
     return None
 
 def load_cmb_spectrum_csv(path: str):

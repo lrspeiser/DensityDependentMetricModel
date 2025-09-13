@@ -104,6 +104,34 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 
 - LOS environment correlation (tariff prediction): compute S(r)=τ(r)/κ and regress anchored SN residuals Δμ on S; record slope, stderr, t-stat, and weighted R². See images/unified_gate_sn_residuals_vs_S.png and hubble.los_env_correlation in results/unified_gate_metrics.json.
 
+---
+
+## Methods: Supernovae (Pantheon+) and BAO (shape-only)
+
+### Supernovae (Pantheon+)
+We use the Pantheon+SH0ES distance-modulus table and its full STAT+SYS covariance C. For a model prediction μ_model(z), we analytically marginalize over a constant offset a (the absolute magnitude M_B, or equivalently H_0) by minimizing
+
+$$
+\chi^2(a)=\bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr)^{\!\top} C^{-1} \bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr),
+$$
+
+which yields
+
+$$
+a_{\rm best}=-\frac{\mathbf{1}^\top C^{-1}\,\Delta}{\mathbf{1}^\top C^{-1}\,\mathbf{1}},\qquad \Delta\equiv\mu_{\rm model}-\mu_{\rm data}.
+$$
+
+We report χ²_SN at a_best and χ²_SN/dof with dof = N_SN − 1. To test the gated‑tariff prediction, we construct the LOS‑environment statistic S(r)≡τ(r)/κ along each sightline and regress the anchored residuals Δμ on S using generalized least squares (GLS) with the same C: \hat\beta=(X^\top C^{-1}X)^{-1}X^\top C^{-1}y for y=Δμ and X=[\mathbf{1},S]. We quote the slope, its standard error, t‑statistic, and a generalized weighted R².
+
+Practical notes: we ensure the covariance is symmetric positive‑definite (SPD) by small diagonal jitter if needed; we do not refit light‑curve nuisance parameters (α,β) and use Pantheon+ released μ with the provided STAT+SYS covariance.
+
+### BAO (shape‑only)
+From the monotone inversion z(r) we compute H_eff(z)=c\,dz/dr, D_M(z)=r(z), and D_H(z)=c/H_eff(z). We verify the identity c\,dz/dr = c(1+z)\,d\ln(1+z)/dr (RMS relative error reported). We then fit a single sound horizon r_d to a compilation providing either {D_M/r_d, D_H/r_d} (with optional per‑point correlation ρ) or D_V/r_d, minimizing χ²(r_d) by 1‑D search. We report r_d, χ², and χ²/dof (observables minus one parameter).
+
+---
+
+- LOS environment correlation (tariff prediction): compute S(r)=τ(r)/κ and regress anchored SN residuals Δμ on S; record slope, stderr, t-stat, and weighted R². See images/unified_gate_sn_residuals_vs_S.png and hubble.los_env_correlation in results/unified_gate_metrics.json.
+
 - H_eff identity (BAO proxy): with z = z(r) or the FRW+overlay mapping, we enforce H_eff(z) ≡ c·dz/dr and its equivalence to c·(1+z)·d ln(1+z)/dr in the tariff-only limit. We record the RMS relative difference as heff_identity_rms in results/unified_gate_metrics.json; numerical targets are ≲ 1e−6 after tabulation smoothing.
 - Distance duality and luminosity distance: in the flat case we use D_L(z) = (1+z)·D_M(z) with D_M(z) = r(z). We compute μ(z) from D_L and also recompute via the duality relation on the Pantheon grid; we store distance_duality_ok and distance_duality_mu_rms.
 - BAO shape-only fit: after constructing H_eff(z) = c·dz/dr, we take D_M(z) = r(z) and D_H(z) = c/H_eff(z) and fit a single sound-horizon r_d to BAO compilations; metrics include rd_best_Mpc, bao_chi2, bao_red_chi2, and bao_dof.

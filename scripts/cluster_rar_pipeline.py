@@ -157,7 +157,7 @@ def norm_name(s: str) -> str:
 
 
 # ----------------------------
-# ACCEPT parser and baryon mass builder
+# ACCEPT parser and baryon + stars mass builder
 # ----------------------------
 @dataclass
 class AcceptShell:
@@ -231,6 +231,61 @@ def build_gas_profiles(shells: List[AcceptShell], mu_e: float = 1.17) -> Tuple[n
     Mgas_cum_g = np.array(Mgas_cum, dtype=float)
     g_bar = G * Mgas_cum_g / (r_edges_cm ** 2)
     return r_edges_cm, Mgas_cum_g, g_bar
+
+# ----------------------------
+# Optional BCG/stellar mass plug-in
+# ----------------------------
+@dataclass
+class StarSpec:
+    Mstar_Msun: float
+    Re_kpc: float
+    profile: str = 'hernquist'  # 'hernquist' or 'sersic4' (mapped to hernquist)
+
+
+def parse_stars_csv(path: str) -> Dict[str, StarSpec]:
+    """Parse optional stars CSV: cluster,log10Mstar_BCG,Re_kpc,profile"""
+    if not os.path.exists(path):
+        return {}
+    stars: Dict[str, StarSpec] = {}
+    import csv
+    with open(path, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            name = row.get('cluster') or row.get('name') or ''
+            if not name:
+                continue
+            try:
+                log10M = float(row.get('log10Mstar_BCG') or row.get('log10Mstar') or row.get('log10M'))
+                Re_kpc = float(row.get('Re_kpc') or row.get('Re'))
+                profile = (row.get('profile') or 'hernquist').strip().lower()
+                stars[name] = StarSpec(Mstar_Msun=10**log10M, Re_kpc=Re_kpc, profile=profile)
+            except Exception:
+                continue
+    return stars
+
+
+def star_M_enclosed_hernquist(r_cm: np.ndarray, Mstar_g: float, Re_kpc: float) -> np.ndarray:
+    # Map de Vaucouleurs/Sersic n=4 to Hernquist with a = Re/1.8153
+    a_cm = (Re_kpc / 1.8153) * kpc
+    r = np.maximum(r_cm, 1e-3)
+    return Mstar_g * (r**2) / (r + a_cm)**2
+
+
+def add_stars_to_baryons(r_cm: np.ndarray,
+                         Mgas_cum_g: np.ndarray,
+                         star: Optional[StarSpec]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Returns:
+      Mbar_cum_g, g_bar_cgs, Mstar_cum_g (for diagnostics)
+    """
+    if star is None:
+        g_bar = G * Mgas_cum_g / (r_cm ** 2)
+        return Mgas_cum_g, g_bar, np.zeros_like(Mgas_cum_g)
+    Mstar_g = star.Mstar_Msun * M_sun
+    Mstar_cum = star_M_enclosed_hernquist(r_cm, Mstar_g, star.Re_kpc)
+    Mbar = Mgas_cum_g + Mstar_cum
+    g_bar = G * Mbar / (r_cm ** 2)
+    return Mbar, g_bar, Mstar_cum
 
 
 # ----------------------------
@@ -366,7 +421,8 @@ def _validate_and_filter_shells(shells: List[AcceptShell]) -> Tuple[List[AcceptS
 
 def run_cluster(cluster_name: str,
                 accept_shells: List[AcceptShell],
-                mu_e: float = 1.17) -> Optional[ClusterRARResult]:
+                mu_e: float = 1.17,
+                star: Optional[StarSpec] = None) -> Optional[ClusterRARResult]:
     clash_name = _canonicalize_clash_key(cluster_name)
     if clash_name is None:
         return None
@@ -376,7 +432,9 @@ def run_cluster(cluster_name: str,
     filtered, _ = _validate_and_filter_shells(accept_shells)
     if not filtered:
         return None
-    r_cm, Mgas_cum_g, gbar = build_gas_profiles(filtered, mu_e=mu_e)
+    r_cm, Mgas_cum_g, gbar_gas = build_gas_profiles(filtered, mu_e=mu_e)
+    # include optional stars
+    _, gbar, _ = add_stars_to_baryons(r_cm, Mgas_cum_g, star)
     gtot = nfw.g_tot(r_cm)
     return ClusterRARResult(cluster=clash_name,
                             z=pars["z"],
@@ -390,11 +448,15 @@ def run_all(accept_path: str,
             out_results: str,
             out_images: str,
             mu_e: float = 1.17,
-            save_plot: bool = True) -> Tuple[List[ClusterRARResult], np.ndarray, np.ndarray]:
+            stars_csv: Optional[str] = None,
+            save_plot: bool = True,
+            warn_fgas_thresh: float = 0.2,
+            warn_used_frac_thresh: float = 0.6) -> Tuple[List[ClusterRARResult], np.ndarray, np.ndarray]:
     os.makedirs(out_results, exist_ok=True)
     os.makedirs(out_images, exist_ok=True)
 
     accept = parse_accept(accept_path)
+    stars_map = parse_stars_csv(stars_csv) if stars_csv else {}
     results: List[ClusterRARResult] = []
     all_gb = []
     all_gt = []
@@ -408,21 +470,38 @@ def run_all(accept_path: str,
             continue
         pars = CLASH_PARAMS[clash_name]
         nfw = NFW(M200c_Msun_h70=pars["M200c"], c200c=pars["c200c"], z=pars["z"])
-        r_cm, Mgas_cum_g, gbar = build_gas_profiles(filtered, mu_e=mu_e)
+        r_cm, Mgas_cum_g, gbar_gas = build_gas_profiles(filtered, mu_e=mu_e)
+        # include optional stars for diagnostics and final g_bar
+        star_spec = None
+        # try to match stars by provided name or CLASH key
+        for key_try in (name, clash_name):
+            if key_try in stars_map:
+                star_spec = stars_map[key_try]
+                break
+        Mbar_cum, gbar, Mstar_cum = add_stars_to_baryons(r_cm, Mgas_cum_g, star_spec)
         gtot = nfw.g_tot(r_cm)
-        # quick f_gas sanity at 0.5 R200c and R200c
+        # quick f_bary sanity at 0.5 R200c and R200c
         r200 = nfw.r200c_cm
-        def _fgas_at(frac: float) -> float:
+        def _fratio_at(frac: float, Mnum: np.ndarray) -> float:
             R = frac * r200
-            # find closest index
             if len(r_cm) == 0:
                 return float('nan')
             idx = int(np.clip(np.searchsorted(r_cm, R), 0, len(r_cm)-1))
-            Mgas = float(Mgas_cum_g[idx])
+            Mnum_val = float(Mnum[idx])
             Mtot = float(nfw.M_enclosed(np.array([r_cm[idx]]))[0])
-            return Mgas / Mtot if Mtot > 0 else float('nan')
-        f05 = _fgas_at(0.5)
-        f1 = _fgas_at(1.0)
+            return Mnum_val / Mtot if Mtot > 0 else float('nan')
+        fgas05 = _fratio_at(0.5, Mgas_cum_g)
+        fgas1 = _fratio_at(1.0, Mgas_cum_g)
+        fbar05 = _fratio_at(0.5, Mbar_cum)
+        fbar1 = _fratio_at(1.0, Mbar_cum)
+        used_frac = (di['n_used'] / di['n_shells']) if di['n_shells'] > 0 else 0.0
+        warn_flags = []
+        if fgas1 and fgas1 > warn_fgas_thresh:
+            warn_flags.append('FGAS_R200_HIGH')
+        if used_frac < warn_used_frac_thresh:
+            warn_flags.append('FEW_SHELLS_USED')
+        if di['monotonic_ok'] == 0.0:
+            warn_flags.append('NON_MONOTONIC_RADII')
         diag_rows.append({
             'cluster': clash_name,
             'z': pars['z'],
@@ -434,9 +513,14 @@ def run_all(accept_path: str,
             'rin_ge_rout_removed': di['rin_ge_rout_removed'],
             'min_ne': di['min_ne'],
             'max_ne': di['max_ne'],
-            'r200c_kpc': nfw.r200c_kpc,
-            'fgas_0p5R200': f05,
-            'fgas_R200': f1,
+'r200c_kpc': nfw.r200c_kpc,
+            'fgas_0p5R200': fgas05,
+            'fgas_R200': fgas1,
+            'fbar_0p5R200': fbar05,
+            'fbar_R200': fbar1,
+            'stars_used': 1 if star_spec is not None else 0,
+            'used_frac': used_frac,
+            'warn_flags': ';'.join(warn_flags) if warn_flags else ''
         })
         res = ClusterRARResult(clash_name, pars['z'], r_cm/kpc, gbar, gtot, nfw)
         results.append(res)
@@ -498,10 +582,10 @@ def run_all(accept_path: str,
     # diagnostics CSV
     diag_csv = os.path.join(out_results, 'diagnostics.csv')
     with open(diag_csv, 'w') as f:
-        cols = ['cluster','z','n_shells','n_used','monotonic_ok','overlap_removed','bad_ne_removed','rin_ge_rout_removed','min_ne','max_ne','r200c_kpc','fgas_0p5R200','fgas_R200']
+        cols = ['cluster','z','n_shells','n_used','monotonic_ok','overlap_removed','bad_ne_removed','rin_ge_rout_removed','min_ne','max_ne','r200c_kpc','fgas_0p5R200','fgas_R200','fbar_0p5R200','fbar_R200','stars_used','used_frac','warn_flags']
         f.write(','.join(cols) + '\n')
         for row in diag_rows:
-            f.write(','.join(str(row[c]) for c in cols) + '\n')
+            f.write(','.join(str(row.get(c, '')) for c in cols) + '\n')
 
     # metrics JSON
     mask = (gb>0) & (gt>0)
@@ -530,9 +614,12 @@ if __name__ == "__main__":
     parser.add_argument('--results', default=os.path.join('results', 'cluster_rar'), help='Output directory for results')
     parser.add_argument('--images', default=os.path.join('images', 'cluster_rar'), help='Output directory for images')
     parser.add_argument('--mu-e', type=float, default=1.17, help='Mean molecular weight per free electron (default 1.17)')
+    parser.add_argument('--stars-csv', default=os.path.join('external_data', 'clash_stars.csv'), help='Optional CSV with BCG stellar masses (cluster,log10Mstar_BCG,Re_kpc,profile)')
+    parser.add_argument('--warn-fgas', type=float, default=0.2, help='Warn if f_gas(R200) exceeds this threshold (default 0.2)')
+    parser.add_argument('--warn-used-frac', type=float, default=0.6, help='Warn if n_used/n_shells below this fraction (default 0.6)')
     args = parser.parse_args()
 
-    results, gb, gt = run_all(args.accept, args.results, args.images, mu_e=args.mu_e, save_plot=True)
+    results, gb, gt = run_all(args.accept, args.results, args.images, mu_e=args.mu_e, stars_csv=args.stars_csv, save_plot=True, warn_fgas_thresh=args.warn_fgas, warn_used_frac_thresh=args.warn_used_frac)
 
     # Fit a0 for two illustrative models (global)
     a0_mond, rms_mond = fit_a0(gb, gt, g_pred_mond_simple)

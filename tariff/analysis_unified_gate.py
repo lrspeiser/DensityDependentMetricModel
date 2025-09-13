@@ -129,35 +129,32 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
     dof_raw = max(int(np.count_nonzero(valid) - 1), 1)
 
     if C_full is not None and C_full.shape[0] == len(mu_data):
-        # Use full covariance (add intrinsic scatter on diagonal if requested)
+        # Use full STAT+SYS covariance. Do NOT add sigma_int (avoid double counting systematics).
         C = np.array(C_full, dtype=float)
-        if sigma_int_mag > 0:
-            C = C.copy()
-            idx = np.where(valid)[0]
-            C[idx[:,None], idx[None,:]] += np.eye(len(idx)) * (sigma_int_mag**2)
         # Build selector for valid entries
         idx = np.where(valid)[0]
         y = mu_data[idx]
         m = mu_model_at_data[idx]
-        one = np.ones_like(y)
         C_sel = C[np.ix_(idx, idx)]
-        # Invert covariance robustly
+        # Raw chi2 (no anchor)
         try:
-            C_inv = np.linalg.inv(C_sel)
+            L = np.linalg.cholesky(0.5 * (C_sel + C_sel.T) + 0.0 * np.eye(len(idx)))
         except np.linalg.LinAlgError:
-            C_inv = np.linalg.pinv(C_sel, rcond=1e-10)
-        # Raw chi2
+            # add tiny jitter
+            L = np.linalg.cholesky(0.5 * (C_sel + C_sel.T) + 1e-12 * np.eye(len(idx)))
+        def solve_L(v):
+            return np.linalg.solve(L, v)
         dy = y - m
-        chi2_raw = float(dy @ C_inv @ dy)
+        dy_t = solve_L(dy)
+        chi2_raw = float(dy_t @ dy_t)
         red_chi2_raw = chi2_raw / dof_raw
-        # Anchored chi2: minimize wrt delta_mu
-        num = one @ (C_inv @ dy)
-        den = one @ (C_inv @ one)
-        delta_mu = float(num / den)
-        dy_anch = y - (m + delta_mu)
-        chi2_anch = float(dy_anch @ C_inv @ dy_anch)
+        # Anchored chi2 via analytic minimization using Cholesky whitening
+        from pantheon_plus_tools import analytic_anchor_fullcov as _anch
+        anc = _anch(m, y, C_sel)
+        delta_mu = float(anc['anchor'])
+        chi2_anch = float(anc['chi2'])
         red_chi2_anch = chi2_anch / dof_raw
-        sn_fit_method = 'anchored_cov'
+        sn_fit_method = 'anchored_fullcov'
     else:
         # Diagonal-only with intrinsic scatter
         w = 1.0 / (mu_err_eff[valid]**2)
@@ -191,30 +188,41 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
     mu_model_at_data = np.interp(z_data, z_grid, mu_model)
     resid = (mu_data - (mu_model_at_data + delta_mu))[valid]
     Sv = S_at_data[valid]
-    wv = 1.0 / (mu_err_eff[valid]**2)
-    # Weighted linear regression resid = a + b*S
-    X = np.vstack([np.ones_like(Sv), Sv]).T
-    XtWX = X.T @ (wv[:, None] * X)
-    XtWy = X.T @ (wv * resid)
+    # GLS using full covariance if available; otherwise fall back to WLS
+    b1 = float('nan'); b1_se = float('nan'); t_stat = float('nan'); r2_w = float('nan'); a0 = float('nan')
     try:
-        beta = np.linalg.solve(XtWX, XtWy)
-        cov_beta = np.linalg.inv(XtWX)
-    except np.linalg.LinAlgError:
-        beta = np.linalg.pinv(XtWX) @ XtWy
-        cov_beta = np.linalg.pinv(XtWX)
-    a0, b1 = float(beta[0]), float(beta[1])
-    resid_fit = resid - (a0 + b1 * Sv)
-    dof_reg = max(int(np.count_nonzero(valid) - 2), 1)
-    chi2_w = float(np.sum(wv * resid_fit**2))
-    sigma2 = chi2_w / dof_reg
-    cov_beta = cov_beta * sigma2
-    b1_se = float(np.sqrt(max(cov_beta[1, 1], 0.0)))
-    t_stat = float(b1 / b1_se) if b1_se > 0 else float('inf')
-    # Weighted R^2
-    ybar_w = float(np.sum(wv * resid) / np.sum(wv))
-    ss_tot = float(np.sum(wv * (resid - ybar_w) ** 2))
-    ss_res = float(np.sum(wv * resid_fit ** 2))
-    r2_w = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else float('nan')
+        if C_full is not None and C_full.shape[0] == len(mu_data):
+            C_sel = np.array(C_full, float)[np.ix_(np.where(valid)[0], np.where(valid)[0])]
+            from pantheon_plus_tools import gls_linefit_fullcov as _gls
+            res = _gls(Sv, resid, C_sel)
+            b1 = float(res['slope']); b1_se = float(res['stderr']); t_stat = float(res['t_stat']); r2_w = float(res['r2_weighted']); a0 = float(res['intercept'])
+        else:
+            # Weighted linear regression resid = a + b*S with diagonal weights
+            wv = 1.0 / (mu_err_eff[valid]**2)
+            X = np.vstack([np.ones_like(Sv), Sv]).T
+            XtWX = X.T @ (wv[:, None] * X)
+            XtWy = X.T @ (wv * resid)
+            try:
+                beta = np.linalg.solve(XtWX, XtWy)
+                cov_beta = np.linalg.inv(XtWX)
+            except np.linalg.LinAlgError:
+                beta = np.linalg.pinv(XtWX) @ XtWy
+                cov_beta = np.linalg.pinv(XtWX)
+            a0, b1 = float(beta[0]), float(beta[1])
+            resid_fit = resid - (a0 + b1 * Sv)
+            dof_reg = max(int(np.count_nonzero(valid) - 2), 1)
+            chi2_w = float(np.sum(wv * resid_fit**2))
+            sigma2 = chi2_w / dof_reg
+            cov_beta = cov_beta * sigma2
+            b1_se = float(np.sqrt(max(cov_beta[1, 1], 0.0)))
+            t_stat = float(b1 / b1_se) if b1_se > 0 else float('inf')
+            # Weighted R^2
+            ybar_w = float(np.sum(wv * resid) / np.sum(wv))
+            ss_tot = float(np.sum(wv * (resid - ybar_w) ** 2))
+            ss_res = float(np.sum(wv * resid_fit ** 2))
+            r2_w = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else float('nan')
+    except Exception:
+        pass
     # Plot residuals vs S
     plt.figure(figsize=(8,6))
     plt.scatter(Sv, resid, s=8, alpha=0.6, label='SN residuals (anchored)')
@@ -319,35 +327,11 @@ def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | Non
 
     if bao_csv_path is not None and os.path.exists(bao_csv_path):
         try:
-            bao = load_bao_csv(bao_csv_path)
-            z_b = bao['z']
-            # Try DM/DH first
-            if 'D_M_over_rd' in bao and 'D_H_over_rd' in bao:
-                DM_b = bao['D_M_over_rd']; DH_b = bao['D_H_over_rd']
-                eDM = bao.get('D_M_err', np.ones_like(DM_b)*0.05)
-                eDH = bao.get('D_H_err', np.ones_like(DH_b)*0.05)
-                DM_m = np.interp(z_b, z_grid, DM)
-                DH_m = np.interp(z_b, z_grid, DH)
-                A = np.concatenate([DM_m/eDM, DH_m/eDH])
-                y = np.concatenate([DM_b/eDM, DH_b/eDH])
-                inv_rd = (A @ y) / (A @ A + 1e-300)
-                rd_best = 1.0 / inv_rd
-                chi2 = np.sum(((DM_m/rd_best - DM_b)/eDM)**2 + ((DH_m/rd_best - DH_b)/eDH)**2)
-                dof = max(1, 2*len(z_b) - 1)
-                metrics.update({'rd_best_Mpc': float(rd_best), 'bao_chi2': float(chi2), 'bao_red_chi2': float(chi2/dof), 'bao_dof': int(dof)})
-            elif 'DV_over_rd' in bao:
-                DV_b = bao['DV_over_rd']
-                eDV = bao.get('DV_err', np.ones_like(DV_b)*0.05)
-                DM_m = np.interp(z_b, z_grid, DM)
-                DH_m = np.interp(z_b, z_grid, DH)
-                DV_m = ( (z_b**2) * (DM_m**2) * DH_m ) ** (1.0/3.0)
-                A = DV_m / eDV
-                y = DV_b / eDV
-                inv_rd = (A @ y) / (A @ A + 1e-300)
-                rd_best = 1.0 / inv_rd
-                chi2 = np.sum(((DV_m/rd_best - DV_b)/eDV)**2)
-                dof = max(1, len(z_b) - 1)
-                metrics.update({'rd_best_Mpc': float(rd_best), 'bao_chi2': float(chi2), 'bao_red_chi2': float(chi2/dof), 'bao_dof': int(dof)})
+            # Prefer robust loader + rd fit with optional per-bin correlation
+            from bao_tools import load_bao_compilation as _load_bao, rd_shape_only_fit as _fit_rd
+            bao = _load_bao(bao_csv_path)
+            res = _fit_rd(bao, z_grid, DM, DH)
+            metrics.update(res)
         except Exception as e:
             print(f"[WARN] BAO overlay failed: {e}")
     return metrics

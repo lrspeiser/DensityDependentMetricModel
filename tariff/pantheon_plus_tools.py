@@ -38,7 +38,7 @@ def _ensure_spd(C: np.ndarray, max_trials: int = 5, jitter_frac: float = 1e-10) 
 def load_pantheon_plus(base_dir: str, basename: str = 'Pantheon+SH0ES') -> SimpleNamespace:
     """Load Pantheon+ table and covariance (if available) from a directory.
     Expects a data file matching basename (e.g., Pantheon+SH0ES.dat) and a covariance file with
-    names like '*cov.npy', '*_STAT+SYS_cov.txt', or '*_cov.csv'. Returns z, mu, cov (or None).
+    names like '*cov.npy', '*_STAT+SYS_cov.txt', or the release ASCII '*.cov'. Returns z, mu, cov (or None).
     """
     # Data file
     candidates = [
@@ -66,7 +66,7 @@ def load_pantheon_plus(base_dir: str, basename: str = 'Pantheon+SH0ES') -> Simpl
     z = np.asarray(z_list, float)
     mu = np.asarray(mu_list, float)
 
-    # Covariance candidates
+    # Covariance candidates (include official ASCII .cov)
     cov_candidates = [
         os.path.join(base_dir, f'{basename}_cov.npy'),
         os.path.join(base_dir, f'{basename}_STAT+SYS_cov.npy'),
@@ -74,6 +74,7 @@ def load_pantheon_plus(base_dir: str, basename: str = 'Pantheon+SH0ES') -> Simpl
         os.path.join(base_dir, f'{basename}_STAT+SYS_cov.csv'),
         os.path.join(base_dir, f'{basename}_cov.txt'),
         os.path.join(base_dir, f'{basename}_STAT+SYS_cov.txt'),
+        os.path.join(base_dir, f'{basename}_STAT+SYS.cov'),
     ]
     C = None
     for cp in cov_candidates:
@@ -82,7 +83,7 @@ def load_pantheon_plus(base_dir: str, basename: str = 'Pantheon+SH0ES') -> Simpl
         try:
             if cp.endswith('.npy'):
                 C = np.load(cp)
-            elif cp.endswith('.csv') or cp.endswith('.txt'):
+            elif cp.endswith('.csv') or cp.endswith('.txt') or cp.endswith('.cov'):
                 arr = []
                 with open(cp, 'r') as f:
                     for line in f:
@@ -109,69 +110,93 @@ def load_pantheon_plus(base_dir: str, basename: str = 'Pantheon+SH0ES') -> Simpl
 
 def analytic_anchor_fullcov(mu_model: np.ndarray, mu_data: np.ndarray, C: np.ndarray) -> dict:
     """Analytic minimization over additive anchor a for full covariance.
-    Returns dict(anchor, chi2, resid), where resid are anchored residuals y = mu_data - (mu_model + a).
+    Uses Cholesky-based whitening (no explicit C^{-1}). Returns dict(anchor, chi2, resid).
+    resid are anchored residuals y = mu_data - (mu_model + a).
     """
     y = np.asarray(mu_data, float)
     m = np.asarray(mu_model, float)
     if C is None:
         raise ValueError('Covariance matrix C is required for full-covariance analytic anchor')
-    # Invert covariance robustly
-    try:
-        C_inv = np.linalg.inv(C)
-    except np.linalg.LinAlgError:
-        C_inv = np.linalg.pinv(C, rcond=1e-10)
+    # Ensure SPD and build Cholesky with tiny jitter
+    C = 0.5 * (C + C.T)
+    jitter = 0.0
+    for _ in range(5):
+        try:
+            L = np.linalg.cholesky(C + jitter * np.eye(C.shape[0]))
+            break
+        except np.linalg.LinAlgError:
+            jitter = max(1e-12, 10.0 * (jitter if jitter else 1e-12))
+    else:
+        # last resort pseudo-SPD via eigen cleanup
+        evals, evecs = np.linalg.eigh(C)
+        evals = np.clip(evals, 1e-15, None)
+        C = (evecs * evals) @ evecs.T
+        L = np.linalg.cholesky(C)
+    def solve_L(v):
+        return np.linalg.solve(L, v)
     one = np.ones_like(y)
-    dy = m - y
-    num = one @ (C_inv @ dy)
-    den = one @ (C_inv @ one)
-    a = -float(num / den)
+    y_t = solve_L(y)
+    m_t = solve_L(m)
+    one_t = solve_L(one)
+    dy_t = m_t - y_t
+    num = float(one_t @ dy_t)
+    den = float(one_t @ one_t)
+    a = -num / max(den, 1e-300)
     resid = y - (m + a)
-    chi2 = float(resid @ C_inv @ resid)
+    r_t = solve_L(resid)
+    chi2 = float(r_t @ r_t)
     return {'anchor': a, 'chi2': chi2, 'resid': resid}
 
 
 def gls_linefit_fullcov(S: np.ndarray, resid: np.ndarray, C: np.ndarray) -> dict:
     """Generalized least squares fit of resid = a + b*S using full covariance C.
-    Returns slope b, stderr, t_stat, weighted R^2, dof, intercept.
+    Uses Cholesky whitening; returns slope b, stderr, t_stat, weighted R^2, dof, intercept.
     """
     y = np.asarray(resid, float)
     x = np.asarray(S, float)
     n = len(y)
     if C is None:
         raise ValueError('Covariance matrix C is required for GLS')
+    C = 0.5 * (C + C.T)
+    jitter = 0.0
+    for _ in range(5):
+        try:
+            L = np.linalg.cholesky(C + jitter * np.eye(C.shape[0]))
+            break
+        except np.linalg.LinAlgError:
+            jitter = max(1e-12, 10.0 * (jitter if jitter else 1e-12))
+    else:
+        evals, evecs = np.linalg.eigh(C)
+        evals = np.clip(evals, 1e-15, None)
+        C = (evecs * evals) @ evecs.T
+        L = np.linalg.cholesky(C)
+    def whiten(v):
+        return np.linalg.solve(L, v)
+    X = np.vstack([np.ones_like(x), x]).T
+    y_t = whiten(y)
+    X_t = np.column_stack([whiten(X[:, j]) for j in range(X.shape[1])])
+    XtX = X_t.T @ X_t
+    XtY = X_t.T @ y_t
     try:
-        C_inv = np.linalg.inv(C)
+        beta = np.linalg.solve(XtX, XtY)
+        cov_beta = np.linalg.inv(XtX)
     except np.linalg.LinAlgError:
-        C_inv = np.linalg.pinv(C, rcond=1e-10)
-    X = np.vstack([np.ones_like(x), x]).T  # [1, S]
-    XtCi = X.T @ C_inv
-    XtCiX = XtCi @ X
-    try:
-        beta = np.linalg.solve(XtCiX, XtCi @ y)
-        cov_beta = np.linalg.inv(XtCiX)
-    except np.linalg.LinAlgError:
-        beta = np.linalg.pinv(XtCiX) @ (XtCi @ y)
-        cov_beta = np.linalg.pinv(XtCiX)
-    # Residuals and GLS chi2
-    y_hat = X @ beta
-    r = y - y_hat
-    chi2 = float(r.T @ C_inv @ r)
+        beta = np.linalg.pinv(XtX) @ XtY
+        cov_beta = np.linalg.pinv(XtX)
+    y_hat_t = X_t @ beta
+    r_t = y_t - y_hat_t
+    chi2 = float(r_t @ r_t)
     dof = max(n - 2, 1)
-    # Scale covariance of beta by GLS residual variance (chi2/dof)
     sigma2 = chi2 / dof
     cov_beta = cov_beta * sigma2
     b = float(beta[1])
     b_se = float(np.sqrt(max(cov_beta[1, 1], 0.0)))
     t_stat = float(b / b_se) if b_se > 0 else float('inf')
-    # Weighted R^2 (generalized): 1 - (chi2_model / chi2_const)
-    # chi2_const is GLS chi2 of model with only intercept
-    X0 = np.ones((n, 1))
-    XtCi0 = X0.T @ C_inv
-    XtCi0X0 = XtCi0 @ X0
-    b0 = float(np.linalg.solve(XtCi0X0, XtCi0 @ y)) if XtCi0X0.shape == (1, 1) else float((XtCi0 @ y) / XtCi0X0)
-    r0 = y - b0
-    chi2_const = float(r0.T @ C_inv @ r0)
-    r2_w = 1.0 - (chi2 / chi2_const) if chi2_const > 0 else float('nan')
+    # Weighted R^2 in whitened space
+    ybar_t = float(np.mean(y_t))
+    ss_tot = float(np.sum((y_t - ybar_t) ** 2))
+    ss_res = float(np.sum(r_t ** 2))
+    r2_w = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else float('nan')
     return {
         'slope': b,
         'stderr': b_se,
