@@ -371,32 +371,56 @@ docker run --rm -it \
 
 ---
 
-## 3.1 Galaxy clusters — CLASH × ACCEPT (raw-data‑validated)
+## 9. Galaxy clusters — CLASH × ACCEPT (preliminary)
 
-We test the RAR‑gated framework on galaxy clusters using published total mass models from **Umetsu et al. (2016)** (CLASH; NFW fits per cluster) and gas‑only baryons from your **ACCEPT** database (external_data/accept_database.dat). The pipeline:
-- validates the raw ACCEPT shells (monotonic radii, filtered overlaps, non‑finite or non‑physical ne removed),
-- computes gas mass and $g_{\rm bar}$ per shell, and
-- compares to the CLASH NFW $g_{\rm tot}$.
+We test the RAR‑gated framework on galaxy clusters using published total mass models from Umetsu et al. (2016, CLASH; NFW fits per cluster) and gas‑only baryons from the ACCEPT database (external_data/accept_database.dat). This preliminary section summarizes a reproducible pipeline run and the resulting cluster‑scale RAR scatter.
+
+What the pipeline does
+- Validates raw ACCEPT shells (monotonic radii, removes overlaps, drops non‑finite/non‑physical n_e).
+- Converts shells to cumulative gas mass and computes baryonic accelerations g_bar.
+- Uses Umetsu+2016 CLASH NFW parameters to compute total accelerations g_tot.
+- Fits a universal acceleration scale a0 for three theory curves (MOND‑simple, EG‑like, and RAR‑plateau with Dmax=50) and reports scatter.
+
+Assumptions
+- Cosmology: H0=70 km s⁻¹ Mpc⁻¹, Ωm=0.27, ΩΛ=0.73 (see summary.json).
+- Mean molecular weight per free electron: μ_e=1.17.
+- Gas‑only baryons in this run; optional BCG stellar mass may be included via external_data/clash_stars.csv (if provided; off by default).
+- Data hygiene: enforce monotonic R_out, filter overlaps, drop bad n_e; report f_gas(<0.5 R200c) and f_gas(<R200c).
+
+Results from current run
+- Matched clusters = 7; data points = 220.
+- Best‑fit RAR‑plateau (global): a0 ≈ 1.927e‑7 cgs; RMS ≈ 0.146 dex.
+- GR baseline (baryons‑only) RMS ≈ 1.014 dex.
+- Per‑cluster RMS and residuals by cluster in results/cluster_rar/cluster_section_per_cluster.csv.
 
 Figure: GR vs RAR vs CLASH NFW
 
 ![Cluster RAR: NFW data vs GR and RAR plateau](images/next_steps/cluster_rar/cluster_rar_scatter.png)
 
-Source‑data (all under results/cluster_rar/):
-- cluster_rar_points.csv — columns: cluster, z, r_kpc, log10_gbar, log10_gNFWtot, log10_gGR, log10_gRAR
-- diagnostics.csv — per‑cluster raw‑data hygiene and quick sanity: n_shells, n_used, min/max ne, and gas fractions at 0.5 R200 and R200
-- metrics.json — RMS in log10 space vs GR and RAR‑plateau, and the fitted $a_0$ (Dmax=50)
-- summary.json — matched count and fitted $a_0$ for multiple theory curves
-
-Current run (this repo):
-- matched_clusters = 7; n_points = 220
-- Best‑fit RAR‑plateau (global): $a_0 \approx 1.93\times10^{-7}$ cgs, RMS ≈ 0.146 dex
-- GR baseline RMS ≈ 1.014 dex (baryons‑only)
-
-Raw‑data checks (diagnostics.csv):
-- Shells are enforced monotonic in $R_{\rm out}$. Rows indicate any removed overlaps or bad densities. We also list gas fractions $f_{\rm gas}(<0.5\,R_{200c})$ and $f_{\rm gas}(<R_{200c})$ computed from ACCEPT vs the CLASH NFW $M(<r)$ as a quick sanity; values are broadly in the 0.07–0.16 range for the matched set in this run.
+Source‑data (results/cluster_rar/)
+- cluster_rar_points.csv — points used in the scatter.
+- diagnostics.csv — raw‑data hygiene and quick sanity (n_shells, n_used, min/max n_e, f_gas at 0.5/1.0 R200c, stars_used, used_frac).
+- metrics.json — RMS in log10 space vs GR and the RAR‑plateau and fitted a0 (Dmax=50).
+- summary.json — cosmology, μ_e, matched cluster count, and fitted a0 for all theory curves (MOND‑simple, EG‑like, RAR‑plateau).
+- cluster_section_metrics.json — jackknife/bootstrapped uncertainties for a0 and RMS.
 
 Reproduce locally
+```bash path=null start=null
+source .venv/bin/activate
+python scripts/cluster_rar_pipeline.py \
+  --accept external_data/accept_database.dat \
+  --results results/cluster_rar \
+  --images images/cluster_rar \
+  --warn-fgas 0.2 \
+  --warn-used-frac 0.6 \
+  # Optional: include BCG stellar mass if available
+  --stars-csv external_data/clash_stars.csv
+```
+
+Notes
+- Optional stars CSV columns: cluster, log10Mstar_BCG, Re_kpc, profile (hernquist|sersic4 mapped to Hernquist). If present and matched, stars are folded into g_bar and flagged in diagnostics (stars_used=1).
+- Warnings are emitted if f_gas(<R200c) > 0.2 or the fraction of ACCEPT shells used < 0.6.
+- Cluster‑name matching between CLASH and ACCEPT uses robust normalization and aliasing in the pipeline.
 
 ```bash
 # venv (Python 3.11)
