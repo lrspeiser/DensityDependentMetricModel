@@ -102,6 +102,8 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 
 ### E) Methodological checks (code-verified invariants and metrics)
 
+- LOS environment correlation (tariff prediction): compute S(r)=τ(r)/κ and regress anchored SN residuals Δμ on S; record slope, stderr, t-stat, and weighted R². See images/unified_gate_sn_residuals_vs_S.png and hubble.los_env_correlation in results/unified_gate_metrics.json.
+
 - H_eff identity (BAO proxy): with z = z(r) or the FRW+overlay mapping, we enforce H_eff(z) ≡ c·dz/dr and its equivalence to c·(1+z)·d ln(1+z)/dr in the tariff-only limit. We record the RMS relative difference as heff_identity_rms in results/unified_gate_metrics.json; numerical targets are ≲ 1e−6 after tabulation smoothing.
 - Distance duality and luminosity distance: in the flat case we use D_L(z) = (1+z)·D_M(z) with D_M(z) = r(z). We compute μ(z) from D_L and also recompute via the duality relation on the Pantheon grid; we store distance_duality_ok and distance_duality_mu_rms.
 - BAO shape-only fit: after constructing H_eff(z) = c·dz/dr, we take D_M(z) = r(z) and D_H(z) = c/H_eff(z) and fit a single sound-horizon r_d to BAO compilations; metrics include rd_best_Mpc, bao_chi2, bao_red_chi2, and bao_dof.
@@ -139,6 +141,7 @@ Code (isolated): tariff/alternatives/rar_plateau_alt.py and tariff/analysis_alte
   - If missing: data file tariff/data/sn_timedilation.csv not found (figure not generated)
 - Unified gate μ(z) overlay: ![](images/unified_gate_hubble_overlay.png)
 - Unified gate H_eff(z) and BAO proxies: ![](images/unified_gate_bao_proxies.png)
+- Unified gate SN residuals vs LOS environment S: ![](images/unified_gate_sn_residuals_vs_S.png)
 
 Metrics (JSON): results/unified_gate_metrics.json (χ², reduced χ², fitted r_d if BAO is provided)
 

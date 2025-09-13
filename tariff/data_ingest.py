@@ -35,6 +35,42 @@ def load_pantheon(path: str):
             muerr_list.append(mu_err)
     return np.asarray(z_list, float), np.asarray(mu_list, float), np.asarray(muerr_list, float)
 
+
+def try_load_pantheon_cov(path: str):
+    """Attempt to load a Pantheon(+SH0ES) covariance matrix that matches the rows in `path`.
+    Returns C (NxN) or None if not found. Supported sidecar filenames in the same directory:
+      - Pantheon+SH0ES_cov.npy (NumPy array)
+      - Pantheon+SH0ES_cov.csv (CSV with N rows of N comma-separated values)
+    """
+    import os
+    import csv
+    base_dir = os.path.dirname(os.path.abspath(path))
+    candidates = [
+        os.path.join(base_dir, 'Pantheon+SH0ES_cov.npy'),
+        os.path.join(base_dir, 'Pantheon+SH0ES_cov.csv'),
+    ]
+    for cand in candidates:
+        if os.path.exists(cand) and cand.endswith('.npy'):
+            try:
+                C = np.load(cand)
+                return C
+            except Exception:
+                continue
+        if os.path.exists(cand) and cand.endswith('.csv'):
+            try:
+                rows = []
+                with open(cand, 'r', newline='') as f:
+                    reader = csv.reader(f)
+                    for row in reader:
+                        if not row:
+                            continue
+                        rows.append([float(x) for x in row])
+                C = np.array(rows, dtype=float)
+                return C
+            except Exception:
+                continue
+    return None
+
 def load_cmb_spectrum_csv(path: str):
     nu, I = [], []
     with open(path, 'r', newline='') as f:

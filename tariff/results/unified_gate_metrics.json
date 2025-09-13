@@ -10,9 +10,98 @@
   },
   "hubble": {
     "hubble_plot": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/unified_gate_hubble_overlay.png",
-    "chi2": 975.7992812416126,
-    "red_chi2": 0.5739995772009485,
-    "dof": 1700
+    "sn_fit_method": "anchored_diag",
+    "sigma_int_mag": 0.1,
+    "anchor_delta_mu_mag": 0.06464115692178851,
+    "chi2_raw": 793.4847309729784,
+    "red_chi2_raw": 0.466755724101752,
+    "chi2": 667.0523983419997,
+    "red_chi2": 0.3923837637305881,
+    "dof": 1700,
+    "los_env_correlation": {
+      "plot": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/unified_gate_sn_residuals_vs_S.png",
+      "slope_mag_per_Mpc": 1.4041718557307664e-05,
+      "slope_stderr": 1.8046304957195886e-06,
+      "t_stat": 7.7809383087636395,
+      "dof": 1699,
+      "r2_weighted": 0.03440836679273496
+    },
+    "kappa_scan": {
+      "base_kappa_per_Mpc": 1e-05,
+      "factors": [
+        0.5011872336272722,
+        0.5956621435290105,
+        0.7079457843841379,
+        0.841395141645195,
+        1.0,
+        1.1885022274370185,
+        1.4125375446227542,
+        1.6788040181225605,
+        1.9952623149688795
+      ],
+      "grid": [
+        {
+          "kappa_per_Mpc": 5.0118723362727224e-06,
+          "chi2": 657.3692295421608,
+          "red_chi2": 0.38668778208362403,
+          "delta_mu": -0.07061090340025229
+        },
+        {
+          "kappa_per_Mpc": 5.956621435290105e-06,
+          "chi2": 659.1917772334562,
+          "red_chi2": 0.38775986896085657,
+          "delta_mu": -0.044316268277370646
+        },
+        {
+          "kappa_per_Mpc": 7.07945784384138e-06,
+          "chi2": 661.368511127634,
+          "red_chi2": 0.3890403006633141,
+          "delta_mu": -0.013487653909661026
+        },
+        {
+          "kappa_per_Mpc": 8.413951416451952e-06,
+          "chi2": 663.9650817680025,
+          "red_chi2": 0.39056769515764855,
+          "delta_mu": 0.022572956616419948
+        },
+        {
+          "kappa_per_Mpc": 1e-05,
+          "chi2": 667.0523983419997,
+          "red_chi2": 0.3923837637305881,
+          "delta_mu": 0.06464115692178851
+        },
+        {
+          "kappa_per_Mpc": 1.1885022274370186e-05,
+          "chi2": 670.7108693728851,
+          "red_chi2": 0.39453580551346185,
+          "delta_mu": 0.11356774945575597
+        },
+        {
+          "kappa_per_Mpc": 1.4125375446227543e-05,
+          "chi2": 675.0236921015348,
+          "red_chi2": 0.39707276005972636,
+          "delta_mu": 0.17027409831683685
+        },
+        {
+          "kappa_per_Mpc": 1.6788040181225608e-05,
+          "chi2": 680.0740290465042,
+          "red_chi2": 0.4000435464979436,
+          "delta_mu": 0.23573999119245978
+        },
+        {
+          "kappa_per_Mpc": 1.9952623149688796e-05,
+          "chi2": 685.9087355853552,
+          "red_chi2": 0.40347572681491484,
+          "delta_mu": 0.3109892967976423
+        }
+      ],
+      "best": {
+        "kappa_per_Mpc": 5.0118723362727224e-06,
+        "chi2": 657.3692295421608,
+        "red_chi2": 0.38668778208362403,
+        "delta_mu": -0.07061090340025229
+      }
+    }
   },
   "bao": {
     "bao_plot": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/unified_gate_bao_proxies.png",
@@ -12029,12 +12118,14 @@
         133.80847952666227,
         133.76826888962006
       ]
-    }
+    },
+    "bao_fit_available": false,
+    "note": "Provide tariff/data/bao_compilation.csv with columns z and D_M_over_rd/D_H_over_rd or DV_over_rd to enable shape-only fit."
   },
   "consistency": {
     "heff_identity_rms": 1.09039026574216e-05,
     "distance_duality_ok": false,
-    "distance_duality_mu_rms": 3.266485651890789e-05,
+    "distance_duality_mu_rms": NaN,
     "tolman_p": null,
     "time_dilation_p": null
   }
