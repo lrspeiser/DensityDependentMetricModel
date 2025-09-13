@@ -424,7 +424,7 @@ def compute_residual_metrics(
     weights_mode: str = 'points',
     xmin: Optional[float] = None,
     xmax: Optional[float] = None,
-) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute coverage, slope vs x, inner/outer medians, and weights vector.
     weights_mode in {'points','equal_cluster'}.
@@ -439,6 +439,8 @@ def compute_residual_metrics(
         mask &= (x >= xmin)
     if xmax is not None:
         mask &= (x <= xmax)
+    cl_arr = np.array(clusters, dtype=object)
+    cl_filt = cl_arr[mask]
     x = x[mask]
     gb = gb[mask]
     gt = gt[mask]
@@ -447,9 +449,8 @@ def compute_residual_metrics(
     if weights_mode == 'equal_cluster':
         # count per cluster under mask
         from collections import Counter
-        masked_clusters = [c for c, m in zip(clusters, mask) if m]
-        counts = Counter(masked_clusters)
-        w = np.array([1.0 / counts[c] for c in masked_clusters], dtype=float)
+        counts = Counter(cl_filt)
+        w = np.array([1.0 / counts[c] for c in cl_filt], dtype=float)
     else:
         w = np.ones_like(resid)
     # coverage
@@ -482,7 +483,7 @@ def compute_residual_metrics(
         'radial_trend': {'a': a_hat, 'b': b_hat, 'x_zero': x_zero},
         'medians': {'inner_le_0p2_dex': med_in, 'outer_gt_0p2_dex': med_out},
     }
-    return metrics, x, resid, w, gb, gt
+    return metrics, x, resid, w, gb, gt, cl_filt
 
 
 def per_cluster_metrics(results: List[ClusterRARResult], a0: float, dmax: float = 50.0) -> List[dict]:
@@ -523,7 +524,7 @@ def jackknife_by_cluster(results: List[ClusterRARResult], weights_mode: str, xmi
         gbar = np.array(gbar)
         gtot = np.array(gtot)
         # weights for fit
-        _, x, _, w, gb_f, gt_f = compute_residual_metrics(clusters, r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)  # a0 placeholder just to get mask/weights
+        _, x, _, w, gb_f, gt_f, _ = compute_residual_metrics(clusters, r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)  # a0 placeholder just to get mask/weights
         # Fit a0 weighted on filtered arrays
         a0_i, _, _ = fit_a0_weighted(gb_f, gt_f, lambda x_, a: g_pred_rar_plateau(x_, a, dmax=dmax), weights=w, robust='none')
         a0_list.append(a0_i)
@@ -549,7 +550,7 @@ def bootstrap_rms(results: List[ClusterRARResult], weights_mode: str, xmin: Opti
     gbar = np.array(gbar)
     gtot = np.array(gtot)
     # base weights mask and filtered arrays
-    metrics_base, x_base, resid_base, w_base, gb_f, gt_f = compute_residual_metrics(clusters.tolist(), r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)
+    metrics_base, x_base, resid_base, w_base, gb_f, gt_f, cl_f = compute_residual_metrics(clusters.tolist(), r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)
     m = resid_base.size
     if m == 0:
         return {'mean_rms_dex': float('nan'), 'std_rms_dex': float('nan'), 'n': int(n)}
@@ -913,7 +914,7 @@ if __name__ == "__main__":
 
     # Compute weights and fit a0 (RAR plateau) with options
     # First compute weights mask via metrics helper (a0 placeholder is fine for mask/weights)
-    base_metrics, x_base, resid_base, w_base, gb_filt, gt_filt = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=1e-8, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
+    base_metrics, x_base, resid_base, w_base, gb_filt, gt_filt, cl_filt = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=1e-8, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
     a0_rar, rms_rar, _ = fit_a0_weighted(gb_filt, gt_filt, lambda x, a: g_pred_rar_plateau(x, a, dmax=50.0), weights=w_base, robust=args.robust_loss, huber_delta=args.huber_delta, fixed_a0=args.fixed_a0)
 
     summary = {
@@ -933,7 +934,7 @@ if __name__ == "__main__":
 
     # Enhanced metrics and plots (defensible analysis pieces)
     # Residual metrics with final a0
-    resid_metrics, x, resid, w, _, _ = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=a0_rar, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
+    resid_metrics, x, resid, w, gb_final, gt_final, cl_final = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=a0_rar, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
     # Additional plots
     alt_dir = os.path.join('images', 'next_steps', 'cluster_rar')
     make_additional_plots(args.images, x, resid, alt_dir=alt_dir)
@@ -971,37 +972,30 @@ if __name__ == "__main__":
     # Null tests
     if args.null_tests:
         import numpy as _np
-        # Radial scramble (shuffle x within cluster)
-        scrambled_x = x.copy()
-        # recompute x per-cluster strictly
-        x_all = np.array([rk / r200_map[c] for rk, c in zip(r_kpc, clusters)], dtype=float)
-        scrambled = []
-        for cl in set(clusters):
-            idx = [i for i,(c,mask) in enumerate(zip(clusters, np.isfinite(x_all))) if c==cl]
-            vals = x_all[idx]
+        # Work on filtered arrays and filtered clusters for consistency
+        x_f = x  # already filtered x
+        gb_f = gb_final
+        gt_f = gt_final
+        cl_f = cl_final
+        w_f = w_base
+        # Radial scramble within each cluster among filtered points
+        x_scr = x_f.copy()
+        uniq = list(set(cl_f.tolist()))
+        for cl in uniq:
+            idx = np.where(np.array(cl_f) == cl)[0]
+            vals = x_scr[idx].copy()
             _np.random.shuffle(vals)
-            for k,v in zip(idx, vals):
-                scrambled.append((k,v))
-        x_scr = x_all.copy()
-        for k,v in scrambled:
-            x_scr[k] = v
-        # filter mask
-        mask_x = np.ones_like(x_scr, dtype=bool)
-        if args.xmin is not None:
-            mask_x &= (x_scr >= args.xmin)
-        if args.xmax is not None:
-            mask_x &= (x_scr <= args.xmax)
-        # Use same a0, compute slope on scrambled x
-        x_scr2 = x_scr[mask_x & np.isfinite(gbar_all) & np.isfinite(gtot_all) & (gbar_all>0) & (gtot_all>0)]
-        resid_scr = (np.log10(gtot_all) - np.log10(g_pred_rar_plateau(gbar_all, a0_rar, dmax=50.0)))[mask_x & np.isfinite(gbar_all) & np.isfinite(gtot_all) & (gbar_all>0) & (gtot_all>0)]
-        if x_scr2.size >= 2:
-            b_s, a_s = np.polyfit(x_scr2, resid_scr, 1)
+            x_scr[idx] = vals
+        # Slope on scrambled x vs same residuals
+        resid_f = np.log10(gt_f) - np.log10(g_pred_rar_plateau(gb_f, a0_rar, dmax=50.0))
+        if x_scr.size >= 2:
+            b_s, a_s = np.polyfit(x_scr, resid_f, 1)
         else:
             a_s = b_s = float('nan')
-        # Cross-match scramble (permute g_tot across points)
-        perm = _np.random.permutation(gtot_all.size)
-        gt_perm = gtot_all[perm]
-        a0_perm, rms_perm, _ = fit_a0_weighted(gbar_all, gt_perm, lambda xx, aa: g_pred_rar_plateau(xx, aa, dmax=50.0), weights=w_base, robust='none')
+        # Cross-match scramble: permute g_tot among filtered points
+        perm = _np.random.permutation(gt_f.size)
+        gt_perm = gt_f[perm]
+        a0_perm, rms_perm, _ = fit_a0_weighted(gb_f, gt_perm, lambda xx, aa: g_pred_rar_plateau(xx, aa, dmax=50.0), weights=w_f, robust='none')
         agg['null_tests'] = {
             'radial_scramble': {'a': float(a_s), 'b': float(b_s)},
             'cross_match_scramble': {'a0_cgs': float(a0_perm), 'rms_dex': float(rms_perm)},

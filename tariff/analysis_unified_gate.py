@@ -155,6 +155,34 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
         chi2_anch = float(anc['chi2'])
         red_chi2_anch = chi2_anch / dof_raw
         sn_fit_method = 'anchored_fullcov'
+        # QA: whitened residuals, p-value, hist and QQ plots
+        try:
+            from scipy.stats import chi2 as _chi2dist, kstest as _kstest, norm as _norm
+            r_t = solve_L(y - (m + delta_mu))
+            # p-value of chi2
+            p_value = float(1.0 - _chi2dist.cdf(chi2_anch, dof_raw))
+            # KS test of whitened residuals vs N(0,1)
+            r_std = (r_t - np.mean(r_t)) / max(np.std(r_t, ddof=1), 1e-12)
+            ks_p = float(_kstest(r_std, cdf='norm').pvalue)
+            # plots
+            plt.figure(figsize=(10,4))
+            plt.subplot(1,2,1)
+            plt.hist(r_std, bins=40, density=True, alpha=0.7, label='whitened resid')
+            xs = np.linspace(-4,4,200)
+            from math import sqrt, pi, exp
+            plt.plot(xs, 1/np.sqrt(2*np.pi)*np.exp(-0.5*xs**2), 'r-', label='N(0,1)')
+            plt.title('Whitened residuals'); plt.legend(); plt.grid(alpha=0.3)
+            plt.subplot(1,2,2)
+            # QQ plot
+            import scipy.stats as st
+            (osm, osr), (slope, intercept, r) = st.probplot(r_std, dist='norm', sparams=())
+            plt.plot(osm, osr, 'o', alpha=0.6)
+            plt.plot(osm, slope*osm + intercept, 'r-')
+            plt.title('QQ plot (N(0,1))'); plt.grid(alpha=0.3)
+            out_histqq = os.path.join(IMAGES_DIR, 'sn_whitened_hist_qq.png')
+            plt.tight_layout(); plt.savefig(out_histqq, dpi=150); plt.close()
+        except Exception:
+            p_value = float('nan'); ks_p = float('nan'); out_histqq = None
     else:
         # Diagonal-only with intrinsic scatter
         w = 1.0 / (mu_err_eff[valid]**2)
@@ -246,13 +274,17 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
         'chi2': chi2_anch,
         'red_chi2': red_chi2_anch,
         'dof': dof_raw,
-        'los_env_correlation': {
+'los_env_correlation': {
             'plot': out_resid,
             'slope_mag_per_Mpc': b1,
             'slope_stderr': b1_se,
             't_stat': t_stat,
             'dof': dof_reg,
             'r2_weighted': r2_w
+        },
+        'sn_goodness': {
+            'p_value': float(p_value) if 'p_value' in locals() else None,
+            'whitened_hist_qq': out_histqq if 'out_histqq' in locals() else None
         }
     }, (r_grid, z_of_r, tau_of_r)
 
@@ -328,8 +360,8 @@ def bao_shape_overlay(z_of_r: np.ndarray, r: np.ndarray, bao_csv_path: str | Non
 
     if bao_csv_path is not None and os.path.exists(bao_csv_path):
         try:
-            # Prefer robust loader + rd fit with optional per-bin correlation
-            from bao_tools import load_bao_compilation as _load_bao, rd_shape_only_fit as _fit_rd
+            # Prefer robust loader + analytic rd fit using block-diagonal 2x2 covariances
+            from bao_tools import load_bao_compilation as _load_bao, rd_shape_only_fit_analytic as _fit_rd
             bao = _load_bao(bao_csv_path)
             res = _fit_rd(bao, z_grid, DM, DH)
             metrics.update(res)

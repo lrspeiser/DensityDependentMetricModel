@@ -108,3 +108,49 @@ def rd_shape_only_fit(df: Dict[str, np.ndarray], z_mod: np.ndarray, DM_mod: np.n
     chi2 = float(f(rd_best))
     dof = int(len(z_b) * (2 if ('D_M_over_rd' in df and 'D_H_over_rd' in df) else 1) - 1)
     return {'rd_best_Mpc': float(rd_best), 'bao_chi2': chi2, 'bao_red_chi2': float(chi2/dof), 'bao_dof': dof}
+
+
+def rd_shape_only_fit_analytic(df: Dict[str, np.ndarray], z_mod: np.ndarray, DM_mod: np.ndarray, DH_mod: np.ndarray) -> Dict[str, float]:
+    """Analytic rd fit for anisotropic BAO using block-diagonal per-bin 2x2 covariances.
+    Requires columns: z, D_M_over_rd, D_H_over_rd and, ideally, D_M_err, D_H_err, rho.
+    Returns rd_best, rd_err, chi2, dof, red_chi2.
+    """
+    if not ('D_M_over_rd' in df and 'D_H_over_rd' in df):
+        # Fallback to numeric if only DV present
+        return rd_shape_only_fit(df, z_mod, DM_mod, DH_mod)
+    z_b = df['z']
+    DM_b = df['D_M_over_rd']; DH_b = df['D_H_over_rd']
+    eDM = df.get('D_M_err', np.full_like(DM_b, 0.05))
+    eDH = df.get('D_H_err', np.full_like(DH_b, 0.05))
+    rho = df.get('rho', np.zeros_like(DM_b))
+    # Build y (6,) and C6 (6x6) block-diagonal
+    y = np.empty(2*len(z_b), float)
+    C6 = np.zeros((2*len(z_b), 2*len(z_b)), float)
+    for i in range(len(z_b)):
+        y[2*i] = DM_b[i]; y[2*i+1] = DH_b[i]
+        C2 = np.array([[eDM[i]**2, rho[i]*eDM[i]*eDH[i]], [rho[i]*eDM[i]*eDH[i], eDH[i]**2]], float)
+        C6[2*i:2*i+2, 2*i:2*i+2] = C2
+    # Model x (6,) from DM_mod, DH_mod
+    DM_m = np.interp(z_b, z_mod, DM_mod)
+    DH_m = np.interp(z_b, z_mod, DH_mod)
+    x = np.empty_like(y)
+    x[0::2] = DM_m; x[1::2] = DH_m
+    # Analytic s=1/rd
+    try:
+        Ci = np.linalg.inv(C6)
+    except np.linalg.LinAlgError:
+        Ci = np.linalg.pinv(C6, rcond=1e-10)
+    xtC = x @ Ci
+    den = xtC @ x
+    num = xtC @ y
+    if den <= 0:
+        # Fallback numeric
+        return rd_shape_only_fit(df, z_mod, DM_mod, DH_mod)
+    s_best = num/den
+    rd = 1.0/s_best
+    sigma_s = den**(-0.5)
+    rd_err = sigma_s/(s_best**2)
+    r = y - s_best*x
+    chi2 = float(r @ Ci @ r)
+    dof = 2*len(z_b) - 1
+    return {'rd_best_Mpc': float(rd), 'rd_err_Mpc': float(rd_err), 'bao_chi2': float(chi2), 'bao_red_chi2': float(chi2/dof), 'bao_dof': int(dof)}
