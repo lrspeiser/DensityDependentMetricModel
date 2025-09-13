@@ -109,7 +109,7 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 ## Methods: Supernovae (Pantheon+) and BAO (shape-only)
 
 ### Supernovae (Pantheon+)
-We use the Pantheon+SH0ES distance-modulus table and its full STAT+SYS covariance C (loaded from the release .cov; see tariff/data/README_DATA.md for file paths). For a model prediction μ_model(z), we analytically marginalize over a constant offset a (the absolute magnitude M_B, or equivalently H_0) by minimizing
+We use the Pantheon+SH0ES distance-modulus table and its full STAT+SYS covariance C (loaded from the release .cov; see tariff/data/README_DATA.md for paths). For a model prediction μ_model(z), we analytically marginalize over a constant offset a (absolute magnitude, degenerate with H0) by minimizing
 
 $$
 \chi^2(a)=\bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr)^{\!\top} C^{-1} \bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr),
@@ -280,7 +280,7 @@ Because the loss is $\propto E$ and nearly isotropic on large scales, the **shap
 Your pipeline includes tests for **SN stretch $\propto 1+z$** and **Tolman $(1+z)^{-4}$** behavior; those must match expansion expectations (the tariff alone cannot produce the correct scalings). ([arXiv][3])
 
 **(E) BAO/chronometer proxies (shape only).**
-Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW})}$, $r(z_{\rm obs})=\int c/H_{\rm FRW}\,dz_{\rm FRW}}$, and $H_{\rm eff}(z_{\rm obs}) = H_{\rm FRW}(z_{\rm FRW}) e^{\tau}\,[1+(1+z_{\rm FRW})\,\tau'(z_{\rm FRW})]$. Then compare $D_M(z)=r(z)$ and $D_H(z)=c/H_{\rm eff}(z)$ shapes to BAO; fit only an overall $r_d$ if desired. ([arXiv][6])
+Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW})}$, $r(z_{\rm obs})=\int c/H_{\rm FRW}\,dz_{\rm FRW}$, and $H_{\rm eff}(z_{\rm obs}) = H_{\rm FRW}(z_{\rm FRW}) e^{\tau}\,[1+(1+z_{\rm FRW})\,\tau'(z_{\rm FRW})]$. Then compare $D_M(z)=r(z)$ and $D_H(z)=c/H_{\rm eff}(z)$ shapes to BAO; fit only an overall $r_d$ if desired. ([arXiv][6])
 
 ---
 
