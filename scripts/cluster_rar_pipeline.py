@@ -251,10 +251,24 @@ def g_pred_emergent(g_bar: np.ndarray, a0_cgs: float) -> np.ndarray:
     return g_bar + np.sqrt(a0_cgs * g_bar)
 
 
+def xi_rar_plateau(g_bar: np.ndarray, a0_cgs: float, dmax: float = 50.0) -> np.ndarray:
+    """RAR plateau-style boost: xi = min(0.5 + sqrt(0.25 + a0/g_b), D_max)."""
+    # guard for divide-by-zero
+    gb = np.maximum(g_bar, 1e-99)
+    xi = 0.5 + np.sqrt(0.25 + (a0_cgs / gb))
+    if dmax is not None and np.isfinite(dmax):
+        xi = np.minimum(xi, dmax)
+    return xi
+
+
+def g_pred_rar_plateau(g_bar: np.ndarray, a0_cgs: float, dmax: float = 50.0) -> np.ndarray:
+    return xi_rar_plateau(g_bar, a0_cgs, dmax=dmax) * g_bar
+
+
 def fit_a0(g_bar: np.ndarray,
            g_tot: np.ndarray,
            model: Callable[[np.ndarray, float], np.ndarray],
-           a0_min: float = 1e-12, a0_max: float = 1e-7, n_grid: int = 4000) -> Tuple[float, float]:
+           a0_min: float = 1e-12, a0_max: float = 1e-6, n_grid: int = 6000) -> Tuple[float, float]:
     """
     Brute-force grid search for a0 (cgs) minimizing squared residuals in log-space.
     Returns best a0 and RMS scatter (dex).
@@ -308,6 +322,48 @@ def _canonicalize_clash_key(name: str) -> Optional[str]:
     return None
 
 
+def _validate_and_filter_shells(shells: List[AcceptShell]) -> Tuple[List[AcceptShell], Dict[str, float]]:
+    """Basic data hygiene for ACCEPT shells. Returns filtered shells and diagnostics."""
+    diags = {
+        'n_shells': float(len(shells)),
+        'n_used': 0.0,
+        'monotonic_ok': 1.0,
+        'overlap_removed': 0.0,
+        'bad_ne_removed': 0.0,
+        'rin_ge_rout_removed': 0.0,
+        'min_ne': float('nan'),
+        'max_ne': float('nan'),
+    }
+    out: List[AcceptShell] = []
+    last_rout = -1.0
+    ne_vals = []
+    for sh in shells:
+        if not (np.isfinite(sh.Rin_Mpc) and np.isfinite(sh.Rout_Mpc) and np.isfinite(sh.ne_cm3)):
+            diags['bad_ne_removed'] += 1.0
+            continue
+        if sh.Rin_Mpc >= sh.Rout_Mpc:
+            diags['rin_ge_rout_removed'] += 1.0
+            continue
+        # enforce monotonic Rout
+        if last_rout > 0 and sh.Rout_Mpc <= last_rout:
+            diags['overlap_removed'] += 1.0
+            continue
+        # very broad sanity band for ne
+        if sh.ne_cm3 <= 0 or sh.ne_cm3 > 1e-1:
+            diags['bad_ne_removed'] += 1.0
+            continue
+        out.append(sh)
+        last_rout = sh.Rout_Mpc
+        ne_vals.append(sh.ne_cm3)
+    if len(out) == 0:
+        diags['monotonic_ok'] = 0.0
+    diags['n_used'] = float(len(out))
+    if ne_vals:
+        diags['min_ne'] = float(np.min(ne_vals))
+        diags['max_ne'] = float(np.max(ne_vals))
+    return out, diags
+
+
 def run_cluster(cluster_name: str,
                 accept_shells: List[AcceptShell],
                 mu_e: float = 1.17) -> Optional[ClusterRARResult]:
@@ -317,7 +373,10 @@ def run_cluster(cluster_name: str,
     pars = CLASH_PARAMS[clash_name]
     nfw = NFW(M200c_Msun_h70=pars["M200c"], c200c=pars["c200c"], z=pars["z"])
 
-    r_cm, Mgas_cum_g, gbar = build_gas_profiles(accept_shells, mu_e=mu_e)
+    filtered, _ = _validate_and_filter_shells(accept_shells)
+    if not filtered:
+        return None
+    r_cm, Mgas_cum_g, gbar = build_gas_profiles(filtered, mu_e=mu_e)
     gtot = nfw.g_tot(r_cm)
     return ClusterRARResult(cluster=clash_name,
                             z=pars["z"],
@@ -339,13 +398,50 @@ def run_all(accept_path: str,
     results: List[ClusterRARResult] = []
     all_gb = []
     all_gt = []
+    # diagnostics per-cluster
+    diag_rows = []
+
     for name, shells in accept.items():
-        out = run_cluster(name, shells, mu_e=mu_e)
-        if out is None:
+        clash_name = _canonicalize_clash_key(name)
+        filtered, di = _validate_and_filter_shells(shells)
+        if clash_name is None or not filtered:
             continue
-        results.append(out)
-        all_gb.append(out.g_bar)
-        all_gt.append(out.g_tot)
+        pars = CLASH_PARAMS[clash_name]
+        nfw = NFW(M200c_Msun_h70=pars["M200c"], c200c=pars["c200c"], z=pars["z"])
+        r_cm, Mgas_cum_g, gbar = build_gas_profiles(filtered, mu_e=mu_e)
+        gtot = nfw.g_tot(r_cm)
+        # quick f_gas sanity at 0.5 R200c and R200c
+        r200 = nfw.r200c_cm
+        def _fgas_at(frac: float) -> float:
+            R = frac * r200
+            # find closest index
+            if len(r_cm) == 0:
+                return float('nan')
+            idx = int(np.clip(np.searchsorted(r_cm, R), 0, len(r_cm)-1))
+            Mgas = float(Mgas_cum_g[idx])
+            Mtot = float(nfw.M_enclosed(np.array([r_cm[idx]]))[0])
+            return Mgas / Mtot if Mtot > 0 else float('nan')
+        f05 = _fgas_at(0.5)
+        f1 = _fgas_at(1.0)
+        diag_rows.append({
+            'cluster': clash_name,
+            'z': pars['z'],
+            'n_shells': di['n_shells'],
+            'n_used': di['n_used'],
+            'monotonic_ok': di['monotonic_ok'],
+            'overlap_removed': di['overlap_removed'],
+            'bad_ne_removed': di['bad_ne_removed'],
+            'rin_ge_rout_removed': di['rin_ge_rout_removed'],
+            'min_ne': di['min_ne'],
+            'max_ne': di['max_ne'],
+            'r200c_kpc': nfw.r200c_kpc,
+            'fgas_0p5R200': f05,
+            'fgas_R200': f1,
+        })
+        res = ClusterRARResult(clash_name, pars['z'], r_cm/kpc, gbar, gtot, nfw)
+        results.append(res)
+        all_gb.append(gbar)
+        all_gt.append(gtot)
 
     if not results:
         raise RuntimeError("No ACCEPT clusters matched CLASH sample.")
@@ -353,31 +449,65 @@ def run_all(accept_path: str,
     gb = np.concatenate(all_gb)
     gt = np.concatenate(all_gt)
 
+    # GR and RAR-plateau predictions for overlay/metrics (global a0)
+    g_gr = g_pred_newton(gb)
+    a0_rar, rms_rar = fit_a0(gb, gt, lambda x, a0: g_pred_rar_plateau(x, a0, dmax=50.0))
+
+    # Plot
     if save_plot:
         fig, ax = plt.subplots(figsize=(6,5), dpi=140)
-        ax.scatter(np.log10(gb), np.log10(gt), s=8, alpha=0.55, label='ACCEPT×CLASH shells')
-        # one-to-one
+        ax.scatter(np.log10(gb), np.log10(gt), s=8, alpha=0.55, label='NFW total (Umetsu+2016)')
+        # GR line y=x
         xmin = float(np.nanmin(np.log10(gb)))
         xmax = float(np.nanmax(np.log10(gb)))
         x = np.linspace(xmin, xmax, 256)
-        ax.plot(x, x, lw=2, color='k', alpha=0.8, label='g_tot = g_bar')
+        ax.plot(x, x, lw=2, color='k', alpha=0.8, label='GR (baryons only)')
+        # RAR plateau curve using global a0
+        gx = 10**x
+        y_rar = np.log10(g_pred_rar_plateau(gx, a0_rar, dmax=50.0))
+        ax.plot(x, y_rar, lw=2, color='tab:red', label=f'RAR plateau (a0={a0_rar:.2e} cgs, Dmax=50)')
         ax.set_xlabel(r'$\log_{10}\,g_{\rm bar}\;[\,\mathrm{cm\,s^{-2}}\,]$')
         ax.set_ylabel(r'$\log_{10}\,g_{\rm tot}\;[\,\mathrm{cm\,s^{-2}}\,]$')
-        ax.set_title('Cluster RAR (gas-only; CLASH NFW total)')
+        ax.set_title('Cluster RAR: NFW data vs GR and RAR plateau')
         ax.legend(frameon=False, fontsize=8)
         ax.grid(alpha=0.25)
         plt.tight_layout()
         fig_path = os.path.join(out_images, 'cluster_rar_scatter.png')
         fig.savefig(fig_path)
 
-    # write points CSV
+    # write points CSV with additional columns
     csv_path = os.path.join(out_results, 'cluster_rar_points.csv')
     with open(csv_path, 'w') as f:
-        f.write('cluster,z,r_kpc,log10_gbar_cgs,log10_gtot_cgs\n')
+        f.write('cluster,z,r_kpc,log10_gbar_cgs,log10_gNFWtot_cgs,log10_gGR_cgs,log10_gRAR_cgs\n')
         for r in results:
             for rkpc, gbv, gtv in zip(r.radii_kpc, r.g_bar, r.g_tot):
                 if np.isfinite(gbv) and np.isfinite(gtv) and gbv>0 and gtv>0:
-                    f.write(f"{r.cluster},{r.z:.5f},{rkpc:.6f},{math.log10(gbv):.9f},{math.log10(gtv):.9f}\n")
+                    gr = g_pred_newton(np.array([gbv]))[0]
+                    grar = g_pred_rar_plateau(np.array([gbv]), a0_rar, dmax=50.0)[0]
+                    f.write(
+                        f"{r.cluster},{r.z:.5f},{rkpc:.6f},{math.log10(gbv):.9f},{math.log10(gtv):.9f},{math.log10(gr):.9f},{math.log10(grar):.9f}\n"
+                    )
+
+    # diagnostics CSV
+    diag_csv = os.path.join(out_results, 'diagnostics.csv')
+    with open(diag_csv, 'w') as f:
+        cols = ['cluster','z','n_shells','n_used','monotonic_ok','overlap_removed','bad_ne_removed','rin_ge_rout_removed','min_ne','max_ne','r200c_kpc','fgas_0p5R200','fgas_R200']
+        f.write(','.join(cols) + '\n')
+        for row in diag_rows:
+            f.write(','.join(str(row[c]) for c in cols) + '\n')
+
+    # metrics JSON
+    mask = (gb>0) & (gt>0)
+    metrics = {
+        'counts': int(mask.sum()),
+        'rms_logdex': {
+            'GR': float(np.sqrt(np.mean((np.log10(gt[mask]) - np.log10(g_gr[mask]))**2))) if mask.any() else float('nan'),
+            'RAR_plateau': float(rms_rar),
+        },
+        'rar_plateau': {'a0_cgs': float(a0_rar), 'Dmax': 50.0},
+    }
+    with open(os.path.join(out_results, 'metrics.json'), 'w') as f:
+        json.dump(metrics, f, indent=2)
 
     return results, gb, gt
 
@@ -397,9 +527,10 @@ if __name__ == "__main__":
 
     results, gb, gt = run_all(args.accept, args.results, args.images, mu_e=args.mu_e, save_plot=True)
 
-    # Fit a0 for two illustrative models
-    a0_mond, rms_mond = fit_a0(gb, gt, g_pred_mond_simple, a0_min=1e-12, a0_max=1e-7)
-    a0_eg, rms_eg = fit_a0(gb, gt, g_pred_emergent, a0_min=1e-12, a0_max=1e-7)
+    # Fit a0 for two illustrative models (global)
+    a0_mond, rms_mond = fit_a0(gb, gt, g_pred_mond_simple)
+    a0_eg, rms_eg = fit_a0(gb, gt, g_pred_emergent)
+    a0_rar, rms_rar = fit_a0(gb, gt, lambda x, a0: g_pred_rar_plateau(x, a0, dmax=50.0))
 
     summary = {
         'cosmology': {'H0_km_s_Mpc': COSMO.H0_km_s_Mpc, 'Omega_m': COSMO.Omega_m, 'Omega_L': COSMO.Omega_L},
@@ -409,6 +540,7 @@ if __name__ == "__main__":
         'a0_fits_cgs': {
             'mond_simple': {'a0': a0_mond, 'rms_dex': rms_mond},
             'eg_like': {'a0': a0_eg, 'rms_dex': rms_eg},
+            'rar_plateau': {'a0': a0_rar, 'Dmax': 50.0, 'rms_dex': rms_rar},
         }
     }
     os.makedirs(args.results, exist_ok=True)
@@ -418,5 +550,6 @@ if __name__ == "__main__":
     # Console report
     print(f"Fitted a0 (MOND-simple): {a0_mond:.3e} cgs; RMS scatter = {rms_mond:.3f} dex")
     print(f"Fitted a0 (EG-like)    : {a0_eg:.3e} cgs; RMS scatter = {rms_eg:.3f} dex")
+    print(f"Fitted a0 (RAR plateau): {a0_rar:.3e} cgs; RMS scatter = {rms_rar:.3f} dex")
     for r in results:
         print(f"{r.cluster:20s} z={r.z:.3f}  r200c={r.nfw.r200c_kpc:7.0f} kpc  c200c={r.nfw.c200c:4.1f}  points={len(r.radii_kpc)}")
