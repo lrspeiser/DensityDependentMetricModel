@@ -14,6 +14,16 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+# New analysis utilities (full covariance, BAO fit, H_eff helpers)
+try:
+    from .pantheon_plus_tools import load_pantheon_plus, analytic_anchor_fullcov, gls_linefit_fullcov
+    from .bao_tools import load_bao_compilation, rd_shape_only_fit
+    from .heff_utils import heff_from_z_of_r, heff_identity_check
+except Exception:
+    from pantheon_plus_tools import load_pantheon_plus, analytic_anchor_fullcov, gls_linefit_fullcov
+    from bao_tools import load_bao_compilation, rd_shape_only_fit
+    from heff_utils import heff_from_z_of_r, heff_identity_check
+
 # Robust imports for package or script execution
 try:
     from .data_ingest import load_pantheon, load_bao_csv
