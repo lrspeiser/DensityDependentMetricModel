@@ -12119,6 +12119,10 @@
         133.76826888962006
       ]
     },
+    "rd_best_Mpc": 113.47524157501472,
+    "bao_chi2": 4415.618775084605,
+    "bao_red_chi2": 883.123755016921,
+    "bao_dof": 5,
     "bao_fit_available": true
   },
   "consistency": {

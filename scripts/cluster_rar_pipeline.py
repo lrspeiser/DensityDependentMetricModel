@@ -424,7 +424,7 @@ def compute_residual_metrics(
     weights_mode: str = 'points',
     xmin: Optional[float] = None,
     xmax: Optional[float] = None,
-) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute coverage, slope vs x, inner/outer medians, and weights vector.
     weights_mode in {'points','equal_cluster'}.
@@ -482,7 +482,7 @@ def compute_residual_metrics(
         'radial_trend': {'a': a_hat, 'b': b_hat, 'x_zero': x_zero},
         'medians': {'inner_le_0p2_dex': med_in, 'outer_gt_0p2_dex': med_out},
     }
-    return metrics, x, resid, w
+    return metrics, x, resid, w, gb, gt
 
 
 def per_cluster_metrics(results: List[ClusterRARResult], a0: float, dmax: float = 50.0) -> List[dict]:
@@ -523,9 +523,9 @@ def jackknife_by_cluster(results: List[ClusterRARResult], weights_mode: str, xmi
         gbar = np.array(gbar)
         gtot = np.array(gtot)
         # weights for fit
-        _, x, _, w = compute_residual_metrics(clusters, r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)  # a0 placeholder just to get mask/weights
-        # Fit a0 weighted
-        a0_i, _, _ = fit_a0_weighted(gbar, gtot, lambda x_, a: g_pred_rar_plateau(x_, a, dmax=dmax), weights=w, robust='none')
+        _, x, _, w, gb_f, gt_f = compute_residual_metrics(clusters, r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)  # a0 placeholder just to get mask/weights
+        # Fit a0 weighted on filtered arrays
+        a0_i, _, _ = fit_a0_weighted(gb_f, gt_f, lambda x_, a: g_pred_rar_plateau(x_, a, dmax=dmax), weights=w, robust='none')
         a0_list.append(a0_i)
     arr = np.array(a0_list)
     return {'mean_a0_cgs': float(np.nanmean(arr)), 'std_a0_cgs': float(np.nanstd(arr)), 'n': int(len(arr))}
@@ -548,22 +548,17 @@ def bootstrap_rms(results: List[ClusterRARResult], weights_mode: str, xmin: Opti
     r_kpc = np.array(r_kpc)
     gbar = np.array(gbar)
     gtot = np.array(gtot)
-    # base weights mask
-    metrics_base, x_base, resid_base, w_base = compute_residual_metrics(clusters.tolist(), r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)
-    idx = np.where(np.isfinite(resid_base))[0]
+    # base weights mask and filtered arrays
+    metrics_base, x_base, resid_base, w_base, gb_f, gt_f = compute_residual_metrics(clusters.tolist(), r_kpc, r200, gbar, gtot, a0=1e-8, dmax=dmax, weights_mode=weights_mode, xmin=xmin, xmax=xmax)
+    m = resid_base.size
+    if m == 0:
+        return {'mean_rms_dex': float('nan'), 'std_rms_dex': float('nan'), 'n': int(n)}
     rms_list = []
     for _ in range(n):
-        pick = rng.choice(idx, size=idx.size, replace=True)
-        gb = gbar[metrics_base['counts']*0:metrics_base['counts']*0]  # dummy to satisfy linter
-        # Build bootstrap sample
-        gb = gbar[mask := (np.arange(len(gbar)) == -1)]  # empty, reuse arrays directly
-        # Simpler: work with filtered arrays directly
-        filt_gb = gbar[mask := (np.arange(len(gbar)) == -1)]  # noop
-        lg_gt = np.log10(gbar)  # not used; leave placeholder to avoid heavy copies
-        # Use residual_base index to build gb/gt/x/w for picked sample
-        gbp = 10**(np.log10(gbar)[idx][pick])
-        gtp = 10**(np.log10(gtot)[idx][pick])
-        wp = w_base[idx][pick]
+        pick = rng.choice(np.arange(m), size=m, replace=True)
+        gbp = gb_f[pick]
+        gtp = gt_f[pick]
+        wp = w_base[pick]
         a0_b, rms_b, _ = fit_a0_weighted(gbp, gtp, lambda x_, a: g_pred_rar_plateau(x_, a, dmax=dmax), weights=wp, robust='none')
         rms_list.append(rms_b)
     arr = np.array(rms_list)
@@ -880,7 +875,7 @@ if __name__ == "__main__":
     parser.add_argument('--mu-e', type=float, default=1.17, help='Mean molecular weight per free electron (default 1.17)')
     parser.add_argument('--stars-csv', default=os.path.join('external_data', 'clash_stars.csv'), help='Optional CSV with BCG stellar masses (cluster,log10Mstar_BCG,Re_kpc,profile)')
     parser.add_argument('--warn-fgas', type=float, default=0.2, help='Warn if f_gas(R200) exceeds this threshold (default 0.2)')
-parser.add_argument('--warn-used-frac', type=float, default=0.6, help='Warn if n_used/n_shells below this fraction (default 0.6)')
+    parser.add_argument('--warn-used-frac', type=float, default=0.6, help='Warn if n_used/n_shells below this fraction (default 0.6)')
     # Analysis enhancements
     parser.add_argument('--equal-cluster-weight', action='store_true', help='Weight each cluster equally (each point in a cluster gets weight 1/N_cluster)')
     parser.add_argument('--xmin', type=float, default=None, help='Mask out points with r/R200c < xmin')
@@ -918,8 +913,8 @@ parser.add_argument('--warn-used-frac', type=float, default=0.6, help='Warn if n
 
     # Compute weights and fit a0 (RAR plateau) with options
     # First compute weights mask via metrics helper (a0 placeholder is fine for mask/weights)
-    base_metrics, x_base, resid_base, w_base = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=1e-8, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
-    a0_rar, rms_rar, _ = fit_a0_weighted(gbar_all, gtot_all, lambda x, a: g_pred_rar_plateau(x, a, dmax=50.0), weights=w_base, robust=args.robust_loss, huber_delta=args.huber_delta, fixed_a0=args.fixed_a0)
+    base_metrics, x_base, resid_base, w_base, gb_filt, gt_filt = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=1e-8, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
+    a0_rar, rms_rar, _ = fit_a0_weighted(gb_filt, gt_filt, lambda x, a: g_pred_rar_plateau(x, a, dmax=50.0), weights=w_base, robust=args.robust_loss, huber_delta=args.huber_delta, fixed_a0=args.fixed_a0)
 
     summary = {
         'cosmology': {'H0_km_s_Mpc': COSMO.H0_km_s_Mpc, 'Omega_m': COSMO.Omega_m, 'Omega_L': COSMO.Omega_L},
@@ -938,7 +933,7 @@ parser.add_argument('--warn-used-frac', type=float, default=0.6, help='Warn if n
 
     # Enhanced metrics and plots (defensible analysis pieces)
     # Residual metrics with final a0
-    resid_metrics, x, resid, w = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=a0_rar, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
+    resid_metrics, x, resid, w, _, _ = compute_residual_metrics(clusters, r_kpc, r200_map, gbar_all, gtot_all, a0=a0_rar, dmax=50.0, weights_mode=weights_mode, xmin=args.xmin, xmax=args.xmax)
     # Additional plots
     alt_dir = os.path.join('images', 'next_steps', 'cluster_rar')
     make_additional_plots(args.images, x, resid, alt_dir=alt_dir)

@@ -10,7 +10,11 @@ Data we use (minimum viable set)
   - Provide a CSV with columns: frequency_GHz, intensity_Wsr_m2_Hz (or a normalized intensity column)
   - Place at: tariff/data/cmb_firas_like.csv (example path)
 - BAO compilations (optional)
-  - CSV with either D_M_over_rd, D_H_over_rd (with errors) or DV_over_rd; include a z column.
+  - CSV with either D_M_over_rd, D_H_over_rd (with errors and optional per-bin rho) or DV_over_rd; include a z column.
+  - Preferred (BOSS DR12 consensus): anisotropic CSV with columns
+    - z, D_M_over_rd, D_M_err, D_H_over_rd, D_H_err, rho
+    - Generated via: python tariff/scripts/ingest_boss_dr12_consensus.py --in-dir external_data/BOSS/DR12_consensus/COMBINEDDR12_BAO_consensus_dM_Hz --out tariff/data/bao_compilation.csv
+    - This script reads the Alam et al. (2016/2017) BAO-only consensus means and 6×6 covariance, converts to our native variables, and writes the per-bin values and correlations.
   - Place at: tariff/data/bao_compilation.csv
 - Tolman surface-brightness dataset (optional)
   - CSV with columns: z, SB (surface brightness, consistent units), SB_err

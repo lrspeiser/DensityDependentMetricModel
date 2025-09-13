@@ -109,7 +109,7 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 ## Methods: Supernovae (Pantheon+) and BAO (shape-only)
 
 ### Supernovae (Pantheon+)
-We use the Pantheon+SH0ES distance-modulus table and its full STAT+SYS covariance C. For a model prediction μ_model(z), we analytically marginalize over a constant offset a (the absolute magnitude M_B, or equivalently H_0) by minimizing
+We use the Pantheon+SH0ES distance-modulus table and its full STAT+SYS covariance C (loaded from the release .cov; see tariff/data/README_DATA.md for file paths). For a model prediction μ_model(z), we analytically marginalize over a constant offset a (the absolute magnitude M_B, or equivalently H_0) by minimizing
 
 $$
 \chi^2(a)=\bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr)^{\!\top} C^{-1} \bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr),
@@ -126,7 +126,7 @@ We report χ²_SN at a_best and χ²_SN/dof with dof = N_SN − 1. To test the g
 Practical notes: we ensure the covariance is symmetric positive‑definite (SPD) by small diagonal jitter if needed; we do not refit light‑curve nuisance parameters (α,β) and use Pantheon+ released μ with the provided STAT+SYS covariance.
 
 ### BAO (shape‑only)
-From the monotone inversion z(r) we compute H_eff(z)=c\,dz/dr, D_M(z)=r(z), and D_H(z)=c/H_eff(z). We verify the identity c\,dz/dr = c(1+z)\,d\ln(1+z)/dr (RMS relative error reported). We then fit a single sound horizon r_d to a compilation providing either {D_M/r_d, D_H/r_d} (with optional per‑point correlation ρ) or D_V/r_d, minimizing χ²(r_d) by 1‑D search. We report r_d, χ², and χ²/dof (observables minus one parameter).
+From the monotone inversion z(r) we compute H_eff(z)=c\,dz/dr, D_M(z)=r(z), and D_H(z)=c/H_eff(z). We verify the identity c\,dz/dr = c(1+z)\,d\ln(1+z)/dr (RMS relative error reported). We then fit a single sound horizon r_d to a compilation providing either {D_M/r_d, D_H/r_d} (with optional per‑point correlation ρ) or D_V/r_d, minimizing χ²(r_d) by 1‑D search. Our BOSS DR12 ingestion script (tariff/scripts/ingest_boss_dr12_consensus.py; see tariff/data/README_DATA.md) reads the Alam et al. consensus means and 6×6 covariance and writes the per-bin anisotropic CSV our pipeline consumes. We report r_d, χ², and χ²/dof (observables minus one parameter).
 
 ---
 
