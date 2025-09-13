@@ -112,6 +112,19 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 
 ---
 
+## Alternatives Considered: SVT with late-time dielectric RAR plateau (no particle CDM)
+
+We prototyped a self-contained, SVT-inspired alternative that reduces to GR at high redshift (a density/time gate suppresses the scalar sector) and yields a late-time, quasi-static modified Poisson law with a dielectric response that produces a constant acceleration plateau, $g_{\rm obs}\approx g_{\rm bar}+a_p$, at low $g$. This leaves the main pipeline unchanged and produces illustrative figures:
+
+- RAR diagram with plateau: ![](images/alternatives/rar_plateau_alternative.png)
+- Rotation curve with plateau component: ![](images/alternatives/rotation_curve_plateau_alternative.png)
+
+Metrics (JSON): results/alternatives/alternative_rar_plateau_summary.json
+
+Code (isolated): tariff/alternatives/rar_plateau_alt.py and tariff/analysis_alternative_rar_plateau.py.
+
+---
+
 # Figures and Tables (auto-generated from tariff/)
 
 - Hubble baseline (GR): ![](images/baseline_hubble.png)
