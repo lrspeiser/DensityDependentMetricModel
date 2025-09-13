@@ -42,7 +42,7 @@ Why this works: one gate 𝒢 controls both weak-field dynamics and a uniform (E
 To keep conservation laws and the equivalence principle intact, we use a conservative conformal-drift framing. All species share one physical metric g_{μν} (EEP-safe); the tariff acts as an effective conformal drift of the photon distribution function with a slowly varying factor A(φ,χ) such that d ln A/dℓ = 1/2 κ [G(χ)-1] along null rays. This preserves c_T=1 in screened regimes and avoids species-dependent violations.
 
 Essentials in the weak field:
-- Modified Poisson: ∇·[ G(χ) ∇Φ ] = 4πG ρ_b, with G(χ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) f(φ).
+- Modified Poisson: ∇·[ G(χ) ∇Φ ] = 4π G_N ρ_b, with G(χ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) f(φ).
 - Photon energy and period drift (time-dilation safety): d ln E / dℓ = − d ln A / dℓ ≡ −κ [G − 1] and d ln(Δt) / dℓ = + d ln A / dℓ ≡ +κ [G − 1]. Energy and arrival periods rescale inversely with the same A, preserving SN time dilation and Tolman when expressed in terms of the observed 1+z.
 - Total energy conservation (phenomenological): ∇_μ T^{μν}_{(γ)} = −Q^ν, ∇_μ T^{μν}_{(φ)} = +Q^ν with a null-aligned exchange Q^ν ∝ κ [G − 1] T^{νλ}_{(γ)} k_λ (k^μ: photon wavevector). We avoid over-specifying frame-dependent couplings.
 - Mode-level statement: d ln ω̂_k / dℓ = −κ [G(χ) − 1] — a dilaton-like conformal drift (no scattering), hence no spectral distortion beyond a uniform rescaling (FIRAS-safe for smooth κ[G−1]).
