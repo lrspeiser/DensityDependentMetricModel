@@ -80,21 +80,35 @@ def load_stars_csv(stars_csv: Optional[Path]) -> Dict[str, dict]:
         rdr = csv.DictReader(f)
         for row in rdr:
             name = row['cluster'].strip()
-            # Primary BCG
+            # Accept either schema:
+            # 1) log10M/Re: log10Mstar_BCG, Re_kpc (or Re_BCG_kpc), [log10Mstar_ICL, Re_ICL_kpc]
+            # 2) M/a:      M_BCG_Msun, a_BCG_kpc, [M_ICL_Msun, a_ICL_kpc]
+            prof = (row.get('profile') or 'hernquist').lower()
+            icl_prof = (row.get('profile_ICL') or prof).lower()
+
             bcg_logM = row.get('log10Mstar_BCG')
             bcg_Re = row.get('Re_kpc') or row.get('Re_BCG_kpc')
-            prof = (row.get('profile') or 'hernquist').lower()
-            # Optional ICL
             icl_logM = row.get('log10Mstar_ICL')
             icl_Re = row.get('Re_ICL_kpc')
-            icl_prof = (row.get('profile_ICL') or prof).lower()
+
+            bcg_Msun = row.get('M_BCG_Msun')
+            bcg_a = row.get('a_BCG_kpc')
+            icl_Msun = row.get('M_ICL_Msun')
+            icl_a = row.get('a_ICL_kpc')
+
             out[name] = {
+                # Schema 1 (logM/Re)
                 'bcg_logM': float(bcg_logM) if bcg_logM not in (None, '') else None,
                 'bcg_Re_kpc': float(bcg_Re) if bcg_Re not in (None, '') else None,
                 'bcg_profile': prof,
                 'icl_logM': float(icl_logM) if icl_logM not in (None, '') else None,
                 'icl_Re_kpc': float(icl_Re) if icl_Re not in (None, '') else None,
                 'icl_profile': icl_prof,
+                # Schema 2 (M/a)
+                'bcg_M_Msun': float(bcg_Msun) if bcg_Msun not in (None, '') else None,
+                'bcg_a_kpc': float(bcg_a) if bcg_a not in (None, '') else None,
+                'icl_M_Msun': float(icl_Msun) if icl_Msun not in (None, '') else None,
+                'icl_a_kpc': float(icl_a) if icl_a not in (None, '') else None,
             }
     return out
 
@@ -113,12 +127,22 @@ def compute_with_optional_stars(
         st = stars_map.get(cl)
         if not st:
             continue
-        # BCG
-        if st.get('bcg_logM') is not None and st.get('bcg_Re_kpc') is not None:
+        # BCG: prefer (M,a) if provided; else fallback to (logM, Re)
+        bcg_M = st.get('bcg_M_Msun')
+        bcg_a = st.get('bcg_a_kpc')
+        if bcg_M is not None and bcg_a is not None:
+            if st.get('bcg_profile', 'hernquist') in ('hernquist', 'sersic4', 'de_vaucouleurs'):
+                g_add[i] += hernquist_accel_cgs(bcg_M, bcg_a * 1.8153, r_kpc[i])  # convert a to Re-equivalent for consistency
+        elif st.get('bcg_logM') is not None and st.get('bcg_Re_kpc') is not None:
             if st.get('bcg_profile', 'hernquist') in ('hernquist', 'sersic4', 'de_vaucouleurs'):
                 g_add[i] += hernquist_accel_cgs(10.0 ** st['bcg_logM'], st['bcg_Re_kpc'], r_kpc[i])
-        # ICL (optional)
-        if st.get('icl_logM') is not None and st.get('icl_Re_kpc') is not None:
+        # ICL (optional): prefer (M,a) then fallback (logM, Re)
+        icl_M = st.get('icl_M_Msun')
+        icl_a = st.get('icl_a_kpc')
+        if icl_M is not None and icl_a is not None:
+            if st.get('icl_profile', 'hernquist') in ('hernquist', 'sersic4', 'de_vaucouleurs'):
+                g_add[i] += hernquist_accel_cgs(icl_M, icl_a * 1.8153, r_kpc[i])
+        elif st.get('icl_logM') is not None and st.get('icl_Re_kpc') is not None:
             if st.get('icl_profile', 'hernquist') in ('hernquist', 'sersic4', 'de_vaucouleurs'):
                 g_add[i] += hernquist_accel_cgs(10.0 ** st['icl_logM'], st['icl_Re_kpc'], r_kpc[i])
     return gbar + g_add

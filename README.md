@@ -387,11 +387,18 @@ Assumptions
 - Gas‑only baryons in this run; optional BCG stellar mass may be included via external_data/clash_stars.csv (if provided; off by default).
 - Data hygiene: enforce monotonic R_out, filter overlaps, drop bad n_e; report f_gas(<0.5 R200c) and f_gas(<R200c).
 
-Results from current run
-- Matched clusters = 7; data points = 220.
-- Best‑fit RAR‑plateau (global): a0 ≈ 1.927e‑7 cgs; RMS ≈ 0.146 dex.
-- GR baseline (baryons‑only) RMS ≈ 1.014 dex.
-- Per‑cluster RMS and residuals by cluster in results/cluster_rar/cluster_section_per_cluster.csv.
+### Results (gas only; CLASH NFW totals vs GG and GR)
+
+- Matched clusters: 7, points: 220
+- Global fit (RAR‑plateau, Dmax=50): a0 = 1.93×10⁻⁷ cgs
+  RMS scatter in log10 g: 0.146 dex (RAR‑plateau) vs 1.014 dex (GR baryons‑only)
+- Coverage: 47.3% within ±0.1 dex; 85.5% within ±0.2 dex; 49.1% positive residuals
+- Radial trend in residuals Δlog10 g ≡ log gNFW − log gRAR as a function of x ≡ r/R200c:
+  - Inner median (x ≤ 0.2): +0.085 dex
+  - Outer median (x > 0.2): −0.130 dex
+  - Linear fit: Δlog g ≈ 0.196 − 0.93 x (zero at x ≈ 0.21)
+
+Interpretation. The positive inner residuals are consistent with missing stellar baryons (BCG + ICL) in the gas‑only g_bar. At larger radii the gas dominates g_bar and residuals tilt negative, as expected from a single‑parameter gate matched to galaxy‑scale a0.
 
 Figure: GR vs RAR vs CLASH NFW
 
@@ -418,9 +425,31 @@ python scripts/cluster_rar_pipeline.py \
 ```
 
 Notes
-- Optional stars CSV columns: cluster, log10Mstar_BCG, Re_kpc, profile (hernquist|sersic4 mapped to Hernquist). If present and matched, stars are folded into g_bar and flagged in diagnostics (stars_used=1).
+- Optional stars CSV — either of the following schemas is accepted by the helper:
+  1) logM/Re form: cluster, log10Mstar_BCG, Re_kpc, [log10Mstar_ICL, Re_ICL_kpc], profile
+  2) M/a form: cluster, M_BCG_Msun, a_BCG_kpc, [M_ICL_Msun, a_ICL_kpc]
+  Profiles hernquist|sersic4 map internally to Hernquist. If present and matched, stars are folded into g_bar.
 - Warnings are emitted if f_gas(<R200c) > 0.2 or the fraction of ACCEPT shells used < 0.6.
 - Cluster‑name matching between CLASH and ACCEPT uses robust normalization and aliasing in the pipeline.
+
+Optional: add BCG/ICL stars (Hernquist) and re‑fit
+
+```bash
+# Gas‑only (sanity)
+python scripts/cluster_clusters_plus_stars.py \
+  --points results/cluster_rar/cluster_rar_points.csv \
+  --diagnostics results/cluster_rar/diagnostics.csv \
+  --outdir results/cluster_rar_plus \
+  --images images/next_steps/cluster_rar_plus
+
+# Gas + stars (provide per‑cluster stars CSV)
+python scripts/cluster_clusters_plus_stars.py \
+  --points results/cluster_rar/cluster_rar_points.csv \
+  --diagnostics results/cluster_rar/diagnostics.csv \
+  --stars external_data/clash_stars.csv \
+  --outdir results/cluster_rar_plus_stars \
+  --images images/next_steps/cluster_rar_plus_stars
+```
 
 ```bash
 # venv (Python 3.11)
