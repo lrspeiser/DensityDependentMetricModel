@@ -108,6 +108,14 @@ All of this remains confined to tariff/ and is wired for our existing LOS machin
 
 ## Methods: Supernovae (Pantheon+) and BAO (shape-only)
 
+## Results snapshot (SN + BAO)
+
+Using the full Pantheon+ STAT+SYS covariance with analytic marginalization over the magnitude offset (anchored_fullcov), our current run yields:
+- Supernovae: χ²/dof ≈ 1712.36 / 1700 = 1.0073 (anchor Δμ ≈ +0.059 mag). GLS regression of residuals vs S gives slope ≈ 9.02×10⁻⁶ mag Mpc⁻¹ (stderr ≈ 2.56×10⁻⁶, t ≈ 3.52, weighted R² ≈ 0.0071).
+- BAO (BOSS DR12 anisotropic consensus, analytic rd with full covariance): r_d ≈ 113.48 Mpc; current χ²/dof ≈ 4415.62 / 5 ≈ 883.1, indicating the present H_eff shape (overlay parameters) is not aligned with DR12 constraints. Ingestion and fit use the published 6×6 covariance with the non‑linear transform to D_H/r_d.
+
+We provide a small kappa scan to explore BAO‑compatible shapes while tracking the SN fit: see tariff/results/bao_kappa_scan.json. This scan varies kappa logarithmically around the baseline and logs per‑step SN and BAO metrics.
+
 ### Supernovae (Pantheon+)
 We use the Pantheon+SH0ES distance-modulus table and its full STAT+SYS covariance C (loaded from the release .cov; see tariff/data/README_DATA.md for paths). For a model prediction μ_model(z), we analytically marginalize over a constant offset a (absolute magnitude, degenerate with H0) by minimizing
 
