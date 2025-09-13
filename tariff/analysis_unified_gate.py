@@ -196,6 +196,7 @@ def overlay_hubble_unified(pantheon_path: str, params: GateParams, y_value: floa
             from pantheon_plus_tools import gls_linefit_fullcov as _gls
             res = _gls(Sv, resid, C_sel)
             b1 = float(res['slope']); b1_se = float(res['stderr']); t_stat = float(res['t_stat']); r2_w = float(res['r2_weighted']); a0 = float(res['intercept'])
+            dof_reg = max(len(resid) - 2, 1)
         else:
             # Weighted linear regression resid = a + b*S with diagonal weights
             wv = 1.0 / (mu_err_eff[valid]**2)
@@ -456,4 +457,5 @@ if __name__ == '__main__':
     bao_csv_path = REPO_ROOT / 'tariff' / 'data' / 'bao_compilation.csv'
     # Small-overlay default: q=0, small kappa; FRW+tariff overlay mode
     params = GateParams(eta=3.0, p=1.5, q=0.0, rho_star_evcm3=0.26, kappa_per_Mpc=1e-5)
-    analyze_unified_gate(pantheon, str(bao_csv_path) if bao_csv_path.exists() else None, params, mode='frw_overlay', sigma_int_mag=0.1)
+    # Use sigma_int_mag=0.0 so full STAT+SYS covariance is the sole error model when available.
+    analyze_unified_gate(pantheon, str(bao_csv_path) if bao_csv_path.exists() else None, params, mode='frw_overlay', sigma_int_mag=0.0)

@@ -61,6 +61,11 @@ def try_load_pantheon_cov(path: str):
         try:
             if cand.endswith('.npy'):
                 C = np.load(cand)
+                # sanity: square matrix
+                if C.ndim == 2 and C.shape[0] == C.shape[1]:
+                    return C
+                else:
+                    continue
             elif cand.endswith('.csv'):
                 import csv as _csv
                 rows = []
@@ -71,20 +76,33 @@ def try_load_pantheon_cov(path: str):
                             continue
                         rows.append([float(x) for x in row])
                 C = np.array(rows, dtype=float)
+                if C.ndim == 2 and C.shape[0] == C.shape[1]:
+                    return C
+                else:
+                    continue
             else:
-                # ASCII whitespace-delimited
-                rows = []
+                # ASCII: Pantheon+ often provides first line N then N*N values
                 with open(cand, 'r') as f:
-                    for line in f:
-                        s = line.strip()
-                        if not s or s.startswith('#'):
-                            continue
-                        rows.append([float(x) for x in s.replace(',', ' ').split()])
+                    lines = [ln.strip() for ln in f if ln.strip() and not ln.startswith('#')]
+                # Try flattened format with leading N
+                try:
+                    N = int(float(lines[0].split()[0]))
+                    flat = []
+                    for ln in lines[1:]:
+                        flat.extend([float(x) for x in ln.replace(',', ' ').split()])
+                    flat = np.asarray(flat, float)
+                    if flat.size >= N*N:
+                        C = flat[:N*N].reshape(N, N)
+                        return C
+                except Exception:
+                    pass
+                # Fallback: whitespace-delimited square table
+                rows = []
+                for ln in lines:
+                    rows.append([float(x) for x in ln.replace(',', ' ').split()])
                 C = np.array(rows, dtype=float)
-            # sanity: square matrix
-            if C.ndim != 2 or C.shape[0] != C.shape[1]:
-                continue
-            return C
+                if C.ndim == 2 and C.shape[0] == C.shape[1]:
+                    return C
         except Exception:
             continue
     return None

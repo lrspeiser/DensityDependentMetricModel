@@ -81,33 +81,69 @@ def parse_one_table(path: str) -> List[Dict[str, Any]]:
     return out
 
 
-def build_csv(in_dir: str, out_csv: str):
-    entries: List[Dict[str, Any]] = []
-    for root, _, files in os.walk(in_dir):
-        for fn in files:
-            if fn.lower().endswith(('.txt', '.dat', '.csv')):
-                path = os.path.join(root, fn)
-                try:
-                    entries.extend(parse_one_table(path))
-                except Exception:
-                    continue
-    if not entries:
-        print(f"[ERROR] No DR12 consensus entries found in {in_dir}. Inspect the files and adjust parser.", file=sys.stderr)
+def build_csv(in_dir: str, out_csv: str, r_s_fid_mpc: float = 147.78):
+    # Load the consensus means
+    means_path = os.path.join(in_dir, 'BAO_consensus_results_dM_Hz.txt')
+    cov_path = os.path.join(in_dir, 'BAO_consensus_covtot_dM_Hz.txt')
+    if not os.path.exists(means_path) or not os.path.exists(cov_path):
+        print(f"[ERROR] Expected files not found in {in_dir}:\n  - BAO_consensus_results_dM_Hz.txt\n  - BAO_consensus_covtot_dM_Hz.txt", file=sys.stderr)
         sys.exit(2)
-    # Deduplicate by z and keep the first occurrence per z in sorted order
-    df = pd.DataFrame(entries).drop_duplicates(subset=['z']).sort_values('z')
-    # We have DM_over_rd and Hz_scaled; convert to D_H_over_rd via Hrd/c if we know c and scaling.
-    # Without the exact rs/rsfid factor, we cannot get absolute D_H_over_rd; we will output only D_M_over_rd for now.
-    df['D_M_over_rd'] = df['DM_over_rd']
-    cols = ['z', 'D_M_over_rd']
+    rows = _parse_numeric_lines(means_path)
+    # Parse means in order [dM1, Hz1, dM2, Hz2, dM3, Hz3]
+    z_bins: List[float] = []
+    dM_vals: List[float] = []
+    Hz_vals: List[float] = []
+    for parts in rows:
+        try:
+            z = float(parts[0]); key = parts[1]; val = float(parts[2])
+        except Exception:
+            continue
+        if 'dM' in key:
+            z_bins.append(z); dM_vals.append(val)
+        elif key.startswith('Hz'):
+            Hz_vals.append(val)
+    if len(z_bins) != 3 or len(Hz_vals) != 3:
+        print(f"[ERROR] Failed to parse 3 z bins and (dM, Hz) means from {means_path}", file=sys.stderr)
+        sys.exit(3)
+    # Load 6x6 covariance for [dM1, Hz1, dM2, Hz2, dM3, Hz3]
+    C6 = np.loadtxt(cov_path)
+    if C6.shape != (6, 6):
+        print(f"[ERROR] Expected 6x6 covariance in {cov_path}, got {C6.shape}", file=sys.stderr)
+        sys.exit(4)
+    # Convert to our native variables: D_M_over_rd and D_H_over_rd (with D_H_over_rd = 1 / (Hrd/c))
+    c_km_s = 299792.458
+    D_M_over_rd = np.asarray(dM_vals, float) / float(r_s_fid_mpc)
+    Hrd_over_c = (np.asarray(Hz_vals, float) * float(r_s_fid_mpc)) / c_km_s
+    D_H_over_rd = 1.0 / Hrd_over_c
+    # Extract per-bin 2x2 covariance blocks and transform linearly then via y2=1/x
+    out_rows: List[Dict[str, Any]] = []
+    for i in range(3):
+        # block indices in 6x6: (2i, 2i+1)
+        idx = [2*i, 2*i+1]
+        C_block = C6[np.ix_(idx, idx)].astype(float)
+        # Linear transform first: x1=dM -> y1 = x1 / r_s_fid; x2=Hz -> u = (x2 * r_s_fid / c) = Hrd/c
+        A = np.array([[1.0/r_s_fid_mpc, 0.0], [0.0, r_s_fid_mpc/c_km_s]], float)
+        Cu = A @ C_block @ A.T
+        sig_DM = float(np.sqrt(max(Cu[0, 0], 0.0)))
+        sig_Hrd = float(np.sqrt(max(Cu[1, 1], 0.0)))
+        cov_DM_Hrd = float(Cu[0, 1])
+        rho_u = float(cov_DM_Hrd / (sig_DM * sig_Hrd)) if sig_DM > 0 and sig_Hrd > 0 else 0.0
+        # Now transform u -> y2 = 1/u for D_H_over_rd
+        u = float(Hrd_over_c[i])
+        sig_DH = sig_Hrd / (u*u)
+        rho = -rho_u  # correlation flips sign under reciprocal
+        out_rows.append(dict(z=z_bins[i], D_M_over_rd=D_M_over_rd[i], D_M_err=sig_DM,
+                             D_H_over_rd=D_H_over_rd[i], D_H_err=sig_DH, rho=rho))
+    df = pd.DataFrame(out_rows).sort_values('z')
     os.makedirs(os.path.dirname(out_csv), exist_ok=True)
-    df[cols].to_csv(out_csv, index=False)
-    print(f"Wrote {out_csv} with columns {cols} and N={len(df)}")
+    df.to_csv(out_csv, index=False)
+    print(f"Wrote {out_csv} with columns {list(df.columns)} and N={len(df)}")
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='Ingest BOSS DR12 consensus Gaussian constraints into BAO CSV schema.')
-    ap.add_argument('--in-dir', type=str, default=os.path.join('external_data', 'BOSS', 'DR12_consensus'))
+    ap.add_argument('--in-dir', type=str, default=os.path.join('external_data', 'BOSS', 'DR12_consensus', 'COMBINEDDR12_BAO_consensus_dM_Hz'))
     ap.add_argument('--out', type=str, default=os.path.join('tariff', 'data', 'bao_compilation.csv'))
+    ap.add_argument('--r-s-fid', dest='r_s_fid', type=float, default=147.78, help='Fiducial sound horizon r_s(fid) in Mpc (DR12 uses ~147.78 Mpc)')
     args = ap.parse_args()
-    build_csv(args.in_dir, args.out)
+    build_csv(args.in_dir, args.out, r_s_fid_mpc=args.r_s_fid)
