@@ -61,12 +61,32 @@ def xi_hybrid(
     return xi
 
 
+def xi_density_plateau(
+    gbar: np.ndarray,
+    rho: np.ndarray,
+    R_kpc: np.ndarray | None = None,
+    *,
+    rho_c: float = 1e-27,
+    gamma: float = 1.5,
+    n: float = 2.0,
+    Dmax: float = 50.0,
+    **_: float,
+) -> np.ndarray:
+    """Bounded density gate with adjustable sharpness and plateau."""
+    r = np.maximum(np.asarray(rho, dtype=float), 1e-99)
+    exponent = float(gamma) * float(n)
+    env = 1.0 / (1.0 + np.power(r / rho_c, exponent))
+    return 1.0 + (Dmax - 1.0) * env
+
+
 def build_gate(kind: str, **params) -> Gate:
     k = kind.lower()
     if k == "accel":
         return lambda gbar, rho=None, R=None: xi_accel(gbar, rho, R, **params)
     if k == "density":
         return lambda gbar, rho, R=None: xi_density_only(gbar, rho, R, **params)
+    if k in ("density-plateau", "dg-plateau"):
+        return lambda gbar, rho, R=None: xi_density_plateau(gbar, rho, R, **params)
     if k == "hybrid":
         return lambda gbar, rho, R=None: xi_hybrid(gbar, rho, R, **params)
     raise ValueError(f"Unknown gate kind: {kind}")

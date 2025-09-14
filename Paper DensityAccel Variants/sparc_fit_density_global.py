@@ -44,9 +44,10 @@ def load_rho_proxy(proxy_csv: Path, gid: str):
     return np.array(R), np.array(rho)
 
 
-def xi_density(rho_cgs: np.ndarray, rho_c: float, gamma: float, xi_max: float) -> np.ndarray:
+def xi_density(rho_cgs: np.ndarray, rho_c: float, gamma: float, xi_max: float, n: float = 2.0) -> np.ndarray:
     r = np.maximum(rho_cgs, 1e-99)
-    env = 1.0 / (1.0 + np.power(r / rho_c, gamma))
+    exponent = float(gamma) * float(n)
+    env = 1.0 / (1.0 + np.power(r / rho_c, exponent))
     return 1.0 + (xi_max - 1.0) * env
 
 
@@ -74,7 +75,7 @@ def evaluate_gate_for_galaxy(kind: str, params: dict, rotmods_dir: Path, obs_csv
     gbar_cgs_at = np.interp(Ro, Rm, gbar_SI, left=gbar_SI[0], right=gbar_SI[-1]) * 100.0
     rho_at = np.interp(Ro, Rrho, rho, left=rho[0], right=rho[-1])
     if kind == 'density':
-        xi = xi_density(rho_at, params['rho_c'], params['gamma'], params['xi_max'])
+        xi = xi_density(rho_at, params['rho_c'], params['gamma'], params['xi_max'], params.get('n', 2.0))
     else:
         xi = xi_hybrid(gbar_cgs_at, rho_at, params['a0'], params['rho_c'], params['gamma'], params['zeta'], params['xi_max'])
     Vmod = np.sqrt(np.clip(xi, 1.0, None)) * Vbar_at
@@ -96,6 +97,7 @@ def main():
     ap.add_argument('--rho-c-grid', default='1e-28,3e-28,1e-27,3e-27,1e-26')
     ap.add_argument('--gamma-grid', default='0.8,1.0,1.2,1.5')
     ap.add_argument('--xi-max', type=float, default=50.0)
+    ap.add_argument('--n', type=float, default=2.0)
     ap.add_argument('--a0', type=float, default=1.93e-7)
     ap.add_argument('--zeta-grid', default='0.5,1.0,2.0')
     args = ap.parse_args()
@@ -111,7 +113,7 @@ def main():
     for rho_c in rho_c_grid:
         for gamma in gamma_grid:
             if args.kind == 'density':
-                params = {'rho_c': rho_c, 'gamma': gamma, 'xi_max': args.xi_max}
+                params = {'rho_c': rho_c, 'gamma': gamma, 'xi_max': args.xi_max, 'n': args.n}
                 rms_list = []
                 for gid in args.galaxies:
                     rms_list.append(evaluate_gate_for_galaxy('density', params, Path(args.rotmods_dir), Path(args.obs_csv), Path(args.rho_proxy_csv), gid, args.sigma_floor))

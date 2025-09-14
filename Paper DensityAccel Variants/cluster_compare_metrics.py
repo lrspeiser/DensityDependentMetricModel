@@ -91,11 +91,12 @@ def main():
     ap.add_argument('--xmax', type=float, default=0.8, help='Max r/R200c')
     ap.add_argument('--equal-cluster-weight', action='store_true')
     # Optional gate
-    ap.add_argument('--gate', choices=['hybrid','density'], default=None)
+    ap.add_argument('--gate', choices=['hybrid','density','density-plateau','accel'], default=None)
     ap.add_argument('--a0', type=float, default=1.93e-7)
     ap.add_argument('--rho-c', type=float, default=1e-27)
     ap.add_argument('--gamma', type=float, default=1.5)
     ap.add_argument('--zeta', type=float, default=1.0)
+    ap.add_argument('--n', type=float, default=2.0)
     ap.add_argument('--xi-max', type=float, default=50.0)
     args = ap.parse_args()
 
@@ -115,7 +116,7 @@ def main():
     if args.gate:
         if build_gate is None:
             raise RuntimeError('xi_registry_variants not available')
-        gate = build_gate(args.gate, a0=args.a0, rho_c=args.rho_c, gamma=args.gamma, zeta=args.zeta, Dmax=args.xi_max)
+        gate = build_gate(args.gate, a0=args.a0, rho_c=args.rho_c, gamma=args.gamma, zeta=args.zeta, Dmax=args.xi_max, n=args.n)
 
     for raw_name, shells in accept.items():
         cname = canon(raw_name)

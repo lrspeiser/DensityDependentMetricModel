@@ -35,11 +35,12 @@ def einstein_angle_gr(Sigma_crit_cgs: float, R_kpc: np.ndarray, M2D_cgs: np.ndar
 
 def main():
     ap = argparse.ArgumentParser(description='Lensing sandbox: gate variants at theta_E')
-    ap.add_argument('--gate', default='density', choices=['accel','density','hybrid'])
+    ap.add_argument('--gate', default='density', choices=['accel','density','density-plateau','hybrid'])
     ap.add_argument('--a0', type=float, default=1.93e-7)
     ap.add_argument('--rho-c', type=float, default=1e-27)
     ap.add_argument('--gamma', type=float, default=1.0)
     ap.add_argument('--zeta', type=float, default=1.0)
+    ap.add_argument('--n', type=float, default=2.0)
     ap.add_argument('--Dmax', type=float, default=50.0)
     ap.add_argument('--log10Mstar', type=float, required=True)
     ap.add_argument('--Re_kpc', type=float, required=True)
@@ -64,12 +65,12 @@ def main():
     gb = G_CGS * np.interp(R_E, R, M3D) / ((R_E * KPC_CM) ** 2)
     rho_E = np.interp(R_E, R, rho)
 
-    gate = build_gate(args.gate, a0=args.a0, rho_c=args.rho_c, gamma=args.gamma, zeta=args.zeta, Dmax=args.Dmax)
+    gate = build_gate(args.gate, a0=args.a0, rho_c=args.rho_c, gamma=args.gamma, zeta=args.zeta, Dmax=args.Dmax, n=args.n)
     xi_E = gate(gb, rho_E, R_E)
 
     out = {
         'gate': args.gate,
-        'params': {'a0': args.a0, 'rho_c': args.rho_c, 'gamma': args.gamma, 'zeta': args.zeta, 'Dmax': args.Dmax},
+        'params': {'a0': args.a0, 'rho_c': args.rho_c, 'gamma': args.gamma, 'zeta': args.zeta, 'n': args.n, 'Dmax': args.Dmax},
         'Re_kpc': args.Re_kpc,
         'log10Mstar': args.log10Mstar,
         'R_E_kpc': float(R_E),
