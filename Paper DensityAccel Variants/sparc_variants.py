@@ -61,20 +61,21 @@ def main():
     ap.add_argument('--sparc-rotmods', required=True, help='Dir with per-galaxy rotmod CSVs')
     ap.add_argument('--galaxies', nargs='+', required=True, help='Galaxy IDs (filenames without .csv)')
     ap.add_argument('--outdir', required=True)
-    ap.add_argument('--gate', default='accel', choices=['accel','density','hybrid'])
+    ap.add_argument('--gate', default='accel', choices=['accel','density','density-plateau','hybrid'])
     ap.add_argument('--rho-csv', default=None, help='CSV with columns: galaxy_id,R_kpc,rho_cgs (required for density/hybrid)')
     ap.add_argument('--a0', type=float, default=1.93e-7)
     ap.add_argument('--rho-c', type=float, default=1e-27)
     ap.add_argument('--gamma', type=float, default=1.5)
     ap.add_argument('--zeta', type=float, default=1.0)
     ap.add_argument('--Dmax', type=float, default=50.0)
+    ap.add_argument('--n', type=float, default=2.0)
     args = ap.parse_args()
 
     outdir = Path(args.outdir); outdir.mkdir(parents=True, exist_ok=True)
     rotdir = Path(args.sparc_rotmods)
     rho_map = load_rho_proxy(Path(args.rho_csv)) if args.rho_csv else {}
 
-    gate = build_gate(args.gate, a0=args.a0, rho_c=args.rho_c, gamma=args.gamma, zeta=args.zeta, Dmax=args.Dmax)
+    gate = build_gate(args.gate, a0=args.a0, rho_c=args.rho_c, gamma=args.gamma, zeta=args.zeta, Dmax=args.Dmax, n=args.n)
 
     for gid in args.galaxies:
         rotmod_path = rotdir / f"{gid}.csv"
@@ -85,7 +86,7 @@ def main():
         gbar_SI = (Vbar**2 / R) * ACC_M_S2_PER_KMS2_PER_KPC
         gbar_cgs = gbar_SI * 100.0
 
-        if args.gate in ('density','hybrid'):
+        if args.gate in ('density','density-plateau','hybrid'):
             if gid not in rho_map:
                 raise ValueError(f"No rho profile found in {args.rho_csv} for galaxy_id={gid}")
             # Interpolate rho(R) to rotmod radii
@@ -106,7 +107,7 @@ def main():
 
     meta = {
         'gate': args.gate,
-        'params': {'a0': args.a0, 'rho_c': args.rho_c, 'gamma': args.gamma, 'zeta': args.zeta, 'Dmax': args.Dmax},
+        'params': {'a0': args.a0, 'rho_c': args.rho_c, 'gamma': args.gamma, 'zeta': args.zeta, 'n': args.n, 'Dmax': args.Dmax},
         'galaxies': args.galaxies,
     }
     (outdir/'sparc_variants_meta.json').write_text(json.dumps(meta, indent=2), encoding='utf-8')
