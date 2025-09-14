@@ -455,12 +455,12 @@ python scripts/cluster_clusters_plus_stars.py \
 
 Setup. CLASH NFW totals (Umetsu et al. 2016) matched to ACCEPT ICM gas shells; baryons = ICM + a global BCG+ICL Hernquist template; cosmology and constants pinned in summary.json. We cut to 0.05 ≤ r/R200c ≤ 0.8, weight clusters equally, and fit with a robust Huber loss.
 
-RAR‑plateau (best‑fit a0): a0 ≈ 1.737×10⁻⁷ cgs; RMS = 0.113 dex.
+RAR‑plateau (best‑fit a0): a0 ≈ 1.74×10⁻⁷ cgs; RMS = 0.113 dex (improved from 0.146 dex in the preliminary run).
 GR (baryons‑only): RMS = 1.014 dex.
 Residual vs radius: Δlog10 g ≈ 0.178 − 0.81 x, with x ≡ r/R200c; zero ≈ 0.22. Inner/outer medians: +0.083 dex (x≤0.2), −0.108 dex (x>0.2).
 Fixed‑a0 cross‑domain: with a0 = 1.93×10⁻⁷ cgs, RMS = 0.115 dex; same trend/coverage (≈54% within ±0.1 dex; ≈94% within ±0.2 dex).
 
-Null tests: radial scramble flattens slope; cluster cross‑match inflates RMS to ≈ 0.16 dex.
+Diagnostics and null tests are written to results/cluster_rar_defensible/cluster_section_metrics.json (including jackknife a0, bootstrap RMS with 200 replicates, radial-scramble slope, and cross-match scramble).
 
 Reproduce (paper preset):
 ```bash
@@ -487,12 +487,12 @@ python scripts/cluster_rar_pipeline.py \
 
 Notes
 - Total accelerations are from CLASH NFW (Table 2 of Umetsu+2016) at the paper cosmology ($H_0=70,\, \Omega_m=0.27,\, \Omega_\Lambda=0.73$).
-- Baryons are gas‑only from ACCEPT shells using $\rho_{\rm gas}=\mu_e m_p n_e$ with $\mu_e=1.17$.
+- Baryons are gas‑only from ACCEPT shells using $\rho_{\rm gas}=\mu_e m_p n_e$ with $\mu_e=1.17$; optional stellar components (BCG/ICL) can be supplied via external_data/clash_stars.csv.
 - The figure overlays:
   - CLASH NFW points (log10 $g_{\rm bar}$ vs log10 $g_{\rm tot}$),
   - GR baseline (one‑to‑one), and
   - RAR‑plateau (global $a_0$, $D_{\max}=50$).
-- The raw‑data hygiene and $f_{\rm gas}$ sanity are reported per cluster; inspect diagnostics.csv to flag suspect inputs.
+- Raw‑data hygiene (n_shells, used_frac) and $f_{\rm gas}$ sanity are reported per cluster; inspect diagnostics.csv to flag suspect inputs.
 
 ---
 
@@ -503,6 +503,11 @@ Notes
 ---
 
 For extended figures, latest results tables, and detailed reproducibility instructions, see REPRODUCIBLE.md.
+
+Sandbox comparison (paper-style, optional)
+- Orchestration: Paper DensityAccel Variants/sandbox_reproduce.py
+- Report: Paper DensityAccel Variants/sandbox_report.md (generated)
+- This sandbox runs density- and acceleration-gated variants for clusters, SPARC, lensing, Solar, and MW Kz without touching the main paper code.
 
 For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets. The aggregator standardizes residuals with $\sigma_{\rm eff}=\sqrt{\sigma^2+6^2+(0.05\,V_{\rm obs})^2}$ and records these floor settings in `docs/metrics/sparc_fit_quality.json`.
 

@@ -21,12 +21,17 @@ def load_rotmod(path: Path) -> Dict[str, np.ndarray]:
     R_kpc, Vbar = [], []
     with path.open() as f:
         rdr = csv.DictReader(f)
-        cols = [c.lower() for c in rdr.fieldnames or []]
-        # heuristics for column names
-        col_R = 'r_kpc' if 'r_kpc' in cols else ('r' if 'r' in cols else None)
-        col_Vbar = 'vbar_kms' if 'vbar_kms' in cols else ('vbar' if 'vbar' in cols else None)
+        cols = rdr.fieldnames or []
+        # heuristics for column names with case-insensitive matching
+        norm = {c.lower(): c for c in cols}
+        col_R = norm.get('r_kpc') or norm.get('r') or norm.get('radius')
+        col_Vbar = norm.get('vbar_kms') or norm.get('vbar') or norm.get('vbar_km_s')
         if col_R is None or col_Vbar is None:
-            raise ValueError(f"Rotmod CSV must contain R_kpc and Vbar columns: {path}")
+            # try exact names used by our converter
+            if 'R_kpc' in cols and 'Vbar_kms' in cols:
+                col_R, col_Vbar = 'R_kpc', 'Vbar_kms'
+            else:
+                raise ValueError(f"Rotmod CSV must contain R_kpc and Vbar columns: {path}")
         for row in rdr:
             R_kpc.append(float(row[col_R]))
             Vbar.append(float(row[col_Vbar]))
