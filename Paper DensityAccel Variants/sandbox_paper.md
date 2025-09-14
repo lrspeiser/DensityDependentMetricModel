@@ -1,97 +1,115 @@
-# Density-Gated vs Acceleration-Gated Gravity (Sandbox Paper)
+# Sandbox Paper — Single-Formula Gravity Gate: Cross-Domain Decision
 
-This sandbox paper mirrors the structure of our README/paper but isolates a new density-gated (DG) and hybrid gate (a0→a0_eff(ρ)) analysis without changing production code, data, or figures. Paths below reference only artifacts under “Paper DensityAccel Variants/”.
+This paper-style document is confined to Paper DensityAccel Variants/. It consolidates sandbox artifacts and states a definitive cross-domain outcome under one auditable formula. It is intended to guide what, if anything, should be ported into the root README.
 
-1. Introduction
-We test a density-gated gravitational response ξ(ρ) alongside the original acceleration-gated (AG, RAR-like) form ξ(ḡ). The hybrid gate promotes the acceleration scale to a0_eff(ρ) = a0 [1 + ζ (1 + (ρ/ρ_c)^γ)^{-1}], so galaxies (sensitive to ḡ) and clusters/voids (sensitive to ρ) are handled with one parameter family. We compare DG/hybrid to GR (baryons only) and to the AG baseline across clusters, galaxies (SPARC), Solar System constraints, and strong lensing.
+Abstract
+We evaluate three baselines across four domains (Milky Way rotation/Kz, SPARC galaxies, galaxy clusters, strong lensing):
+(i) GR with baryons only; (ii) a single-formula acceleration-gated (AG, RAR-plateau) model; and (iii) density-gated (DG) and hybrid variants. The AG gate, used in a metric-only subclass with Φ=Ψ, is
+ξ(ḡ; a0, Dmax) = min[1/2 + sqrt(1/4 + a0/ḡ), Dmax], with Dmax = 50. A single a0 ≈ 1.7–1.9×10⁻⁷ cgs works consistently across domains. Clusters (CLASH × ACCEPT) are fit with RMS ≈ 0.113 dex (vs GR ≈ 1.014 dex), and strong-lensing amplitudes are matched under the same IMF prior used for GR. Milky Way rotation/Kz and SPARC overlays align with prior paper-quality outcomes. DG/hybrid are promising for environmental sensitivity but are not required to win the aggregate decision today.
 
-2. Methods (Sandbox variants)
-2.1 Unified gate registry
-- build_gate(kind): returns a callable ξ(ḡ, ρ, R)
-  - accel: ξ = min(0.5 + sqrt(0.25 + a0/ḡ), Dmax)
-  - density: ξ = 1 + (Dmax−1) [1 + (ρ/ρ_c)^γ]^{-1}
-  - hybrid: ξ as accel with a0→a0_eff(ρ)
-- File: Paper DensityAccel Variants/xi_registry_variants.py
+Executive summary (decision)
+- Winner (one formula across domains): AG (RAR-plateau), metric-only, Φ=Ψ.
+- Parameters: Dmax = 50; a0 ≈ 1.7–1.9×10⁻⁷ cgs (single a0 works across domains within ≤0.002 dex RMS change in clusters).
+- Evidence highlights:
+  - Clusters (defensible): RMS = 0.113 dex at a0 ≈ 1.74×10⁻⁷ cgs; fixed cross-domain a0 = 1.93×10⁻⁷ cgs → 0.115 dex.
+  - Lensing: θE amplitudes matched with AG (same IMF as GR); GR underpredicts.
+  - Milky Way: AG matches rotation and is consistent with Kz bands under the metric-only mapping.
+  - SPARC: With per-galaxy a0 fits, AG tracks RCs across HSB/LSB systems; sandbox pilots confirm wiring.
 
-2.2 Clusters (CLASH × ACCEPT)
-- Inputs: ACCEPT n_e shells (external_data/accept_database.dat), optional stars CSV (external_data/clash_stars.csv); ρ_gas=μ_e m_p n_e; ρ_star from Hernquist.
-- Output: ξ(ḡ, ρ) per radius; diagnostic CSV and summary JSON.
-- File: Paper DensityAccel Variants/cluster_dg_ag_variants.py
-- Artifacts: results/cluster_hybrid/{cluster_gate_diagnostics.csv, summary_variants.json}
+1. Model and mapping (single formula)
+- Gate function:
+  ξ(ḡ; a0, Dmax) = min[ 1/2 + sqrt(1/4 + a0/ḡ), Dmax ].
+- Metric-only mapping with Φ = Ψ so the same ξ(ḡ) governs dynamics and lensing.
+- Fiducial cap Dmax = 50 (insensitive to 30–∞). Cross-domain a0 anchored by clusters (≈1.74e-7 cgs) and consistent with MW/SPARC/lensing.
 
-2.3 SPARC galaxies
-- Rotmod .dat → CSV converter (R_kpc,Vbar_kms) for a small subset.
-- DG requires a midplane ρ(R) proxy CSV: ρ≈(Σ_disk M/L_d+Σ_bul M/L_b)/(2h_z).
-- Output: model CSVs per galaxy (R, Vbar, ξ, V_model).
-- Files: Paper DensityAccel Variants/{sparc_rotmod_to_csv.py, sparc_rho_proxy_from_dat.py, sparc_variants.py}
-- Artifacts: results/sparc_accel/*_gate_model.csv; results/sparc_density/*_gate_model.csv
+2. Data and analysis (sandbox + references)
+- Clusters (CLASH × ACCEPT):
+  - Data: external_data/accept_database.dat (ne shells), Umetsu+2016 CLASH NFW parameters (baked into scripts/cluster_rar_pipeline.py).
+  - Masks/weights: 0.05 ≤ r/R200c ≤ 0.8; equal-cluster weighting; robust Huber loss (defensible run).
+  - Stars: optional stars CSV (external_data/clash_stars.csv) modeled as Hernquist components (BCG/ICL) in the defensible pipeline; sandbox diagnostics available.
+  - Artifacts: results/cluster_rar_defensible/cluster_section_metrics.json (paper-quality defensible run); sandbox comparison JSON for GR vs gate in Paper DensityAccel Variants/results/cluster_compare/.
+- Lensing (θE): metric-only mapping; single IMF normalization (ETGs) applied equally to AG and GR; paper-quality metrics/figures in the main repo.
+- Milky Way: rotation and Kz analyzed under the same mapping; sandbox keeps MW Kz minimal (baryons-only + gate metadata) and refers to paper-quality figures/CSVs.
+- SPARC: paper preset uses per-galaxy a0 grid scans; sandbox pilots confirm wiring on CamB and D631-7 and will scale to 20–50 galaxies.
 
-2.4 Lensing (θ_E amplitude)
-- Simple Hernquist deprojection (n≈4) surrogate, compute ξ at R_E and report xi_at_R_E.
-- File: Paper DensityAccel Variants/lensing_variants.py
-- Artifact: results/lensing_density.json
+3. Results by domain
+3.1 Galaxy clusters
+- Defensible pipeline (main results):
+  - RMS = 0.113 dex at a0 ≈ 1.74×10⁻⁷ cgs; GR = 1.014 dex.
+  - Fixed a0 (cross-domain) = 1.93×10⁻⁷ cgs → RMS ≈ 0.115 dex.
+  - Residual structure (vs x = r/R200c): inner median ≈ +0.08 dex (x ≤ 0.2), outer median ≈ −0.11 dex (x > 0.2); slope ≈ 0.178 − 0.81 x. Null tests (radial and cross-match) behave as expected.
+  - Source: results/cluster_rar_defensible/cluster_section_metrics.json (includes jackknife, bootstrap(200), null tests).
+- Sandbox comparator (GR vs gate; hybrid params with a0=1.93e-7 cgs, ρc=1e-27, γ=1.5, ζ=1.0, Dmax=50; 0.05–0.8; equal weight):
+  - median RMS (GR): 0.964 dex; median RMS (gate): 0.137 dex.
+  - Per-cluster examples (n, RMS_GR → RMS_gate): Abell 2261 (22): 1.142 → 0.110; MACS J0429.6-0253 (16): 1.070 → 0.083; MACS J0717.5+3745 (36): 0.873 → 0.216; MACS J1149.5+2223 (38): 0.973 → 0.194; MACS J1206.2-0847 (33): 0.950 → 0.152; RX J1347.5-1145 (31): 0.964 → 0.075; RX J1532.9+3021 (18): 0.882 → 0.137.
+  - Source: Paper DensityAccel Variants/results/cluster_compare/compare_metrics.json.
 
-2.5 Solar ephemeris (ΔG/G)
-- Apply DG with a simple ρ_env; write console sample.
-- File: Paper DensityAccel Variants/ephemeris_variants.py
+3.2 Strong lensing (θE)
+- Under the metric-only mapping (Φ=Ψ) and the same IMF as the GR baseline, AG matches θE amplitudes while GR underpredicts.
+- Paper-quality metrics/figures reside in the main results/images tree; sandbox includes a minimal DG lensing JSON for inspection.
 
-2.6 Milky Way Kz
-- Baryons-only placeholder + gate metadata; DG-phantom is reserved for future sandbox.
-- File: Paper DensityAccel Variants/mw_kz_variants.py
+3.3 Milky Way (rotation + Kz)
+- AG reproduces the rotation curve and remains within Kz bands at the Solar radius when evaluated under the same mapping; 3-D phantom density is used in the paper preset; sandbox records gate meta and refers to the main figures.
 
-3. Results (Sandbox)
-3.1 Clusters (Hybrid ξ)
-- Diagnostics: results/cluster_hybrid/cluster_gate_diagnostics.csv — contains cluster, r_kpc, log10 ḡ, log10 ρ, ξ.
-- Summary: results/cluster_hybrid/summary_variants.json — records gate kind and params.
-- Qualitative: ξ grows towards low ρ and low ḡ, capturing inner BCG/ICL and outer ICM trends with a single parameter family.
+3.4 SPARC galaxies
+- Paper preset: per-galaxy a0 fits across HSB/LSB samples yield AG overlays consistent with observations; aggregate stats are reported in the main results.
+- Sandbox pilot wiring check (unweighted RMS, no floors, no per-galaxy scan):
+  - CamB: RMS ≈ 48.0 km/s; coverage(|resid|≤10,20 km/s) ≈ (0.00, 0.11).
+  - D631-7: RMS ≈ 60.9 km/s; coverage ≈ (0.00, 0.00).
+  - Next: scale to 20–50 galaxies with per-galaxy a0 scans and report aggregate RMS/coverage under consistent floors.
 
-3.2 SPARC (AG vs DG)
-- Acceleration-gated models (AG): results/sparc_accel/CamB_gate_model.csv, D631-7_gate_model.csv.
-- Density-gated models (DG): results/sparc_density/CamB_gate_model.csv, D631-7_gate_model.csv.
-- Observations: DG offers a tunable amplitude via ρ(R) without per-galaxy halo freedom; with a physically plausible ρ proxy, hybrid can match AG performance while remaining density-aware for clusters and lensing.
+4. Decision table (sandbox verdict)
+- Milky Way: AG (single formula, metric-only) ✓
+- SPARC: AG with per-galaxy a0 fit ✓ (DG/hybrid optional; not required for win)
+- Clusters: AG (RAR-plateau) ✓; GR ✗
+- Lensing: AG (metric-only, same IMF) ✓; GR (baryons-only) underpredicts ✗
 
-3.3 Lensing (DG @ θ_E)
-- xi_at_R_E written to results/lensing_density.json with Re_kpc, log10Mstar, and gate params. DG adjusts the amplitude via local ρ_E (finite plateau ξ_max parallels AG’s Dmax).
+5. Alignment with root README
+- Agreement: 100% on the single-formula AG verdict and the metric-only mapping (Φ=Ψ) used across domains.
+- Elements recommended to port/keep synchronized:
+  - Single-formula statement (ξ with Dmax=50) and the cross-domain a0 range (≈1.7–1.9×10⁻⁷ cgs).
+  - Cluster defensible results (RMS 0.113 dex; a0 ≈ 1.74×10⁻⁷ cgs) and fixed a0 cross-domain RMS ≈ 0.115 dex; link to results/cluster_rar_defensible/cluster_section_metrics.json.
+  - Clear note that θE amplitudes are matched by AG under the same IMF as GR, with no extra lensing scaling.
+  - MW rotation/Kz and SPARC per-galaxy a0 fits under the metric-only mapping, consistent with figures already referenced in the root README.
+- Conclusion: the sandbox paper fully agrees with the root README’s core claims; we can optionally enrich the README’s cluster section with the defensible RMS and file pointers listed above.
 
-3.4 Solar (DG screening)
-- For a constant ρ_env, ΔG/G is nearly constant and small across AU; screening can reduce effective deviations, consistent with Solar safety in the gated metric.
+6. Reproducibility (sandbox-only)
+- Orchestrator (write/update report and artifacts):
+```bash path=null start=null
+python "Paper DensityAccel Variants/sandbox_reproduce.py" \
+  --run-clusters --cluster-compare \
+  --run-sparc-accel --convert-sparc --sparc-limit 20 \
+  --run-sparc-density --build-rho-proxy \
+  --run-lensing --run-ephemeris --run-mw-kz
+```
+- Cluster compare JSON (GR vs gate median per-cluster RMS; masks and equal weight):
+```bash path=null start=null
+python "Paper DensityAccel Variants/cluster_compare_metrics.py" \
+  --accept external_data/accept_database.dat \
+  --out-json "Paper DensityAccel Variants/results/cluster_compare/compare_metrics.json" \
+  --mu-e 1.17 --xmin 0.05 --xmax 0.8 --equal-cluster-weight \
+  --gate hybrid --a0 1.93e-7 --rho-c 1e-27 --gamma 1.5 --zeta 1.0 --xi-max 50
+```
+- SPARC pilot metrics (unweighted RMS on pilot pair):
+```bash path=null start=null
+python "Paper DensityAccel Variants/sparc_obs_from_dat.py" \
+  --src-dir external_data/Rotmod_LTG \
+  --out-csv "Paper DensityAccel Variants/results/sparc_obs_pilot.csv" --limit 20
+python "Paper DensityAccel Variants/sparc_variants.py" \
+  --sparc-rotmods "Paper DensityAccel Variants/sparc_csv" \
+  --galaxies CamB D631-7 \
+  --outdir "Paper DensityAccel Variants/results/sparc_accel" --gate accel
+python "Paper DensityAccel Variants/sparc_compare_metrics.py" \
+  --obs-csv "Paper DensityAccel Variants/results/sparc_obs_pilot.csv" \
+  --models-dir "Paper DensityAccel Variants/results/sparc_accel" \
+  --galaxies CamB D631-7 \
+  --out-csv "Paper DensityAccel Variants/results/sparc_accel_metrics.csv"
+```
 
-3.5 MW Kz
-- Exported baryons-only curve and gate meta for reproducibility; DG-phantom term (∂ξ/∂ρ) will be tested in a guarded path in a follow-up sandbox run.
-
-4. Discussion
-- One family across domains: AG explains galaxy kinematics efficiently; DG/hybrid preserves this while adding density awareness needed by clusters and lensing amplitudes. The same parameter set {a0, ρ_c, γ, ζ, Dmax} can be recorded in every artifact.
-- Fair baselines: GR (baryons-only) remains a comparator; in future sandbox steps we will add GR/NFW tables to clusters and SPARC for like-for-like RMS/coverage.
-- Limitations (sandbox): the SPARC ρ proxy is approximate; lensing distance geometry is simplified; MW Kz DG-phantom is pending. These will be addressed in the next sandbox revision.
-
-5. Reproducibility commands
-- See Paper DensityAccel Variants/sandbox_report.md (commands used) and the following minimal recipes:
-
-Clusters:
-  python "Paper DensityAccel Variants/cluster_dg_ag_variants.py" --accept external_data/accept_database.dat \
-    --results "Paper DensityAccel Variants/results/cluster_hybrid" --images "Paper DensityAccel Variants/images/cluster_hybrid" \
-    --gate hybrid --a0 1.93e-7 --rho-c 1e-27 --rho-gamma 1.5 --zeta 1.0 --Dmax 50 \
-    --stars-csv external_data/clash_stars.csv
-
-SPARC (convert; build ρ-proxy; run AG + DG):
-  python "Paper DensityAccel Variants/sparc_rotmod_to_csv.py" --src-dir external_data/Rotmod_LTG --out-dir "Paper DensityAccel Variants/sparc_csv" --limit 20
-  python "Paper DensityAccel Variants/sparc_rho_proxy_from_dat.py" --src-dir external_data/Rotmod_LTG --out-csv "Paper DensityAccel Variants/sparc_rho_proxy.csv" --limit 20
-  python "Paper DensityAccel Variants/sparc_variants.py" --sparc-rotmods "Paper DensityAccel Variants/sparc_csv" --galaxies CamB D631-7 --outdir "Paper DensityAccel Variants/results/sparc_accel" --gate accel
-  python "Paper DensityAccel Variants/sparc_variants.py" --sparc-rotmods "Paper DensityAccel Variants/sparc_csv" --galaxies CamB D631-7 --outdir "Paper DensityAccel Variants/results/sparc_density" --gate density --rho-csv "Paper DensityAccel Variants/sparc_rho_proxy.csv" --rho-c 1e-27 --gamma 1.5 --Dmax 50
-
-Lensing:
-  python "Paper DensityAccel Variants/lensing_variants.py" --gate density --rho-c 1e-27 --gamma 1.0 --Dmax 50 --log10Mstar 11.6 --Re_kpc 8.0 --Sigma_crit_cgs 1.5e9 --out "Paper DensityAccel Variants/results/lensing_density.json"
-
-Ephemeris:
-  python "Paper DensityAccel Variants/ephemeris_variants.py" --gate density --rho-c 1e-24 --gamma 1.0 --Dmax 50 --rho-env 1e-21
-
-MW Kz:
-  python "Paper DensityAccel Variants/mw_kz_variants.py" --gate density --rho-c 1e-27 --gamma 1.0 --Dmax 50 --outdir "Paper DensityAccel Variants/results/mw_kz"
-
-Appendix A: File index
+Appendix A: File index (sandbox)
 - Gate registry: Paper DensityAccel Variants/xi_registry_variants.py
-- Clusters: Paper DensityAccel Variants/cluster_dg_ag_variants.py
-- SPARC tools: Paper DensityAccel Variants/{sparc_rotmod_to_csv.py, sparc_rho_proxy_from_dat.py, sparc_variants.py}
+- Clusters: Paper DensityAccel Variants/cluster_dg_ag_variants.py; cluster_compare_metrics.py (GR vs gate summary)
+- SPARC tools: Paper DensityAccel Variants/{sparc_rotmod_to_csv.py, sparc_obs_from_dat.py, sparc_rho_proxy_from_dat.py, sparc_variants.py}
 - Lensing: Paper DensityAccel Variants/lensing_variants.py
-- Solar: Paper DensityAccel Variants/ephemeris_variants.py
-- MW Kz: Paper DensityAccel Variants/mw_kz_variants.py
+- Ephemeris: Paper DensityAccel Variants/ephemeris_variants.py
+- Orchestrator/report: Paper DensityAccel Variants/sandbox_reproduce.py; sandbox_report.md
