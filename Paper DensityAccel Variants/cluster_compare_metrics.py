@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 from typing import Dict, List, Tuple
 import importlib.util
+import sys
 import numpy as np
 
 # Gate registry (sandbox)
@@ -30,6 +31,8 @@ def load_cluster_module(repo_root: Path):
     spec = importlib.util.spec_from_file_location('cluster_rar_pipeline', str(mod_path))
     mod = importlib.util.module_from_spec(spec)  # type: ignore
     assert spec and spec.loader
+    # Ensure module is registered so dataclasses/typing introspection works
+    sys.modules[spec.name] = mod  # type: ignore
     spec.loader.exec_module(mod)  # type: ignore
     return mod
 

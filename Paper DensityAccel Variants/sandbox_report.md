@@ -35,11 +35,26 @@ Evidence and artifacts (sandbox)
   - Diagnostics CSV (when produced): Paper DensityAccel Variants/results/cluster_hybrid/cluster_gate_diagnostics.csv
   - Summary JSON: Paper DensityAccel Variants/results/cluster_hybrid/summary_variants.json
   - GR vs gate median RMS comparator: Paper DensityAccel Variants/results/cluster_compare/compare_metrics.json
+    - Current sandbox compare (hybrid with a0=1.93e-7 cgs, ρ_c=1e-27, γ=1.5, ζ=1.0, Dmax=50; 0.05≤x≤0.8; equal-cluster weight):
+      - median RMS (GR): 0.964 dex
+      - median RMS (gate): 0.137 dex
+      - Per-cluster examples (n, RMS_GR → RMS_gate):
+        - Abell 2261 (22): 1.142 → 0.110
+        - MACS J0429.6-0253 (16): 1.070 → 0.083
+        - MACS J0717.5+3745 (36): 0.873 → 0.216
+        - MACS J1149.5+2223 (38): 0.973 → 0.194
+        - MACS J1206.2-0847 (33): 0.950 → 0.152
+        - RX J1347.5-1145 (31): 0.964 → 0.075
+        - RX J1532.9+3021 (18): 0.882 → 0.137
   - Provenance note: The defensible AG cluster metrics (RMS 0.113 dex; a0 ≈ 1.74×10⁻⁷ cgs; jackknife, bootstrap, null tests) are available in the main results tree:
     - results/cluster_rar_defensible/cluster_section_metrics.json
 - SPARC
   - Rotmod CSVs (converted, pilot): Paper DensityAccel Variants/sparc_csv/*.csv
   - Accel-gate models: Paper DensityAccel Variants/results/sparc_accel/*.csv (R_kpc, Vbar_kms, ξ, V_model_kms)
+    - Pilot metrics vs observed (Paper DensityAccel Variants/results/sparc_accel_metrics.csv):
+      - CamB: RMS 48.0 km/s; coverage(|resid|≤10,20 km/s) = (0.00, 0.11)
+      - D631-7: RMS 60.9 km/s; coverage = (0.00, 0.00)
+    - Note: These are quick, unweighted point-wise RMS figures on a tiny pilot pair (no error floors, no per-galaxy a0 grid scan). Paper-quality SPARC results use per-galaxy a0 fits and selection/filtering; the sandbox confirms the pipeline wiring and will expand to 20–50 galaxies next.
   - Density proxy (v1) for DG pilot: Paper DensityAccel Variants/sparc_rho_proxy.csv
   - DG models (pilot): Paper DensityAccel Variants/results/sparc_density/*.csv
 - Lensing (sandbox minimal)
