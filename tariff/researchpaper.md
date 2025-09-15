@@ -4,13 +4,13 @@ Leonard Speiser, Independent Researcher
 
 ## Abstract
 
-We propose a **unified gate** $\mathcal{G}(y,\rho_\gamma)$ that links weak-field dynamical enhancements (RAR-like behavior) to a strictly **energy-proportional** photon energy loss (“tariff”) that accumulates along **void-weighted** lines of sight. The gate depends on the baryon-only acceleration ratio $y\equiv g_{\rm bar}/a_0$ and the ambient photon energy density $\rho_\gamma$ (CMB+EBL). By construction, $\mathcal{G}\!\to\!1$ in high-acceleration regions (Solar-System safety) and the tariff is $\propto E$ (CMB spectral purity). In the weak field, we take
+We present a standalone **unified gate** $\mathcal{G}(y,\rho_\gamma)$ that ties the weak‑field dynamical enhancement (RAR‑like) to a strictly **energy‑proportional** photon tariff that accumulates primarily along **void‑weighted** paths. By construction $\mathcal{G}\!\to\!1$ in high‑acceleration regions (Solar‑System safety) and the tariff is $\propto E$ (CMB spectral purity). In the weak field we use
 
 $$
  g_{\rm obs} \;=\; \nu\, g_{\rm bar},\quad \nu\equiv\mathcal{G}(y,\rho_\gamma), \qquad \frac{d\ln E}{d\ell} \;=\; -\kappa\,[\mathcal{G}-1].
 $$
 
-We outline a tariff-only analysis track that (i) establishes GR **baselines** from data (small-$z$ Hubble slope, CMB blackbody fit, Tolman exponent, SN time-dilation), and (ii) tests the unified gate by overlaying $\mu(z)$ on Pantheon+ with $\chi^2$, and by deriving $H_{\rm eff}(z)$ and BAO **shape-only** overlays with a fitted $r_d$. A minimal scalar–tensor wrapper preserves FRW dynamics, $\Phi=\Psi$, and $c_T=1$ in screened regimes. We enumerate **falsifiable** predictions and provide clear locations where numbers must be run.
+We provide an FRW‑compatible, testable scaffold that (i) establishes GR **baselines** from data (small‑$z$ Hubble slope, CMB blackbody fit, Tolman exponent, SN time‑dilation) and (ii) evaluates the unified gate by overlaying $\mu(z)$ on Pantheon+ with $\chi^2$, and by deriving $H_{\rm eff}(z)$ with BAO **shape‑only** overlays via a fitted $r_d$. We log **falsifiable** predictions (e.g., LOS‑environment correlation) and preserve $\Phi=\Psi$ and $c_T=1$ in screened regimes. All analysis code and figures live under `tariff/` and are reproducible from this repository.
 
 **Keywords:** modified gravity; RAR; CMB; supernovae; BAO; weak field; conformal drift; energy–gravity reciprocity
 
@@ -322,14 +322,12 @@ Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW}
 
 ## Related Work: Skordis & Złośnik (AeST) and alternatives
 
-Our proposal differs from relativistic MOND frameworks such as the Aether–Scalar–Tensor (AeST) theory of Skordis & Złośnik. AeST augments GR with a unit‑timelike vector and a scalar while keeping a single metric and Φ=Ψ; it was designed to satisfy c_T=c and to match Planck‑era observables on linear scales, with the scalar behaving effectively as dust so that CMB and matter power spectra can be fitted without particle CDM. [SZ‑PRL][SZ-PRL], [SZ‑PRD][SZ-PRD], [SZ‑arXiv][SZ-ARXIV]
+Our approach is distinct from relativistic MOND frameworks and dark‑sector alternatives. In AeST (Skordis & Złośnik), GR is extended with a unit‑timelike vector and a scalar while retaining a single metric and $\Phi=\Psi$; the scalar can behave effectively as dust so that Planck‑era observables are matched without particle CDM [SZ‑PRL][SZ-PRL], [SZ‑PRD][SZ-PRD], [SZ‑arXiv][SZ-ARXIV]. By contrast, we keep FRW and use a single weak‑field control function $\xi(g)$—already validated on galaxy/lensing domains—to modulate both dynamics and a small, E‑proportional photon tariff that turns on in low‑$g$/void environments and is screened elsewhere. The distinctive, falsifiable prediction here is a positive correlation between anchored SN residuals and a void‑weighted gate integral $S$; models without a tariff do not generically predict this.
 
-In contrast, our unified gate uses the same weak‑field control function that boosts low‑g dynamics to modulate a tiny, energy‑proportional photon‑energy loss that accumulates primarily in voids; dense, high‑g regions are screened (G→1), preserving Solar‑System tests. This mechanism adds path‑dependent redshift on top of FRW expansion while preserving the CMB blackbody (no frequency dependence). A distinctive prediction is a correlation between SN residuals and a void‑weighted line‑of‑sight gate integral, which AeST (lacking any tariff) does not predict.
-
-Broader landscape (one‑sentence context):
-- Superfluid dark matter (Berezhiani & Khoury): a DM component whose phonons mediate MOND‑like forces in galaxies; cosmology remains essentially ΛCDM‑like. [SFDM][SFDM-PRD]
-- Dipolar dark matter (Blanchet & Le Tiec): a polarizable DM fluid reproducing MOND phenomenology while keeping standard cosmology. [DDM][DDM-PRD]
-- MOG/STVG (Moffat): modified‑gravity field content for galaxy/cluster dynamics with proposed CMB treatments; distinct predictions from both AeST and our reciprocity. [MOG][MOG-MDPI]
+Pointers to nearby ideas:
+- Superfluid dark matter (Berezhiani & Khoury): DM phonons mediate MOND‑like forces in galaxies; cosmology remains ΛCDM‑like. [SFDM][SFDM-PRD]
+- Dipolar dark matter (Blanchet & Le Tiec): polarizable DM fluid reproduces MOND phenomenology with standard cosmology. [DDM][DDM-PRD]
+- MOG/STVG (Moffat): modified‑gravity field content for galaxy/cluster dynamics with separate CMB treatments. [MOG][MOG-MDPI]
 
 ---
 
