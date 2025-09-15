@@ -24,38 +24,53 @@ def main():
     ap.add_argument("--Neff", type=float, default=3.046)
     ap.add_argument("--Tcmb", type=float, default=2.7255)
     ap.add_argument("--flat", action="store_true")
+    ap.add_argument("--Omega_k_list", type=str, default="", help="comma-separated Ω_k values; if set, overrides flat/closure")
 
     ap.add_argument("--ellA", type=float, default=301.0)
     ap.add_argument("--sigma", type=float, default=0.1)
 
-    ap.add_argument("--a_trans_grid", type=str, default="1e-4,2e-4,3e-4,5e-4,1e-3")
-    ap.add_argument("--n_trans_grid", type=str, default="3,4,5,6")
-    ap.add_argument("--boost_min", type=float, default=1.05)
-    ap.add_argument("--boost_max", type=float, default=1.80)
-    ap.add_argument("--boost_steps", type=int, default=16)
+    ap.add_argument("--a_trans_grid", type=str, default="5e-5,8e-5,1.2e-4,1.8e-4,2.7e-4,4e-4,6e-4,9e-4,1.4e-3,2.1e-3,3e-3")
+    ap.add_argument("--n_trans_grid", type=str, default="2,3,4,5,6,8,10,12")
+    ap.add_argument("--B_min", type=float, default=0.60)
+    ap.add_argument("--B_max", type=float, default=1.10)
+    ap.add_argument("--B_steps", type=int, default=24)
+    ap.add_argument("--omega_b_grid", type=str, default="0.02237")
+    ap.add_argument("--Neff_grid", type=str, default="3.046")
 
     ap.add_argument("--json-out", type=str, default=os.path.join("tariff","results","plateaus_ellA_scan.json"))
     args = ap.parse_args()
 
-    cosmo = Cosmology(H0=args.H0, omega_b=args.omega_b, Neff=args.Neff, Tcmb=args.Tcmb, flat=args.flat)
-
     a_trans_grid = [float(x) for x in args.a_trans_grid.split(",") if x.strip()]
     n_trans_grid = [float(x) for x in args.n_trans_grid.split(",") if x.strip()]
-    boosts = np.linspace(args.boost_min, args.boost_max, int(args.boost_steps))
+    B_vals = np.linspace(args.B_min, args.B_max, int(args.B_steps))
+    omega_b_vals = [float(x) for x in args.omega_b_grid.split(",") if x.strip()]
+    Neff_vals = [float(x) for x in args.Neff_grid.split(",") if x.strip()]
+    Omega_k_vals = [float(x) for x in args.Omega_k_list.split(",") if x.strip()] if args.Omega_k_list else [None]
 
     rows = []
     best = None
-    for a_t in a_trans_grid:
-        for n_t in n_trans_grid:
-            for b in boosts:
-                params = PlateausParams(G_eff_boost=float(b), a_trans=float(a_t), n_trans=float(n_t))
-                bg = PlateausBackground(cosmo, params)
-                out = chi2_cmb_ellA(bg, args.ellA, args.sigma)
-                row = {"G_eff_boost": float(b), "a_trans": float(a_t), "n_trans": float(n_t),
-                       "ellA_th": float(out["ellA_th"]), "chi2": float(out["chi2"])}
-                rows.append(row)
-                if best is None or row["chi2"] < best["chi2"]:
-                    best = dict(row)
+    for Omk in Omega_k_vals:
+        for wb in omega_b_vals:
+            for ne in Neff_vals:
+                cosmo = Cosmology(H0=args.H0, omega_b=wb, Neff=ne, Tcmb=args.Tcmb, flat=args.flat, Omega_k_override=Omk)
+                for a_t in a_trans_grid:
+                    for n_t in n_trans_grid:
+                        for b in B_vals:
+                            params = PlateausParams(G_eff_boost=float(b), a_trans=float(a_t), n_trans=float(n_t))
+                            bg = PlateausBackground(cosmo, params)
+                            out = chi2_cmb_ellA(bg, args.ellA, args.sigma)
+                            zstar = bg.z_star()
+                            rs = bg.sound_horizon(zstar)
+                            DM = bg.D_M(zstar)
+                            DA = DM/(1.0+zstar)
+                            row = {"G_eff_boost": float(b), "a_trans": float(a_t), "n_trans": float(n_t),
+                                   "omega_b": float(wb), "Neff": float(ne),
+                                   "Omega_k": (float(Omk) if Omk is not None else None),
+                                   "z_star": float(zstar), "r_s_Mpc": float(rs), "D_A_star_Mpc": float(DA),
+                                   "ellA_th": float(out["ellA_th"]), "chi2": float(out["chi2"])}
+                            rows.append(row)
+                            if best is None or row["chi2"] < best["chi2"]:
+                                best = dict(row)
 
     result = {"scan": rows, "best": best, "cosmology": cosmo.__dict__}
     out_path = args.json_out

@@ -20,6 +20,7 @@ class Cosmology:
     Neff: float = 3.046              # Effective relativistic dof
     omega_b: float = 0.02237         # Ω_b h^2 (baryon density)
     flat: bool = False               # if False, Ω_k0 = 1 - (Ω_b+Ω_r) at a=1 (Λ=0)
+    Omega_k_override: float | None = None  # if provided, use this Ω_k at a=1
 
 
 @dataclass
@@ -75,8 +76,10 @@ class PlateausBackground:
         self.Om_b = cosmo.omega_b / h**2
         self.Om_r = (omega_gamma_h2(cosmo.Tcmb) + omega_nu_h2(cosmo.Neff, cosmo.Tcmb)) / h**2
 
-        # No Λ, no CDM. Close the budget with curvature unless flat=True.
-        if cosmo.flat:
+        # No Λ, no CDM. Close the budget with curvature unless flat=True or override set.
+        if cosmo.Omega_k_override is not None:
+            self.Om_k = float(cosmo.Omega_k_override)
+        elif cosmo.flat:
             self.Om_k = 0.0
         else:
             self.Om_k = 1.0 - (self.Om_b + self.Om_r)
