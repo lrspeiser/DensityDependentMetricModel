@@ -20,6 +20,8 @@ from __future__ import annotations
 import argparse, json, os
 import numpy as np
 import matplotlib.pyplot as plt
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from models.plateaus_model import Cosmology, PlateausParams, PlateausBackground, omega_gamma_h2, omega_nu_h2
 
 C = 299792.458

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse, json, os
 import numpy as np
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from models.plateaus_model import Cosmology, PlateausParams, PlateausBackground
 from fits.likelihoods import chi2_cmb_ellA
 
