@@ -20,6 +20,16 @@ We outline a tariff-only analysis track that (i) establishes GR **baselines** fr
 
 This section fuses our gated RAR gravity with a photon energy→gravity tariff using a single control function. It provides both a drop-in model and a relativistic wrapper so the mechanism is testable and spectrum-safe.
 
+Box 0 — Stand-alone drop-in equations (for Methods)
+
+- Gravity: g_obs = ξRAR(g_bar/a0) g_bar, with ξRAR(g_bar) = min[ 1/2 + sqrt(1/4 + a0/g_bar), D_max ].
+- Energy tariff: d ln E / dℓ = − κ [ ξRAR − 1 ], with κ a small coupling (∼10^−5 Mpc^−1) fit to SN+BAO shape-only.
+- Solar-System safety (ξRAR − 1 ≈ a0/(2 g_bar)): using a0 ≃ 1.2×10^−10 m s^−2:
+  - 1 AU: |ΔG/G| ≈ 1.0×10^−8
+  - 10 AU (Cassini): |ΔG/G| ≈ 1.0×10^−6
+  - 30 AU: |ΔG/G| ≈ 9.1×10^−6
+  All are ≪ 2.3×10^−5 (Cassini bound). The tariff across ≲30 AU for κ∼10^−5 Mpc^−1 is τ≲10^−20 (negligible).
+
 ### A) Unified Gate Law (drop-in model)
 
 Let g_bar(x) be the baryon-only Newtonian field, y ≡ g_bar/a0 (RAR handle), and ρ_γ(x) the local background photon energy density (CMB+EBL). Define one gate 𝒢 that strengthens gravity when acceleration and ambient photon energy are both low:
@@ -33,7 +43,7 @@ Tie dynamics and tariff to the same gate:
   In high-g or high-ρ_γ regions, 𝒢→1 and the tariff vanishes.
 - Optional back-reaction (gentle self-reinforcement): accumulate a gate potential ψ via dψ/dℓ = γ [𝒢 − 1] and let 𝒢 → 𝒢 · f(ψ) with f(ψ)=exp(σψ) or f(ψ)=1+σψ (σ small), keeping galaxy fits intact while allowing slight cosmology-level drift.
 
-Equivalence to Paper I. When ρ_γ is held fixed, identify 𝒢(y) ≡ ξ(g) from Paper I via y=g_bar/a0; in plots we continue to report the enhancement as ν≡𝒢.
+Equivalence to the canonical RAR gate. When ρ_γ is held fixed, identify 𝒢(y) ≡ ξRAR(g) defined here via y=g_bar/a0, with ξRAR(g)=min[1/2+sqrt(1/4+a0/g), D_max]. In plots we continue to report the enhancement as ν≡𝒢.
 
 Why this works: one gate 𝒢 controls both weak-field dynamics and a uniform (E-proportional) cooling along light paths, preserving blackbody shape and passing Solar-System constraints (𝒢→1 as y→∞).
 
@@ -199,7 +209,7 @@ We explore whether a **single gate** $G$ can (i) reproduce weak-field dynamical 
 
 **Historic photon‑loss proposals.** Zwicky’s 1929 **tired‑light** idea posited that photons *lose* energy en route, producing a redshift–distance relation in a static spacetime. Such mechanisms are **ruled out** by multiple observations (image blurring from scattering, failure to reproduce SN time‑dilation and Tolman dimming, and CMB blackbody/anisotropy constraints). Our construction explicitly avoids those pathologies by (i) assuming expansion and (ii) imposing a **strictly proportional** loss law that preserves blackbody shape and is **gated** to operate only in **low‑acceleration** regions, leaving dense regions and the Solar System essentially untouched. ([arXiv][4])
 
-**Our framing.** Within **Gravity Gates**, the same gate $\xi(g)$ that enhances weak‑field gravitational response (Paper I) also controls a tiny, *environment‑weighted* photon energy loss rate. This *reciprocity* provides a single control variable for both dynamics and a phenomenological redshift contribution. We emphasize: the **galaxy, $K_z$**, Solar‑System, and **lensing** results from Gravity Gates stand **independently** of this cosmology add‑on.
+**Our framing.** We use a single gate $\xi_{\rm RAR}(g)$ that enhances weak‑field gravitational response and also controls a tiny, *environment‑weighted* photon energy loss rate. This reciprocity provides one control function for both dynamics and a phenomenological redshift contribution. We emphasize: the **galaxy, $K_z$**, Solar‑System, and **lensing** checks remain intact; this cosmology add‑on is confined to tariff/.
 
 ---
 
@@ -292,9 +302,9 @@ Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW}
 
 ---
 
-# 5. Relation to Gravity Gates (Paper I)
+# 5. Relation to MOND‑like gates and prior work
 
-* **Single control function.** The same $\xi(g)$ that fits **galaxy rotation curves**, **MW $K_z$**, **Solar‑System safety**, and **strong‑lensing** amplitudes (metric‑only mapping with $\Phi=\Psi$) also gates the cosmological tariff. No per‑object tweaking is introduced here.
+* **Single control function.** The same $\xi_{\rm RAR}(g)$ that fits **galaxy rotation curves**, **MW $K_z$**, **Solar‑System safety**, and **strong‑lensing** amplitudes (metric‑only mapping with $\Phi=\Psi$) also gates the cosmological tariff. No per‑object tweaking is introduced here.
 * **Screening.** In high‑$g$ regimes (Solar System, galaxy interiors), $\xi\!\to\!1$ and $\alpha\!\to\!0$, automatically keeping local tests intact.
 * **Scope.** This section **does not** claim a replacement for FRW/CMB/BAO; it asks whether a *small, gated* reciprocity can (i) follow the SN‑Hubble shape and (ii) remain CMB‑, Tolman‑, and time‑dilation‑safe, thereby offering a *phenomenological* link between cosmic web environment and residual redshift trends. (Full cosmology is deferred to a companion study.)
 
@@ -343,4 +353,55 @@ Broader landscape (one‑sentence context):
 [SFDM-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.92.103510
 [DDM-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.80.023524
 [MOG-MDPI]: https://www.mdpi.com/2075-4434/1/1/65
+
+---
+
+# Standalone positioning (no separate RAR paper)
+
+This paper is self‑contained. We define the gate ξRAR(g) and the photon tariff here, without relying on a separate RAR paper. The constant a0 is treated as either (i) a literature‑anchored scale (a0 ≃ 1.2×10^−10 m s^−2) or (ii) a value to be re‑fit on standard galaxy datasets in an appendix; our cosmology add‑on does not hinge on a specific a0 choice as long as ξRAR obeys the screened high‑g limit.
+
+Distinctive claim (what no prior MOND offered in this minimal form)
+- One and the same gate ξRAR(g) controls low‑g dynamics and a strictly energy‑proportional, spectrum‑safe photon tariff.
+- The tariff overlays consistently on FRW (we use a FRW+overlay mapping for BAO and distances), preserving: (a) SN time‑dilation (p_t ≈ 1), (b) Tolman surface‑brightness scaling (p ≈ 4), and (c) the CMB blackbody shape (FIRAS‑level residuals), while providing BAO shape‑only proxies H_eff(z), D_M(z), D_H(z) that can be confronted with data via a single fitted r_d.
+- Solar‑System safety is automatic from the high‑y limit of ξRAR.
+
+Scope and non‑claims
+- We do not claim a full alternative to ΛCDM for early‑universe observables (acoustic peaks, primordial nucleosynthesis, growth of structure). Our claim is a tightly constrained, falsifiable reciprocity linking galaxy‑scale gates to a cosmology‑level energy tariff that passes key spectrum/dilation/surface‑brightness checks and admits SN+BAO shape‑only fits.
+
+Implementation pointers
+- All cosmology‑add‑on code and figures live under tariff/. The main dynamics/lensing pipeline remains untouched.
+
+---
+
+# Standalone submission checklist (remaining work)
+
+To publish this paper alone (without a separate RAR paper), the following must be completed and locked:
+
+A) Mandatory consistency and invariants
+- CMB blackbody (FIRAS‑safe): run tariff_major_tests.py cmb with Liouville transport; report best‑fit T′ and rms fractional residuals; require ≲ few×10^−5.
+- SN time‑dilation: run tariff_major_tests.py sntd; report p_t ≈ 1±uncertainty and χ^2/dof.
+- Tolman surface‑brightness: run tariff_major_tests.py tolman; report p ≈ 4±uncertainty and χ^2/dof.
+- Distance duality: verify D_L=(1+z) D_M identity numerically in our code (already checked in analysis_unified_gate.py; include number in Methods).
+- Solar‑System bound: include the 1/10/30 AU numbers in Methods (now added) and show compliance with Cassini.
+- Lensing time delays: include the argument/figure that energy‑only tariff leaves Fermat potential and Δt unchanged (tariff_major_tests.py timedelay).
+
+B) Observational fits (shape‑only where stated)
+- Pantheon+ overlay with full STAT+SYS covariance: use analytic anchor; target reduced χ^2 ≈ 1 and report κ posterior with credible interval; include whitened residuals hist/QQ plots.
+- BAO shape‑only (FRW+overlay mode): compute H_eff(z) and D_M(z), D_H(z); fit r_d with the anisotropic per‑bin covariances; target acceptable χ^2/dof; document data ingestion.
+- LOS correlation: build/ingest a tomographic LOS density proxy; test for the predicted positive correlation of Δμ with S≡τ/κ; report slope, stderr, t‑stat, and (if non‑detection) an upper limit.
+
+C) Parameter treatment and robustness
+- κ: provide a one‑parameter posterior (and sensitivity to simple f_env choices); include a small κ scan (results/bao_kappa_scan.json).
+- a0: state the stance (literature anchor vs minimal re‑fit). If re‑fitting, include a short appendix with SPARC/MW K_z summary and show that cosmology results are insensitive to small shifts.
+- f_env(z) vs f_env(r): demonstrate that conclusions (κ posterior and BAO shape results) are not driven by the chosen smooth proxy.
+
+D) Reproducibility and data
+- Ship exact commands and data paths (Pantheon+ table and covariance, BAO CSVs); verify paths in README_DATA.md.
+- Record commit hash, Python version (3.11), and dependency pins (utils/pyproject.toml; SciPy optional).
+- Ensure all figures under tariff/images/ are regenerated by the scripted entry points; large artifacts tracked via Git LFS per repo rules.
+
+E) Writing and framing
+- Update Abstract and Methods to include the boxed equations and Solar‑System sanity check (done here).
+- Expand Related Work to contrast with MOND variants and emergent gravity on spectrum/time‑dilation/Tolman compliance and cross‑domain linkage.
+- Clarify the claim limits (shape‑only BAO, FRW overlay) and what’s deferred to future work.
 
