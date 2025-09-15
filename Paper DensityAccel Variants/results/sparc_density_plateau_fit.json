@@ -1,0 +1,128 @@
+{
+  "kind": "density",
+  "best": {
+    "kind": "density",
+    "params": {
+      "rho_c": 3e-28,
+      "gamma": 1.0,
+      "xi_max": 50.0,
+      "n": 2.0
+    },
+    "median_rms": 19.14214317587322
+  },
+  "grid_results": [
+    {
+      "params": {
+        "rho_c": 1e-28,
+        "gamma": 1.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 19.88330819847506
+    },
+    {
+      "params": {
+        "rho_c": 1e-28,
+        "gamma": 1.5,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 20.456579170804144
+    },
+    {
+      "params": {
+        "rho_c": 1e-28,
+        "gamma": 2.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 20.596006161352832
+    },
+    {
+      "params": {
+        "rho_c": 3e-28,
+        "gamma": 1.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 19.14214317587322
+    },
+    {
+      "params": {
+        "rho_c": 3e-28,
+        "gamma": 1.5,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 19.33088289731842
+    },
+    {
+      "params": {
+        "rho_c": 3e-28,
+        "gamma": 2.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 19.545141536086106
+    },
+    {
+      "params": {
+        "rho_c": 1e-27,
+        "gamma": 1.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 23.24843707712798
+    },
+    {
+      "params": {
+        "rho_c": 1e-27,
+        "gamma": 1.5,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 24.19624740867781
+    },
+    {
+      "params": {
+        "rho_c": 1e-27,
+        "gamma": 2.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 24.897464866172324
+    },
+    {
+      "params": {
+        "rho_c": 3e-27,
+        "gamma": 1.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 28.810790514745943
+    },
+    {
+      "params": {
+        "rho_c": 3e-27,
+        "gamma": 1.5,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 29.43960124899627
+    },
+    {
+      "params": {
+        "rho_c": 3e-27,
+        "gamma": 2.0,
+        "xi_max": 50.0,
+        "n": 2.0
+      },
+      "median_rms": 29.858923096430445
+    }
+  ],
+  "galaxies": [
+    "CamB",
+    "D631-7"
+  ],
+  "sigma_floor": 6.0
+}

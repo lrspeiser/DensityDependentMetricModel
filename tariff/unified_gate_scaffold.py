@@ -10,6 +10,7 @@ This module implements:
 - calibrate_kappa_to_cmb(f_void, D_LSS_Mpc, G_cap_minus1=1.0): pick kappa so τ ≈ ln(1100)
 
 Notes:
+- Option A vs B: The tariff path can be driven either by Option A (RAR-compatible ξ with energy-coupled a0_eff; see tariff/energy_coupled_gate.py) or by this scaffold’s Option B multiplicative gate G(y, ρ_γ). The analyzer frequently uses GateParams (Option B); the CLI tariff model uses Option A when --energy-coupled is enabled. See tariff/README.md for the Model box and Solar-System safety.
 - Remains confined to tariff/ and can be imported by energy_tariff_model.py if desired.
 - Path sampler is any generator yielding tuples (y, rho_gamma, dl_Mpc) along LOS.
 """

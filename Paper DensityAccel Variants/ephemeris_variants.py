@@ -14,12 +14,13 @@ AU_M = 1.495978707e11
 
 def main():
     ap = argparse.ArgumentParser(description="Solar ephemeris ΔG/G with density/accel gate (sandbox)")
-    ap.add_argument('--gate', default='density', choices=['accel','density','hybrid'])
+    ap.add_argument('--gate', default='density', choices=['accel','density','density-plateau','hybrid'])
     ap.add_argument('--a0', type=float, default=1.93e-10)  # SI for Solar plots if needed
     ap.add_argument('--rho-c', type=float, default=1e-21)  # kg m^-3 (≈1e-24 g cm^-3)
     ap.add_argument('--gamma', type=float, default=1.0)
     ap.add_argument('--zeta', type=float, default=1.0)
     ap.add_argument('--Dmax', type=float, default=50.0)
+    ap.add_argument('--n', type=float, default=2.0)
     ap.add_argument('--rho-env', type=float, default=1e-20)  # kg m^-3; simple constant env
     args = ap.parse_args()
 
@@ -32,7 +33,7 @@ def main():
     rho_env = np.full_like(r, args.rho_env)
 
     gate = build_gate(args.gate, a0=args.a0, rho_c=args.rho_c, gamma=args.gamma,
-                      zeta=args.zeta, Dmax=args.Dmax)
+                      zeta=args.zeta, Dmax=args.Dmax, n=args.n)
     xi = gate(gN, rho_env, r / AU_M)
 
     dG_over_G = xi - 1.0

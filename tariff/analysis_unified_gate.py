@@ -6,6 +6,9 @@ analysis_unified_gate.py — tariff-only comparison harness for the unified gate
 - Computes χ² and reduced χ² for the overlay
 - Derives H_eff(z) from z(r) and, if a BAO CSV is provided, fits r_d and reports χ²/dof
 - Writes plots under tariff/images/ and a JSON summary under tariff/results/
+
+Note on gate choices:
+- The tariff can be driven by Option A (RAR-compatible ξ with energy-coupled a0_eff; used by energy_tariff_model when --energy-coupled) or by this module’s Option B multiplicative gate G(y, ρ_γ) via GateParams. Results are comparable for small overlays; see tariff/README.md (Model box).
 """
 from __future__ import annotations
 

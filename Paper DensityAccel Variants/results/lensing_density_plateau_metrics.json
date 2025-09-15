@@ -1,0 +1,15 @@
+{
+  "gate": "density-plateau",
+  "params": {
+    "a0": 1.93e-07,
+    "rho_c": 1e-27,
+    "gamma": 1.5,
+    "zeta": 1.0,
+    "n": 2.0,
+    "Dmax": 50.0
+  },
+  "Re_kpc": 8.0,
+  "log10Mstar": 11.6,
+  "R_E_kpc": 0.1,
+  "xi_at_R_E": 1.0
+}

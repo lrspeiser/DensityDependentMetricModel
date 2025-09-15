@@ -7,6 +7,20 @@ Key idea
 - ξ(g) is the same RAR-plateau gate used in the paper (capped by D_max), so dense regions (high g) contribute negligibly and void-weighted paths dominate the integral.
 - This is a phenomenological add-on; it does not replace FRW expansion. CMB/time-dilation/Tolman/BAO checks below are provided to assess viability.
 
+Model box — one gate, two observables (Option A)
+- Energy → gravity mapping used by tariff when energy coupling is enabled:
+  - y = g_bar / a0; H(y; β) = 1 / (1 + y^β)
+  - a0_eff = a0 [ 1 + ζ (ρ_γ / E0) H(y; β) ], with E0 ≈ 0.26 eV/cm^3
+  - ξ(g_bar, ρ_γ) = min[ 1/2 + sqrt(1/4 + a0_eff/g_bar), D_max ]
+  - Gravity: g_obs = ξ · g_bar
+- Photon tariff (unchanged): d ln E / dℓ = − κ [ξ − 1] f_env(…)
+- Defaults: a0 = 1.2e-10 m/s^2, β = 2, ζ = 1, D_max ∈ {30, 50}, ρ_γ ≈ 0.26 eV/cm^3.
+- Solar-System safety: for y ≫ 1 and β ≳ 2, H → y^−β and ξ−1 ≈ 0.5 a0/g. With a0 ≈ 1.2×10^-10 m/s^2:
+  - 1 AU: |ΔG/G| ≈ 1.0×10^-8
+  - 10 AU: |ΔG/G| ≈ 1.0×10^-6
+  - 30 AU: |ΔG/G| ≈ 9.1×10^-6
+  All are below the Cassini bound ~2.3×10^-5.
+
 Files
 - energy_tariff_model.py
   - PhotonJourney simulator for z(r) and μ(z), with k calibrated from an H0 anchor by default.

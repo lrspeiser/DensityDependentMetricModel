@@ -59,6 +59,7 @@ try:
     from tariff.energy_coupled_gate import (
         EnergyCouplingParams,
         xi_rar_plateau_energy_coupled,
+        xi_energy_to_gravity,
     )
 except Exception:
     import importlib.util, os, sys
@@ -71,6 +72,7 @@ except Exception:
         _spec.loader.exec_module(_mod)  # type: ignore[attr-defined]
         EnergyCouplingParams = getattr(_mod, 'EnergyCouplingParams')
         xi_rar_plateau_energy_coupled = getattr(_mod, 'xi_rar_plateau_energy_coupled')
+        xi_energy_to_gravity = getattr(_mod, 'xi_energy_to_gravity')
     else:
         raise
 
@@ -219,9 +221,18 @@ class PhotonJourney:
         for _ in range(steps):
             r += dr
             g_local = g_bar_fn(r)
-            xi = xi_rar_plateau_energy_coupled(
-                g_local, self.a0, self.d_max, self.energy_params
-            )
+            if self.energy_params.enabled:
+                xi = xi_energy_to_gravity(
+                    g_local,
+                    rho_gamma_evcm3=self.energy_params.u_gamma_evcm3,
+                    a0_m_s2=self.a0,
+                    D_max=self.d_max,
+                    params=self.energy_params,
+                )
+            else:
+                xi = xi_rar_plateau_energy_coupled(
+                    g_local, self.a0, self.d_max, self.energy_params
+                )
             if self.void_mix_mode == "redshift":
                 f_eff = self.f_env_z(z_running)
             else:
@@ -289,6 +300,9 @@ def main(argv: List[str] | None = None) -> int:
                     help="Path to Pantheon+SH0ES .dat file to overlay (μ vs z)")
     ap.add_argument("--plot-hubble", action="store_true",
                     help="If set, build Hubble Diagram (μ vs z) with data overlay and model lines")
+
+    ap.add_argument("--solar-check", action="store_true",
+                    help="Print Solar-System check at 1/10/30 AU: |ΔG/G|=|ξ−1| vs Cassini 2.3e-5 (uses energy→gravity Option A)")
 
     # Tuning knobs for tariff shape and amplitude
     ap.add_argument("--dmax", type=float, default=D_MAX, help="RAR plateau cap D_max")
@@ -371,6 +385,26 @@ def main(argv: List[str] | None = None) -> int:
         zstar=float(args.zstar),
         eta=float(args.eta),
     )
+
+    # Optional Solar-System safety printout (Option A)
+    if args.solar_check:
+        GM_SUN = 1.32712440018e20  # m^3/s^2
+        AU_M = 1.495978707e11      # m
+        cassini_bound = 2.3e-5
+        print("Solar-System safety (|ΔG/G| = |ξ−1|) using Option A (energy→gravity):")
+        for au in (1.0, 10.0, 30.0):
+            r_m = AU_M * au
+            g = GM_SUN / (r_m * r_m)
+            xi_sol = xi_energy_to_gravity(
+                g_bar_m_s2=g,
+                rho_gamma_evcm3=energy_params.u_gamma_evcm3,
+                a0_m_s2=A0,
+                D_max=float(args.dmax),
+                params=energy_params,
+            ) if energy_params.enabled else xi_rar_plateau_energy_coupled(g, A0, float(args.dmax), energy_params)
+            delta = abs(xi_sol - 1.0)
+            status = "OK (below bound)" if delta < cassini_bound else "EXCEEDS bound"
+            print(f"  r={int(au):2d} AU: g={g:.3e} m/s^2  ξ−1={delta:.3e}  Cassini~2.3e-5 → {status}")
 
     # Distance grid for z(distance) curve
     dmax = max(float(args.distance_max), 0.0)

@@ -1,0 +1,15 @@
+{
+  "gate": "density-plateau",
+  "params": {
+    "a0": 1.93e-07,
+    "rho_c": 1e-27,
+    "gamma": 1.5,
+    "zeta": 1.0,
+    "n": 2.0,
+    "Dmax": 50.0
+  },
+  "galaxies": [
+    "CamB",
+    "D631-7"
+  ]
+}

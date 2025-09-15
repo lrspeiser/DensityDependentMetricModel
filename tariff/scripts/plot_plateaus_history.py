@@ -101,8 +101,40 @@ def main():
 
     # Sound horizon cumulative vs a for both
     aa_rs = np.geomspace(1e-8, 1.0, 2000)
-    rs_plateaus = (C/args.H0)*np.array([np.trapz( (1.0/np.sqrt(3.0*(1.0 + 0.75*( (cosmo.omega_b/(args.H0/100.0)**2)/(omega_gamma_h2(args.Tcmb)/(args.H0/100.0)**2) )*t )))/(t**2*bg.E(t)), aa_rs[:i+1]) for i,t in enumerate(aa_rs)])
-    rs_lcdm = (C/H0_lcdm)*np.array([np.trapz( (1.0/np.sqrt(3.0*(1.0 + 0.75*( (0.049/(omega_gamma_h2(args.Tcmb)/(H0_lcdm/100.0)**2))*t ))))/(t**2*E_LCDM(t)), aa_rs[:i+1]) for i,t in enumerate(aa_rs)])
+    def _rs_cumulative_plateaus(aa):
+        # Compute running integral r_s(a) = (c/H0) ∫_0^{a} c_s/(a'^2 E(a')) da'
+        h = args.H0/100.0
+        Ogamma = omega_gamma_h2(args.Tcmb)/h**2
+        Ob = cosmo.omega_b/(h**2)
+        def integrand(t):
+            R = 0.75*(Ob/Ogamma)*t
+            cs_c = 1.0/np.sqrt(3.0*(1.0+R))
+            return cs_c/(t**2*bg.E(t))
+        vals = []
+        for i in range(len(aa)):
+            tgrid = aa[:i+1]
+            y = integrand(tgrid)
+            vals.append((C/args.H0)*np.trapz(y, tgrid))
+        return np.array(vals)
+
+    def _rs_cumulative_lcdm(aa):
+        # Compute running r_s(a) in ΛCDM baseline
+        h0 = H0_lcdm/100.0
+        Ogamma = omega_gamma_h2(args.Tcmb)/h0**2
+        Ob = 0.049
+        def integrand(t):
+            R = 0.75*(Ob/Ogamma)*t
+            cs_c = 1.0/np.sqrt(3.0*(1.0+R))
+            return cs_c/(t**2*E_LCDM(t))
+        vals = []
+        for i in range(len(aa)):
+            tgrid = aa[:i+1]
+            y = integrand(tgrid)
+            vals.append((C/H0_lcdm)*np.trapz(y, tgrid))
+        return np.array(vals)
+
+    rs_plateaus = _rs_cumulative_plateaus(aa_rs)
+    rs_lcdm = _rs_cumulative_lcdm(aa_rs)
 
     # ℓ(a)=π D_M(a)/r_s(a) proxy
     def ell_of_a(a_val, rs_func, DM_func, H0):
