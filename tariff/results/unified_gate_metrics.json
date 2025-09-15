@@ -26,6 +26,10 @@
       "dof": 1699,
       "r2_weighted": 0.0071103395874443365
     },
+    "sn_goodness": {
+      "p_value": 0.4118437702765809,
+      "whitened_hist_qq": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/sn_whitened_hist_qq.png"
+    },
     "kappa_scan": {
       "base_kappa_per_Mpc": 1e-05,
       "factors": [
@@ -12119,9 +12123,10 @@
         133.76826888962006
       ]
     },
-    "rd_best_Mpc": 113.47524157501472,
-    "bao_chi2": 4415.618775084605,
-    "bao_red_chi2": 883.123755016921,
+    "rd_best_Mpc": 67.40356293890761,
+    "rd_err_Mpc": 0.4119755184628072,
+    "bao_chi2": 3.078013958838282,
+    "bao_red_chi2": 0.6156027917676564,
     "bao_dof": 5,
     "bao_fit_available": true
   },
