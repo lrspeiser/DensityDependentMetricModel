@@ -61,6 +61,17 @@ Notes and caveats
 - This is a first-order, testable prescription. It is effectively a phenomenological disformal scalar coupling in the weak field. A full covariant action can be written to reproduce these linearized metric potentials while respecting screening; that development is beyond scope here but consistent with standard scalar–tensor effective field theory with environment-dependent functions.
 - Cluster and CMB lensing would further constrain (a_env + b_env) at larger scales and temperatures; screening should suppress φ_env in hot intracluster media.
 
-How to run
+How to run (manuscript path)
+- Use scripts/next_steps_from_run.py with --metric-lensing-only (no α_lens_ph). Provide docs/lensing_targets.csv with measured log10M_star and Re_kpc. See docs/paper_appendix_relativistic.md and theory/relativistic.py for the mapping used.
+
+Optional systematics (implemented; default-off)
+- Two-halo term (stacked ΔΣ): Provide a CSV with columns `R_kpc,DeltaSigma_2h`; the template is interpolated to the common R grid and added to the stacked curves when `--twohalo-csv <file>` is passed.
+- Miscentering (stacked ΔΣ): Fraction `f_off` convolved with a Rayleigh offset distribution of width `σ_off` (kpc). We compute Σ_mis by angular/Rayleigh averaging, mix Σ_mix = (1−f_off) Σ + f_off Σ_mis, then recompute ΔΣ_mix = <Σ_mix>(<R) − Σ_mix(R). Enable with `--miscenter-f-off` and `--miscenter-sigma-kpc`.
+- External convergence κ_ext (θE): Mass-sheet transform samples κ ~ N(μ, σ) and apply θE → θE/(1−κ); report *_kappa metrics and record the prior used. Enable with `--kappa-ext-mean`, `--kappa-ext-sigma`, `--kappa-ext-samples` (>0 enables).
+
+Reproducibility note
+- If you omit these flags, the pipeline reproduces the paper’s lensing figures and tables. When enabled, place outputs under a separate `--out-root`/`--images-root` to keep baseline artifacts unchanged. The run metadata gains a `lensing_systematics` section recording the parameters.
+
+Internal pilot (not for manuscript figures)
 - See tools/lensing_predict.py for a CLI that computes θ_E and α(R) for chosen parameters, including a worked example with uncertainties. You can plug in posterior-informed priors for A_env, p from your ER/TFR fits in SPARC.
 

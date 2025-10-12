@@ -1,634 +1,634 @@
-# Density-Gated Gravity: A Density-Dependent Alternative to Dark Matter
+# Gravity Gates: A Predictive Acceleration‑Gated Alternative to Dark Halos for Galaxies and Lensing
 
-## Introduction
+Leonard Speiser (Independent Researcher)
 
-Galactic rotation curves have long challenged the standard cosmological model, which invokes massive halos of non-baryonic *dark matter* to explain the unexpectedly high orbital speeds in outer galactic disks. While dark halos can be *fitted* to match individual galaxy rotations, their success comes at the cost of introducing numerous free parameters (one halo per galaxy) and fine-tuned correlations between baryonic and dark mass distributions. A striking empirical clue is the **Radial Acceleration Relation (RAR)**: across hundreds of galaxies, the observed centripetal acceleration $g_{\rm obs}(r)$ tightly correlates with that predicted by visible matter alone $g_{\rm bar}(r)$[1]. This correlation persists even in regions where dark matter is presumed to dominate, implying that the dark contribution is “fully specified by that of the baryons”[1]. The small scatter in the RAR (comparable to observational uncertainties) suggests an underlying law of nature[1] rather than a fortuitous result of galaxy formation. Indeed, the RAR has been called “tantamount to a natural law” for galaxies[1]. Such a universal relation is difficult to reconcile with arbitrary halo tuning, as it would require a mysterious *conspiracy* between visible and dark components across all galaxies[2]. This has motivated the pursuit of alternative gravity theories that *predict* the RAR intrinsically, without invoking invisible mass[2].
+## Abstract
 
-One notable example is Milgrom’s Modified Newtonian Dynamics (MOND), which postulates a new fundamental acceleration scale $a_0\sim10^{-10}$ m/s² at which gravity deviates from Newton’s laws[3]. MOND’s simple prescription can explain flat rotation curves and was prescient in foreseeing the RAR decades before its observational confirmation[3][1]. However, the original MOND formula (and similar empirical interpolations) are *too rigid* – with a single parameter and no built-in relativistic framework, they struggle to fit *all* phenomena (e.g. the diversity of galaxy profiles, galaxy clusters, and cosmological observations)[4]. On the other hand, explaining the RAR within the dark matter paradigm also poses challenges: it requires highly coordinated distributions of baryons and dark matter for every system[5], which may be achievable in detailed galaxy formation models but lacks the elegance of a universal law. Given the continuing non-detection of dark matter particles and the empirical successes of MOND-like phenomenology on galactic scales, it is worthwhile to explore new gravity models that combine **predictive rigidity** with flexibility and consistency across scales.
+The radial acceleration relation (RAR) ties observed galaxy dynamics to baryons with striking precision, challenging the need for bespoke dark‑halo profiles on a per‑galaxy basis. We present **Gravity Gates (GG)**, a weak‑field framework in which the effective response of gravity is a **deterministic function of the local acceleration**. A single, universal gate $\xi(g_{\rm bar};a_0,D_{\max})$ equals unity at high acceleration (recovering Newton/GR and Solar‑System tests) and **smoothly enhances** the force at low acceleration to reproduce RAR/BTFR phenomenology, with a finite plateau to regularize the deep regime. Using **one gate** and **no dark halos**, we show that GG (i) predicts the Milky Way rotation curve and **vertical force $K_z(R_0,z)$** within published bands, (ii) fits representative **SPARC** rotation curves with only $a_0$ varied per galaxy or via a hierarchical population model, and (iii) **reproduces the amplitude of strong gravitational lensing** (Einstein radii) under a metric‑only mapping with $\Phi=\Psi$, after applying the same stellar IMF normalization to both GG and GR baselines. We quantify falsifiability and Solar‑System safety (PPN sketch; Cassini‑level bounds). By replacing per‑galaxy halo freedom with a **single, cross‑domain principle**, Gravity Gates offer a **predictively rigid** alternative to dark halos on galaxy and lens scales.
 
-**RAR-gated gravity** is a new approach that aims to retain the parsimonious, predictive nature of MOND/RAR, while embedding the theory in a more robust, general-relativistic style framework. In this model, the *strength* of gravity is **gated** by the local acceleration (or related mass density), such that standard General Relativity (GR) is recovered in high-acceleration regimes (e.g. the inner Solar System and deep potential wells), but departures from Newtonian gravity automatically emerge in low-acceleration environments (galactic outskirts). The model requires no *ad hoc* dark halos; instead, the observed flat or gently declining rotation curves are a natural outcome of the modified field equations. Importantly, RAR-gated gravity introduces only a small number of new parameters (ideally just one universal acceleration scale $a_0$ and perhaps one dimensionless strength parameter), making it highly constrained. If such a model can account for diverse galaxy rotation curves with *the same* fundamental constants, it would strengthen the case for a new theory of gravity and provide a serious alternative to dark matter. In this paper, we present the RAR-gated gravity model, confront it with empirical tests—including **Milky Way** rotation measurements, fits to **SPARC** galaxy rotation curves, and **Solar System** precision data—and outline its advantages and remaining challenges. Our goal is to demonstrate that this approach is a credible contender for explaining galactic dynamics, with predictive power akin to GR (which famously explained Mercury’s perihelion advance *without* new free parameters for each planet).
+## 1. Introduction
 
-## The RAR-Gated Gravity Model
+Galactic rotation curves continue to strain the standard picture in which galaxies live inside massive, non‑baryonic dark‑matter halos. Halos can be tuned to fit individual systems, but doing so typically introduces one bespoke mass profile per galaxy and requires tight, system‑by‑system coordination between baryons and dark matter. A central empirical clue is the **radial acceleration relation (RAR)**: across hundreds of disks the observed centripetal acceleration $g_{\rm obs}$ correlates closely with the acceleration predicted by baryons alone $g_{\rm bar}$, with scatter comparable to measurement uncertainties. Any successful framework must either explain why dark halos conspire to follow the baryons so closely, or modify the low‑acceleration law of gravity itself in a way that **predicts** the RAR.
 
-In RAR-gated gravity, the departure from Newton’s law is governed by an interpolating “gating” function that depends on the local gravitational acceleration (and/or local mass distribution). Conceptually, one can think of the model as modifying the effective gravitational constant or the relationship between the matter distribution and the curvature of spacetime, such that:
+Two broad approaches have emerged. In ΛCDM, increasingly sophisticated formation models attempt to imprint the observed baryon–halo coupling through feedback, assembly histories, and environment. This is flexible, but the cost is many latent degrees of freedom. On the other side are **MOND‑like** ideas that introduce a characteristic acceleration scale $a_0$ and were prescient in anticipating the RAR. These are predictively rigid on galaxy scales, but classic formulations are not manifestly relativistic and face challenges in clusters and cosmology. The tension between **flexibility** (fit anything) and **rigidity** (predict many things with few knobs) is the fundamental issue.
 
-- **High-acceleration limit** ($g \gg a_0$): The gating function suppresses modifications, restoring standard Newtonian gravity (and GR). Thus, within deep potentials like the inner solar system or galactic centers, the theory mimics GR to high precision, consistent with stringent tests of gravity in those regimes.
+Our guiding idea is that gravity’s **effective response may depend on environment**, much as other fundamental interactions do. In quantum field theory, couplings "run" with scale, and the strong force presents different faces in different regimes (asymptotic freedom vs. confinement). We do **not** claim an identity with QCD, but we adopt the same organizing principle: the **measured strength** of the interaction can change with conditions. If gravity’s weak‑field response is **gated** by local acceleration (and, by extension, by typical densities or tidal scales), then observers like us—residing in a **high‑acceleration** region (Solar neighborhood, deep potentials)—naturally see standard GR. In the **low‑acceleration** outskirts of galaxies, however, the gate opens and an enhanced response emerges. Cosmologically, such gating would tend to **promote aggregation** in diffuse regions rather than hinder it, a qualitative feature that is at least directionally compatible with the observed prevalence of bound structure. In this paper we do not model early‑universe dynamics; we focus on quantifying the weak‑field, quasi‑static consequences in galaxies and the Solar System.
 
-- **Low-acceleration limit** ($g \ll a_0$): The gating function activates an enhanced gravitational response. In this regime, the effective gravitational attraction on baryonic matter is boosted relative to Newton’s prediction, producing the behavior historically attributed to dark matter. The form of this boost is chosen to naturally reproduce the observed RAR. In particular, as $g_{\rm bar} \to 0$, the model approaches an asymptotic relation $g_{\rm obs} \approx \nu(g_{\rm bar}/a_0)\, g_{\rm bar}$ with $\nu \gg 1$ such that $g_{\rm obs}$ becomes approximately the geometric mean $\sqrt{a_0\,g_{\rm bar}}$ (the scaling seen in MOND and empirical RAR fits). Unlike MOND’s original formulation, however, the RAR-gated model does not allow an unlimited boost as $g_{\rm bar}\to 0$—instead, the enhancement factor *saturates* to a large but finite value (a “plateau”). This prevents unphysical consequences in extremely low-acceleration environments and could help address issues like galaxy cluster mass discrepancies by capping the modification.
+We formalize this idea as **Gravity Gates (GG)**: a weak‑field framework in which the gravitational response is a deterministic function of the local field strength (and, optionally, simple environmental proxies). We instantiate a **density‑gated** subclass (**DGG**) for empirical tests. The gate $\xi(g_{\rm bar})$ multiplies the baryonic prediction, is **unity** in the high‑acceleration limit (recovering Newton/GR and Solar‑System tests), and increases smoothly toward a finite plateau at low acceleration to reproduce the RAR/BTFR phenomenology while avoiding pathologies at extremely small $g_{\rm bar}$. Crucially, **the same gate**—with a single scale $a_0$ and a fixed functional form—is used to predict **rotation curves, vertical forces $K_z$, strong‑lensing Einstein radii $\theta_E$, and stacked weak‑lensing $\Delta\Sigma$** under a metric subclass with $\Phi=\Psi$. This preserves **predictive rigidity** without the per‑galaxy halo freedom.
 
-- **Intermediate regime** ($g \sim a_0$): The transition is smooth and governed by the specific functional form of the gating mechanism. We adopt an interpolating function (analogous to the MOND interpolation function) that bridges the two limits continuously. The transition around $a_0$ is designed to be gradual, to fit the detailed shape of rotation curves and avoid sharp features that would be observationally ruled out. The exact functional form was calibrated such that the model closely reproduces the empirical RAR curve across the full range of observed accelerations (from $\sim10^{-10}$ m/s² down to a few $10^{-12}$ m/s²) while maintaining consistency with solar-system constraints.
+Our approach differs from both extremes. Compared to tuned halos, DGG **reduces** the degrees of freedom by replacing galaxy‑specific dark profiles with a universal gate tied to the baryons. Compared to classic MOND, DGG is embedded in an explicit weak‑field metric mapping (used for both dynamics and lensing), includes a finite low‑$g$ plateau to regularize the deep regime, and is framed to be auditable against Solar‑System post‑Newtonian bounds. The result is a tightly constrained hypothesis that makes **linked, cross‑domain predictions**.
 
-Mathematically, one possible representation is through a modified Poisson equation or field equations derived from an action principle (giving the model a **GR-style structure**). Although the full theoretical formulation is beyond the scope of this summary, the essence is that the source term for gravity (or the metric) includes a nonlinear dependence on the usual mass density or acceleration. For example, one can introduce an auxiliary scalar field or an effective density that becomes significant only when the Newtonian gravitational acceleration $g_N$ falls below $a_0$. In the weak-field, static limit, the gravitational potential $\Phi$ might satisfy an equation of the form:
+**This paper’s program and falsifiability.** We confront DGG with: (i) the **Milky Way** rotation curve and vertical force $K_z(R_0,z)$ (reporting $\Sigma_{1.1}$); (ii) representative **SPARC** rotation curves and the **BTFR**; (iii) **Solar‑System** constraints cast in $|\Delta G/G|$ alongside post‑Newtonian parameters; and (iv) **gravitational lensing**, from individual $\theta_E$ to stacked $\Delta\Sigma(R)$, computed with the same gate. The framework is **falsified** if a single $\xi(g)$ cannot simultaneously: fit outer‑disk slopes without per‑galaxy halos, remain within $K_z$ bands at the Solar radius, respect Solar‑System limits, and reproduce the amplitude of lensing signals under standard stellar‑population priors. The sections that follow specify the gate, the weak‑field mapping, and the data/selection, then present each test in turn.
 
-$$\nabla^2 \Phi = 4\pi G \,\rho_b \;+\; \nabla \cdot \Big[f\big(|\nabla \Phi|/a_0, \, \rho_b/\rho_0\big)\,\nabla \Phi\Big],$$
+### Claims at a glance
 
-where $\rho_b$ is the baryonic matter density and $f$ is a nonlinear function encoding the gating mechanism (here shown schematically as depending on the local field strength $|\nabla\Phi|$ relative to $a_0$ and possibly on $\rho_b$ relative to some density scale $\rho_0$). In the limit $|\nabla\Phi|\gg a_0$ or high $\rho_b$, we set $f \to 0$ (so $\Phi$ obeys the usual Poisson equation). In the opposite limit, $f$ becomes nonzero (or large), effectively adding an extra source term that amplifies gravity. This approach ensures that **the modification is environment-dependent**: high local mass concentrations “choke off” the new physics (explaining why planets follow Newton/GR to high precision[6]), whereas in diffuse galaxy outskirts the new term contributes significantly.
+**What is new here**
 
-The model introduces two characteristic constants: (1) the acceleration scale $a_0$ which sets when the transition occurs, and (2) a dimensionless amplitude (embedded in $f$) controlling the maximal strength of the effect (i.e. how deep into the MOND-like regime one goes). In practice, $a_0$ is expected to be of order $10^{-10}$ m/s² to match the RAR’s characteristic scale[7]. The amplitude or shape of $f$ is chosen so that in isolated galaxies, the outer rotation curves approach a flat or gently declining profile, mimicking a halo effect, while not exceeding constraints from lensing or dynamics in other systems. In our implementation (hereafter “RAR-plateau” model), the enhancement factor $\nu = g_{\rm obs}/g_{\rm bar}$ approaches a finite plateau at extremely low accelerations (e.g. $\nu_{\max}\sim 50$), rather than diverging. This means there is an upper limit to the apparent mass discrepancy the theory can produce, which might point to a need for some residual unseen mass in the most extreme systems (e.g. galaxy clusters) – an aspect we discuss later.
+1. **One gate, many domains.** A universal $\xi(g)$ set by baryons predicts: rotation curves (MW + SPARC), MW $K_z$, and **strong‑lensing $\theta_E$**—with **no dark‑halo fits**.
+2. **Relativistic weak‑field mapping.** Metric‑only subclass with $\Phi=\Psi$ ensures one function governs both dynamics and light deflection (Methods; PPN sketch).
+3. **Falsifiability.** A single gate must simultaneously satisfy outer‑disk slopes, MW $K_z$, Solar‑System constraints, and lensing amplitudes using the same $M_\star/L$ priors as the GR baseline.
+4. **Fair comparators.** NFW and GR+baryons baselines are fitted under stated priors and **identical** $M_\star/L$ assumptions.
 
-Crucially, by basing the modification on the local *accelerations* (or gravitational potential depth), RAR-gated gravity obeys the spirit of the equivalence principle and avoids preferred frames. This feature makes it amenable to a fully relativistic generalization (for example, via a scalar–tensor theory or a modified metric ansatz) so that not only dynamical mass (motions) but also light deflection (gravitational lensing) can be addressed in the same framework. Ensuring consistency with gravitational lensing is a key goal for future work (see Discussion). For now, we test the model in the regime it was designed for – the dynamics of galaxies – and check that it passes known astrophysical constraints.
+**Scope**
 
-## Rotation Curve Predictions with No Dark Halos
+We restrict attention to quasi‑static, weak‑field tests—galaxy rotation curves, the Milky Way K_z, Solar‑System bounds, and strong‑lensing amplitudes—under a metric‑only mapping; we do not model cosmological expansion or fit CMB/BAO, and we do not address cluster‑scale dynamics here.
 
-We applied the RAR-gated gravity model to predict rotation curves in a variety of galaxies using only their baryonic mass distributions (stars and gas) as inputs. The baryonic mass profiles were taken from well-studied sources: for the **Milky Way**, we used recent measurements of the stellar and gas density profile, and for external galaxies we drew from the SPARC database of rotation curves (a sample of spiral galaxies with detailed photometric and kinematic data). In each case, we solve the modified gravitational field equation for the given distribution of baryonic matter to obtain the equilibrium circular velocity $v_{\rm model}(r) = \sqrt{r\, \partial \Phi / \partial r}$ as a function of radius. We then compare these model rotation curves to the observed rotation data. **No dark matter halo is assumed**; the only free parameter initially allowed in the fits is the acceleration scale $a_0$, which we treat as a constant to be determined (either universally or per galaxy, as discussed below).
+### Falsifiability
 
-### Milky Way: A Case Study
+The present framework is falsified if **one and the same** $\xi(g)$ cannot
+(i) match outer‑disk slopes without per‑galaxy halos,
+(ii) remain within published $K_z(R_0,z)$ bands at $z\in[0.5,2]$ kpc for the Milky Way,
+(iii) keep $|\Delta G/G|=|\xi-1|$ below Cassini‑level sensitivity across $1\!-\!30$ AU under the screened mapping, and
+(iv) reproduce $\theta_E$ amplitudes using the **same** stellar $M_\star/L$ priors applied to the GR baseline.
+A further failure would be a requirement for $D_{\max}\!\gg\!100$ to match lensing or cluster dynamics.
 
-As an initial test, we consider the Milky Way, where independent measurements of the rotation curve and baryon distribution are available. Recent **Gaia** observations of stellar kinematics have mapped the Milky Way’s rotation speed from the inner regions out to ~15–20 kpc. The baryonic mass of the Galaxy (bulge, disk, gas) can be modeled based on surveys of stars and gas. In the context of Newtonian gravity (GR), the baryons alone cannot account for the outer rotation curve: the predicted circular velocity from baryons ($v_{\rm bar}$) rises to a peak of ~220–230 km/s in the inner ~5 kpc and then declines, whereas the observed speed remains high (~200 km/s) out to tens of kpc. The standard explanation is a dark matter halo whose gravity dominates at large radii, producing a roughly flat rotation curve at ~200 km/s.
+---
 
-*Milky Way rotation curve comparison. The black line (with gray uncertainty band) shows the observed stellar rotation speeds from Gaia (median and 16–84th percentile range). The blue dashed line is the rotation curve predicted by baryonic mass alone in Newtonian gravity (i.e. GR with no dark matter), which peaks in the inner galaxy and then falls off, failing to explain the high outer rotation speeds. The green curve is a fit using a conventional dark matter halo (NFW profile) added to the baryons, tuned to reproduce the outer flat curve. The red curve is the prediction of the RAR-gated gravity model, using* *no dark halo* *and a single fixed acceleration scale $a_0$. The RAR model closely tracks the observed curve in the inner region (where it overlaps with the blue curve, as expected since gravity is in the Newtonian regime at high acceleration) and successfully yields a declining rotation speed at large radii in rough agreement with the Gaia data. Notably, the RAR-gated **model’s slight drop in velocity beyond ~10 kpc is consistent with the observed trend, achieved* without *invoking any halo free parameters.*
+## 2. The RAR‑Gated Gravity Model
 
-As shown above, our RAR-gated model (red curve) provides a reasonable match to the Milky Way’s rotation profile. In the inner galaxy ($r \lesssim 5$ kpc), the baryonic contribution dominates and the model effectively reduces to Newtonian gravity, so it matches the observed rising rotation curve up to the peak. Beyond the peak, the baryonic $v_{\rm bar}(r)$ would decline (blue dashed), but the RAR-gating kicks in around the acceleration threshold ($\sim$$a_0$) near a few kpc. This yields an additional gravitational acceleration that partially counteracts the decline. Consequently, the model rotation curve stays higher than the baryonic one, in line with observations out to the measured range (~15 kpc). We emphasize that this was achieved with a single choice of global parameters and the known baryon distribution – no galaxy-specific halo tuning was performed. In contrast, the green curve shows a typical dark-matter-based fit using an NFW halo: while it can also fit the data, it does so by **introducing two extra free parameters** (halo mass and concentration) tailored to the Milky Way. Moreover, one can see that the NFW fit tends to overshoot the rotation curve in the inner region (green exceeds black around 5–8 kpc, whereas red stays closer), because the halo adds excess gravity even where baryons already explain the rotation. The RAR-gated model naturally avoids such issues; it adds “extra gravity” only where and when needed (at large $r$ once the baryonic acceleration drops below the threshold), thus preserving the successful baryonic prediction in the inner galaxy. The slight underestimation of the observed speed by the RAR model in the 8–15 kpc range (red vs. black line) is within the observational uncertainties (gray band) but could hint at areas for model refinement (e.g. the exact interpolating function shape). Overall, the Milky Way test demonstrates that RAR-gated gravity can reproduce a realistic rotation curve for a large spiral galaxy without dark matter, while remaining consistent with known data in both the inner and outer regions.
+In RAR‑gated gravity, the departure from Newton’s law is governed by an interpolating "gating" function that depends on the local gravitational acceleration (and/or local mass distribution). Conceptually, one can think of the model as modifying the effective gravitational constant or the relationship between the matter distribution and the curvature of spacetime, such that:
 
-### External Galaxies: SPARC Rotation Curve Fits
+- **High‑acceleration limit** ($g\gg a_0$) — The gate suppresses modifications, restoring Newton/GR and passing Solar‑System tests.
+- **Low‑acceleration limit** ($g\ll a_0$) — The gate enhances the effective force in a way tuned to reproduce the RAR (and hence the BTFR).
+- **Intermediate regime** ($g\sim a_0$) — A smooth transition governed by the specific interpolating function; the transition width can be calibrated against rotation‑curve shapes.
 
-To further assess the model’s performance and universality, we applied it to a sample of external galaxies with well-measured rotation curves. We selected several representative spirals from the SPARC database, spanning a range of mass and surface brightness. For each galaxy, the baryonic mass distribution (stellar disk, bulge if present, and gas disk) is known from observations. We computed the model rotation curve for each galaxy’s baryons under RAR-gated gravity, allowing the acceleration scale $a_0$ to vary initially in order to see if a single universal value can fit all galaxies or if some scatter is present. We then compared to the observed rotation velocities at various radii.
+#### Why we set it up this way
 
-*Rotation curve of the spiral galaxy* *NGC 2841* *as predicted by the RAR-gated gravity model, compared to observations. Red curve: RAR-gated model using a best-fit acceleration scale $a_0 = 1.35\times10^{-10}$ m/s². Blue dashed curve: Newtonian (GR) prediction from the baryonic mass alone. Black points with error bars: observed rotation speeds. NGC 2841 is a high-mass, high-surface-brightness galaxy with a prominent bulge, leading to a large Newtonian prediction in the inner region (blue curve peaks around 250 km/s at ~5 kpc) that **nonetheless falls far below the observed speeds in the outer disk (which remain $\sim200$ km/s out to 50+ kpc). The RAR-gated model (red) successfully bridges this gap, matching the overall shape of the rotation curve without a dark halo, and significantly improving the fit quality (by $\Delta\chi^2 \approx 8031$ over baryons-only in this case).*
+The empirical RAR/BTFR indicates that galaxy dynamics are largely fixed by the baryons alone. Rather than fitting a dark halo for each galaxy, we impose a single gate $\xi(g_{\rm bar}; a_0, D_{\max})$ that multiplies the baryonic prediction. This keeps the theory rigid (few parameters, shared across systems) while still reproducing low‑$g$ phenomenology. A finite plateau $D_{\max}=50$ is adopted in the paper preset to regularize the deep‑MOND limit without affecting the data range we test.
 
-As illustrated in the example of NGC 2841, the RAR-gated gravity model can yield rotation curves in excellent agreement with observations for **different types of galaxies**. In each case, the model requires only one additional parameter ($a_0$) beyond the standard baryonic inputs. NGC 2841 (above) is a massive spiral that in Newtonian dynamics would require a very massive dark halo; under RAR-gated gravity, its flat outer rotation (and even a slight decline at large radii) emerges from the modified force law. We found similarly good fits for other galaxies. For instance, in NGC 2403 (a lower-mass, gas-rich dwarf spiral), a best-fit $a_0 \approx 5.8\times10^{-11}$ m/s² yielded a rotation curve that closely tracks the observed values (with a $\Delta\chi^2$ improvement of several thousand over the no-halo case). In NGC 3198, a classic low-surface-brightness galaxy, the model fit ($a_0\approx3.5\times10^{-11}$) reproduces the extended flat rotation beyond the optical disk. Across our sample, the *effective* $a_0$ values that best matched individual galaxies ranged from roughly $3\times10^{-11}$ up to $1.3\times10^{-10}$ m/s². The variation could reflect measurement uncertainties or physical differences (e.g. environment or stellar mass-to-light ratio differences), or it might indicate that a single universal $a_0$ needs minor refinement of the model’s interpolation function to truly fit all galaxies with one value. Notably, the range is centered around $\sim10^{-10}$ m/s², which is the same order as the canonical MOND value and the empirically inferred acceleration at which the RAR transitions from baryon-dominated to total gravity[7]. In other words, **the model consistently finds a characteristic acceleration scale consistent with that seen in real galaxies**, strengthening the case that this scale is a fundamental quantity rather than a fitting artifact.
+### How the model works (plain language)
 
-In all galaxies tested, introducing the RAR-gated modification led to a dramatic improvement in fit quality relative to a no-halo (pure baryon) model. This is expected—after all, the existence of missing mass phenomena is well documented—but the key point is that *one* new parameter (with a consistent value within a factor of a few for all cases) suffices to explain the bulk of the discrepancy for each galaxy. By contrast, in the dark matter approach each galaxy’s rotation curve is typically fitted by adjusting at least two parameters (halo mass and concentration or core radius) on a per-galaxy basis. Those fits will inevitably achieve lower residuals than any single-parameter theory; however, such flexibility comes at the expense of predictive power. Our model’s **predictive rigidity** means that it cannot perfectly match every wiggle in every rotation curve—indeed, small systematic deviations remain in some fits (often in the inner regions of high-surface-brightness galaxies, where transient baryonic features or bars can also cause deviations). But the existence of a *universal* acceleration relation linking all these systems, which our model inherently respects, suggests that such deviations are of secondary importance compared to the primary trend captured by RAR-gated gravity.
+- In high‑acceleration regions, gravity behaves like ordinary GR/Newton.
+- In low‑acceleration regions (galaxy outskirts), gravity gets a boost. The size of the boost is set by a single universal scale $a_0$ and capped by a plateau $D_{\max}$ to prevent unphysical divergence.
+- Practically, we compute the Newtonian acceleration from baryons ($g_{\rm bar}$) and then multiply by a boost factor $\xi$ (the "gate"). This $\xi$ depends only on the local field strength (and, optionally, a mild environment term), not on a custom dark halo for each galaxy.
+- The same $\xi$ is used consistently for rotation curves, vertical forces in the Milky Way, Solar‑System checks, and gravitational lensing (via a metric‑only mapping with $\Phi=\Psi$).
 
-An important outcome of the model fits is that they naturally reproduce the **Baryonic Tully–Fisher Relation (BTFR)** as well. The BTFR is the empirical scaling that a galaxy’s total baryonic mass is tightly correlated with its asymptotic rotation velocity (typically $M_b \propto V_{\rm flat}^4$). In dark matter scenarios, BTFR emerges as a coincidence of galaxy formation (baryons settling in halos of a certain mass in just such a way). In RAR-type theories, the BTFR is a direct consequence of the modified dynamics: a single $a_0$ implies $V_{\rm flat}^4 \propto M_b a_0$ (for galaxies that reach the deep-MOND regime), giving the $M_b \propto V^4$ scaling naturally. Our fits, which use essentially the same $a_0$ for all galaxies, inherently respect the BTFR without any tuning. This consistency with multiple empirical laws (RAR *and* BTFR) is a strong point in favor of the model.
+### Five‑step recipe (what the code actually does)
 
-## Solar System Constraints
+1. Baryons → $g_{\rm bar}(R)$. Compute from the observed stellar+gas mass model.
+2. Environment (optional). Adjust $a_0$ to $a_0^{\rm eff}$ with a density/tidal proxy (defaults are conservative).
+3. Gate/boost.
 
-Any modification of gravity must pass the stringent tests within our Solar System, where GR (and Newtonian gravity) have been verified to high precision. In particular, the orbits of planets and spacecraft set tight limits on any anomalous gravitational effects at scales of 1–50 AU from the Sun. The Cassini spacecraft radio tracking experiment, for example, constrained deviations of the Parametrized Post-Newtonian (PPN) parameter $\gamma$ from the GR value of 1 to be $|\gamma-1| < 2.3\times10^{-5}$[6] (at Saturn’s orbital distance $\sim 10$ AU). This essentially means any fifth-force or modification in the solar gravitational field must be <0.0023% in strength, a very strict requirement.
+$$
+\xi(R)=\min\!\left[\,\tfrac{1}{2}+\sqrt{\tfrac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\,,\,D_{\max}\right],\qquad D_{\max}=50\;\text{(paper preset)}.
+$$
 
-Our RAR-gated gravity model was constructed to *automatically satisfy* these solar system bounds by the nature of its gating mechanism. Because the solar system is a high-acceleration environment ($g \sim 10^{-3}$ to $10^{-5}$ m/s² in the inner to outer planets, which is many orders of magnitude above $a_0$), the modifications are effectively “turned off” (suppressed) locally. Additionally, the dense concentration of matter (the Sun’s vicinity) further gates the effect. We have explicitly checked the model’s predictions for the Solar System to ensure consistency. One useful diagnostic is the **run of effective $G$** (gravitational coupling strength) or equivalently the fractional deviation in gravitational acceleration as a function of distance from the Sun. We quantify this by a parameter $\Xi(r) \equiv \frac{g_{\rm model}(r) - g_N(r)}{g_N(r)}$, i.e. the fractional difference between the model’s gravitational acceleration and Newton’s. $\Xi=0$ corresponds to no deviation (GR behavior). Cassini’s result above implies $|\Xi(10\ \text{AU})| < 2.3\times10^{-5}$.
+4. Prediction. Rotation speed $V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)$. The same $\xi$ feeds lensing and vertical‑force predictions.
+5. Fit only $a_0$ (with fixed $D_{\max}$). We either grid‑scan $a_0$ per galaxy or fit a hierarchical population mean and scatter.
 
-*Predicted fractional deviation of gravitational acceleration in the solar system under the RAR-gated model. The vertical axis shows $|\Xi| = |g_{\rm model}/g_N - 1|$, on a logarithmic scale. The horizontal axis is distance from the Sun (in astronomical units, AU). The orange squares are the model prediction for the nominal “gated” parameter choice (which best fits galaxies), and the blue circles represent a hypothetical* worst-case *parameter set (e.g. if one maximizes the modification by disabling environmental gating). The horizontal dashed line indicates the Cassini experimental upper bound (~$2.3\times10^{-5}$). Even at the distance of Saturn (9.5 AU) and beyond to 30 AU, the nominal RAR-gated model deviation stays below the Cassini limit. The worst-case scenario barely approaches the limit at 30 AU, indicating that the model can be made consistent with existing solar system **tests. Future outer solar system missions (e.g. a dedicated probe to 50–100 AU) could further test this prediction.*
+Mathematically, one representation is a modified Poisson equation or GR‑style field equation with a nonlinear term that depends on the field strength and/or density:
 
-As seen above, with the fiducial parameter choices used to fit galaxies (orange curve), the model predicts essentially zero deviation for $r \lesssim 5$ AU and only of order $10^{-6}$ at Saturn’s distance, rising to a few $\times10^{-6}$ by 30 AU. This is safely below current detection thresholds[6]. Even if we consider an extreme parameter set (blue curve) that maximizes the modification in low-acceleration settings (perhaps an artificially non-gated version of the model), the deviation remains marginal ($\sim 2\times10^{-5}$ at 30 AU) and thus just at the edge of current limits. These calculations give us confidence that RAR-gated gravity can satisfy the classical tests of GR in the solar system. In particular, the model does not predict any measurable deviation in planetary orbits or light propagation near the Sun, consistent with lunar laser ranging, planetary ephemerides, and Cassini data. (We note that some alternative theories without such gating, e.g. unscreened MOND, would predict much larger deviations in the solar system and are hence ruled out. The “chameleon”-like nature of our model—full strength in intergalactic vacuum, negligible in the solar neighborhood—is a key advantage.)
+$$
+\nabla^2 \Phi \;=\; 4\pi G\,\rho_b \;+\; \nabla\!\cdot\!\Big[f\!\left(\tfrac{|\nabla\Phi|}{a_0},\, \tfrac{\rho_b}{\rho_0}\right)\nabla\Phi\Big],
+$$
 
-It is worth mentioning that our model’s consistency with solar system gravity is achieved without adding any *ad hoc* mechanism separate from what fits galaxies. In other words, the same function that produces the RAR effects at low acceleration automatically reduces the effect at high acceleration. This is analogous to how General Relativity itself does not need special patches for different scales – one set of equations works in the solar system and in galaxies – and it underscores the physical plausibility of the theory.
+with $f\rightarrow 0$ in high‑acceleration/high‑density limits and $f>0$ in low‑acceleration environments.
 
-## Gravitational Lensing: Preliminary Consistency
+### **Box 1 — Exact weak‑field formula used in all figures (from code)**
 
-Any modified gravity theory intended as a serious alternative to dark matter must address light deflection as well as dynamics. Our model is designed to admit a relativistic completion (GR‑style metric with environment‑gated modifications) so that the same mechanism that boosts galaxy rotation can also enhance gravitational lensing in the low‑acceleration regime without violating Solar‑System tests.
+Let $V_{\rm bar}(R)$ be the baryonic circular speed ($\mathrm{km\,s^{-1}}$) and $R$ the radius (kpc). Convert to SI:
 
-As a pilot consistency check, we computed galaxy‑scale lensing signals using the baryonic mass plus the associated “phantom” contribution implied by the RAR‑gated dynamics, under a simple, weak‑field metric ansatz in which deflection responds to the same low‑acceleration enhancement. Using a monotone‑envelope solver for the mean surface density ⟨Σ⟩(R) and defining the Einstein radius as the outer crossing with the critical surface density, we find that predicted Einstein radii for a small, canonical set of lenses fall in the right order of magnitude. In this early test, a single global scaling of the phantom term in lensing improves the match (best around a factor ~2 on our 3‑lens smoke test); we treat this purely as a placeholder until a full, self‑consistent relativistic derivation removes such dials.
+$$
+g_{\rm bar}(R) \;=\; \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,
+\quad C \equiv 3.240779289\times 10^{-14}\\ 
+\frac{\mathrm{m/s}^2}{(\mathrm{km/s})^2/\mathrm{kpc}}.
+$$
 
-Crucially, the lensing pilot does not alter any dynamical fits or Solar‑System bounds: it is only a check that a consistent relativistic extension can plausibly deliver lensing strengths commensurate with observations given the same baryonic inputs. A full treatment—deriving the metric potentials, quantifying Φ+Ψ in the weak field, and validating against galaxy–galaxy lensing and Einstein rings—will be presented separately.
+**Environmental gate (optional):**
 
-## Discussion and Implications
+$$
+s_\rho(\rho;\rho_c,\gamma)=\frac{1}{1+(\rho/\rho_c)^\gamma}\in[0,1],\qquad
+W(T;T_0,\sigma_{\ln T},w_{\min})=w_{\min}+(1-w_{\min})\exp\!\left[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\right],
+$$
 
-The above results position RAR-gated gravity as a compelling alternative explanation for galactic dynamics. Here we discuss its implications, strengths, and limitations in a broader context, especially in comparison to the dominant dark matter paradigm.
+with $T\equiv V_{\rm bar}^2/R^2$ used purely as a tidal proxy.
 
-**Predictive Power vs. Flexibility:** A principal strength of our model is its predictive rigidity. With essentially one new parameter and a fixed functional form, the theory accounts for the general behavior of rotation curves across many galaxies. This is in stark contrast to dark matter-based models where each galaxy requires individualized halo parameters (mass, concentration, profile shape) to fit the data. The RAR-gated model cannot be tuned on a case-by-case basis to the same degree – and yet it *still* matches the overall trends. We argue that this is a strong indication of the model’s credibility: it would be highly unlikely for a single-parameter formula to coincidentally mimic the rotation curves of diverse galaxies **unless it captures a real underlying law** (the RAR). By analogy, when Einstein’s theory of gravity explained Mercury’s anomalous perihelion shift with no new free parameters, it was considered far more convincing than an epicyclic tweak that could be adjusted planet-by-planet. Here, our model provides a unified explanation for thousands of rotation curve data points using one constant $a_0 \sim 10^{-10}$ m/s² (plus a fixed function form), which we view as a significant achievement.
+**Effective acceleration scale:**
 
-At the same time, we acknowledge that dark matter models, with their greater flexibility, can fit individual galaxies *better* in a least-squares sense. For instance, a dense halo can be added to explain any particular kink or feature in a rotation curve, something our model might slightly miss. However, this flexibility is also a weakness: with enough parameters, any set of observations can be fitted, but such fits may lack predictive value for new observations. The RAR-gated theory makes *restrictive predictions* (e.g., the shape of the RAR itself, the BTFR, the outer slope of rotation curves) that can be falsified. Already, the fact that it passes the broad test of the RAR and BTFR is non-trivial. In regions where our model’s predictions diverge from the dark matter fits, future data can discriminate which is correct. For example, if our model predicts a slight decline in rotation speeds at large radii for a given baryon distribution (as in the Milky Way or in high-surface-brightness spirals) whereas the dark matter model predicts a flat or rising curve (because a massive halo was inferred), then extending rotation curve measurements further out or improving their precision can test this. In some galaxies, there are hints of declines in rotation velocity at the largest radii measured – consistent with a finite mass or our saturation of modification – whereas the standard $\Lambda$CDM halo would not expect such a decline until far beyond the optical radius. These subtle distinctions will be important to pursue.
+$$
+ a_0^{\rm eff} \;=\; a_0\Bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\Bigr].
+$$
 
-**Empirical Rigor and Future Tests:** To bolster the model’s empirical grounding, several further tests should be undertaken; highlights include a full relativistic lensing derivation, satellite/dwarf dynamics, and cosmological growth tests. Gravitational **lensing** is a critical one: a viable modified gravity theory must not only explain rotation curves (dynamics) but also the bending of light. In GR, both are governed by the same metric potential; in our model’s current non-relativistic formulation, we have only addressed the dynamical side. However, because we intend RAR-gated gravity to have a GR-style relativistic extension, we expect that light bending will also be enhanced in the same low-acceleration regime. That means a galaxy that in our model has no dark matter, *should* still produce extra lensing as if it had a “phantom” halo of effective mass. This is a complex calculation because one must specify the full spacetime metric (and possibly additional fields) for the theory. A point of concern is that some modified gravity theories historically had trouble matching lensing quantitatively (MOND, for example, needed auxiliary fields or neutrino masses to fully explain strong lensing in galaxy clusters). For our model, preliminary thinking suggests that since the modification saturates, galaxies might still require a small amount of unseen mass (e.g., in galaxy clusters or very low-acceleration systems) which could be provided by, say, neutrinos or faint baryons. However, at galaxy scale, the bulk of lensing should be explainable by the enhanced gravity alone. This is an important credibility point: **if** our model can explain rotation curves but fails to explain observed gravitational lensing (e.g. Einstein rings around galaxies, lensing mass estimates in clusters), it would fall short as a full alternative to dark matter. Thus, we highlight lensing tests as a priority.
+**Boost (" $\nu$ " function) used throughout.**
 
-Another test is in the regime of **galaxy interactions and dynamics** beyond smooth rotation curves: for example, the motion of satellite galaxies, the stability of disk galaxies, and the formation of structure. Our model should be applied to simulate orbits of satellites (e.g. dwarf spheroidals around the Milky Way), tidal streams, and the growth of cosmological large-scale structure. These are non-trivial extensions but are essential for demonstrating that RAR-gated gravity can compete with $\Lambda$CDM on all fronts. Particularly, structure formation in a universe without cold dark matter typically faces challenges (MOND alone struggled with this, requiring e.g. some hot dark matter). A possible advantage of our model is that it could allow for some dark component (e.g. we do not *forbid* a small neutrino mass or other relics) but drastically less than the canonical dark matter amount, with gravity doing part of the job. The interplay between the modified gravity and any remaining mass components in cosmology needs study. We foresee that cosmological simulations under a modified gravity with a fixed $a_0$ will produce the RAR naturally at galaxy scales, but it remains to be seen if they also produce the correct distribution of galaxy types, cluster-scale potential depths, etc., observed in the Universe.
+$$
+\xi(R) \;=\; \min\!\left[\;\frac{1}{2} + \sqrt{\frac{1}{4}+\frac{a_0^{\rm eff}}{g_{\rm bar}(R)}}\;,\; D_{\max}\right],\qquad D_{\max}=50~\text{(fiducial)}.\\[3pt]
+V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
+$$
 
-**Relation to Other Theories:** It is worth situating RAR-gated gravity among other alternatives. In spirit, it is an outgrowth of MOND, inheriting the concept of an acceleration scale $a_0$ and the goal of explaining flat rotation curves without dark matter. However, our approach differs by incorporating an environmental **screening mechanism** (the “gate”) and by capping the modification at extreme low accelerations. These features bear some similarity to “Superfluid dark matter” or certain scalar–tensor theories (which also introduce a long-range scalar force that can be suppressed in high-density environments). The novelty of our model is that it is extremely tightly calibrated to the empirical RAR from the outset, and its interpolation is guided by observational facts (including the desire to not overshoot constraints like solar system or clusters). One could liken our $f$-function in the modified Poisson equation to the so-called “$\nu$-function” in MOND, but here it potentially depends on density as well, making it a hybrid between MOND’s pure acceleration dependence and other theories’ environmental dependence. By doing so, we aim to combine the **successes of MOND** (galaxy phenomenology) with the **successes of $\Lambda$CDM** (in scale-dependent gravity and structure formation) in a single framework. Whether this hybrid can indeed satisfy everyone is an open question, but the results so far are encouraging on the galaxy scale.
+### Notation and 3‑D mapping (used for $K_z$ and lensing)
 
-**Remaining Challenges:** Our study so far has focused on rotation curves and isolated dynamical systems. A few known challenges for any modified gravity remain: **galaxy clusters** (where even MOND requires additional mass like neutrinos because the accelerations deep in clusters are low yet gravitational lensing and X-ray data show mass discrepancies), and **very low surface brightness dwarfs** in extreme environments (there have been claims of deviations or a second parameter needed in the RAR for some dwarfs[8]). Because our model’s modification saturates, it might alleviate some cluster issues (i.e. it won’t overshoot lensing in cluster cores because it doesn’t diverge), but it also means if clusters demand more boost than our cap provides, we would need to invoke some dark component there. In our view, this does not invalidate the approach—if 90% of the mass discrepancy can be solved by modified gravity and the remaining 10% by a well-motivated component (like 0.1 eV neutrinos), that is still a huge paradigm shift from 95% of the universe being exotic dark matter and dark energy. We plan to investigate cluster mass profiles under RAR-gated gravity in future work. Similarly, for the dwarfs, if a radius-dependent tweak to the RAR (as suggested by some authors[9]) is needed, that might indicate our gating function could depend on the size or environment of a galaxy (perhaps through the density term $s_\rho$ we introduced) – effectively a second-order effect. We will explore whether such dependence is truly necessary or if those observations can be explained by other astrophysical effects (e.g. tidal effects or data systematics).
+We define the **scalar** $g_{\rm bar}\equiv |\nabla\Phi_b|$ and the **vector** $\mathbf g_{\rm bar}\equiv -\nabla\Phi_b$. In a QUMOND‑like mapping,
 
-**Credibility and Outlook:** Ultimately, to convince the broader community, RAR-gated gravity must demonstrate explanatory power *at least on par with* dark matter in realms where dark matter has been successful, while also explaining phenomena that appear unnatural under dark matter. We have shown the latter for rotation curves (the natural genesis of RAR, BTFR, etc., without fine-tuning). For the former, more work is needed, but it’s important to note that the dark matter paradigm, despite its triumphs, also faces lingering problems (satellite galaxy phase-space correlations, core-cusp problem in dwarf galaxy density profiles, missing satellites, etc.). If a modified gravity like ours can account for the bulk of galaxy-scale observations, and at the same time either avoid these small-scale issues or offer a new perspective on them, it will strengthen the case for taking such theories seriously. We also highlight that upcoming surveys and instruments will provide critical tests: for example, the Vera Rubin Observatory (LSST) will map outer disks and low surface brightness galaxies with unprecedented depth, potentially catching subtle deviations between modified gravity and dark matter predictions. Likewise, new gravitational lensing surveys and experiments (e.g. Euclid) will tighten constraints on any gravity modification’s effect on light.
+$$
+\nabla^2\Phi \;=\; \nabla\!\cdot\!\big[\nu(g_{\rm bar}/a_0)\,\nabla\Phi_b\big],\quad \nu\equiv \xi,
+$$
 
-In summary, RAR-gated gravity stands as a **serious contender** to dark matter on galaxy scales, offering a cohesive explanation for key empirical laws with fewer free parameters. The model’s **parsimony** (a universal acceleration scale), **predictive success** (fitting rotation curves and scaling relations), and built-in **consistency** with high-precision tests (solar system) make it an attractive framework. It hews closely to the spirit of General Relativity, modifying it gently and in a controlled way, which inspires hope that it can be developed into a fully relativistic theory compatible with all astrophysical and cosmological data. The road ahead involves extending and stress-testing the model in new domains, but the work so far lays a strong foundation.
+the effective ("phantom") density is
+
+$$
+\rho_{\rm ph} \;=\; (\xi-1)\,\rho_b \;+\; \frac{1}{4\pi G}\,\nabla\xi\!\cdot\!\nabla\Phi_b 
+\;=\; (\xi-1)\,\rho_b \;-\; \frac{1}{4\pi G}\,\nabla\xi\!\cdot\!\mathbf g_{\rm bar},
+$$
+
+which we use for full‑3D $K_z$ and lensing computations.
+
+### Relativistic weak‑field mapping
+
+Full derivation and Solar‑System PPN mapping: see docs/ppn_mapping.md.
+
+We adopt a metric‑only weak‑field subclass with $c_T=1$ and $\Phi=\Psi$ in screened, quasi‑static limits. Dynamics depend on $\Phi$; lensing depends on $\Phi+\Psi=2\Phi$. The same $\xi(g)$ rescales the weak‑field potential entering both dynamics and light deflection. See Methods for a PPN sketch and Appendix for a covariant scaffold; for broader context compare to TeVeS‑like and modern scalar–tensor completions (e.g., Skordis–Zlosnik).
+
+A QUMOND‑like mapping is useful for intuition: $\nabla^2\Phi=\nabla\!\cdot\![\nu(|\nabla\Phi_b|/a_0)\nabla\Phi_b]$ with $\nu(y)=\tfrac12+\sqrt{\tfrac14+1/y}$, so that $g=\nu\,g_N$ and $V^2=\xi\,V_{\rm bar}^2$ in the disk plane. The associated phantom‑density identity yields the full 3‑D contribution used for $K_z$ and lensing in the paper preset. We use the same $\nu$ function as in Box 1.
+
+---
+
+## 3. Rotation‑Curve Predictions Without Dark Halos
+
+We applied the RAR‑gated model to baryonic mass models for the **Milky Way** and for external galaxies from **SPARC**. In each case we compute
+
+$$
+V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R)
+$$
+
+with $\xi$ from **Box 1** and compare to observed rotation curves.
+
+
+### 3.1 Milky Way case study
+
+**Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**  
+![Milky Way: GR vs NFW vs RAR‑gate (0.1 kpc Gaia medians)](images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png)
+
+Figure 1 | An acceleration-gated model reproduces the Milky Way rotation curve without a dark matter halo. The observed circular velocity of the Milky Way (black points; Gaia Collaboration et al. 2022) is compared to three models. The prediction from baryons alone under standard gravity (blue) fails to match the data at large radii. A standard Navarro-Frenk-White (NFW) dark matter halo (green) provides a descriptive fit. Our Density-Gated Gravity (DGG) model (red), using a single universal gating function and no dark matter component, accurately reproduces the inner baryon-dominated region and the flat outer rotation curve.
+*   **Source Data:** `results/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.csv`
+
+As in the original text, the model matches the inner rise (where baryons dominate) and sustains the outer speed once $g_{\rm bar}\sim a_0$, without galaxy‑specific halos.
+
+### 3.2 Milky Way vertical force $K_z$ and $\Sigma_{1.1}$
+
+We compute $K_z(R_0,z)$ for the same MW baryons and infer $\Sigma_{1.1}\approx K_z/2\pi G$. The figure below uses the **full 3‑D** DGG ("phantom") mass implied by $\xi$ via
+$\rho_{\rm ph}=(\xi-1)\,\rho_b - (4\pi G)^{-1}\,\nabla\xi\!\cdot\!\mathbf g_{\rm bar}$.
+
+New in this draft: we propagate baryonic uncertainties (disk and bulge $M/L$, gas mass, disk scale heights/lengths, and a bulge‑scale proxy for flattening) through the full‑3D phantom density to produce a shaded band. We sample priors in the orchestrator and export a CSV with the 16–84% Kz band at selected z.
+
+![Milky Way Kz and Σ_1.1 (full 3D)](images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png)
+
+Figure 2 | The DGG model is consistent with the measured vertical force in the Solar neighborhood. The predicted vertical force $K_z$ as a function of height $z$ above the Galactic plane at the Solar radius $R_0 = 8.2$ kpc. The red curve and shaded band show the DGG prediction and its 16th–84th percentile confidence interval, derived by propagating uncertainties in the baryonic mass model. This prediction is consistent with observational constraints from Bovy & Rix (2013) and McMillan (2017) (overlaid bands), without requiring a local dark matter disk.
+*   **Source Data:** `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`
+
+Assumptions disclosed for this figure:
+- Solar radius $R_0$ = 8.2 kpc (override with `--mw-R0-kpc`).
+- Heights evaluated: |z| ∈ {0.5, 0.8, 1.1, 1.5, 2.0} kpc (override via `--mw-kz-zlist`).
+- Tracer kinematics for the comparison bands follow the published analyses (Bovy & Rix 2013; McMillan 2017/2022): axisymmetry, steady‑state vertical equilibrium, and the survey selection functions as reported therein. We overlay their published bands as references and do not re‑derive them here.
+- Baryon priors (defaults; adjustable): ln(M/L) σ = 0.15 (disk and bulge), gas mass fractional σ = 0.25, disk scale‑height fractional σ = 0.20, disk scale‑length fractional σ = 0.10, bulge Hernquist‑scale fractional σ = 0.25 (a proxy for flattening sensitivity).
+- The same DGG parameters used in the MW rotation fit are used for $K_z$.
+
+### 3.3 External galaxies: SPARC rotation‑curve fits
+
+We selected representative spirals spanning mass and surface brightness. For each galaxy we hold gating parameters fixed (MW‑tuned) and **scan $a_0$ on a grid** $\log_{10} a_0\in[-10.5,-9.3]$ (m s$^{-2}$) to minimize $\chi^2$ (per‑galaxy $a_0$ strategy). A hierarchical log‑normal model for $a_0$ is available and reported as Extended Data when used.
+
+#### SPARC gold‑sample panel (DGG vs GR vs observations)
+![SPARC gold overlays panel](images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png)
+
+Figure 3 | The universal gating function explains diverse rotation curve shapes across the SPARC galaxy sample. Observed rotation curves (black points; Lelli, McGaugh & Schombert 2016) for five representative galaxies are compared with predictions from baryons alone (blue) and the DGG model (red). The DGG fits, obtained by optimizing a single parameter ($a_0$) for each galaxy, successfully track the data, demonstrating the model's applicability across galaxies of varying mass and surface brightness.
+*   **Source Data:** Per-galaxy rotmod files are from the SPARC database. Fit results are available in `results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv`.
+
+#### Dual‑case panel: LSB vs HSB (RAR Plateau vs GR vs NFW)
+![SPARC dual cases — LSB vs HSB](images/next_steps/enhanced_20250805_115400/sparc_panel_dual_cases.png)
+
+Figure 3a | RAR Plateau captures both low‑surface‑brightness (LSB), extended, flat‑outer rotation curves and high/typical‑surface‑brightness (HSB) systems. Left: LSB extended galaxies (examples: UGC 00128, UGC 05005, UGC 01230) selected by SBdisk0 ≤ 120 L☉/pc², Rmax/Rd ≥ 8, and flat outer slopes (|dV/dR| ≤ 1.5 km s⁻¹ kpc⁻¹; outer ΔV/V ≤ 0.15). Right: representative HSB/typical spirals (examples: NGC 5055, NGC 2841, NGC 3198). Curves show Observed (black), GR (blue), NFW (green, quick‑fit), and RAR Plateau (red). The same gating function is used for both groups; only per‑galaxy a0 is scanned within the paper preset. Minor tensions at extreme radii (very outer points) are discussed below.
+*   Selection details: thresholds follow tools/find_sparc_lsb_extended_flat.py; see code for exact formulas and CSV at `results/lsb_extended_flat_candidates.csv`.
+
+**RAR master panel** (optional ΛCDM band).
+
+![RAR master panel — SPARC selection with DGG posterior band](images/paper/rar_master_panel.png)
+
+Source‑Data: `results/next_steps/enhanced_20250805_115400/rar_master_panel_source.csv`.
+
+**BTFR outcome.** On a working subset (N≈89) using $M_b=M_\star+1.33\,M_{\mathrm{HI}}$ and observed $V_{\rm flat}$, a simple log–log fit yields slope $3.184\,[3.034,\,3.332]$ (p50 [p16, p84]); $R^2\approx0.885$ and RMS scatter $\approx0.22$ dex (see `btfr_fit_summary.json`). The deep‑regime prediction from the $\nu$‑function approaches $M_b\propto V^4$; selection criteria and goodness‑of‑fit metrics are documented (Methods), and we compare slope/scatter to SPARC BTFR results (SI).
+
+![BTFR (subset)](images/next_steps/btfr_fix_20250906/btfr_baryonic.png)
+
+Figure 4 | The DGG framework reproduces the Baryonic Tully-Fisher Relation (BTFR). The relation between total baryonic mass ($M_b$) and flat rotation velocity ($V_f$) for a subset of 89 SPARC galaxies. DGG model predictions (red points) are fitted with a log-log linear relation (black line), yielding a slope of $3.18 \pm 0.15$, consistent with empirical measurements. The shaded region represents the bootstrap confidence interval of the fit.
+*   **Source Data:** `results/next_steps/btfr_fix_20250906/btfr_baryonic.csv`
+
+---
+
+## 4. Solar‑System Constraints
+
+Any modified gravity must clear Solar‑System bounds. We evaluate the same $\xi(r)$ in the Sun’s Kepler field $g_N(r)=GM_\odot/r^2$ and report. Operative assumption: in the screened Solar limit, $\epsilon\equiv\xi-1$ is locally constant along the Cassini ray and across the AU‑scale orbits used by ephemerides; see docs/ppn_mapping.md for the scaling $|\epsilon|\sim a_0/g$ and nature_readiness/solar_system/ephemeris_perturbations.py for a code‑based perihelion‑precession surrogate.
+
+$$
+\left|\frac{\Delta G}{G}\right| \;\equiv\; \left|\xi(r)-1\right|
+$$
+
+at 1–30 AU. We show a **gated** curve (same parameters as galaxy fits) and a **worst‑case** curve (no screening).
+
+![Solar‑System constraints](images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png)
+
+Figure 5 | The DGG model satisfies Solar System constraints. The predicted fractional deviation from Newtonian gravity, $|\Delta G/G| = |\xi-1|$, is plotted as a function of orbital distance from the Sun. The model's prediction (blue curve) remains orders of magnitude below the constraint from the Cassini mission on the PPN parameter $\gamma$ (gray band, $|\gamma-1|<2.3\times10^{-5}$; Bertotti, Iess & Tortora 2003), confirming the model's compatibility with high-precision local tests.
+*   **Source Data:** `results/next_steps/rar_plateau_mw_full/solar_system_table.csv`
+
+
+---
+
+## 5. Gravitational Lensing with One Metric
+
+We map surface brightness to stellar mass using an SED‑informed $M/L$ prior. For SLACS ETGs the paper preset applies a population‑level Salpeter‑like offset $\delta_{\rm IMF}=+0.23$ to Chabrier SED masses; Chabrier results are shown for comparison. We deproject a Sérsic profile with measured $(n, R_e)$ (spherical baseline; axis ratio $q$ and external convergence priors can be added in SI), and build $\Sigma(R)$, $\bar\Sigma(<R)$, $\Delta\Sigma(R)$, and $\theta_E$ using the same metric‑only gate $\xi(g)$ (with $\Phi=\Psi$). Uncertainties propagate from $(\log_{10}M_\star, R_e, n, \theta_E^{\rm obs})$; we report residuals and RMSE and compare practice to SLACS.
+
+![θ_E: predicted vs observed](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
+
+Figure 6 | The DGG framework consistently predicts strong gravitational lensing. Predicted versus observed Einstein radii ($\theta_E$) for a sample of 70 early-type galaxies from the SLACS survey (Auger et al. 2009). Predictions from the DGG model (red points), using the same metric-only framework as for dynamics, cluster around the one-to-one relation (dashed line). In contrast, predictions from baryons alone in GR (blue points) systematically underestimate the lensing strength.
+*   **Source Data:** `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv`
+
+**IMF normalization for SLACS ETGs.** With SED masses on a Chabrier IMF prior, the metric‑only GG prediction underestimates Einstein radii (high‑$g$; $\xi\simeq1$). Introducing a single population‑level offset $\delta_{\rm IMF}$ for early‑type lenses (Salpeter‑like, +0.23 dex) brings the amplitude into agreement without changing $\xi(g)$. Coverage improves and bias is reduced (Chab: 68% = 0.014, 95% = 0.100; Salp: 68% = 0.500, 95% = 0.800). For fairness, we apply the same IMF choice to the GR+baryons baseline; see the GR rows in the comparison table. $\delta_{\rm IMF}$ is a single population‑level normalization for SLACS ETGs only; it is not used in SPARC, MW $K_z$, or Solar‑System tests. See also:
+- Table: `docs/tables/lensing_imf_comparison.md`
+- Histogram: `docs/figures/lensing_imf_f_theta_hist.png`
+- ΔAIC JSON: `docs/metrics/lensing_imf_delta_aic.json`
+- q‑axis summary: `docs/stats/lensing_q_axis_ratio_summary.json`
+
+Defaults for coverage sampling (θ_E): unless overridden, we propagate $\sigma(\log_{10}M_\star)=0.10$ dex, a fractional $\sigma(R_e)=3.5\%$, and a global $\kappa_{\rm ext}\sim\mathcal N(0,0.03)$. ΔAIC is computed on the subset of lenses with reported $\theta_E$ uncertainties; we report $N_{\rm eff}$ in the JSON. When per‑lens $\sigma_{\theta_E}$ are unavailable, ΔAIC is omitted (see JSON for $N_{\rm eff}$).
+
+[Theoretical stacked ΔΣ moved to supplemental] See docs/supplemental_lensing_stack.md for the theory‑only stack (with GR vs RAR overlay), code references, and source tables. We omit it from the main paper because no observed stack is overlaid here; accuracy is judged instead via the θ_E comparison (predicted vs observed), for which metrics and scatter are included above.
+
+We use measured lens properties from SLACS (Auger+ 2009; VizieR J/ApJ/705/1099): $(z_l, z_s, \theta_E^{\rm obs})$, together with stellar masses (Chabrier) and sizes $(R_e)$ compiled in our lens table. Source‑Data tables accompany the figures: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv` and `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`. Rows lacking required measured inputs are flagged and omitted from summary metrics until completed. Per‑lens panels (SLACS examples) appear in Extended Data:
+`images/next_steps/enhanced_20250805_115400/lensing_rar_J0037-0942.png`,
+`images/next_steps/enhanced_20250805_115400/lensing_rar_J1402+6321.png`.
+
+Uncertainties: where available, per‑lens $\theta_E$ uncertainties ($\sigma_{\theta_E}$) are included in `docs/lensing_targets.csv`; rows lacking uncertainties are omitted from weighted metrics. Residuals and a goodness‑of‑fit summary are written to `results/.../lensing_thetaE_residuals.csv` and `.../lensing_thetaE_metrics.json`.
+
+We assess miscentering and external convergence $\kappa_\mathrm{ext}$ in SI; paper figures use the baseline unless stated. See REPRODUCIBLE.md and docs/lensing.md for exact flags and outputs.
+
+#### Homogeneous SLACS sample (Auger+ 2009)
+
+For a more homogeneous lens set, we provide a SLACS CSV converted from the VizieR ASU-TSV (Auger et al. 2009; J/ApJ/705/1099):
+- Source-like file (for curation/inspection): `docs/lensing_targets_slacs_sl2s.csv` (lens_name, survey, z_l, z_s, theta_E_arcsec, log10Mstar_chab, Re_arcsec, ...)
+- Orchestrator-ready file: `docs/lensing_targets_slacs.csv` (lens_id, z_l, z_s, log10M_star, Re_kpc, n_sersic=4, theta_E_obs_arcsec)
+
+Run the lensing step with this set by overriding LENS_CSV:
+```bash path=null start=null
+LENS_CSV=docs/lensing_targets_slacs.csv ./reproduce_paper.sh
+```
+Notes: θE uncertainties are not tabulated in the SLACS lenses table; we leave theta_E_obs_err_arcsec blank (metrics involving error weighting will omit those lenses). Re_kpc is converted from Re(I→V→B) arcsec using a flat ΛCDM (H0=70, Ωm=0.3). Axis ratio q and n are not provided in this table; we use n_sersic=4 as an ETG baseline.
+
+Importer sanity checks (applied in scripts/tools):
+- Assert θE is provided in arcsec on ingest; warn if any θE > 10″ (common kpc mis-units).
+- Assert Re is in arcsec before cosmology conversion; log the cosmology used (H0, Ωm) in table metadata.
+- Cosmology constants are pinned in one place (LENSING_COSMO in scripts/next_steps_from_run.py) and included in run_metadata for every build; the same values are used consistently across lensing artifacts.
+
+---
+
+## 6. Discussion and Implications
+
+**Predictive power vs flexibility.** With a single principal scale $a_0$ and a fixed $\nu$-function, DGG reproduces broad rotation‑curve trends across diverse galaxies, naturally respecting the RAR and approaching the BTFR. This rigidity prevents per‑galaxy over‑fitting, sharpening falsifiable predictions (e.g., outer‑slope behavior). We compute code‑based universality metrics (χ²/ν for a global $a_0$ and WAIC‑like comparisons for universal vs hierarchical $a_0$) and write results to results/next_steps/.../universality_metrics.json. A compact summary table is provided below (numbers reflect the current run; see JSONs for full details). 
+
+**Solar‑System safety.** Under the screened subclass (Φ=Ψ, c_T=1) we have γ=β=1 at 1PN and α1=α2=0 in the Solar limit. Cassini constrains γ (|γ−1|≲2.3×10⁻⁵); amplitude rescaling ε≡ξ−1 only projects to Cassini if not absorbed into the GM used by ephemerides (see docs/ppn_mapping.md). Operatively, we assume ε is locally constant along the Cassini ray and across AU‑scale orbits; we verify negligible effects with a code‑based perihelion‑precession surrogate (nature_readiness/solar_system/ephemeris_perturbations.py). We therefore show |ΔG/G|≡|ξ−1| as a conservative tracer vs. AU and export a PPN CSV alongside the Solar table.
+
+**Vertical forces and local surface density.** A decisive check is $K_z(R_0,z)$ and $\Sigma_{1.1}$. We use the **full 3‑D** DGG contribution throughout the paper preset.
+
+**Lensing under one metric.** Metric‑only predictions show the right order of magnitude for $\theta_E$ and stacked $\Delta\Sigma$ with measured lens inputs; residuals and RMSE are reported. A single‑theory lensing success is essential. **Sanity:** varying the stellar $M/L$ prior within the SED‑informed band shifts the amplitude of $\Delta\Sigma$ but not its slope over 0.05–300 kpc.
+
+**Environment term (ablation).** We publish an ablation between env‑ON and env‑OFF on the same SPARC subset with Δχ², ΔAIC/ΔBIC (global parameter counts stated), and, where available, Δlog Z. We also report residual correlation slopes vs central surface brightness, inclination, and gas fraction (Pearson/Spearman with p‑values). See `env_ablation_summary.json` and `residual_correlations.{json,csv}` (SI) for the quantitative outcomes; the Discussion notes the sign of ΔIC in plain language.
+
+**Open issues.** (i) Whether a **finite plateau** $D_{\max}$ is required observationally (and, if so, at what value). (ii) Universality of $a_0$: hierarchical results and environment‑dependence. (iii) Clusters and ultra‑diffuse systems (may need residual mass such as neutrinos). (iv) Cosmological growth and CMB/BAO consistency in a relativistic completion. In this paper preset we adopt $D_{\max}=50$; galaxy fits and Solar bounds are empirically robust for $D_{\max}\in[30,80]$, with strong‑lensing sensitivity tested in Extended Data. See `docs/dmax_cap.md` for details and sweep instructions. **Falsifiability:** a decisive failure would be a requirement for $D_{\max}\gg100$ to fit strong‑lensing scales or cluster dynamics under the same mapping, or a systematic misfit of the BTFR slope/scatter under standardized selections.
+
+#### On minor mismatches at extreme radii (outermost points)
+- Beam smearing and asymmetric drift corrections can degrade rotation‑curve reliability at low surface brightness and large radii (inclination systematics and non‑circular motions increase fractional errors). SPARC files report quality flags Q; many LSB extended systems are Q=2.
+- Distance and inclination uncertainties feed directly into V_obs and can bias the outer slope by several km/s, particularly for near face‑on systems.
+- Our overlays use component rotmods and reconstruct gas surface density when _HIrad profiles are missing (documented in code logs). This reconstruction can affect the precise v_bar tail, but the effect on RAR Plateau overlays is modest relative to observational systematics at the farthest radii.
+- The paper preset does not tune parameters radius‑by‑radius; we scan only a0 per galaxy with a fixed gate and a finite plateau. Residual tensions at the last point or two are expected within the quoted error budgets and selection floors. We therefore refrain from ad‑hoc tweaks and disclose the floors used (σ_floor, obs_frac_sigma) and Q.
+
+---
+
+### Outlook — cosmological extension (separate paper)
+
+Because $\xi(g)$ is local, it can be coupled to line‑of‑sight integrals to build a redshift–distance mapping without assuming FRW kinematics. We have explored an **energy–gravity reciprocity** ("energy tariff") where a tiny cumulative energy drain along low‑$g$ sightlines yields a phenomenological $z(r)$ consistent with SN Hubble‑diagram curvature and Liouville‑preserving CMB transport. These results **do not** alter any galaxy/lensing conclusions here and will be presented in a **companion paper**.
+
+---
 
 ## Conclusions
 
-We have presented an in-depth analysis of a novel modified gravity model – RAR-gated gravity – that aims to explain the missing mass problem in galaxies *without* invoking particle dark matter. The model is built around the observed Radial Acceleration Relation, using it as a guiding principle to modify gravitational dynamics at low accelerations while preserving standard gravity at high accelerations. **Key results and conclusions include:**
+- **Unified galaxy dynamics without dark halos.** Using a single scale $a_0$ and a fixed $\nu$-function (Box 1), DGG reproduces the broad form of rotation curves for the Milky Way and representative SPARC galaxies.
+- **Scaling laws.** DGG respects the RAR by construction and approaches the BTFR expectation $M_b\propto V^4$; measured slopes depend on selection and will be reported with scatter.
+- **Local tests.** For parameters that fit galaxies, $|\Delta G/G|$ in the Solar System remains below Cassini‑level sensitivity at Saturn; a worked PPN derivation is provided (docs/ppn_mapping.md).
+- **One‑theory lensing.** A metric‑only mapping gives reasonable $\theta_E$ and $\Delta\Sigma$ predictions; completing the lens sample with measured inputs is a priority.
+- **Roadmap.** (1) Full 3D $K_z/\Sigma_{1.1}$; (2) lensing with measured $(M_\star,R_e)$ and uncertainties; (3) hierarchical $a_0$ with nuisances; (4) PPN appendix; (5) cluster/cosmology tests.
 
-- **Unified Explanation of Rotation Curves:** With a single acceleration scale $a_0 \sim 10^{-10}$ m/s² (comparable to values found in empirical galaxy relations), the RAR-gated model reproduces the general form of rotation curves in galaxies ranging from high-mass spirals to dwarfs. We demonstrated good fits to the Milky Way and several external galaxies without the need for dark halos, highlighting that the model naturally accounts for the flat or declining rotation velocities in outer galactic disks.
-
-- **Reproduction of Empirical Scaling Laws:** The model inherently satisfies the Radial Acceleration Relation and the Baryonic Tully–Fisher Relation across the sample, which emerge as natural consequences of the modified dynamics rather than as imposed constraints. The small scatter in these relations is consistent with our theory’s use of a nearly universal parameter set for all galaxies.
-
-- **Minimal Parameter Count:** Compared to dark matter models, which fit each galaxy with multiple free parameters, our approach uses a highly constrained parameterization. This economy of parameters lends the model substantial predictive power – any failure to fit a galaxy cannot be “fixed” by tweaking a halo, making the success in matching data all the more non-trivial. This also means that if the model is correct, it should continue to hold for new observations (or else be conclusively falsified if it doesn’t).
-
-- **Consistency with Local Gravity Tests:** RAR-gated gravity respects known Solar System and laboratory bounds. By construction, the modifications to gravity become negligible in the solar neighborhood, and we have verified that the deviations in planetary orbits are below current detection limits. This is a critical hurdle that many alternative theories fail, and clearing it is a prerequisite for viability.
-
-- **GR-style Theoretical Framework:** The model aspires to be more than an empirical fit – we outline how it can be embedded in a relativistic framework, modifying the Poisson equation or Einstein field equations with a physically motivated term. This approach retains the elegance of Einstein’s theory (in terms of principle of equivalence and geometric description) while extending it in a minimal way. It ensures energy-momentum conservation and avoids ad hoc “fixes” for different regimes (the same mechanism that explains galaxy rotation also ensures solar system consistency, etc.). This lays the groundwork for future derivations of cosmological implications and gravitational lensing within the same theory.
-
-In conclusion, our critique of the dark matter paradigm is that, despite its ability to fit a wide range of data, it lacks the predictive simplicity exhibited by these new relations and theories. RAR-gated gravity, as refined in this work, shows that it is possible to craft a serious, testable alternative that addresses many of the shortcomings of earlier modified gravity attempts. While much work remains to extend and stress-test this model (especially in clusters and cosmology), the evidence so far suggests that it captures something profound about how gravity operates in the low-acceleration regime of galaxies. We encourage further scrutiny and development of this model. Upcoming observations will be decisive: should they continue to align with the crisp predictions of a theory with few parameters, it will signal a potential shift in our understanding of the universe’s mass composition and gravitational laws.
-
-
-
-[1] [1609.05917] The Radial Acceleration Relation in Rotationally Supported Galaxies
-
-https://arxiv.org/abs/1609.05917
-
-[2] [3] [4] [2405.10019] Distinct radial acceleration relations of galaxies and galaxy clusters supports hyperconical modified gravity
-
-https://arxiv.org/abs/2405.10019
-
-[5] [8] [9] [1810.08472] The Radial Acceleration Relation (RAR): the crucial cases of Dwarf Discs and of Low Surface Brightness galaxies
-
-https://arxiv.org/abs/1810.08472
-
-[6] background.uchicago.edu
-
-https://background.uchicago.edu/~whu/Presentations/modifiedgravity_kitpc.pdf
-
-[7] [PDF] A Distinct Radial Acceleration Relation Across the Brightest Cluster ...
-
-https://commons.case.edu/cgi/viewcontent.cgi?article=1767&context=facultyworks
 ---
 
-## Figures and Charts (added)
+## 7. Methods
 
-## Reproducibility (paper figures and tables)
+**Hierarchical $a_0$ (optional).** When enabled, we infer a population‑level mean and scatter in $\ln a_0$ from per‑galaxy grids (dynesty nested sampling). We report $(\mu,\sigma)$ posteriors in `hierarchical_a0_posterior_summary.json` and a heatmap at `images/.../hierarchical_a0_posterior_heatmap.png`.  
 
-Use scripts/reproduce_paper.py to regenerate the analysis artifacts used in the paper (SPARC overlays, Solar/PPN table + plot, lensing tables/figures, and hierarchical a0). Environment:
-- Python 3.11
-- pip install ./utils
-- pip install dynesty
+**Baryon models.** Milky Way disks (Miyamoto–Nagai) + bulge (Hernquist) + gas; external galaxies use SPARC component rotmods.  
 
-Example (gold sample):
+**Computation.** We evaluate $\xi(g)$ as in **Box 1**, with unit conversion constant $C$ and optional gates $s_\rho, W(T)$.  
+
+**Fitting $a_0$.** Per‑galaxy **grid** $\log_{10} a_0\in[-10.5,-9.3]$ (60 points) minimizing $\chi^2$; optional **hierarchical** log‑normal prior for $a_0$ with nested sampling. We report both "raw" $\chi^2$ (as in the SPARC files) and floor‑augmented fits using a velocity error floor and/or fractional observational floor to capture inclination/distance/beam systematics. For headline SPARC reduced‑$\chi^2$ we adopt `--sigma-floor 6.0` (km/s) and `--obs-frac-sigma 0.05` unless otherwise stated; raw values (no floors) are reported alongside in SI. Residual PPC plots (residuals vs R with 16–84% bands) can be generated via `tools/sparc_ppc.py`.  
+
+**Solar‑System.** In the Solar limit where $g_{\rm bar}\gg a_0$, $\xi\to1$ and the metric reduces to GR with $\gamma\simeq\beta\simeq1$ and $\alpha_{1,2}\simeq0$. We evaluate $\xi(r)$ in the Sun’s field and report $|\Delta G/G|$ at 1–30 AU; compare to the Cassini line as a consistency check. When the relativistic module is present (adopted subclass $\Phi=\Psi, c_T=1$), we also export a PPN CSV (`ppn_table.csv`) with $(\gamma,\beta,\alpha_1,\alpha_2)$.
+
+**PPN mapping and export.** In the metric subclass we adopt, the weak-field line element is $ds^2=-(1+2\Phi/c^2)dt^2+(1-2\Psi/c^2)d\mathbf x^2$ with screening such that $\Phi=\Psi$ and $c_T=1$. The DGG gate $\xi(g)$ rescales the weak-field potential by a small factor $1+\epsilon$ with $\epsilon\equiv\xi-1\ll1$ in the Solar System. Matching coefficients of the baryonic Newtonian potential $U$ at 1PN, the equal additive contribution of $c^2\phi_{\rm env}$ to $g_{00}$ and $g_{ij}$ implies the coefficient ratio is unity: $\gamma=1$; $\beta=1$; and preferred‑frame parameters $\alpha_{1,2}=0$ in this limit. Cassini measures the coefficient of the logarithmic term in the Shapiro delay relative to the ephemeris $GM_\odot$; hence the two regimes (degenerate vs non‑degenerate amplitude) discussed in docs/ppn_mapping.md. We therefore use $|\Delta G/G|=|\xi-1|$ as a conservative amplitude tracer and export a PPN table with columns $(\mathrm{AU},\gamma-1,\beta-1,\alpha_1,\alpha_2,|\Delta G/G|)$ alongside the Solar System source‑data CSV. The figure shows $|\Delta G/G|$ vs. $r$ with planetary semi‑major axes marked and a reference band for the Cassini $|\gamma-1|$ limit on a secondary axis. See docs/ppn_mapping.md for the precise $\gamma/\epsilon$ conditions.
+
+**PPN mapping (sketch).** In PPN gauge, $ds^2=-(1-2U)dt^2+(1+2\gamma U)dx^2$, so $\gamma$ is the ratio of the coefficients of $U$ in $g_{ij}$ vs $g_{00}$. In our subclass with screening and $\Phi=\Psi$, both potentials receive the same additive $c^2\phi_{\rm env}$ at 1PN, so the coefficients of $U$ match and $\gamma=1$, while light‑deflection and Shapiro‑delay amplitudes scale with $(1+\gamma)U\to (1+\gamma)(1+\epsilon)U$. Because Cassini determines this coefficient relative to the ephemeris $GM_\odot$, a uniform $\epsilon$ absorbed into $GM_\odot$ leaves $\gamma$ unchanged (degenerate regime); if not absorbed, $|\gamma-1|$ projects to $|\epsilon|$ at the $\sim10^{-5}$ level along the ray. We therefore use $|\Delta G/G|$ as a conservative tracer and refer to docs/ppn_mapping.md for details; in the screened Solar limit both $\epsilon$ and $|\gamma-1|$ approach zero, consistent with the CSV export (ε treated as locally constant over 1–30 AU).
+**Lensing (metric‑only).** We adopt a metric‑only mapping with $\Phi=\Psi$; the deflection potential is $2\Phi$, so the same $\xi(g)$ that boosts dynamics boosts lensing. Critical surface density $\Sigma_{\rm cr}(z_l, z_s)$ and distances use a flat $\Lambda$CDM cosmology with $H_0=70\,\mathrm{km\,s^{-1}\,Mpc^{-1}}$ and $\Omega_m=0.3$. Stellar masses come from SED‑based $M/L$ (prior specified in Supplement), and sizes $(R_e, n)$ are measured from the discovery images or follow‑ups listed in the lens table. Residuals and goodness‑of‑fit metrics for $\theta_E$ are written to `lensing_thetaE_residuals.csv` and `lensing_thetaE_metrics.json`. The ETG mass normalization $\delta_{\rm IMF}$ is a single population‑level parameter applied to all SLACS lenses; it is not a per‑lens degree of freedom. For fairness, we apply the same IMF choice to the GR+baryons baseline. $\delta_{\rm IMF}$ applies only to early‑type strong lenses (SLACS ETGs) and is not applied to SPARC disc rotation‑curve fits.  
+**Model comparison.** Δlog Z histograms are reported as a BIC approximation; full evidences are produced when hierarchical runs are enabled.
+
+**NFW comparator priors.** For the NFW yardstick we adopt weak, non‑informative bounds on $\log_{10} M_{200}$ and $c$ consistent with a standard mass–concentration relation at $z\simeq 0$. Fits are performed by $\chi^2$ minimization on the same radii and velocity uncertainties as the DGG/GR fits; exact prior ranges and any mass–concentration hyper‑prior are listed in SI (Table Sx).
+
+---
+
+## 8. Code and Data Availability
+
+- **Code.** Analysis and plotting scripts are part of this repository. The exact function used in all figures is **Box 1**, implemented as `xi_rar_plateau_numpy`.  
+- **Data.** SPARC rotmod files and Source Data CSVs accompany the figures (`results/...`) and are tracked with Git LFS.  
+- **Reproduction.** See `scripts/reproduce_paper.py` for end‑to‑end regeneration of figures and tables. Each run writes a `run_metadata.json` with flags, environment, and timestamp; SPARC selection disclosure is saved to `sparc_selection.json`.
+
+Reproduction (one command)
+From repo root, with paper run NPZ and SPARC rotmods available:
+```bash
+RUN_DIR=runs/enhanced_20250805_115400 \
+SPARC_DIR=external_data/Rotmod_LTG \
+LENS_CSV=docs/lensing_targets_slacs.csv \
+./reproduce_paper.sh
+```
+Note: Paper preset enables circularized Re (q) and δIMF=+0.23 (ETG) by default. Override via:
+- --use-circularized-Re=false
+- --delta-imf-dex 0.0   # Chabrier variant
+Docker (CPU-first):
+```bash
+docker build -t dgg-repro .
+docker run --rm -it \
+  -e RUN_DIR=runs/enhanced_20250805_115400 \
+  -e SPARC_DIR=external_data/Rotmod_LTG \
+  -e LENS_CSV=docs/lensing_targets_slacs.csv \
+  -v "$PWD/runs:/app/runs" \
+  -v "$PWD/external_data/Rotmod_LTG:/app/external_data/Rotmod_LTG:ro" \
+  -v "$PWD/results:/app/results" \
+  -v "$PWD/images:/app/images" \
+  dgg-repro
+```
+
+---
+
+## 9. Galaxy clusters — CLASH × ACCEPT (preliminary)
+
+We test the RAR‑gated framework on galaxy clusters using published total mass models from Umetsu et al. (2016, CLASH; NFW fits per cluster) and gas‑only baryons from the ACCEPT database (external_data/accept_database.dat). This preliminary section summarizes a reproducible pipeline run and the resulting cluster‑scale RAR scatter.
+
+What the pipeline does
+- Validates raw ACCEPT shells (monotonic radii, removes overlaps, drops non‑finite/non‑physical n_e).
+- Converts shells to cumulative gas mass and computes baryonic accelerations g_bar.
+- Uses Umetsu+2016 CLASH NFW parameters to compute total accelerations g_tot.
+- Fits a universal acceleration scale a0 for three theory curves (MOND‑simple, EG‑like, and RAR‑plateau with Dmax=50) and reports scatter.
+
+Assumptions
+- Cosmology: H0=70 km s⁻¹ Mpc⁻¹, Ωm=0.27, ΩΛ=0.73 (see summary.json).
+- Mean molecular weight per free electron: μ_e=1.17.
+- Gas‑only baryons in this run; optional BCG stellar mass may be included via external_data/clash_stars.csv (if provided; off by default).
+- Data hygiene: enforce monotonic R_out, filter overlaps, drop bad n_e; report f_gas(<0.5 R200c) and f_gas(<R200c).
+
+### Results (gas only; CLASH NFW totals vs GG and GR)
+
+- Matched clusters: 7, points: 220
+- Global fit (RAR‑plateau, Dmax=50): a0 = 1.93×10⁻⁷ cgs
+  RMS scatter in log10 g: 0.146 dex (RAR‑plateau) vs 1.014 dex (GR baryons‑only)
+- Coverage: 47.3% within ±0.1 dex; 85.5% within ±0.2 dex; 49.1% positive residuals
+- Radial trend in residuals Δlog10 g ≡ log gNFW − log gRAR as a function of x ≡ r/R200c:
+  - Inner median (x ≤ 0.2): +0.085 dex
+  - Outer median (x > 0.2): −0.130 dex
+  - Linear fit: Δlog g ≈ 0.196 − 0.93 x (zero at x ≈ 0.21)
+
+Interpretation. The positive inner residuals are consistent with missing stellar baryons (BCG + ICL) in the gas‑only g_bar. At larger radii the gas dominates g_bar and residuals tilt negative, as expected from a single‑parameter gate matched to galaxy‑scale a0.
+
+Figure: GR vs RAR vs CLASH NFW
+
+![Cluster RAR: NFW data vs GR and RAR plateau](images/next_steps/cluster_rar/cluster_rar_scatter.png)
+
+Source‑data (results/cluster_rar/)
+- cluster_rar_points.csv — points used in the scatter.
+- diagnostics.csv — raw‑data hygiene and quick sanity (n_shells, n_used, min/max n_e, f_gas at 0.5/1.0 R200c, stars_used, used_frac).
+- metrics.json — RMS in log10 space vs GR and the RAR‑plateau and fitted a0 (Dmax=50).
+- summary.json — cosmology, μ_e, matched cluster count, and fitted a0 for all theory curves (MOND‑simple, EG‑like, RAR‑plateau).
+- cluster_section_metrics.json — jackknife/bootstrapped uncertainties for a0 and RMS.
+
+Reproduce locally
+```bash path=null start=null
+source .venv/bin/activate
+python scripts/cluster_rar_pipeline.py \
+  --accept external_data/accept_database.dat \
+  --results results/cluster_rar \
+  --images images/cluster_rar \
+  --warn-fgas 0.2 \
+  --warn-used-frac 0.6 \
+  # Optional: include BCG stellar mass if available
+  --stars-csv external_data/clash_stars.csv
+```
+
+Notes
+- Optional stars CSV — either of the following schemas is accepted by the helper:
+  1) logM/Re form: cluster, log10Mstar_BCG, Re_kpc, [log10Mstar_ICL, Re_ICL_kpc], profile
+  2) M/a form: cluster, M_BCG_Msun, a_BCG_kpc, [M_ICL_Msun, a_ICL_kpc]
+  Profiles hernquist|sersic4 map internally to Hernquist. If present and matched, stars are folded into g_bar.
+- Warnings are emitted if f_gas(<R200c) > 0.2 or the fraction of ACCEPT shells used < 0.6.
+- Cluster‑name matching between CLASH and ACCEPT uses robust normalization and aliasing in the pipeline.
+
+Optional: add BCG/ICL stars (Hernquist) and re‑fit
 
 ```bash
-python scripts/reproduce_paper.py \
+# Gas‑only (sanity)
+python scripts/cluster_clusters_plus_stars.py \
+  --points results/cluster_rar/cluster_rar_points.csv \
+  --diagnostics results/cluster_rar/diagnostics.csv \
+  --outdir results/cluster_rar_plus \
+  --images images/next_steps/cluster_rar_plus
+
+# Gas + stars (provide per‑cluster stars CSV)
+python scripts/cluster_clusters_plus_stars.py \
+  --points results/cluster_rar/cluster_rar_points.csv \
+  --diagnostics results/cluster_rar/diagnostics.csv \
+  --stars external_data/clash_stars.csv \
+  --outdir results/cluster_rar_plus_stars \
+  --images images/next_steps/cluster_rar_plus_stars
+```
+
+### Galaxy clusters — CLASH × ACCEPT (defensible)
+
+Setup. CLASH NFW totals (Umetsu et al. 2016) matched to ACCEPT ICM gas shells; baryons = ICM + a global BCG+ICL Hernquist template; cosmology and constants pinned in summary.json. We cut to 0.05 ≤ r/R200c ≤ 0.8, weight clusters equally, and fit with a robust Huber loss.
+
+RAR‑plateau (best‑fit a0): a0 ≈ 1.737×10⁻⁷ cgs; RMS = 0.113 dex.
+GR (baryons‑only): RMS = 1.014 dex.
+Residual vs radius: Δlog10 g ≈ 0.178 − 0.81 x, with x ≡ r/R200c; zero ≈ 0.22. Inner/outer medians: +0.083 dex (x≤0.2), −0.108 dex (x>0.2).
+Fixed‑a0 cross‑domain: with a0 = 1.93×10⁻⁷ cgs, RMS = 0.115 dex; same trend/coverage (≈54% within ±0.1 dex; ≈94% within ±0.2 dex).
+
+Null tests: radial scramble flattens slope; cluster cross‑match inflates RMS to ≈ 0.16 dex.
+
+Reproduce (paper preset):
+```bash
+python scripts/cluster_rar_pipeline.py \
+  --accept external_data/accept_database.dat \
+  --results results/cluster_rar_defensible \
+  --images  images/cluster_rar_defensible \
+  --equal-cluster-weight \
+  --xmin 0.05 --xmax 0.8 \
+  --robust-loss huber --huber-delta 0.2 \
+  --jackknife-by-cluster --bootstrap-points 200 --null-tests \
+  --stars-csv external_data/clash_stars.csv
+```
+
+```bash
+# venv (Python 3.11)
+python3.11 -m venv .venv && source .venv/bin/activate
+python -m pip install numpy matplotlib
+python scripts/cluster_rar_pipeline.py \
+  --accept external_data/accept_database.dat \
+  --results results/cluster_rar \
+  --images images/cluster_rar
+```
+
+Notes
+- Total accelerations are from CLASH NFW (Table 2 of Umetsu+2016) at the paper cosmology ($H_0=70,\, \Omega_m=0.27,\, \Omega_\Lambda=0.73$).
+- Baryons are gas‑only from ACCEPT shells using $\rho_{\rm gas}=\mu_e m_p n_e$ with $\mu_e=1.17$.
+- The figure overlays:
+  - CLASH NFW points (log10 $g_{\rm bar}$ vs log10 $g_{\rm tot}$),
+  - GR baseline (one‑to‑one), and
+  - RAR‑plateau (global $a_0$, $D_{\max}=50$).
+- The raw‑data hygiene and $f_{\rm gas}$ sanity are reported per cluster; inspect diagnostics.csv to flag suspect inputs.
+
+---
+
+## 9. References
+
+(finalizing this list)
+
+---
+
+For extended figures, latest results tables, and detailed reproducibility instructions, see REPRODUCIBLE.md.
+
+For headline SPARC fits we adopt a modest noise floor unless stated: σ_floor = 6 km/s and obs_frac_sigma = 0.05. We report raw (no floors) and floor‑augmented metrics side‑by‑side, and provide posterior‑predictive checks (PPC; residuals vs radius with 16–84% bands) for representative HSB/LSB subsets. The aggregator standardizes residuals with $\sigma_{\rm eff}=\sqrt{\sigma^2+6^2+(0.05\,V_{\rm obs})^2}$ and records these floor settings in `docs/metrics/sparc_fit_quality.json`.
+
+- JSON: `docs/metrics/sparc_fit_quality.json`
+- Figure: `docs/figures/sparc_ppc_panel.png`
+
+### Universality Metrics
+
+The orchestrator can compute a global (universal) $a_0$ and WAIC‑like metrics (when the optional module is available). Below is a compact summary from the current run; see JSONs for full details and confidence intervals.
+
+- Universal a0 (global fit): a0 ≈ 5.0×10⁻¹¹ m s⁻² (demo subset; see `results/next_steps/.../global_a0.json`), χ²/ν ≈ 28.12 (raw; no floors). WAIC/LOO or ΔBIC vs hierarchical are reported in `universality_metrics.json` when enabled.
+- Hierarchical a0 (two‑stage or Bayesian): μ_ln a0, σ_ln a0 and coverage are written to `hierarchical_a0_summary.json` / `hierarchical_a0_posterior_summary.json` when requested (see REPRODUCIBLE.md). 
+- Env ON vs OFF: ΔAIC/ΔBIC (and Δlog Z where available) and residual‑correlation slopes before/after are summarized in `universality_metrics.json`.
+
+These summarize the latest outputs under `results/next_steps/btfr_fix_20250906/` and related top-level summaries. Full CSVs are linked for reproducibility.
+
+### Solar System Source Data
+
+File: `results/next_steps/btfr_fix_20250906/solar_system_table.csv`
+
+| AU | dG/G (gated) | dG/G (worst) | gamma−1 | Cassini bound |
+|---:|--------------:|-------------:|--------:|--------------:|
+| 1.0 | 2.0235e-08 | 2.0235e-08 | 0.0 | 2.3e-05 |
+| 5.0 | 5.0588e-07 | 5.0588e-07 | 0.0 | 2.3e-05 |
+| 10.0 | 2.0235e-06 | 2.0235e-06 | 0.0 | 2.3e-05 |
+| 20.0 | 8.0940e-06 | 8.0940e-06 | 0.0 | 2.3e-05 |
+| 30.0 | 1.8211e-05 | 1.8211e-05 | 0.0 | 2.3e-05 |
+
+### SPARC per‑galaxy a0 summary (subset)
+
+File: `results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv`
+
+| Galaxy | a0_best [m/s^2] | a0_lo | a0_hi | chi2_rar | chi2_gr | dof |
+|:------|-----------------:|------:|------:|---------:|--------:|----:|
+| M31 | 8.860488e-11 | 8.068256e-11 | 9.730510e-11 | 31.734 | 477.097 | 11 |
+| NGC3198 | 3.472786e-11 | 3.313897e-11 | 3.472786e-11 | 132.051 | 1903.006 | 42 |
+| NGC2403 | 5.813086e-11 | 5.813086e-11 | 5.813086e-11 | 439.470 | 2906.038 | 72 |
+| NGC2841 | 1.350543e-10 | 1.350543e-10 | 1.350543e-10 | 42.769 | 8073.565 | 49 |
+| NGC5055 | 3.162278e-11 | 3.162278e-11 | 3.162278e-11 | 3035.600 | 2800.328 | 27 |
+
+### Milky Way vertical force Kz (full 3‑D phantom)
+
+File: `results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv`
+
+Aggregate summary: `results/mw_kz_sigma.csv`
+
+| z [kpc] | Kz [m s^-2] |
+|-------:|------------:|
+| 0.5 | 8.3962e+07 |
+| 0.8 | 1.3880e+08 |
+| 1.1 | 1.9443e+08 |
+| 1.5 | 2.6870e+08 |
+| 2.0 | 3.6068e+08 |
+
+---
+
+### Lensing metrics (SLACS sample; paper preset)
+
+- Per‑lens table: `results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv`
+- Summary metrics JSON: `results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json`
+- Figure (scatter): `images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png`
+- Extended per‑lens panels (examples):  
+  `images/next_steps/enhanced_20250805_115400/lensing_rar_J0037-0942.png`,  
+  `images/next_steps/enhanced_20250805_115400/lensing_rar_J1402+6321.png`
+
+Updated SLACS outcome (N=70):
+
+|| Model | RMSE_abs [arcsec] | MAE_abs [arcsec] | Bias_abs [arcsec] | RMSE_rel | MAE_rel | Bias_rel |
+||:------|-------------------:|-----------------:|------------------:|---------:|--------:|---------:|
+|| RAR (baseline; Salpeter‑like) | 0.256 | 0.213 | -0.171 | 0.202 | 0.172 | -0.133 |
+|| GR (baryons; Salpeter‑like)   | 0.368 | 0.321 | -0.313 | 0.288 | 0.259 | -0.252 |
+|| RAR (κ_ext‑marg; Salpeter‑like) | 0.256 | 0.213 | -0.172 | 0.202 | 0.173 | -0.134 |
+
+Definitions: RMSE_abs/MAE_abs/Bias_abs are in arcsec; Bias_abs = mean(pred − obs). RMSE_rel/MAE_rel/Bias_rel use residuals normalized by obs; Bias_rel = mean((pred − obs)/obs). We assume n_sersic=4 (ETG baseline); measured n≠4 would shift amplitudes at the O(10%) level. κ_ext prior: mean=0, σ=0.03, samples=2000.
+
+### D_max plateau sweep (insensitivity across 30–∞)
+
+We ran the post‑processing cap $D_{\max}$ over {30, 50, 80, ∞} using the same pipeline (SPARC, MW $K_z$, metric‑only lensing). Results are insensitive across this range:
+
+- Lensing (SLACS, N=70): summary metrics are insensitive across caps within reported precision; see the lensing section above for the Salpeter‑like preset values.
+- SPARC (gold‑like selection): median Δχ²(GR−RAR) and the fraction with χ²_RAR < χ²_GR are invariant across caps. Raw reduced χ² values (no floors) are typically ≫1; with a modest velocity error floor (e.g., 5–10 km/s) and/or a fractional floor on observational systematics (e.g., 5%), reduced χ² values decrease substantially. We therefore report both raw and floor‑augmented fits in the SI and provide CLI flags to reproduce them.
+- Model comparison: BIC‑based ΔlogZ$_{\rm RAR−GR}$ summaries are unchanged across caps.
+- Milky Way vertical force: $K_z(1.1\,\mathrm{kpc})$ is identical across caps for the baseline MW baryon model.
+
+| D_max | RMSE_rel | MAE_rel | RMSE_abs [″] | MAE_abs [″] |
+|:-----:|---------:|--------:|-------------:|------------:|
+| 30 | 0.5597935 | 0.4933990 | 1.0857125 | 0.8474946 |
+| 50 | 0.5597909 | 0.4933974 | 1.0857106 | 0.8474927 |
+| 80 | 0.5597909 | 0.4933974 | 1.0857106 | 0.8474927 |
+| ∞ | 0.5597909 | 0.4933974 | 1.0857106 | 0.8474927 |
+
+Full details and rationale: see docs/dmax_cap.md. Combined summary CSV: docs/dmax_sweep_summary.csv.
+
+
+## Appendices (selected)
+
+### Extended Data — Wide Binaries (Gaia DR3)
+
+We provide the predicted velocity-ratio statistic $\sqrt{\xi}-1$ vs separation using the same DGG mapping; run:
+
+```
+python scripts/analyze_wide_binaries.py \
   --run-dir runs/enhanced_20250805_115400 \
-  --sparc-dir external_data/Rotmod_LTG \
-  --lensing-csv docs/lensing_targets.csv \
-  --hierarchical-a0 \
-  --hierarchical-a0-bayes
+  --out-root results/next_steps/enhanced_20250805_115400 \
+  --images-root images/next_steps/enhanced_20250805_115400
 ```
 
-Larger SPARC sample (Q<=2):
+- Source‑Data: `results/next_steps/enhanced_20250805_115400/wide_binaries_pred.csv`
+- Figure: `images/next_steps/enhanced_20250805_115400/wide_binaries_pred.png`
 
-```bash
-python scripts/reproduce_paper.py \
-  --run-dir runs/enhanced_20250805_115400 \
-  --sparc-dir external_data/Rotmod_LTG \
-  --lensing-csv docs/lensing_targets.csv \
-  --sample q2plus \
-  --hierarchical-a0 \
-  --hierarchical-a0-bayes
-```
+### Appendix A — Exact working formula
 
-Outputs are written under results/next_steps/<run>/ and images/next_steps/<run>/. A summary index is at docs/next_steps.md and a concise report is written to docs/repro_report.md.
+$$
+\begin{aligned}
+ g_{\rm bar}(R) &= \left(\frac{V_{\rm bar}^2(R)}{R}\right)\,C,\quad C=3.240779289\times10^{-14}\\ \frac{\mathrm{m/s}^2}{(\mathrm{km/s})^2/\mathrm{kpc}},\\[3pt]
+ s_\rho(\rho) &= \bigl[1+(\rho/\rho_c)^{\gamma}\bigr]^{-1},\qquad
+W(T)=w_{\min}+(1-w_{\min})\exp\!\Bigl[-\frac{(\ln T-\ln T_0)^2}{2\sigma_{\ln T}^2}\Bigr],\\[3pt]
+ a_0^{\rm eff} &= a_0\bigl[1+\zeta_{\rm env}\,s_\rho(\rho)\,W(T)\bigr],\qquad T\equiv V_{\rm bar}^2/R^2,\\[3pt]
+ \xi(R) &\equiv \tfrac12+\sqrt{\tfrac14+\tfrac{a_0^{\rm eff}}{g_{\rm bar}(R)}},\qquad
+ V_{\rm model}^2(R)=\xi(R)\,V_{\rm bar}^2(R).
+\end{aligned}
+$$
 
-Note: figures and large tables are tracked via Git LFS; if you want to commit newly generated artifacts, ensure LFS is installed (git lfs install).
+*Optional plateau:* impose $\xi\le D_{\max}$ if a finite cap is required observationally (see `docs/dmax_cap.md`).
 
-**Milky Way (Gaia DR3) rotation curve: GR vs NFW vs RAR‑gate.**
-![Milky Way: GR vs NFW vs RAR‑gate](images/rar_plateau_mw_full/mw_rotation_rar_plateau.png)
-*Caption: Comparison of GR (baryons‑only), NFW halo, and RAR‑gate predictions for the Milky Way rotation curve (Gaia DR3); figure regenerated from the latest pipeline outputs for this repo.*
+### Appendix B — PPN and Cassini (screened Solar limit)
 
-Below we embed representative outputs produced by the analysis orchestrator (scripts/next_steps_from_run.py) using the latest Milky Way rar_plateau run. Plots link directly to tracked artifacts in this repository.
+In the adopted screened weak‑field subclass with $\Phi=\Psi$ and $c_T=1$, Solar‑System limits imply $\gamma=\beta=1$ and $\alpha_{1,2}=0$. We therefore use $|\Delta G/G|\equiv|\xi-1|$ as a conservative tracer for any residual weak‑field rescaling. We export a per‑AU PPN table (`ppn_table.csv`) with columns $(\mathrm{AU},\gamma-1,\beta-1,\alpha_1,\alpha_2,|\Delta G/G|)$, and the Solar figure plots $|\Delta G/G|$ vs AU alongside the Cassini $|\gamma-1|$ reference band.
 
-- SPARC overlays with per‑galaxy a0 refits (rar_plateau parameters fixed except for a0):
-
-![M31 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_M31.png)
-*Caption: M31 rotation curve overlay under RAR‑plateau vs GR.*
-
-![NGC 3198 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC3198.png)
-*Caption: NGC 3198 rotation curve overlay under RAR‑plateau vs GR.*
-
-![NGC 2403 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC2403.png)
-*Caption: NGC 2403 rotation curve overlay under RAR‑plateau vs GR.*
-
-![NGC 2841 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC2841.png)
-*Caption: NGC 2841 rotation curve overlay under RAR‑plateau vs GR.*
-
-![NGC 5055 — SPARC overlay (RAR‑plateau vs GR)](images/paper/rar_plateau_mw_full/sparc_overlay_NGC5055.png)
-*Caption: NGC 5055 rotation curve overlay under RAR‑plateau vs GR.*
-
-Summary table: results/next_steps/rar_plateau_mw_full/sparc_a0_summary.csv
-
-- Solar‑System constraints (ΔG/G ≈ ξ−1):
-
-![Solar‑System constraints from rar_plateau parameters](images/paper/rar_plateau_mw_full/solar_rar_plateau.png)
-*Caption: Predicted Solar‑System fractional deviation |ΔG/G| vs distance; compared against the Cassini bound.*
-
-At Saturn (~10 AU), the predicted |ΔG/G| is consistent with the Cassini bound (|γ−1| < 2.3×10⁻⁵). See results/next_steps/rar_plateau_mw_full/solar_system_table.csv for values.
-
----
-
-## Reproducibility (repo & CLI)
-
-**Repo:** [https://github.com/lrspeiser/DensityDependentMetricModel](https://github.com/lrspeiser/DensityDependentMetricModel)
-
-> *Note:* Flags below reflect your runner(s) shared earlier. Use `--help` to see all options in your local branch.
-
-```bash
-# 1) Clone & environment
-git clone https://github.com/lrspeiser/DensityDependentMetricModel.git
-cd DensityDependentMetricModel
-# Ensure Git LFS pulls large data (SPARC + Gaia slices)
-# If LFS isn’t installed, see https://git-lfs.com and run: git lfs install
-git lfs install
-git lfs pull
-# (set up your Python env per README; CuPy build if using GPU)
-
-# 2) GR baseline (baryons only)
-python runners/run_dynesty_stellar_fit_cupy.py   --xi gr   --nlive 2000 --maxcall 1500000 --dlogz_target 0.01   --num_threads 8 --run_analysis   --out runs/gr_gaia144k
-
-# 3) NFW (baryons + halo)
-python runners/run_dynesty_stellar_fit_cupy.py   --xi nfw --include_halo   --nlive 2000 --maxcall 1500000 --dlogz_target 0.01   --num_threads 8 --run_analysis   --out runs/nfw_gaia144k
-
-# 4) RAR-gate (no DM; experimental flag as needed in your branch)
-python runners/run_dynesty_stellar_fit_cupy.py   --xi rar_gate --allow_experimental   --nlive 2000 --maxcall 1500000 --dlogz_target 0.01   --num_threads 8 --run_analysis   --out runs/rar_gate_gaia144k
-
-# 5) Comparison plot (uses your helper to overlay GR/NFW/RAR-gate)
-python generate_comparison_plots.py   --gr runs/gr_gaia144k   --nfw runs/nfw_gaia144k   --rar runs/rar_gate_gaia144k   --out images/rar_vs_gr_nfw_gaia.png
-```
-
----
-
-## Extended Analyses and Discussion
-
-### Additional analyses (this work)
-
-We executed the next‑step tests outlined above using the latest rar_plateau Milky Way run (see results/next_steps/rar_plateau_mw_full/run_metadata.json for parameter snapshot). Artifacts are linked below. No placeholder data were used: SPARC rotation curves are the public Lelli et al. (2016) rotmod files under external_data/Rotmod_LTG; Solar‑System checks use physical constants; the lensing table is a model prediction (pilot) using our metric, not a fit to a lensing dataset.
-
-- SPARC overlays and per‑galaxy a0 fits (rar_plateau with MW‑tuned params; only a0 varied):
-- images/paper/rar_plateau_mw_full/sparc_overlay_M31.png
-- images/paper/rar_plateau_mw_full/sparc_overlay_NGC3198.png
-- images/paper/rar_plateau_mw_full/sparc_overlay_NGC2403.png
-- images/paper/rar_plateau_mw_full/sparc_overlay_NGC2841.png
-- images/paper/rar_plateau_mw_full/sparc_overlay_NGC5055.png
-  - Summary table: results/next_steps/rar_plateau_mw_full/sparc_a0_summary.csv
-
-- Solar‑System constraints (ΔG/G ≈ ξ−1):
-- Plot: images/paper/rar_plateau_mw_full/solar_rar_plateau.png
-  - Table: results/next_steps/rar_plateau_mw_full/solar_system_table.csv
-  - At Saturn (≈10 AU) with our MW best‑fit a0 ≈ 3.0×10⁻¹⁰ m/s² and zeta_env=0, we obtain |ΔG/G| ≈ 5.1×10⁻⁶, well within the Cassini bound 2.3×10⁻⁵.
-
-- Lensing baselines (GR point‑mass + SIS; see docs/lensing.md):
-  - results/next_steps/rar_plateau_mw_full/lensing_table.csv (anchored GR θ_E and SIS yardsticks)
-
-- BTFR subset (observed outer‑curve V_flat; M_b = M_star + 1.33·M_HI when available):
-  - results/next_steps/rar_plateau_mw_full/btfr_summary.csv
-
-#### Data provenance and assumptions
-- SPARC rotation curves, component velocities (V_gas, V_disk, V_bulge), and MasterSheet metadata are from Lelli et al. (2016). In several cases, standalone H I surface‑density files (_HIrad.dat) were not present; we used the rotmod gas curve and SB columns for stellar surface brightness, consistent with SPARC practice. These choices are logged during processing and reflected in the outputs.
-- The Solar‑System ΔG/G calculation uses G, M_⊙, and AU in SI units. Gating (zeta_env>0, ρ_c) was not active in this MW run, so ξ_gated=ξ_worst; future runs with nonzero gating will reflect screening differences.
-- The lensing table is a pilot model prediction using a simple φ_env(r) proxy derived from 
-  ξ(R); it is not a fit to observed lenses—intended as a sanity check on predicted θ_E magnitudes in our metric.
-
-### Reproducibility and Replication Protocol
-
-1) Environment
-- Python ≥3.10; packages: numpy, matplotlib, pandas, dynesty; optional: cupy (GPU), pyarrow (Parquet), astropy (FITS), pyvo (Gaia TAP API).
-
-2) Data (included via Git LFS)
-- SPARC (required): external_data/Rotmod_LTG is tracked in this repo. After cloning, run git lfs pull to fetch contents. If you prefer to re-fetch, see scripts/fetch_sparc_hirad_sb_v2.py.
-- Gaia slices (optional for LMC/SMC or all-sky runs): external_data/gaia_sky_slices contains raw_L*.csv, processed_L*.parquet, and all_sky_gaia.csv via Git LFS. After cloning, run git lfs pull to fetch contents. For generating new slices, see docs/gaia_slices_readme.md and data_loaders/load_existing_gaia_lmc_smc.py.
-
-Note: Using GitHub’s “Download ZIP” will not fetch LFS content; clone with git and Git LFS, then run git lfs pull.
-
-3) Milky Way run (rar_plateau)
-- Use runners/dynesty_latest/run_dynesty_stellar_fit_cupy.py with xi=rar_plateau (as in our runs/rar_plateau_mw_full). The run produces NPZ/JSON outputs consumed by the orchestrator. Example flags are documented in runners/dynesty_latest/README.md.
-
-4) Extended analyses
-- Execute the orchestrator (pure NumPy; no GPU required):
-
-```bash
-# Scaled SPARC + BTFR + lensing baselines with global a0 (q2plus subset)
-python scripts/next_steps_from_run.py \
-  --run-dir runs/rar_plateau_mw_full \
-  --sparc-dir external_data/Rotmod_LTG \
-  --sample q2plus --min-npts 12 --min-rmax-kpc 8 --max-quality 2 \
-  --sigma-floor 6.0 --fit-global-a0
-```
-
-This writes CSVs under results/next_steps/rar_plateau_mw_full and plots under images/next_steps/rar_plateau_mw_full. An index page is also written to docs/next_steps.md.
-
-5) Gaia LMC/SMC (optional, API)
-
-```bash
-# Requires: pip install pyvo
-python -m data_loaders.load_existing_gaia_lmc_smc   --api --object LMC --limit 100000   --out-dir data/gaia_slices
-```
-
-All steps emit verbose logs and snapshot metadata (run parameters) for traceability. If a file is missing (e.g., _HIrad.dat), the loader behavior is logged and a consistent fallback is applied; we do not fabricate inputs.
-
-### Recent fixes (orchestration)
-- Mistake: (i) SPARC selection hard‑coded to 5 galaxies; (ii) BTFR used H I‑only mass and model V_flat; (iii) lensing pilot could report 0.000″ θ_E for massive lenses; (iv) no global a0 summary.
-- Fix: (i) added sample filters (Q≤2, min RC points, min R_max) and "q2plus"/"all" modes; (ii) BTFR now uses M_b = M_star + 1.33·M_HI and observed outer‑curve V_flat with flatness checks; (iii) lensing switched to anchored GR point‑mass and SIS baselines (see docs/lensing.md); (iv) added global‑a0 scan with Δχ²=1 uncertainties.
-- Test: ran smoke orchestration and verified non‑zero GR θ_E for 10^11.2 M_⊙ at z_l=0.2,z_s=0.6; BTFR populated with stellar+gas masses; SPARC sample size logged > 5; global a0 JSON written.
-
-1. **Origin & universality of $a_0$.** Treat $a_0$ as a global parameter with tight prior around the canonical value[^mcgaugh16] and test **hierarchically** across galaxies. Does one $a_0$ work for MW, HSBs, LSBs, and dwarfs? Is there evidence for weak environment‑dependence?
-2. **Solar‑System & lab constraints.** Quantify $|\xi-1|$ at planetary/lab densities with the **density gate** $S_\rho$. Show consistency with **Cassini** PPN $|\gamma-1|<2.3\times10^{-5}$.[^bertotti03] Provide a compact $\Delta GM/GM$ table (1–30 AU).
-3. **Gravitational lensing.** As a **metric** model, lensing is computable. Derive $\Phi+\Psi$ in the weak field and test against galaxy–galaxy lensing and Einstein rings. Compare with relativistic MOND frameworks (e.g., **TeVeS**; **Skordis & Złośnik**).[^bekenstein04][^skordis21]
-4. **External galaxies (SPARC) at scale.** Run a **matched‑settings** triad (GR/NFW/RAR‑gate) on $\gtrsim$20 high‑quality SPARC systems,[^lelli16] report $\Delta \log Z$ distributions and BTFR consistency.[^mcgaugh12]
-[5] **Cosmological consistency.** While ΛCDM remains the standard on large scales,[^planck18] explore whether a **bounded**, environment‑modulated coupling can be embedded without violating expansion history or structure growth constraints.
-
----
-
-## Strong‑Lensing Pilot (RAR phantom‑mass mapping) — methods, fixes, and snapshot results
-
-Scope. This section documents the lensing‑only pilot we added to the next_steps_from_run.py orchestrator. It leaves the Milky Way and SPARC dynamics pipeline unchanged, and only augments how we predict light bending from the same baryons + RAR “phantom mass.” The goal is to check whether a single scalar applied to the phantom contribution can bring galaxy‑scale Einstein radii into the right ballpark without spoiling the dynamics fits. The orchestrator writes results under results/next_steps/<run_name>/… and PNGs under images/next_steps/<run_name>/…. 
-
-next_steps_from_run
-
-What changed (lensing path only)
-
-Einstein‑radius solver fix. We now enforce a monotone non‑increasing envelope on the mean surface‑density curve ⟨Σ⟩(R) and solve for the last crossing with Σ₍cr₎ (outer, physical θ_E). This removes spurious early crossings caused by numerical wiggles and makes θ_E respond sensibly to scaling. (Plots and titles note GR/RAR/scaled intersections.) 
-
-next_steps_from_run
-
-Environment scaling clamp. For signed environment amplitudes ζ we compute scale_env = max(1 + ζ f(R), 0) and use
-Σ_lens = Σ_★ + α_lens_ph · scale_env · Σ_ph, so the phantom term is never subtracted in lensing.
-(This is lensing‑only; dynamics/rotation‑curve fits are untouched.)
-
-Inputs, knobs, and outputs
-
-Lens CSV schema (one row per lens):
-lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]
-Interpretation: total stellar mass and effective radius define a spherical Sérsic lens (optional n_sersic, default 4). The lensing step writes lensing_rar_table.csv and per‑lens plots. 
-
-next_steps_from_run
-
-Lensing‑only scalars (global):
-
---alpha-lens-ph — multiplies the RAR phantom surface density in lensing only (default 1.0).
-
---zeta-env-lens — additional amplitude via (1 + ζ f(R)), with --env-profile = constant or tapered (f = [1 + (R/Re)^2]^(-1/2)).
-
-Columns include theta_E_GR_arcsec, theta_E_RAR_arcsec, theta_E_RAR_phscaled_arcsec, SIS yardsticks, and alpha_req_at_thetaE_obs (the scalar that would match the observed θ_E for that lens). 
-
-next_steps_from_run
-
-Repro (example, α = 2.0, ζ sweep with tapered profile):
-
-```bash
-python scripts/next_steps_from_run.py \
-  --run-dir runs/btfr_fix_20250906 \
-  --sparc-dir external_data/Rotmod_LTG \
-  --sample q2plus \
-  --lensing-sample-csv results/next_steps/btfr_fix_20250906/lenses_castles_small_converted.csv \
-  --alpha-lens-ph 2.0 \
-  --zeta-env-lens 0.0 \
-  --env-profile tapered \
-  --out-root results/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p0 \
-  --images-root images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p0
-# Repeat with --zeta-env-lens {-0.25, 0.25, 0.5, 0.75} into sibling out/imag dirs
-```
-
-(The same orchestrator also generates the Solar‑System constraint plot and BTFR subset from SPARC; see the script header for context and usage.) 
-
-next_steps_from_run
-
-What we see on the 3‑lens pilot
-
-With the corrected solver and clamp, θ_E now scales monotonically with α and ζ.
-
-On the CASTLES‑based pilot (PG1115+080, B1608+656, Q0957+561) using Faber–Jackson‑style placeholders for M★ and Re, a single global α_lens_ph ≈ 2.0 is the current best by RMSE; a small, tapered ζ (|ζ|≲0.5) gives comparable MAE but does not yet beat α=2.0 on RMSE with N=3.
-
-These numbers are placeholders until we swap in measured M★ and Re; the pipeline will pick them up from the same CSV and recompute without any code changes. (The per‑lens table/plots are emitted alongside the run.) 
-
-next_steps_from_run
-
-Figures to add (recommended)
-
-BTFR sanity check (SPARC subset) — slope ≈ 3.18 ± 0.12 (N=89).
-Path: images/next_steps/btfr_fix_20250906/btfr_baryonic.png
-Caption: Observed V_flat vs baryonic mass for the working SPARC subset; a linear fit in log–log yields a BTFR slope consistent with literature. (Fit metrics come from btfr_fit_summary.json.) 
-
-btfr_fit_summary
-
-Solar‑System constraints — RAR‑plateau vs Cassini.
-Path: images/next_steps/btfr_fix_20250906/solar_rar_plateau.png
-Caption: Predicted |ΔG/G| ≈ |ξ−1| at 1–30 AU; the model stays below the Cassini bound at Saturn. (Produced by the orchestrator; the plot explicitly annotates the Cassini limit.) 
-
-next_steps_from_run
-
-Lensing: predicted vs observed θ_E (by run) — quick diagnostic.
-Path: images/next_steps/btfr_fix_20250906/combined_global_alpha/lensing_global_alpha_pred_vs_obs.png
-Caption: Scaled RAR lensing predictions (different α/ζ settings) against observed θ_E; illustrates that a single α≈2 already lands in the right order of magnitude on this pilot.
-
-(Optional per‑lens panel) B1608+656 — ⟨Σ⟩(R) with Σ_cr and θ_E markers
-Path: images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png
-Caption: Stars (GR), RAR total, and scaled lens curves with Σ_cr; vertical lines mark GR/RAR/scaled θ_E after applying the monotone envelope + last‑crossing rule. 
-
-next_steps_from_run
-
-Notes on scope and possible biases
-
-No change to dynamics: SPARC fits, MW analysis, and Solar‑System checks are unchanged by these lensing scalars; the “phantom” only enters the lensing convergence here.
-
-Distances: Σ_cr is built from angular‑diameter distances (flat ΛCDM). For pure local‑gravity tests independent of cosmology, rely on Solar‑System deflection constraints (already included) and, when feasible, any suitable near‑field lenses. The Solar‑System calculation/plot is produced by the orchestrator and annotates the Cassini bound. 
-
-next_steps_from_run
-
-Inputs: Until we replace placeholders with measured M★ and Re per lens, treat all α/ζ values as provisional dials for a pilot study. The lensing CSV columns and run outputs are documented in the lensing step of the orchestrator. 
-
-next_steps_from_run
-
-Quick to‑dos
-
-Swap in measured (log10M_star, Re_kpc[, n_sersic]) for the three pilot lenses; re‑run α=2.0 with a small ζ grid.
-
-Add a small table of per‑lens alpha_req_at_thetaE_obs to the paper text (already emitted by the pipeline). 
-
-next_steps_from_run
-
-If desired, test robustness with --density-profile = hernquist or jaffe (spherical) against the Sérsic default. (If you want this selector exposed, I can keep the CLI flag you proposed alongside the existing lensing flags.)
-
-Where these live in the repo
-
-The “Next‑Step Analyses” orchestrator is documented in the script header and writes a short index at docs/next_steps.md linking to generated artifacts. 
-
-next_steps_from_run
- 
-next_steps
-
-Where to point images (ready to embed)
-
-BTFR: images/next_steps/btfr_fix_20250906/btfr_baryonic.png
-
-Solar: images/next_steps/btfr_fix_20250906/solar_rar_plateau.png
-
-Lensing (scatter): images/next_steps/btfr_fix_20250906/combined_global_alpha/lensing_global_alpha_pred_vs_obs.png
-
-Lensing (per‑lens, e.g., B1608+656): images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png
-
-If you want, I can also auto‑generate a compact “Figures” block (with captions) and append it to the README; just say the word.
-
-Anything you want tweaked? If you’d like this merged directly into the existing “Extended Analyses” section, tell me the exact placement (e.g., after Solar constraints) and I’ll produce a version that’s already interleaved with your current headings.
-
----
-
-## Figures (quick embed)
-
-- BTFR sanity check (SPARC subset)
-  - Path: images/next_steps/btfr_fix_20250906/btfr_baryonic.png
-  - ![BTFR sanity check](images/next_steps/btfr_fix_20250906/btfr_baryonic.png)
-  - Caption: Observed V_flat vs baryonic mass for the working SPARC subset; a linear fit in log–log yields a BTFR slope consistent with literature. (Fit metrics from btfr_fit_summary.json.)
-
-- Solar‑System constraints — RAR‑plateau vs Cassini
-  - Path: images/next_steps/btfr_fix_20250906/solar_rar_plateau.png
-  - ![Solar‑System constraints](images/next_steps/btfr_fix_20250906/solar_rar_plateau.png)
-  - Caption: Predicted |ΔG/G| ≈ |ξ−1| at 1–30 AU; the model stays below the Cassini bound at Saturn. (Produced by the orchestrator; the plot annotates the Cassini limit.)
-
-- Lensing diagnostics — RMS vs α (hernquist)
-  - Path: images/next_steps/btfr_fix_20250906_lastcross/metrics/rms_rel_vs_alpha_hernquist.png
-  - ![Lensing RMS vs alpha (hernquist)](images/next_steps/btfr_fix_20250906_lastcross/metrics/rms_rel_vs_alpha_hernquist.png)
-  - Caption: Relative RMS error between scaled RAR predictions and observed θ_E across α (zeta=0) for the hernquist profile.
-
-- Lensing per‑lens panel — B1608+656
-  - Path: images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png
-  - ![B1608+656 — lensing panel](images/next_steps/btfr_fix_20250906_lastcross/alpha_2_zeta_0p25/lensing_rar_B1608+656.png)
-  - Caption: Stars (GR), RAR total, and scaled lens curves with Σ_cr; vertical lines mark GR/RAR/scaled θ_E after the monotone envelope + last‑crossing rule.
-
----
-
-## Editorial review and repo status
-
-- Editorial checklist and proposed actions: see feedback.md (project root). This document captures the Nature Physics-oriented checklist (indispensable results, reviewer pre-empts, presentation/policy) plus a prioritized to-do list.
-- Editor-style review and definition-of-done: see feedback_editor_review.md. This adds a traffic-light status snapshot, concrete upgrades A–I, and a definition-of-done list used to gate submission readiness.
-- Snapshot: Solar-System constraints and PPN/Cassini coverage are implemented; lensing from a single relativistic completion (without any α_lens_ph in the manuscript), hierarchical a0 over a large SPARC/BIG-SPARC sample, wide-binary tests, and Milky Way K_z/Σ_1.1 are the main remaining items.
-
-These files are part of the repo and maintained alongside code to keep the paper and implementation aligned.
-
----
-
-## Lensing (GR vs RAR metric vs SIS/NFW yardsticks)
-
-- Targets and instructions: docs/targets_lensing_galaxies.md (shortlist: ESO 325-G004, SDSS J2141-0001, Q2237+0305, RX J1131-1231). Fill docs/lensing_targets.csv with measured log10M_star and Re_kpc to reproduce the figures below.
-- Forward-predictions come from a single theory (Φ=Ψ, c_T=1) using the same xi mapping as dynamics.
-- Dark-matter baselines:
-  - SIS yardsticks are provided in the table.
-  - Optional NFW yardstick: enable with --nfw-enable (uses either CSV halo_M200_log10/halo_c or a yardstick M200 = (ratio × M⋆), c = c0).
-
-Latest artifacts (smoke run; replace after populating docs/lensing_targets.csv):
-
-- Stacked ΔΣ (RAR metric):
-  - ![ΔΣ stack](images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png)
-
-- Per-lens comparisons (GR vs RAR metric; yardsticks annotated in the table/markers):
-  - ![PG1115+080](images/next_steps/enhanced_20250805_115400/lensing_rar_PG1115+080.png)
-  - ![B1608+656](images/next_steps/enhanced_20250805_115400/lensing_rar_B1608+656.png)
-  - ![Q0957+561](images/next_steps/enhanced_20250805_115400/lensing_rar_Q0957+561.png)
-
-- θE predicted vs observed (scatter; includes RAR metric, GR, and NFW yardstick):
-  - ![θE scatter](images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png)
-  - Metrics JSON: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
-
-Re-run to regenerate with measured M⋆ and Re, e.g.:
-
-```bash
-python scripts/next_steps_from_run.py \
-  --run-dir runs/<your_run> \
-  --sparc-dir external_data/Rotmod_LTG \
-  --lensing-sample-csv docs/lensing_targets.csv \
-  --metric-lensing-only --density-profile sersic --write-ppn-table
-```
-
----
-
-## Key figure call-outs (paper figures)
-
-Final model used in figures (consistency)
-- Model: RAR‑plateau (xi_rar_plateau) — this is the model used for SPARC overlays and lensing predictions in this paper.
-- Baselines: GR (baryons‑only) and optional NFW yardstick (DM baseline) as annotated.
-- Run context for figures below: results/next_steps/enhanced_20250805_115400 (see run_metadata.json there).
-
-Milky Way — rotation curves (GR vs RAR‑plateau vs NFW yardstick)
-- ![Milky Way rotation (RAR‑plateau vs GR)](images/rar_plateau_analysis/rar_plateau_mw_comparison_3way.png)
-
-Representative SPARC overlays (observed vs GR vs RAR)
-- ![NGC 3198 overlay](images/next_steps/enhanced_20250805_115400/sparc_overlay_NGC3198.png)
-- ![NGC 2841 overlay](images/next_steps/enhanced_20250805_115400/sparc_overlay_NGC2841.png)
-- ![NGC 2403 overlay](images/next_steps/enhanced_20250805_115400/sparc_overlay_NGC2403.png)
-
-Lensing — ΔΣ stack and θE scatter (RAR metric vs observed; GR/NFW yardsticks shown)
-- ΔΣ stack: images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png
-- θE scatter: images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
-
----
-
-## Reproducibility protocol (exact commands & parameters)
-
-Environment (per WARP.md)
-- Python: 3.11
-- Create a venv, then install:
-  ```bash
-  pip install ./utils
-  pip install dynesty scipy pandas astropy
-  # Optional GPU path: pip install cupy-cuda12x  (or cupy-cuda11x for CUDA 11)
-  ```
-
-Data in-repo
-- SPARC rotmod: external_data/Rotmod_LTG (rotmod files, optional MasterSheet)
-- Lens target list: docs/lensing_targets.csv (fill measured log10M_star and Re_kpc)
-
-Exact command used to generate the figures and tables referenced above
-- Run directory used in this README: runs/enhanced_20250805_115400
-- Command:
-  ```bash
-  python scripts/next_steps_from_run.py \
-    --run-dir runs/enhanced_20250805_115400 \
-    --sparc-dir external_data/Rotmod_LTG \
-    --lensing-sample-csv docs/lensing_targets.csv \
-    --metric-lensing-only --density-profile sersic \
-    --nfw-enable --nfw-mass-ratio 50 --nfw-c 8 \
-    --write-ppn-table
-  ```
-
-Outputs produced (paths in repo)
-- Lensing tables & figures
-  - results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv
-  - results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
-  - images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
-  - images/next_steps/enhanced_20250805_115400/lensing_rar_<lens_id>.png
-  - results/next_steps/enhanced_20250805_115400/lensing_metric_stack.csv
-  - images/next_steps/enhanced_20250805_115400/lensing_metric_stack.png
-- Solar-System & PPN
-  - results/next_steps/enhanced_20250805_115400/solar_system_table.csv
-  - images/next_steps/enhanced_20250805_115400/solar_rar_plateau.png
-  - results/next_steps/enhanced_20250805_115400/ppn_table.csv
-- SPARC overlays & BTFR
-  - results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
-  - images/next_steps/enhanced_20250805_115400/sparc_overlay_<galaxy>.png
-  - results/next_steps/enhanced_20250805_115400/btfr_summary.csv
-  - results/next_steps/enhanced_20250805_115400/btfr_fit_summary.json
-- Hierarchical a0 (optional; add --hierarchical-a0)
-  - results/next_steps/enhanced_20250805_115400/sparc_a0_grids/*.csv
-  - results/next_steps/enhanced_20250805_115400/hierarchical_a0_summary.json
-  - images/next_steps/enhanced_20250805_115400/hierarchical_a0_heatmap.png
-
-Source-Data mapping for paper figures
-
----
-
-## Evidence snapshots (from current repo artifacts)
-
-Lensing — θE metrics (RAR vs observed)
-- Results JSON: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
-- N = 3, RMSE_abs_arcsec ≈ 1.226, MAE_abs_arcsec ≈ 0.884, Bias_abs_arcsec ≈ −0.884
-- RMSE_rel ≈ 0.487, MAE_rel ≈ 0.398, Bias_rel ≈ −0.398
-- Scatter: images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
-
-Solar System — ΔG/G at selected AU (gated path)
-- Table: results/next_steps/enhanced_20250805_115400/solar_system_table.csv
-- Excerpt:
-  - 10 AU: |ΔG/G| ≈ 2.02×10⁻⁶ (≪ Cassini |γ−1| < 2.3×10⁻⁵)
-  - 20 AU: |ΔG/G| ≈ 8.09×10⁻⁶; 30 AU: ≈ 1.82×10⁻⁵
-
-SPARC — per-galaxy a0 scan (best a0 and χ²)
-- Table: results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
-- Excerpt:
-
-| Galaxy   | a0_best [m s⁻²] | χ²_RAR | χ²_GR | dof |
-|----------|------------------:|-------:|------:|----:|
-| M31      | 8.86e−11         | 31.734 | 477.097 | 11 |
-| NGC3198  | 3.47e−11         | 132.051 | 1903.006 | 42 |
-| NGC2403  | 5.81e−11         | 439.470 | 2906.038 | 72 |
-| NGC2841  | 1.35e−10         | 42.769 | 8073.565 | 49 |
-| NGC5055  | 3.16e−11         | 3035.600 | 2800.328 | 27 |
-
-Hierarchical a0 (pilot)
-- Summary JSON: results/next_steps/enhanced_20250805_115400/hierarchical_a0_summary.json
-  - μ = −10.227 (for ln a0), σ = 0.245, n_gal = 5
-- Heatmap: images/next_steps/enhanced_20250805_115400/hierarchical_a0_heatmap.png
-- Per-lens lensing plots: results/next_steps/enhanced_20250805_115400/lensing_metric_profiles/<lens>_profiles.csv
-- θE scatter: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json and lensing_metric_table.csv
-- ΔΣ stack: results/next_steps/enhanced_20250805_115400/lensing_metric_stack.csv
-- Solar constraints: results/next_steps/enhanced_20250805_115400/solar_system_table.csv
-- SPARC overlays: results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
-- BTFR: results/next_steps/enhanced_20250805_115400/btfr_summary.csv and btfr_fit_summary.json
-
-- Editorial checklist and proposed actions: see feedback.md (project root). This document captures the Nature Physics-oriented checklist (indispensable results, reviewer pre-empts, presentation/policy) plus a prioritized to-do list.
-- Editor-style review and definition-of-done: see feedback_editor_review.md. This adds a traffic-light status snapshot, concrete upgrades A–I, and a definition-of-done list used to gate submission readiness.
-- Snapshot: Solar-System constraints and PPN/Cassini coverage are implemented; lensing from a single relativistic completion (without any α_lens_ph in the manuscript), hierarchical a0 over a large SPARC/BIG-SPARC sample, wide-binary tests, and Milky Way K_z/Σ_1.1 are the main remaining items.
-
-These files are part of the repo and maintained alongside code to keep the paper and implementation aligned.

@@ -49,8 +49,19 @@ def main() -> None:
     ap.add_argument("--sparc-dir", required=True, help="SPARC rotmod dir (e.g., external_data/Rotmod_LTG)")
     ap.add_argument("--lensing-csv", default="docs/lensing_targets.csv", help="Lens CSV with lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]")
     ap.add_argument("--sample", default="gold", choices=["gold","q2plus","all"], help="SPARC sample for the orchestrator: gold (default), q2plus (Q<=2), or all")
+    ap.add_argument("--preset", default="paper", choices=["paper","pilot","custom"], help="Preset for orchestrator (default: paper)")
     ap.add_argument("--hierarchical-a0", action="store_true", help="Also compute hierarchical a0 MLE over the SPARC subset")
     ap.add_argument("--hierarchical-a0-bayes", action="store_true", help="Run full Bayesian hierarchical posterior for a0 (dynesty)")
+    # Clusters (optional)
+    ap.add_argument("--run-clusters", action="store_true", help="Also run the CLASH×ACCEPT cluster section (defensible preset)")
+    ap.add_argument("--cluster-accept", default="external_data/accept_database.dat", help="ACCEPT database path")
+    ap.add_argument("--cluster-stars", default="external_data/clash_stars.csv", help="Optional stars CSV (BCG/ICL)")
+    ap.add_argument("--cluster-xmin", type=float, default=0.05, help="Min x=r/R200c to include")
+    ap.add_argument("--cluster-xmax", type=float, default=0.8, help="Max x=r/R200c to include")
+    ap.add_argument("--cluster-huber-delta", type=float, default=0.2, help="Huber delta in dex for robust fit")
+    ap.add_argument("--cluster-bootstrap", type=int, default=200, help="Bootstrap replicates for cluster RMS")
+    ap.add_argument("--cluster-jackknife", action="store_true", help="Enable leave-one-cluster-out jackknife")
+    ap.add_argument("--cluster-null-tests", action="store_true", help="Run cluster null tests (radial/cross-match scrambles)")
     args = ap.parse_args()
 
     run_dir = Path(args.run_dir)
@@ -64,6 +75,7 @@ def main() -> None:
         "--run-dir", str(run_dir),
         "--sparc-dir", str(sparc_dir),
         "--lensing-sample-csv", str(lens_csv),
+        "--preset", str(args.preset),
         "--metric-lensing-only",
         "--density-profile", "sersic",
         "--nfw-enable",
@@ -78,6 +90,35 @@ def main() -> None:
         cmd.append("--hierarchical-a0-bayes")
 
     run(cmd)
+
+    # Optional: run cluster section (defensible preset)
+    if args.run_clusters:
+        clusters_results = Path("results") / "next_steps" / run_dir.name / "clusters"
+        clusters_images = Path("images") / "next_steps" / run_dir.name / "clusters"
+        clusters_results.mkdir(parents=True, exist_ok=True)
+        clusters_images.mkdir(parents=True, exist_ok=True)
+        cluster_cmd = [
+            sys.executable,
+            "scripts/cluster_rar_pipeline.py",
+            "--accept", str(Path(args.cluster_accept)),
+            "--results", str(clusters_results),
+            "--images", str(clusters_images),
+            "--equal-cluster-weight",
+            "--xmin", str(args.cluster_xmin),
+            "--xmax", str(args.cluster_xmax),
+            "--robust-loss", "huber",
+            "--huber-delta", str(args.cluster_huber_delta),
+            "--bootstrap-points", str(args.cluster_bootstrap),
+        ]
+        if args.cluster_jackknife:
+            cluster_cmd.append("--jackknife-by-cluster")
+        if args.cluster_null_tests:
+            cluster_cmd.append("--null-tests")
+        # Stars CSV (optional)
+        if args.cluster_stars and Path(args.cluster_stars).exists():
+            cluster_cmd.extend(["--stars-csv", str(Path(args.cluster_stars))])
+        print("$", " ".join(cluster_cmd), flush=True)
+        run(cluster_cmd)
 
     # Copy Milky Way overlay if available under rar_plateau_analysis
     src_mw = Path("images/rar_plateau_analysis/rar_plateau_mw_comparison_3way.png")
@@ -119,6 +160,14 @@ def main() -> None:
         lines.append("Hierarchical a0")
         lines.append(f"- Summary JSON: { (results_root/'hierarchical_a0_summary.json').as_posix() }")
         lines.append(f"- Heatmap: images/next_steps/{run_dir.name}/hierarchical_a0_heatmap.png")
+        lines.append("")
+    if args.run_clusters:
+        lines.append("Clusters (CLASH × ACCEPT)")
+        lines.append(f"- Metrics: results/next_steps/{run_dir.name}/clusters/cluster_section_metrics.json")
+        lines.append(f"- Per-cluster: results/next_steps/{run_dir.name}/clusters/cluster_section_per_cluster.csv")
+        lines.append(f"- Scatter: images/next_steps/{run_dir.name}/clusters/cluster_rar_scatter.png")
+        lines.append(f"- Residual vs r/R200: images/next_steps/{run_dir.name}/clusters/cluster_rar_residuals_vs_r200.png")
+        lines.append(f"- Histogram: images/next_steps/{run_dir.name}/clusters/cluster_rar_residual_hist.png")
         lines.append("")
     report.write_text("\n".join(lines), encoding="utf-8")
     print(f"Wrote {report}")

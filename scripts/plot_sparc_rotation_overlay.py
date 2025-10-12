@@ -210,13 +210,13 @@ def main():
     else:
         plt.text(0.02, 0.96, 'NFW unavailable', transform=plt.gca().transAxes, color='green', fontsize=9, va='top')
     if v_er is not None:
-        plt.plot(R, v_er, 'r-', lw=2.4, label='Tidal (env)')
+        plt.plot(R, v_er, 'r-', lw=2.4, label='RAR Plateau')
     else:
-        plt.text(0.02, 0.90, 'ER env fit JSON not found', transform=plt.gca().transAxes, color='red', fontsize=9, va='top')
+        plt.text(0.02, 0.90, 'RAR Plateau JSON not found', transform=plt.gca().transAxes, color='red', fontsize=9, va='top')
 
     plt.xlabel('R (kpc)')
     plt.ylabel('Vc (km s$^{-1}$)')
-    plt.title(f'{galid}: Rotation curve with GR, NFW, and Tidal overlays')
+    plt.title(f'{galid}: Rotation curve with GR, NFW, and RAR Plateau overlays')
     plt.grid(True, alpha=0.3)
     plt.legend(frameon=False)
     plt.xlim(0, max(R.max()*1.2, R.max()+5))

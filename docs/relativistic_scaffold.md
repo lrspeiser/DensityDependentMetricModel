@@ -7,14 +7,16 @@ Assumptions (explicit):
 - No weak-field anisotropic stress in the quasi-static regime so that Φ = Ψ.
 
 Implications used in code:
+- See also docs/ppn_mapping.md for the explicit Solar‑System PPN and Shapiro mapping used to address Cassini.
 - PPN coefficients in the screened/high-acceleration regime (Solar System): γ = 1, β = 1, α1 = 0, α2 = 0.
-- Weak-field lensing uses Φ + Ψ = 2Φ, and Φ is built from the same baryons plus the effective “phantom” mass implied by the xi(...) mapping used in dynamics.
+- Weak-field lensing uses Φ + Ψ, where Φ and Ψ are built from the same baryons plus the environment potential φ_env = 1/2 ln ξ used in dynamics (see appendix and QUMOND mapping).
 
 Where this is enforced:
-- theory/relativistic.py: programmatic PPN exporter and c_T guardrail; replace with explicit expressions if you adopt a concrete Lagrangian (e.g., a restricted Horndeski/DHOST subclass).
-- scripts/next_steps_from_run.py: pass --metric-lensing-only to compute θ_E and ΔΣ(R) directly from the metric prediction (no α_lens_ph or environment scaling in manuscript outputs). A per-lens ΔΣ profile is saved under results/next_steps/<run>/lensing_metric_profiles/ and a simple stack is written to results/next_steps/<run>/lensing_metric_stack.csv with a companion plot.
-- Solar-System checks: ΔG/G table and plot are written alongside an optional PPN table (--write-ppn-table), with the Cassini bound annotated in the plot.
+- docs/paper_appendix_relativistic.md: appendix with the schematic action, QUMOND→ξ mapping, phantom-density lensing link, and PPN/c_T statements that the manuscript cites.
+- docs/modified_poisson_qumond.md: compact derivation of the modified Poisson equation, ξ boost, phantom density identity, and lensing mapping.
+- theory/relativistic.py: weak-field helpers (Φ, Ψ, Φ+Ψ from ξ via φ_env), programmatic PPN export (GR values under screening), and c_T guardrail (must be 1).
+- scripts/next_steps_from_run.py: computes ρ_ph from ξ on axisymmetric grids, projects Σ_tot, solves θ_E, and writes ΔΣ/θ_E profiles. The Solar-System ΔG/G and PPN tables are also produced here.
 
-Caveats and roadmap:
-- This scaffold encodes the relativistic subclass via assumptions to satisfy editorial requirements for a single-theory prediction path; a full derivation of γ, β, α1, α2 from an action (with explicit screening) is planned. When that is in place, theory/relativistic.py should be updated to compute PPN from parameters and the guardrail can be strengthened beyond a hard assertion.
-- For stacked galaxy–galaxy lensing comparisons (HSC/DES/KiDS), wire public ΔΣ(R) products or shear catalogs and compare against the generated ΔΣ(R) stack (results/…/lensing_metric_stack.csv).
+Scope and limitations:
+- Claims are confined to the weak-field, quasi-static regime and to the screened Solar System. Cosmology and strong-field tests are out of scope for this manuscript build.
+- For stacked galaxy–galaxy lensing comparisons (HSC/DES/KiDS), wire public ΔΣ(R) products or shear catalogs and compare against results/…/lensing_metric_stack.csv.

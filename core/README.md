@@ -1,5 +1,24 @@
 # Core Physics Module Documentation
 
+This directory contains the fundamental, GPU‑accelerated implementations used for galaxy predictions. It operates in the weak‑field, quasi‑static regime and uses a gating factor ξ to rescale the baryonic prediction for circular speed.
+
+What the code actually computes
+- Baryonic circular speed V_bar(R) from disks/bulges/gas.
+- Gate ξ(...), which depends on local baryonic fields (density ρ, tidal proxy T, acceleration g_bar) with conservative screening such that ξ→1 in Solar‑System conditions.
+- Predicted speed: V_model²(R) = ξ(R) · V_bar²(R).
+
+Relativistic mapping and PPN
+- The repository adopts a minimal metric subclass with Φ=Ψ and c_T=1 in screened, quasi‑static limits. The environment potential φ_env ≡ ½ ln ξ enters additively into both potentials so lensing responds to Φ+Ψ built from the same ξ.
+- In the Solar limit under screening, PPN parameters reduce to their GR values (γ=β=1, α1=α2=0). See docs/ppn_mapping.md for a worked derivation and conditions under which the Cassini Shapiro bound does or does not constrain ε≡ξ−1.
+
+Key files
+- density_metric_cupy.py — primary GPU implementation (v_total_kms_cupy combines baryons and ξ; many ξ variants with conservative Solar screening are provided).
+- xi_registry.py — declares which ξ models are “published” (reproducible) vs experimental.
+- theory/relativistic.py — weak‑field helpers and PPN export under screening.
+
+Notes
+- The previous placeholder equations suggesting “G_μν + ξ(ρ) G_μν = 8π T_μν” were incorrect and have been removed. The working formulation is non‑relativistic (QUMOND‑like) for galaxy dynamics with a consistent weak‑field metric mapping for lensing.
+
 This directory contains the fundamental physics implementations for the Density-Dependent Metric Model (DDMM).
 
 ## Mathematical Framework

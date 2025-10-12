@@ -2,6 +2,171 @@
 
 This note describes how to reproduce the main figures and tables in this repository with exact commands, package versions, and data artifacts. Update the DOI placeholders after minting Zenodo records.
 
+## Latest Results Tables and Figures
+
+- Figures overview (paths only):
+  - Fig. 1 Milky Way rotation — images/rar_plateau_mw_full/mw_rotation_rar_plateau_finebins.png
+  - Fig. 2 MW (K_z)/(Σ_1.1) — images/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.png
+  - Fig. 3 SPARC panel — images/next_steps/enhanced_20250805_115400/sparc_panel_gold.png
+  - Fig. 4 BTFR subset — images/next_steps/btfr_fix_20250906/btfr_baryonic.png
+  - Fig. 5 Solar |ΔG/G| — images/next_steps/rar_plateau_mw_full/solar_rar_plateau.png
+  - Fig. 6 Lensing θ_E scatter (SLACS, N≈70) — images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+  - Ext. Fig. Δlog Z histograms — images/next_steps/enhanced_20250805_115400/model_comparison/delta_logZ_hist.png
+
+- SPARC Fit Quality
+  - JSON: docs/metrics/sparc_fit_quality.json
+  - Figure: docs/figures/sparc_ppc_panel.png
+
+- Universality Metrics
+  - Universal a0 (global fit): results/next_steps/.../global_a0.json
+  - Hierarchical summaries: hierarchical_a0_summary.json / hierarchical_a0_posterior_summary.json
+  - Env ON/OFF deltas: universality_metrics.json
+
+- Solar System Source Data
+  - results/next_steps/btfr_fix_20250906/solar_system_table.csv
+  - Example table columns: AU, dG/G (gated), dG/G (worst), gamma−1, Cassini bound
+
+- SPARC per‑galaxy a0 summary (subset)
+  - results/next_steps/enhanced_20250805_115400/sparc_a0_summary.csv
+
+- Milky Way vertical force Kz (full 3‑D phantom)
+  - results/next_steps/enhanced_20250805_115400/mw_kz_sigma_full3d.csv
+  - Aggregate: results/mw_kz_sigma.csv
+
+- Lensing metrics (SLACS sample; paper preset)
+  - Per‑lens table: results/next_steps/enhanced_20250805_115400/lensing_metric_table.csv
+  - Summary JSON: results/next_steps/enhanced_20250805_115400/lensing_thetaE_metrics.json
+  - Figure (scatter): images/next_steps/enhanced_20250805_115400/lensing_thetaE_pred_vs_obs.png
+  - Extended examples: images/next_steps/enhanced_20250805_115400/lensing_rar_J0037-0942.png, images/next_steps/enhanced_20250805_115400/lensing_rar_J1402+6321.png
+
+- D_max plateau sweep
+  - docs/dmax_cap.md
+  - docs/dmax_sweep_summary.csv
+
+## Single-command reproduction (recommended)
+
+- From repo root (host):
+  - Ensure SPARC rotmods exist under `external_data/Rotmod_LTG/` and a paper run NPZ exists under `runs/<run_name>/`.
+  - Then run:
+
+  ```bash
+  RUN_DIR=runs/enhanced_20250805_115400 \
+  SPARC_DIR=external_data/Rotmod_LTG \
+  LENS_CSV=docs/lensing_targets.csv \
+  ./reproduce_paper.sh
+  ```
+
+- Docker (CPU-first):
+  ```bash
+  docker build -t dgg-repro .
+  docker run --rm -it \
+    -e RUN_DIR=runs/enhanced_20250805_115400 \
+    -e SPARC_DIR=external_data/Rotmod_LTG \
+    -e LENS_CSV=docs/lensing_targets.csv \
+    -v "$PWD/runs:/app/runs" \
+    -v "$PWD/external_data/Rotmod_LTG:/app/external_data/Rotmod_LTG:ro" \
+    -v "$PWD/results:/app/results" \
+    -v "$PWD/images:/app/images" \
+    dgg-repro
+  ```
+
+Notes
+- The dynesty run regeneration (to create the NPZ) requires GPU/CuPy. If you need to regenerate the run, set `RUN_GENERATE=1` and ensure a working GPU/CuPy environment; otherwise, provide an existing run NPZ.
+
+### Optional: Lensing systematics (sensitivity checks)
+The manuscript uses default-off systematics. To explore robustness without altering paper outputs, run to a separate output root:
+
+```bash
+python scripts/next_steps_from_run.py \
+  --preset paper \
+  --run-dir runs/<your_run> \
+  --sparc-dir external_data/Rotmod_LTG \
+  --lensing-sample-csv docs/lensing_targets.csv \
+  --miscenter-f-off 0.25 --miscenter-sigma-kpc 50 \
+  --kappa-ext-mean 0.03 --kappa-ext-sigma 0.02 --kappa-ext-samples 5000 \
+  --out-root results/next_steps_sys/<your_run> \
+  --images-root images/next_steps_sys/<your_run>
+```
+
+- Stacked ΔΣ: add a two‑halo tail via `--twohalo-csv <template.csv>` and/or miscentering via `--miscenter-*`; the stack CSV gains `*_sys` columns.
+- θE metrics: enable κ_ext marginalization via `--kappa-ext-*`; JSON metrics gain `_kappa` entries and a `kappa_ext` block.
+- Metadata: `run_metadata.json` includes `lensing_systematics` with the parameters used.
+
+Omitting these flags reproduces the manuscript figures and tables byte-for-byte (aside from the harmless new metadata section).
+
+### QA and SI helpers (optional)
+- Lens table QA (reports missing required fields for θE metrics):
+  ```bash
+  python tools/qa_lensing_table.py
+  # → results/qa/lensing_missing_report.csv
+  ```
+- Compare baseline vs systematics outputs (θE metrics and stack deltas):
+  ```bash
+  python tools/compare_lensing_systematics.py
+  # → results/qa/thetaE_metrics_comparison.csv, results/qa/stack_deltas.csv
+  ```
+- Merge MW Kz overlays (Bovy–Rix + McMillan) into a single CSV for plotting:
+  ```bash
+  python tools/mw_kz_overlay_merge.py
+  # Use with: --mw-kz-overlay-csv docs/mw_kz_overlay_2band.csv
+  ```
+- Propagate MW baryon priors into Kz (full 3‑D phantom) and produce a shaded band:
+  ```bash
+  python scripts/next_steps_from_run.py \
+    --preset paper \
+    --run-dir runs/<your_run> \
+    --sparc-dir external_data/Rotmod_LTG \
+    --mw-kz \
+    --mw-kz-prior-band \
+    --mw-kz-overlay-csv docs/mw_kz_overlay_two_bands.csv \
+    --mw-R0-kpc 8.2 --mw-kz-zlist 0.5 0.8 1.1 1.5 2.0 \
+    --mw-prior-samples 128 --mw-prior-ml-sigma 0.15 --mw-prior-gas-frac-sigma 0.25 \
+    --mw-prior-height-frac-sigma 0.20 --mw-prior-Rd-frac-sigma 0.10 --mw-prior-bulge-a-frac-sigma 0.25
+  # → results/.../mw_kz_prior_band.csv, images/.../mw_kz_sigma_full3d.png (with shading)
+  ```
+- Dmax sensitivity sweep summarizer (after running three presets to results/dmax_sweep/30,50,80):
+  ```bash
+  python tools/summarize_dmax_sweep.py
+  # → results/qa/dmax_summary.csv
+  ```
+- SPARC rotation-curve PPC (requires a per-point residuals CSV):
+  ```bash
+  python tools/sparc_ppc.py
+  # → results/qa/sparc_ppc_summary.csv, results/qa/sparc_ppc_hist.csv
+  ```
+
+## Milky Way RAR‑plateau run & paper preset
+
+If you need to run the Milky Way fit that produces the paper’s run NPZ, use the dynesty CuPy runner (GPU/CuPy recommended) and then invoke the paper preset orchestrator.
+
+- Fit the Milky Way (RAR‑plateau):
+
+  python runners/dynesty_latest/run_dynesty_stellar_fit_cupy.py \
+    --xi rar_plateau \
+    --nlive 2000 --maxcall 1500000 --dlogz_target 0.01 \
+    --seed 42 --num_threads 8 \
+    --run_analysis \
+    --out runs/rar_plateau_mw_full
+
+  If runners/dynesty_latest/ is not present, fallback script: runners/run_dynesty_stellar_fit_cupy.py with the same flags.
+
+- Generate paper figures/tables (paper preset):
+
+  python scripts/reproduce_paper.py \
+    --run-dir runs/rar_plateau_mw_full \
+    --sparc-dir external_data/Rotmod_LTG \
+    --lensing-csv docs/lensing_targets.csv \
+    --sample gold --preset paper
+
+- Helper: reproduce_paper.sh performs the orchestrator step and (optionally) the MW Kz overlay band plot. Set RUN_GENERATE=1 to let it attempt the dynesty run on a GPU/CuPy machine; otherwise provide an existing NPZ.
+- Container: the provided Dockerfile runs reproduce_paper.sh in a CPU-first image; mount runs/ and external_data/Rotmod_LTG to reproduce outputs without GPU.
+
+### Data requirements
+- SPARC rotmod files under external_data/Rotmod_LTG/ (fetch via `git lfs pull`).
+- Lensing targets table at docs/lensing_targets.csv with measured columns (lens_id,z_l,z_s,log10M_star,Re_kpc[,n_sersic,theta_E_obs_arcsec]).
+- Milky Way Kz overlay CSV (optional): docs/mw_kz_overlay_two_bands.csv.
+- Gaia annuli and posterior snapshots (if referenced) can be downloaded via the DOIs listed in §2 of this document once minted.
+
 1) Environment and packages
 - Python: 3.10+
 - Core packages:

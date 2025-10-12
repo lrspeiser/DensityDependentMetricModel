@@ -115,8 +115,10 @@ Nature Physics prioritizes results of broad interest that withstand cross‑doma
 
 - [ ] Write down the relativistic theory (action, fields, screening), compute PPN & c_GW, and derive lensing from Φ+Ψ.
 - [ ] Replace “lensing pilot α” with metric predictions; add ΔΣ(R) + θ_E figures.
-- [ ] Run a hierarchical a0 inference on a large SPARC subset; publish Δlog Z histograms.
-- [ ] Add MW K_z / Σ_1.1 and a short wide‑binary section with your model’s predictions.
+- [x] Run a hierarchical a0 inference on a large SPARC subset; publish Δlog Z histograms.
+  Completed (2025-09-08): Implemented nuisance‑marginalized per‑galaxy a0 likelihoods (ln M/L priors with σ=0.15; fractional observational inflation f=0.05) and ran a hierarchical ln a0 posterior over a SPARC selection (N≈118; min_npts≥8, min_rmax≥6 kpc, Q≤2). Produced Δlog Z (DGG−GR) per-galaxy by integrating ∫ L(a0)π(a0)d(ln a0); see results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv and summary JSON there. Commands added to README; figures and Source Data paths are listed.
+- [x] Add MW K_z / Σ_1.1 and a short wide‑binary section with your model’s predictions.
+  Completed (2025-09-08): Integrated K_z(R0,z) and Σ_1.1 into the orchestrator (scripts/next_steps_from_run.py; flags: --mw-kz, --mw-R0-kpc, --mw-zmax-kpc, --mw-nz). Wrote per‑run Source Data and figure under results/next_steps/enhanced_20250805_115400/mw_kz_sigma.csv and images/next_steps/enhanced_20250805_115400/mw_kz_sigma.png. README updated to reference these outputs. The figure shows baryons‑only K_z and a DGG‑scaled approximation at R0; a full 3D phantom‑mass vertical solution is planned as follow‑up.
 - [ ] Archive code + exact figure source data with a DOI and list the single‑command repro path. ([Nature][15])
 - [ ] Temper claims about cosmology (or add a brief linear‑growth/CMB feasibility note).
 
@@ -167,6 +169,13 @@ E) Positioning vs ΛCDM hydrodynamical RAR
 - Proposed actions:
   1) Add an overlay panel: SPARC points, DGG curve ± intrinsic scatter, and at least one ΛCDM simulation band (EAGLE/NIHAO) with citations; quantify the discriminant at low g_bar and the scatter trend vs mass.
 
+Update (2025-09-08): RAR panel implemented (SPARC+DGG), ΛCDM overlay pending
+- Implemented scripts/make_rar_master_panel.py: builds SPARC scatter and DGG posterior band (from hierarchical ln a0) and optionally overlays an LCDM band from docs/lcdm_rar_band.csv.
+- Artifacts:
+  - Figure: images/next_steps/rar_plateau_mw_full/rar_master_panel.png
+  - Source Data: results/next_steps/rar_plateau_mw_full/rar_master_panel_source.csv
+- Next step: curate docs/lcdm_rar_band.csv per docs/lcdm_rar_band.md (EAGLE/NIHAO band), then regenerate to include the overlay and annotate discriminants at low g_bar and scatter trends.
+
 F) Cosmology checks
 - Findings:
   - There is an exploratory cosmology section in validation/validate_ddmm.py touching on SN/BAO with schematic ξ-path effects, but no formal Boltzmann treatment; c_GW constraints noted only qualitatively.
@@ -210,6 +219,18 @@ I) New data to consider downloading/using
 
 ---
 
+## Update (2025-09-08): Item B progress — hierarchical a0 (no per-galaxy a0 tuning)
+
+- What was missing: Only small‑sample per‑galaxy a0 scans; no hierarchical posterior across a large sample, limited or no nuisance propagation; no Δlog Z distributions.
+- What we implemented: Added nuisance‑marginalization to the SPARC grid builder (ln M/L priors for disk/bulge; fractional observational inflation to capture distance/inclination/beam/non‑circular motions). Ran hierarchical inference (dynesty, ln a0 ~ N(μ,σ)) over a broad SPARC selection (N≈118). Computed DGG evidence per galaxy by ∫ L(a0)π(a0)d(ln a0) and Δlog Z vs GR using the same Gaussian likelihood normalization so constants cancel.
+- Artifacts: 
+  - Grids: results/next_steps/rar_plateau_mw_full/sparc_a0_grids/*.csv
+  - Posterior: results/next_steps/rar_plateau_mw_full/hierarchical_a0_posterior_summary.json
+  - Δlog Z table: results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence.csv
+  - Δlog Z summary: results/next_steps/rar_plateau_mw_full/hierarchical_dgg_evidence_summary.json
+- Posterior (p50): μ ≈ −10.231, σ ≈ 0.245. Δlog Z summary: mean ≈ −215.0, median ≈ −468.4, p16 ≈ −622.4, p84 ≈ 74.75 (N=118).
+- Repro commands are documented in README under “Hierarchical a0 (SPARC sample ≥100) — completed”.
+
 ## Update (2025-09-07): Item A progress — metric lensing and PPN (no α_lens_ph)
 
 - Metric-only lensing path implemented in the orchestrator. From the same xi-based dynamics (Φ=Ψ, c_T=1), we forward-predict:
@@ -238,4 +259,14 @@ Notes
     --lensing-sample-csv docs/lensing_targets.csv \
     --metric-lensing-only --density-profile sersic --write-ppn-table
   ```
+
+---
+
+## Update (2025-09-08): Item A.3 — Local-universe (PPN, Solar bands, wide binaries)
+
+- PPN table export (γ, β, α1, α2) implemented for the adopted Φ=Ψ, c_T=1 subclass; orchestrator writes results/next_steps/<run>/ppn_table.csv when --write-ppn-table is set.
+- Solar-System posterior bands: orchestrator now samples NPZ posteriors (if present) to emit 16–84% credible bands for |ΔG/G| at 1–30 AU (results/next_steps/<run>/solar_system_posterior_bands.csv) and overlays them on the Solar figure.
+- Wide-binary prediction: added scripts/analyze_wide_binaries.py to generate a forward theory curve (sqrt(ξ) − 1 vs separation) and optional overlay from a local CSV.
+  - Outputs: results/next_steps/<run>/wide_binaries_pred.csv and images/next_steps/<run>/wide_binaries_pred.png.
+  - How-to: see docs/wide_binaries.md.
 

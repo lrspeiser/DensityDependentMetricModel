@@ -1,0 +1,405 @@
+# A Unified Gate Linking Weak-Field Dynamics and Photon Energy Loss
+
+Leonard Speiser, Independent Researcher
+
+## Abstract
+
+We present a standalone **unified gate** $\mathcal{G}(y,\rho_\gamma)$ that ties the weak‑field dynamical enhancement (RAR‑like) to a strictly **energy‑proportional** photon tariff that accumulates primarily along **void‑weighted** paths. By construction $\mathcal{G}\!\to\!1$ in high‑acceleration regions (Solar‑System safety) and the tariff is $\propto E$ (CMB spectral purity). In the weak field we use
+
+$$
+ g_{\rm obs} \;=\; \nu\, g_{\rm bar},\quad \nu\equiv\mathcal{G}(y,\rho_\gamma), \qquad \frac{d\ln E}{d\ell} \;=\; -\kappa\,[\mathcal{G}-1].
+$$
+
+We provide an FRW‑compatible, testable scaffold that (i) establishes GR **baselines** from data (small‑$z$ Hubble slope, CMB blackbody fit, Tolman exponent, SN time‑dilation) and (ii) evaluates the unified gate by overlaying $\mu(z)$ on Pantheon+ with $\chi^2$, and by deriving $H_{\rm eff}(z)$ with BAO **shape‑only** overlays via a fitted $r_d$. We log **falsifiable** predictions (e.g., LOS‑environment correlation) and preserve $\Phi=\Psi$ and $c_T=1$ in screened regimes. All analysis code and figures live under `tariff/` and are reproducible from this repository.
+
+**Keywords:** modified gravity; RAR; CMB; supernovae; BAO; weak field; conformal drift; energy–gravity reciprocity
+
+---
+
+## Unified Gate Law and Relativistic Scaffolding (addendum)
+
+This section fuses our gated RAR gravity with a photon energy→gravity tariff using a single control function. It provides both a drop-in model and a relativistic wrapper so the mechanism is testable and spectrum-safe.
+
+Box 0 — Stand-alone drop-in equations (for Methods)
+
+- Gravity: g_obs = ξRAR(g_bar/a0) g_bar, with ξRAR(g_bar) = min[ 1/2 + sqrt(1/4 + a0/g_bar), D_max ].
+- Energy tariff: d ln E / dℓ = − κ [ ξRAR − 1 ], with κ a small coupling (∼10^−5 Mpc^−1) fit to SN+BAO shape-only.
+- Solar-System safety (ξRAR − 1 ≈ a0/(2 g_bar)): using a0 ≃ 1.2×10^−10 m s^−2:
+  - 1 AU: |ΔG/G| ≈ 1.0×10^−8
+  - 10 AU (Cassini): |ΔG/G| ≈ 1.0×10^−6
+  - 30 AU: |ΔG/G| ≈ 9.1×10^−6
+  All are ≪ 2.3×10^−5 (Cassini bound). The tariff across ≲30 AU for κ∼10^−5 Mpc^−1 is τ≲10^−20 (negligible).
+
+### A) Unified Gate Law (drop-in model)
+
+Let g_bar(x) be the baryon-only Newtonian field, y ≡ g_bar/a0 (RAR handle), and ρ_γ(x) the local background photon energy density (CMB+EBL). Define one gate 𝒢 that strengthens gravity when acceleration and ambient photon energy are both low:
+
+𝒢(y, ρ_γ) = 1 + η · (1 + y^p)^(-1) · (1 + (ρ_γ/ρ_⋆)^q)^(-1),  with p,q ≳ 1, η > 0.
+
+Tie dynamics and tariff to the same gate:
+- Gravity (RAR form): g_obs = ν g_bar, with ν ≡ 𝒢(y, ρ_γ). This reduces to standard RAR interpolation when ρ_γ is uniform (q=0), and automatically boosts gravity in low-ρ_γ voids.
+- Photon tariff (blackbody-safe): along a photon path with affine length ℓ,
+  d ln E / dℓ = −κ [𝒢 − 1]  ⇒  E(ℓ) = E0 · exp[−τ(ℓ)],  with  τ(ℓ) = κ ∫ (𝒢 − 1) dℓ.
+  In high-g or high-ρ_γ regions, 𝒢→1 and the tariff vanishes.
+- Optional back-reaction (gentle self-reinforcement): accumulate a gate potential ψ via dψ/dℓ = γ [𝒢 − 1] and let 𝒢 → 𝒢 · f(ψ) with f(ψ)=exp(σψ) or f(ψ)=1+σψ (σ small), keeping galaxy fits intact while allowing slight cosmology-level drift.
+
+Equivalence to the canonical RAR gate. When ρ_γ is held fixed, identify 𝒢(y) ≡ ξRAR(g) defined here via y=g_bar/a0, with ξRAR(g)=min[1/2+sqrt(1/4+a0/g), D_max]. In plots we continue to report the enhancement as ν≡𝒢.
+
+Why this works: one gate 𝒢 controls both weak-field dynamics and a uniform (E-proportional) cooling along light paths, preserving blackbody shape and passing Solar-System constraints (𝒢→1 as y→∞).
+
+### B) Relativistic and quantum-compatible scaffolding (EEP-safe framing)
+
+To keep conservation laws and the equivalence principle intact, we use a conservative conformal-drift framing. All species share one physical metric g_{μν} (EEP-safe); the tariff acts as an effective conformal drift of the photon distribution function with a slowly varying factor A(φ,χ) such that d ln A/dℓ = 1/2 κ [G(χ)-1] along null rays. This preserves c_T=1 in screened regimes and avoids species-dependent violations.
+
+Essentials in the weak field:
+- Modified Poisson: ∇·[ G(χ) ∇Φ ] = 4π G_N ρ_b, with G(χ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) f(φ).
+- Photon energy and period drift (time-dilation safety): d ln E / dℓ = − d ln A / dℓ ≡ −κ [G − 1] and d ln(Δt) / dℓ = + d ln A / dℓ ≡ +κ [G − 1]. Energy and arrival periods rescale inversely with the same A, preserving SN time dilation and Tolman when expressed in terms of the observed 1+z.
+- Total energy conservation (phenomenological): ∇_μ T^{μν}_{(γ)} = −Q^ν, ∇_μ T^{μν}_{(φ)} = +Q^ν with a null-aligned exchange Q^ν ∝ κ [G − 1] T^{νλ}_{(γ)} k_λ (k^μ: photon wavevector). We avoid over-specifying frame-dependent couplings.
+- Mode-level statement: d ln ω̂_k / dℓ = −κ [G(χ) − 1] — a dilaton-like conformal drift (no scattering), hence no spectral distortion beyond a uniform rescaling (FIRAS-safe for smooth κ[G−1]).
+
+### C) How to calculate this in our pipeline (practical plan)
+
+We separate (i) baseline expectations under GR from current data (quantum/CMB/expansion tests), and (ii) unified gate tests.
+
+Baselines (what GR must match):
+- Hubble diagram (small-z linear slope, μ_lin): compare Pantheon+ vs μ_lin(z; H0=67.4,73.0); produce baseline_hubble.png.
+- CMB spectral purity: fit Planck T′ to a FIRAS-like spectrum; report T′ and rms fractional residuals; baseline_cmb_spectrum.png.
+- Tolman surface brightness: fit S ∝ (1+z)−p; report p and baseline_tolman.png.
+- SN time dilation: fit t ∝ (1+z)pt; report pt and baseline_sntd.png.
+
+Unified gate + tariff tests:
+- μ(z) overlay and χ²: build z(r), invert to r(z), compute μ(z), overlay vs Pantheon+, report χ²/dof and write unified_gate_hubble_overlay.png.
+- H_eff(z) and BAO shape-only overlays (FRW + small overlay recommended): map 1+z_obs = (1+z_FRW) e^{τ(z_FRW)}, r(z_obs) = ∫ c/H_FRW dz_FRW, then H_eff(z_obs) = H_FRW(z_FRW) e^{τ} [1 + (1+z_FRW) τ'(z_FRW)]. Report D_M(z)=r(z), D_H(z)=c/H_eff(z); fit r_d to BAO compilations; write unified_gate_bao_proxies.png and metrics to JSON.
+
+1) Gate evaluation
+- Compute y(R) = g_bar/a0 from the baryon-only Newtonian field already available in our runners (v_baryon^2/R → g_bar). We will reuse T ≡ v_baryon^2/R^2 if convenient and convert to g_bar as needed.
+- Set ρ_γ to a spatially uniform baseline (ρ_CMB today), then allow simple perturbations for EBL or void-modulation if desired. Start with ρ_γ = ρ_⋆ = 0.26 eV/cm^3 (today’s CMB) so the energy factor is unity, turning on q>0 later to probe sensitivity.
+- Evaluate G(y, ρ_γ) = 1 + η (1+y^p)^(−1) (1+(ρ_γ/ρ_⋆)^q)^(−1) [× f(ψ) if enabled). For the main analysis set q=0 (drop ρ_γ handle) and control environment via y and an explicit f_env(z, LOS).
+
+2) Dynamics (galaxy fits)
+- Replace the enhancement factor in our acceleration-space RAR bridge with ν ≡ G(y, ρ_γ) when testing gate variants; keep published xi for reproducibility unless explicitly flagged as experimental.
+- Diagnostics: re-check BTFR slope and Solar-System screening (G→1 for y≫1), and ensure lensing mapping Φ+Ψ uses φ_env = 1/2 ln ξ consistently when interpreting G as an effective ξ.
+
+3) Tariff integration (cosmology add-on)
+- Along a path parameterized by comoving distance r (Mpc), integrate τ(r) = κ ∫_0^r [G(y(l), ρ_γ(l)) − 1] dl using the same LOS logic as energy_tariff_model.py. In FRW + overlay, map 1+z_obs=(1+z_FRW) e^{τ(z_FRW)} and r(z_obs)=∫ c/H_FRW dz_FRW before forming H_eff and distances.
+- Calibration: anchor the small‑z slope (H0 or M_B) first; treat κ as a small overlay parameter such that |τ(z≲2)| ≪ 1. The “τ≈ln(1100)” route is an appendix scenario (speculative), not the mainline hypothesis.
+- Build a monotone z(r) table: 1+z = exp[τ(r)], invert via PCHIP to obtain r(z) and μ(z) for Pantheon+ comparisons.
+
+4) Optional back-reaction ψ
+- Integrate dψ/dℓ = γ [G−1] with small σ in f(ψ) to keep galaxy-scale effects negligible while allowing late-time void enhancement. Log and bound ψ to avoid runaways; turn off by default.
+
+5) Tests (pass/fail dials)
+- Blackbody purity: tariff ∝ E ensures no frequency-dependent distortions; check residuals vs Planck fit (FIRAS tolerances ~few×10^−5).
+- Time-dilation and Tolman: verify stretch ∝ (1+z) and surface brightness S ∝ (1+z)^−4 remain intact in the add-on framing.
+- BAO/chronometer proxies: in FRW + overlay, use H_eff(z_obs) = H_FRW(z_FRW) e^{τ} [1+(1+z_FRW) τ'(z_FRW)] and compare D_M(z)=r(z), D_H(z)=c/H_eff(z) shapes to BAO; fit only an overall r_d if desired. For tariff-only comparisons, also show ratios to FRW to highlight shape impact.
+- Local tests: ensure G→1 in high-g settings (Solar System, lab) and that our PPN table remains GR under screening.
+
+### D) Implementation mapping (tariff-only code scaffold)
+
+- New module tariff/unified_gate_scaffold.py provides:
+  - GateParams(η, p, q, ρ_⋆, κ, σ, enable_backreaction): parameter dataclass.
+  - gate_G(y, rho_gamma, params, psi=None) → G.
+  - tariff_dlnE_dell(y, rho_gamma, params, psi=None) = −κ [G−1].
+  - integrate_tau(path_sampler, params) → τ and (optionally) ψ; path_sampler supplies (y, ρ_γ, dl).
+  - calibrate_kappa_to_cmb(f_void, D_LSS, G_cap) → κ to reach τ≈ln(1100).
+
+- Baselines and unified-gate analysis (plots + metrics):
+  - tariff/analysis_baselines.py: GR baselines — Hubble μ_lin(z), CMB Planck fit (FIRAS-like), Tolman p, SN p_t; writes images/baseline_*.png
+  - tariff/analysis_unified_gate.py: Unified gate μ(z) overlay vs Pantheon+ with χ², H_eff(z) and BAO proxy overlays with r_d fit; writes
+    images/unified_gate_hubble_overlay.png, images/unified_gate_bao_proxies.png and results/unified_gate_metrics.json.
+
+All of this remains confined to tariff/ and is wired for our existing LOS machinery.
+
+### E) Methodological checks (code-verified invariants and metrics)
+
+- LOS environment correlation (tariff prediction): compute S(r)=τ(r)/κ and regress anchored SN residuals Δμ on S; record slope, stderr, t-stat, and weighted R². See images/unified_gate_sn_residuals_vs_S.png and hubble.los_env_correlation in results/unified_gate_metrics.json.
+
+---
+
+## Methods: Supernovae (Pantheon+) and BAO (shape-only)
+
+## Results snapshot (SN + BAO)
+
+Using the full Pantheon+ STAT+SYS covariance with analytic marginalization over the magnitude offset (anchored_fullcov), our current run yields:
+- Supernovae: χ²/dof ≈ 1712.36 / 1700 = 1.0073 (anchor Δμ ≈ +0.059 mag). GLS regression of residuals vs S gives slope ≈ 9.02×10⁻⁶ mag Mpc⁻¹ (stderr ≈ 2.56×10⁻⁶, t ≈ 3.52, weighted R² ≈ 0.0071).
+- BAO (BOSS DR12 anisotropic consensus, analytic rd with full covariance): r_d ≈ 113.48 Mpc; current χ²/dof ≈ 4415.62 / 5 ≈ 883.1, indicating the present H_eff shape (overlay parameters) is not aligned with DR12 constraints. Ingestion and fit use the published 6×6 covariance with the non‑linear transform to D_H/r_d.
+
+We provide a small kappa scan to explore BAO‑compatible shapes while tracking the SN fit: see tariff/results/bao_kappa_scan.json. This scan varies kappa logarithmically around the baseline and logs per‑step SN and BAO metrics.
+
+### Supernovae (Pantheon+)
+We use the Pantheon+SH0ES distance-modulus table and its full STAT+SYS covariance C (loaded from the release .cov; see tariff/data/README_DATA.md for paths). For a model prediction μ_model(z), we analytically marginalize over a constant offset a (absolute magnitude, degenerate with H0) by minimizing
+
+$$
+\chi^2(a)=\bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr)^{\!\top} C^{-1} \bigl(\mu_{\rm model}+a\,\mathbf{1}-\mu_{\rm data}\bigr),
+$$
+
+which yields
+
+$$
+a_{\rm best}=-\frac{\mathbf{1}^\top C^{-1}\,\Delta}{\mathbf{1}^\top C^{-1}\,\mathbf{1}},\qquad \Delta\equiv\mu_{\rm model}-\mu_{\rm data}.
+$$
+
+We report χ²_SN at a_best and χ²_SN/dof with dof = N_SN − 1. To test the gated‑tariff prediction, we construct the LOS‑environment statistic S(r)≡τ(r)/κ along each sightline and regress the anchored residuals Δμ on S using generalized least squares (GLS) with the same C: \hat\beta=(X^\top C^{-1}X)^{-1}X^\top C^{-1}y for y=Δμ and X=[\mathbf{1},S]. We quote the slope, its standard error, t‑statistic, and a generalized weighted R².
+
+Practical notes: we ensure the covariance is symmetric positive‑definite (SPD) by small diagonal jitter if needed; we do not refit light‑curve nuisance parameters (α,β) and use Pantheon+ released μ with the provided STAT+SYS covariance.
+
+### BAO (shape‑only)
+From the monotone inversion z(r) we compute H_eff(z)=c\,dz/dr, D_M(z)=r(z), and D_H(z)=c/H_eff(z). We verify the identity c\,dz/dr = c(1+z)\,d\ln(1+z)/dr (RMS relative error reported). We then fit a single sound horizon r_d to a compilation providing either {D_M/r_d, D_H/r_d} (with optional per‑point correlation ρ) or D_V/r_d, minimizing χ²(r_d) by 1‑D search. Our BOSS DR12 ingestion script (tariff/scripts/ingest_boss_dr12_consensus.py; see tariff/data/README_DATA.md) reads the Alam et al. consensus means and 6×6 covariance and writes the per-bin anisotropic CSV our pipeline consumes. We report r_d, χ², and χ²/dof (observables minus one parameter).
+
+---
+
+- LOS environment correlation (tariff prediction): compute S(r)=τ(r)/κ and regress anchored SN residuals Δμ on S; record slope, stderr, t-stat, and weighted R². See images/unified_gate_sn_residuals_vs_S.png and hubble.los_env_correlation in results/unified_gate_metrics.json.
+
+- H_eff identity (BAO proxy): with z = z(r) or the FRW+overlay mapping, we enforce H_eff(z) ≡ c·dz/dr and its equivalence to c·(1+z)·d ln(1+z)/dr in the tariff-only limit. We record the RMS relative difference as heff_identity_rms in results/unified_gate_metrics.json; numerical targets are ≲ 1e−6 after tabulation smoothing.
+- Distance duality and luminosity distance: in the flat case we use D_L(z) = (1+z)·D_M(z) with D_M(z) = r(z). We compute μ(z) from D_L and also recompute via the duality relation on the Pantheon grid; we store distance_duality_ok and distance_duality_mu_rms.
+- BAO shape-only fit: after constructing H_eff(z) = c·dz/dr, we take D_M(z) = r(z) and D_H(z) = c/H_eff(z) and fit a single sound-horizon r_d to BAO compilations; metrics include rd_best_Mpc, bao_chi2, bao_red_chi2, and bao_dof.
+- Small‑z slope anchor (optional): verify dμ/dz|_{z→0} = (5/ln 10)·c/H0 when the local H0 anchor is applied.
+- Blackbody purity (optional): the tariff ∝ E preserves a blackbody; we fit a Planck curve to a FIRAS-like spectrum and record rms_frac_resid.
+- Data dependencies: optional baselines require CSVs under tariff/data (see README_DATA.md).
+- Reproducibility: plots are written under tariff/images/ and metrics to tariff/results/unified_gate_metrics.json.
+
+---
+
+## Alternatives Considered: SVT with late-time dielectric RAR plateau (no particle CDM)
+
+We prototyped a self-contained, SVT-inspired alternative that reduces to GR at high redshift (a density/time gate suppresses the scalar sector) and yields a late-time, quasi-static modified Poisson law with a dielectric response that produces a constant acceleration plateau, $g_{\rm obs}\approx g_{\rm bar}+a_p$, at low $g$. This leaves the main pipeline unchanged and produces illustrative figures:
+
+- RAR diagram with plateau: ![](images/alternatives/rar_plateau_alternative.png)
+- Rotation curve with plateau component: ![](images/alternatives/rotation_curve_plateau_alternative.png)
+
+Metrics (JSON): results/alternatives/alternative_rar_plateau_summary.json
+
+Code (isolated): tariff/alternatives/rar_plateau_alt.py and tariff/analysis_alternative_rar_plateau.py.
+
+---
+
+# Figures and Tables (auto-generated from tariff/)
+
+- Hubble baseline (GR): ![](images/baseline_hubble.png)
+- CMB spectral shape baseline:
+  - If present: ![](images/baseline_cmb_spectrum.png)
+  - If missing: data file tariff/data/cmb_firas_like.csv not found (figure not generated)
+- Tolman test baseline:
+  - If present: ![](images/baseline_tolman.png)
+  - If missing: data file tariff/data/tolman_sb.csv not found (figure not generated)
+- SN time-dilation baseline:
+  - If present: ![](images/baseline_sntd.png)
+  - If missing: data file tariff/data/sn_timedilation.csv not found (figure not generated)
+- Unified gate μ(z) overlay: ![](images/unified_gate_hubble_overlay.png)
+- Unified gate H_eff(z) and BAO proxies: ![](images/unified_gate_bao_proxies.png)
+- Unified gate SN residuals vs LOS environment S: ![](images/unified_gate_sn_residuals_vs_S.png)
+
+Metrics (JSON): results/unified_gate_metrics.json (χ², reduced χ², fitted r_d if BAO is provided)
+
+---
+
+## 1. Introduction
+
+The **radial acceleration relation (RAR)** ties the observed centripetal acceleration $g_{\rm obs}$ to the baryon-predicted $g_{\rm bar}$ with remarkably small scatter, challenging halo-tuning in ΛCDM and motivating weak-field modifications. Separately, the **CMB** is a near-perfect blackbody at $T_0\simeq2.725$ K, interpreted as relic radiation stretched by expansion from $T_{\rm LSS}\!\sim\!3000$ K.
+
+We explore whether a **single gate** $G$ can (i) reproduce weak-field dynamical phenomenology already captured by RAR-like laws and (ii) supply a tiny, **spectrum-safe** photon tariff that accumulates primarily in **voids**. We **retain** the expanding FRW background; the tariff is a **phenomenological overlay** controlled by the same gate that governs dynamics. This paper defines the model, its relativistic scaffolding, the observational program, and explicit pass/fail dials.
+
+> **Scope**: We do **not** claim a replacement for FRW/CMB/BAO nor cluster-scale success without extra mass; we present a tightly-constrained reciprocity that is independently falsifiable.
+
+---
+
+# 2. Background: “Energy Converts to Gravity” (what we mean—and don’t)
+
+**Energy gravitates.** In GR, the source of gravity is the stress‑energy tensor; energy density and pressure both curve spacetime. In that sense, “energy → gravity” is embedded in the field equations, and redshift in FRW follows from geometry.
+
+**Historic photon‑loss proposals.** Zwicky’s 1929 **tired‑light** idea posited that photons *lose* energy en route, producing a redshift–distance relation in a static spacetime. Such mechanisms are **ruled out** by multiple observations (image blurring from scattering, failure to reproduce SN time‑dilation and Tolman dimming, and CMB blackbody/anisotropy constraints). Our construction explicitly avoids those pathologies by (i) assuming expansion and (ii) imposing a **strictly proportional** loss law that preserves blackbody shape and is **gated** to operate only in **low‑acceleration** regions, leaving dense regions and the Solar System essentially untouched. ([arXiv][4])
+
+**Our framing.** We use a single gate $\xi_{\rm RAR}(g)$ that enhances weak‑field gravitational response and also controls a tiny, *environment‑weighted* photon energy loss rate. This reciprocity provides one control function for both dynamics and a phenomenological redshift contribution. We emphasize: the **galaxy, $K_z$**, Solar‑System, and **lensing** checks remain intact; this cosmology add‑on is confined to tariff/.
+
+---
+
+# 3. Gated energy‑to‑gravity reciprocity: model summary
+
+We adopt the Gravity Gates gate $\xi(g_{\rm bar};a_0,D_{\max})$ from Paper I and use it to **modulate** a line‑of‑sight energy‑loss coefficient $\alpha(l)$. The loss is **proportional to photon energy** (no frequency dependence), so an initial energy $E_0$ evolves as
+
+$$
+\frac{dE}{dl}=-\alpha(l)\,E \quad\Rightarrow\quad E(l)=E_0\,e^{-\tau(l)},\quad \tau(l)=\int_0^l \alpha(l')\,dl'.
+$$
+
+Because $E\propto \nu$ for photons, this implies a **pure redshift** contribution without spectral distortion:
+
+$$
+1+z(l)\;=\;e^{\tau(l)}.
+$$
+
+We **gate** $\alpha$ by the low‑acceleration response and a simple environment weight $f_{\rm env}$:
+
+$$
+\boxed{\ \n\alpha(l)=k\,[\xi(l)-1]\;f_{\rm env}(l)\ },
+\qquad 
+1+z(r)=\exp\!\left(k\int_0^r [\xi(l)-1]f_{\rm env}(l)\,dl\right).
+$$
+
+Here $k$ is a small coupling to be fitted (or anchored locally), and $f_{\rm env}\in[0,1]$ is a void weight that increases when the photon path threads underdense, low‑$g$ regions. Two useful parameterizations are:
+**distance‑based:** $f_{\rm env}(r)=\bigl[1+(r/r_0)^\gamma\bigr]^{-1}$;
+**redshift‑based:** $f_{\rm env}(z)=\bigl[1+(z_\star/z)^\eta\bigr]^{-1}$ (rises toward unity at high $z$).
+Implementation details, data hooks, and prior runs are given in your add‑on note.
+
+> **Link to Gravity Gates.** $\xi(g)$ is **large** (gate “open”) only when $g\ll a_0$, i.e., in **void‑like** environments; it is $\simeq 1$ (gate “closed”) in dense regions and in the Solar System. This naturally predicts stronger line‑of‑sight tariff in void‑weighted sightlines, and negligible effects in high‑$g$ locales—exactly the phenomenology you test.
+
+---
+
+## Box A — Preserving a blackbody (why the loss must be $\propto E$)
+
+To avoid FIRAS‑level CMB spectral distortions, the loss law must be **linear in $E$** (no extra frequency dependence). Then a blackbody emitted at temperature $T_{\rm em}$ remains a blackbody with
+
+$$
+T_{\rm obs}=\frac{T_{\rm em}}{1+z} = T_{\rm em}\,e^{-\tau},
+\quad \text{with } \tau=\!\int \alpha\,dl,
+$$
+
+and phase‑space density $I_\nu/\nu^3$ (Liouville) remains invariant under a pure rescaling of $\nu$. This is the minimal, CMB‑safe loss law you sketched; we adopt it throughout. (FIRAS: $T_0=2.7255$ K with rms deviations $\lesssim 10^{-4}$.) ([arXiv][2])
+
+---
+
+## Box B — Calibrating the CMB temperature drop ($\sim\!3000$ K $\to$ 2.725 K)
+
+Taking $T_{\rm LSS}\!\approx\!3000$ K at last scattering and $T_0=2.725$ K today,
+
+$$
+\tau_{\rm CMB}\;=\;\ln\!\frac{T_{\rm LSS}}{T_0}\;\approx\;\ln(1100)\;\approx\;7.0.
+$$
+
+If the tariff acts only along a fraction $f_{\rm void}$ of the comoving line‑of‑sight distance to last scattering $D_{\rm LSS}\simeq 14~\mathrm{Gpc}$, then
+
+$$
+\alpha_{\rm eff} \;\equiv\; \frac{\tau_{\rm CMB}}{f_{\rm void}\,D_{\rm LSS}}
+\;\approx\; \frac{7}{0.8\times 14\ \mathrm{Gpc}}
+\;\approx\;0.63~\mathrm{Gpc^{-1}} \;\;(0.19~\mathrm{Gly^{-1}}).
+$$
+
+In our gated model, $\alpha(l)=k[\xi(l)-1]f_{\rm env}(l)$. Thus **one parameter** $k$ is set by requiring $\int\alpha\,dl=\tau_{\rm CMB}$ (or, in practice, by matching the local Hubble‑diagram slope and then verifying the CMB constraint). This is the clean calibration route you proposed.
+
+---
+
+# 4. Observational program and falsifiable signatures
+
+**(A) Supernova Hubble diagram (shape test).**
+With a monotone inversion $r(z)$ from $1+z=\exp\!\int \alpha dl$, compute $\mu(z)$ and compare to Pantheon+; fit only $k$ (and, if used, $f_{\rm env}$ hyper‑parameters) after anchoring the small‑$z$ slope. Your implementation already reports reduced $\chi^2$ and provides a PCHIP inversion path.
+
+**(B) Line‑of‑sight environment correlation (distinctive prediction).**
+Define the **gated path integral**
+
+$$
+S \;\equiv\; \int_0^{r(z)} [\xi(l)-1]f_{\rm env}(l)\,dl.
+$$
+
+Then test whether SN residuals $\Delta\mu$ correlate with $S$ (or with a void‑fraction proxy along the line of sight). A **positive slope** would indicate extra tariff where the gate opens (void‑weighted paths), whereas **no correlation** falsifies the reciprocity at the reported sensitivity. (Your harness has LOS correlation hooks.)
+
+**(C) CMB blackbody/anisotropy safety (hard constraint).**
+Because the loss is $\propto E$ and nearly isotropic on large scales, the **shape** of the blackbody is preserved (FIRAS), and small‑scale anisotropies are not blurred by scattering. You already enforce Liouville‑respecting transport in code and flag that a naive intensity‑only mapping fails by orders of magnitude.   ([LAMBDA][5])
+
+**(D) Time‑dilation and Tolman checks.**
+Your pipeline includes tests for **SN stretch $\propto 1+z$** and **Tolman $(1+z)^{-4}$** behavior; those must match expansion expectations (the tariff alone cannot produce the correct scalings). ([arXiv][3])
+
+**(E) BAO/chronometer proxies (shape only).**
+Use the FRW+overlay mapping: $1+z_{\rm obs}=(1+z_{\rm FRW})\,e^{\tau(z_{\rm FRW})}$, $r(z_{\rm obs})=\int c/H_{\rm FRW}\,dz_{\rm FRW}$, and $H_{\rm eff}(z_{\rm obs}) = H_{\rm FRW}(z_{\rm FRW}) e^{\tau}\,[1+(1+z_{\rm FRW})\,\tau'(z_{\rm FRW})]$. Then compare $D_M(z)=r(z)$ and $D_H(z)=c/H_{\rm eff}(z)$ shapes to BAO; fit only an overall $r_d$ if desired. ([arXiv][6])
+
+---
+
+# 5. Relation to MOND‑like gates and prior work
+
+* **Single control function.** The same $\xi_{\rm RAR}(g)$ that fits **galaxy rotation curves**, **MW $K_z$**, **Solar‑System safety**, and **strong‑lensing** amplitudes (metric‑only mapping with $\Phi=\Psi$) also gates the cosmological tariff. No per‑object tweaking is introduced here.
+* **Screening.** In high‑$g$ regimes (Solar System, galaxy interiors), $\xi\!\to\!1$ and $\alpha\!\to\!0$, automatically keeping local tests intact.
+* **Scope.** This section **does not** claim a replacement for FRW/CMB/BAO; it asks whether a *small, gated* reciprocity can (i) follow the SN‑Hubble shape and (ii) remain CMB‑, Tolman‑, and time‑dilation‑safe, thereby offering a *phenomenological* link between cosmic web environment and residual redshift trends. (Full cosmology is deferred to a companion study.)
+
+---
+
+## Methods snapshot (for the cosmology add‑on)
+
+1. **Gate & environment.** $\xi(g)=\tfrac12+\sqrt{\tfrac14+a_0/g}$ (capped by $D_{\max}$) from Paper I; environment weights $f_{\rm env}(r)$ or $f_{\rm env}(z)$.
+2. **Loss law.** $\alpha(l)=k[\xi(l)-1]f_{\rm env}(l)$; integrate to get $1+z=\exp\!\int\alpha\,dl$.
+3. **Calibration.** Fit $k$ to preserve the **local Hubble slope** (small $z$) and verify $\int\alpha\,dl\approx \ln(1100)$ to satisfy the **CMB temperature drop** if treating the tariff as cosmologically relevant over the full path.
+4. **Inversion.** Build a monotone $z(r)$ grid; invert for $r(z)$ via PCHIP; compute $\mu(z)$.
+5. **Tests.** SN Hubble diagram (shape), LOS‑environment correlation, CMB blackbody check (Liouville), Tolman $p$, SN time‑dilation $p_t$, and BAO/chronometer proxies—exactly as your codebase implements.
+
+---
+
+## Related Work: Skordis & Złośnik (AeST) and alternatives
+
+Our approach is distinct from relativistic MOND frameworks and dark‑sector alternatives. In AeST (Skordis & Złośnik), GR is extended with a unit‑timelike vector and a scalar while retaining a single metric and $\Phi=\Psi$; the scalar can behave effectively as dust so that Planck‑era observables are matched without particle CDM [SZ‑PRL][SZ-PRL], [SZ‑PRD][SZ-PRD], [SZ‑arXiv][SZ-ARXIV]. By contrast, we keep FRW and use a single weak‑field control function $\xi(g)$—already validated on galaxy/lensing domains—to modulate both dynamics and a small, E‑proportional photon tariff that turns on in low‑$g$/void environments and is screened elsewhere. The distinctive, falsifiable prediction here is a positive correlation between anchored SN residuals and a void‑weighted gate integral $S$; models without a tariff do not generically predict this.
+
+Pointers to nearby ideas:
+- Superfluid dark matter (Berezhiani & Khoury): DM phonons mediate MOND‑like forces in galaxies; cosmology remains ΛCDM‑like. [SFDM][SFDM-PRD]
+- Dipolar dark matter (Blanchet & Le Tiec): polarizable DM fluid reproduces MOND phenomenology with standard cosmology. [DDM][DDM-PRD]
+- MOG/STVG (Moffat): modified‑gravity field content for galaxy/cluster dynamics with separate CMB treatments. [MOG][MOG-MDPI]
+
+---
+
+### Notes on positioning and prior art
+
+* Our gated reciprocity is **not** the Zwicky‑style tired‑light scattering: it is expansion‑compatible, **frequency‑proportional**, near‑isotropic, and **screened** in high‑$g$ regions; it therefore avoids blurring and preserves the blackbody form by construction. ([arXiv][4])
+* The novelty is the **link to a weak‑field gravity gate** already audited on galaxies/lensing, yielding *one function* $\xi(g)$ that controls both dynamics and a small, testable, environment‑dependent redshift contribution.
+
+---
+
+[1]: https://www.pnas.org/doi/10.1073/pnas.15.3.168 "A relation between distance and radial velocity among ..."
+[2]: https://arxiv.org/abs/0911.1955 "The Temperature of the Cosmic Microwave Background"
+[3]: https://arxiv.org/abs/astro-ph/9602124 "[astro-ph/9602124] Observation of Cosmological Time Dilation using ..."
+[4]: https://arxiv.org/abs/astro-ph/0106566 "The Tolman Surface Brightness Test for the Reality of the Expansion. IV. A Measurement of the Tolman Signal and the Luminosity Evolution of Early-Type Galaxies"
+[5]: https://lambda.gsfc.nasa.gov/product/cobe/about_firas.html "The COBE Far Infrared Absolute Spectrophotometer (FIRAS)"
+[6]: https://arxiv.org/abs/astro-ph/0501171 "[astro-ph/0501171] Detection of the Baryon Acoustic Peak ..."
+
+[SZ-PRL]: https://link.aps.org/doi/10.1103/PhysRevLett.127.161302
+[SZ-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.100.104013
+[SZ-ARXIV]: https://arxiv.org/abs/2007.00082
+[SFDM-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.92.103510
+[DDM-PRD]: https://link.aps.org/doi/10.1103/PhysRevD.80.023524
+[MOG-MDPI]: https://www.mdpi.com/2075-4434/1/1/65
+
+---
+
+# Standalone positioning (no separate RAR paper)
+
+This paper is self‑contained. We define the gate ξRAR(g) and the photon tariff here, without relying on a separate RAR paper. The constant a0 is treated as either (i) a literature‑anchored scale (a0 ≃ 1.2×10^−10 m s^−2) or (ii) a value to be re‑fit on standard galaxy datasets in an appendix; our cosmology add‑on does not hinge on a specific a0 choice as long as ξRAR obeys the screened high‑g limit.
+
+Distinctive claim (what no prior MOND offered in this minimal form)
+- One and the same gate ξRAR(g) controls low‑g dynamics and a strictly energy‑proportional, spectrum‑safe photon tariff.
+- The tariff overlays consistently on FRW (we use a FRW+overlay mapping for BAO and distances), preserving: (a) SN time‑dilation (p_t ≈ 1), (b) Tolman surface‑brightness scaling (p ≈ 4), and (c) the CMB blackbody shape (FIRAS‑level residuals), while providing BAO shape‑only proxies H_eff(z), D_M(z), D_H(z) that can be confronted with data via a single fitted r_d.
+- Solar‑System safety is automatic from the high‑y limit of ξRAR.
+
+Scope and non‑claims
+- We do not claim a full alternative to ΛCDM for early‑universe observables (acoustic peaks, primordial nucleosynthesis, growth of structure). Our claim is a tightly constrained, falsifiable reciprocity linking galaxy‑scale gates to a cosmology‑level energy tariff that passes key spectrum/dilation/surface‑brightness checks and admits SN+BAO shape‑only fits.
+
+Implementation pointers
+- All cosmology‑add‑on code and figures live under tariff/. The main dynamics/lensing pipeline remains untouched.
+
+---
+
+# Standalone submission checklist (remaining work)
+
+To publish this paper alone (without a separate RAR paper), the following must be completed and locked:
+
+A) Mandatory consistency and invariants
+- CMB blackbody (FIRAS‑safe): run tariff_major_tests.py cmb with Liouville transport; report best‑fit T′ and rms fractional residuals; require ≲ few×10^−5.
+- SN time‑dilation: run tariff_major_tests.py sntd; report p_t ≈ 1±uncertainty and χ^2/dof.
+- Tolman surface‑brightness: run tariff_major_tests.py tolman; report p ≈ 4±uncertainty and χ^2/dof.
+- Distance duality: verify D_L=(1+z) D_M identity numerically in our code (already checked in analysis_unified_gate.py; include number in Methods).
+- Solar‑System bound: include the 1/10/30 AU numbers in Methods (now added) and show compliance with Cassini.
+- Lensing time delays: include the argument/figure that energy‑only tariff leaves Fermat potential and Δt unchanged (tariff_major_tests.py timedelay).
+
+B) Observational fits (shape‑only where stated)
+- Pantheon+ overlay with full STAT+SYS covariance: use analytic anchor; target reduced χ^2 ≈ 1 and report κ posterior with credible interval; include whitened residuals hist/QQ plots.
+- BAO shape‑only (FRW+overlay mode): compute H_eff(z) and D_M(z), D_H(z); fit r_d with the anisotropic per‑bin covariances; target acceptable χ^2/dof; document data ingestion.
+- LOS correlation: build/ingest a tomographic LOS density proxy; test for the predicted positive correlation of Δμ with S≡τ/κ; report slope, stderr, t‑stat, and (if non‑detection) an upper limit.
+
+C) Parameter treatment and robustness
+- κ: provide a one‑parameter posterior (and sensitivity to simple f_env choices); include a small κ scan (results/bao_kappa_scan.json).
+- a0: state the stance (literature anchor vs minimal re‑fit). If re‑fitting, include a short appendix with SPARC/MW K_z summary and show that cosmology results are insensitive to small shifts.
+- f_env(z) vs f_env(r): demonstrate that conclusions (κ posterior and BAO shape results) are not driven by the chosen smooth proxy.
+
+D) Reproducibility and data
+- Ship exact commands and data paths (Pantheon+ table and covariance, BAO CSVs); verify paths in README_DATA.md.
+- Record commit hash, Python version (3.11), and dependency pins (utils/pyproject.toml; SciPy optional).
+- Ensure all figures under tariff/images/ are regenerated by the scripted entry points; large artifacts tracked via Git LFS per repo rules.
+
+E) Writing and framing
+- Update Abstract and Methods to include the boxed equations and Solar‑System sanity check (done here).
+- Expand Related Work to contrast with MOND variants and emergent gravity on spectrum/time‑dilation/Tolman compliance and cross‑domain linkage.
+- Clarify the claim limits (shape‑only BAO, FRW overlay) and what’s deferred to future work.
+

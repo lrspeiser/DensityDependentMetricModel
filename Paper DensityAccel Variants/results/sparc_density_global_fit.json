@@ -1,0 +1,179 @@
+{
+  "kind": "density",
+  "best": {
+    "kind": "density",
+    "params": {
+      "rho_c": 1e-28,
+      "gamma": 0.8,
+      "xi_max": 50.0
+    },
+    "median_rms": 18.153809015241873
+  },
+  "grid_results": [
+    {
+      "params": {
+        "rho_c": 1e-28,
+        "gamma": 0.8,
+        "xi_max": 50.0
+      },
+      "median_rms": 18.153809015241873
+    },
+    {
+      "params": {
+        "rho_c": 1e-28,
+        "gamma": 1.0,
+        "xi_max": 50.0
+      },
+      "median_rms": 18.782436754017954
+    },
+    {
+      "params": {
+        "rho_c": 1e-28,
+        "gamma": 1.2,
+        "xi_max": 50.0
+      },
+      "median_rms": 19.311037899232097
+    },
+    {
+      "params": {
+        "rho_c": 1e-28,
+        "gamma": 1.5,
+        "xi_max": 50.0
+      },
+      "median_rms": 19.866124625681337
+    },
+    {
+      "params": {
+        "rho_c": 3e-28,
+        "gamma": 0.8,
+        "xi_max": 50.0
+      },
+      "median_rms": 18.20939736082167
+    },
+    {
+      "params": {
+        "rho_c": 3e-28,
+        "gamma": 1.0,
+        "xi_max": 50.0
+      },
+      "median_rms": 18.294231199940384
+    },
+    {
+      "params": {
+        "rho_c": 3e-28,
+        "gamma": 1.2,
+        "xi_max": 50.0
+      },
+      "median_rms": 18.543293382945173
+    },
+    {
+      "params": {
+        "rho_c": 3e-28,
+        "gamma": 1.5,
+        "xi_max": 50.0
+      },
+      "median_rms": 18.904451236817604
+    },
+    {
+      "params": {
+        "rho_c": 1e-27,
+        "gamma": 0.8,
+        "xi_max": 50.0
+      },
+      "median_rms": 20.77513444149059
+    },
+    {
+      "params": {
+        "rho_c": 1e-27,
+        "gamma": 1.0,
+        "xi_max": 50.0
+      },
+      "median_rms": 20.22493329364897
+    },
+    {
+      "params": {
+        "rho_c": 1e-27,
+        "gamma": 1.2,
+        "xi_max": 50.0
+      },
+      "median_rms": 20.189088854908462
+    },
+    {
+      "params": {
+        "rho_c": 1e-27,
+        "gamma": 1.5,
+        "xi_max": 50.0
+      },
+      "median_rms": 20.333664641293215
+    },
+    {
+      "params": {
+        "rho_c": 3e-27,
+        "gamma": 0.8,
+        "xi_max": 50.0
+      },
+      "median_rms": 25.856408584461402
+    },
+    {
+      "params": {
+        "rho_c": 3e-27,
+        "gamma": 1.0,
+        "xi_max": 50.0
+      },
+      "median_rms": 24.7461158263757
+    },
+    {
+      "params": {
+        "rho_c": 3e-27,
+        "gamma": 1.2,
+        "xi_max": 50.0
+      },
+      "median_rms": 24.595228726945834
+    },
+    {
+      "params": {
+        "rho_c": 3e-27,
+        "gamma": 1.5,
+        "xi_max": 50.0
+      },
+      "median_rms": 24.82446973691178
+    },
+    {
+      "params": {
+        "rho_c": 1e-26,
+        "gamma": 0.8,
+        "xi_max": 50.0
+      },
+      "median_rms": 34.092594395130554
+    },
+    {
+      "params": {
+        "rho_c": 1e-26,
+        "gamma": 1.0,
+        "xi_max": 50.0
+      },
+      "median_rms": 32.08081172096088
+    },
+    {
+      "params": {
+        "rho_c": 1e-26,
+        "gamma": 1.2,
+        "xi_max": 50.0
+      },
+      "median_rms": 31.271031105656547
+    },
+    {
+      "params": {
+        "rho_c": 1e-26,
+        "gamma": 1.5,
+        "xi_max": 50.0
+      },
+      "median_rms": 31.091791586761687
+    }
+  ],
+  "galaxies": [
+    "CamB",
+    "D631-7"
+  ],
+  "sigma_floor": 6.0
+}

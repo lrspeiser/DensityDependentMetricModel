@@ -1,0 +1,70 @@
+{
+  "config": {
+    "xmin": 0.05,
+    "xmax": 0.8,
+    "equal_cluster_weight": true,
+    "gate": "density-plateau",
+    "params": {
+      "a0": 1.93e-07,
+      "rho_c": 1e-27,
+      "gamma": 1.5,
+      "zeta": 1.0,
+      "xi_max": 50.0
+    }
+  },
+  "per_cluster": [
+    {
+      "cluster": "Abell 2261",
+      "n_points": 22,
+      "rms_gr_dex": 1.141897084953829,
+      "r200c_kpc": 2548.4189602374045,
+      "rms_gate_dex": 0.8705543300139367
+    },
+    {
+      "cluster": "MACS J0429.6-0253",
+      "n_points": 16,
+      "rms_gr_dex": 1.0696965192989598,
+      "r200c_kpc": 1799.8644426827,
+      "rms_gate_dex": 0.7953707522332463
+    },
+    {
+      "cluster": "MACS J0717.5+3745",
+      "n_points": 36,
+      "rms_gr_dex": 0.8733467325900173,
+      "r200c_kpc": 2385.2270243674266,
+      "rms_gate_dex": 0.6850224055757184
+    },
+    {
+      "cluster": "MACS J1149.5+2223",
+      "n_points": 38,
+      "rms_gr_dex": 0.9725337416623215,
+      "r200c_kpc": 2335.562948880839,
+      "rms_gate_dex": 0.6914471665244164
+    },
+    {
+      "cluster": "MACS J1206.2-0847",
+      "n_points": 33,
+      "rms_gr_dex": 0.9500963104964907,
+      "r200c_kpc": 2181.525489530499,
+      "rms_gate_dex": 0.6484183096302685
+    },
+    {
+      "cluster": "RX J1347.5-1145",
+      "n_points": 31,
+      "rms_gr_dex": 0.9635066816253358,
+      "r200c_kpc": 2684.0153419693593,
+      "rms_gate_dex": 0.6106834777924042
+    },
+    {
+      "cluster": "RX J1532.9+3021",
+      "n_points": 18,
+      "rms_gr_dex": 0.8824197794670924,
+      "r200c_kpc": 1548.4944487267521,
+      "rms_gate_dex": 0.6797370477887608
+    }
+  ],
+  "global": {
+    "median_rms_gr_dex": 0.9635066816253358,
+    "median_rms_gate_dex": 0.6850224055757184
+  }
+}

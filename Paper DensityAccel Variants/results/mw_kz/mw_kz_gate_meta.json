@@ -1,0 +1,11 @@
+{
+  "gate": "density",
+  "params": {
+    "a0": 1.93e-07,
+    "rho_c": 1e-27,
+    "gamma": 1.0,
+    "zeta": 1.0,
+    "Dmax": 50.0
+  },
+  "note": "DG phantom not computed here; this sandbox only records gate config."
+}

@@ -1,0 +1,7 @@
+{
+  "csv_path": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/docs/lensing_targets_slacs.csv",
+  "n_total": 85,
+  "n_with_q": 0,
+  "frac_with_q": 0.0,
+  "circularized_Re_assumed": true
+}

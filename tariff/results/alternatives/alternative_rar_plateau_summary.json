@@ -1,0 +1,13 @@
+{
+  "M_baryon_Msun": 50000000000.0,
+  "params": {
+    "a_p": 1.2e-10,
+    "g_t": 1.2e-10,
+    "m": 3.0
+  },
+  "figures": {
+    "rar": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/alternatives/rar_plateau_alternative.png",
+    "rotation_curve": "/Users/leonardspeiser/Projects/DensityDependentMetricModel/tariff/images/alternatives/rotation_curve_plateau_alternative.png"
+  },
+  "notes": "Toy SVT-inspired plateau model; main pipeline unchanged."
+}

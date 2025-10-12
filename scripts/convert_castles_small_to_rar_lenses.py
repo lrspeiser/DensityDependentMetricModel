@@ -8,11 +8,10 @@ Purpose
 - Uses documented assumptions to derive stellar mass and size when only
   image separation and velocity dispersion are available.
 
-Input CSV (messy CASTLES subset)
-- Expected columns include (not strictly parsed as CSV due to formatting):
-  index, image, lens_name, grade, z_s, z_l, ra_j2000, dec_j2000,
-  E_BV, m_s, m_l, F_GHz_mJy, N_im, size_arcsec, dt_days, sigma_kms,
-  size_arcsec_raw, dt_days_raw, sigma_kms_raw
+Input CSV
+- Supports two formats:
+  (A) Proper CSV with headers like: id,lens_name,G,zs,zl,...,Nim,size_arcsec,dt_days,sigma_km_s
+  (B) The older "small" table exported as messy CSV-like text; for this we fall back to regex.
 
 Output CSV (clean)
 - lens_id,z_l,z_s,log10M_star,Re_kpc,n_sersic,theta_E_obs_arcsec
@@ -28,8 +27,8 @@ Assumptions (Option B, documented)
 - n_sersic defaults to 4 (de Vaucouleurs-like massive ETGs)
 
 Notes
-- This script is robust to the messy CSV by using regex on each line.
-- If parsing fails for a lens, that lens is skipped (logged to stderr).
+- First attempts strict CSV parsing via csv.DictReader. If expected headers are missing,
+  or nothing parsable is found, falls back to the legacy regex path.
 - You can restrict to a selected set of lenses via --select; otherwise the script will
   try to parse all and include only those with z_s,z_l,size_arcsec, and σ.
 
@@ -38,6 +37,7 @@ import argparse
 import re
 import sys
 import math
+import csv
 from pathlib import Path
 
 
@@ -57,6 +57,7 @@ def safe_float(s):
 
 
 def extract_with_regex(line: str, lens_name: str):
+    """Legacy fallback for messy CASTLES small-table text lines."""
     # Extract z_s and z_l: first two floats following the grade letter after lens name
     m = re.search(r"^\s*\d+\s*,\s*" + re.escape(lens_name) + r"\s+[A-Z]\s+([0-9.]+)\s+([0-9.]+)", line)
     if not m:
@@ -109,52 +110,67 @@ def main():
     selected = set([s.strip() for s in args.select]) if args.select else None
 
     rows = []
-    with in_path.open("r", encoding="utf-8", errors="ignore") as f:
-        header = f.readline()  # discard header
-        for raw in f:
-            if not raw.strip():
-                continue
-            # lens_name is the token after the first comma
-            mname = re.match(r"\s*\d+\s*,\s*([^,\t]+)", raw)
-            if not mname:
-                continue
-            lens = mname.group(1).strip()
-            if selected and lens not in selected:
-                continue
-            info = extract_with_regex(raw, lens)
-            if not info:
-                continue
-            z_s = info["z_s"]; z_l = info["z_l"]
-            sigma = info["sigma"]; size_arcsec = info["size_arcsec"]; is_ring = info["is_ring"]
-            if z_s is None or z_l is None or size_arcsec is None or sigma is None:
-                continue
-            # θE observed
-            theta_obs = size_arcsec if is_ring else (size_arcsec / 2.0)
-            log10M, Re_kpc = derive_mass_size(sigma)
-            if log10M is None or Re_kpc is None:
-                continue
-            rows.append({
-                "lens_id": lens,
-                "z_l": z_l,
-                "z_s": z_s,
-                "log10M_star": log10M,
-                "Re_kpc": Re_kpc,
-                "n_sersic": 4,
-                "theta_E_obs_arcsec": theta_obs,
-            })
+    parsed_csv = False
 
-    # If user asked for "all" but nothing parsed, try a safe small set
-    if not rows and not selected:
-        fallback = ["Q0957+561", "PG1115+080", "B1608+656"]
-        selected = set(fallback)
+    # Attempt strict CSV parsing first
+    try:
         with in_path.open("r", encoding="utf-8", errors="ignore") as f:
-            f.readline()
+            rdr = csv.DictReader(f)
+            fieldnames = [fn.strip() for fn in (rdr.fieldnames or [])]
+            # Require minimal set of recognizable headers
+            need_any = {"lens_name", "zs", "zl"}
+            if fieldnames and need_any.issubset(set(fieldnames)):
+                parsed_csv = True
+                for row in rdr:
+                    if not row:
+                        continue
+                    lens = (row.get("lens_name") or row.get("lens") or row.get("id") or "").strip()
+                    if not lens:
+                        continue
+                    if selected and lens not in selected:
+                        continue
+                    # Extract essential fields
+                    z_s = safe_float((row.get("zs") or row.get("z_s") or "").strip())
+                    z_l = safe_float((row.get("zl") or row.get("z_l") or "").strip())
+                    size_str = (row.get("size_arcsec") or row.get("sep_arcsec") or "").strip()
+                    size_arcsec = safe_float(size_str)
+                    nim = (row.get("Nim") or row.get("nim") or "").strip()
+                    sig_str = (row.get("sigma_km_s") or row.get("sigma") or "").strip()
+                    m = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*±\s*([0-9]+(?:\.[0-9]+)?)", sig_str)
+                    sigma = safe_float(m.group(1)) if m else None
+                    # Determine ring vs non-ring
+                    is_ring = ("ER" in nim) or (re.search(r"\b[2-9]?R\b", nim) is not None)
+                    if z_s is None or z_l is None or size_arcsec is None or sigma is None:
+                        continue
+                    theta_obs = size_arcsec if is_ring else (size_arcsec / 2.0)
+                    log10M, Re_kpc = derive_mass_size(sigma)
+                    if log10M is None or Re_kpc is None:
+                        continue
+                    rows.append({
+                        "lens_id": lens,
+                        "z_l": z_l,
+                        "z_s": z_s,
+                        "log10M_star": log10M,
+                        "Re_kpc": Re_kpc,
+                        "n_sersic": 4,
+                        "theta_E_obs_arcsec": theta_obs,
+                    })
+    except Exception:
+        parsed_csv = False
+        # fall through to regex path
+
+    # Fallback to legacy regex parsing if needed
+    if not rows:
+        with in_path.open("r", encoding="utf-8", errors="ignore") as f:
+            header = f.readline()  # discard header
             for raw in f:
+                if not raw.strip():
+                    continue
                 mname = re.match(r"\s*\d+\s*,\s*([^,\t]+)", raw)
                 if not mname:
                     continue
                 lens = mname.group(1).strip()
-                if lens not in selected:
+                if selected and lens not in selected:
                     continue
                 info = extract_with_regex(raw, lens)
                 if not info:

@@ -1,0 +1,38 @@
+general:
+  dry_run: true
+  output_dir: results/nature_readiness
+  random_seed: 42
+  device: cpu  # safe default; GPU optional when you enable real runs
+
+theory:
+  enforce_cT: true
+  check_stability: true
+  check_bianchi: true
+  check_equivalence: true
+
+solar:
+  run_ppn: true
+  run_cassini: true
+  run_llr: true
+  run_ephemerides: true
+
+lensing:
+  run_strong: false
+  run_weak: false
+
+dynamics:
+  run_sparc_subset: false
+  compare: [lcdm, mond, ddmm]
+
+clusters:
+  run_bullet: false
+
+cosmology:
+  run_compressed: false
+
+bayes:
+  run_evidence: false
+  kfold: null
+  ppc: false
+  sbc: false
+

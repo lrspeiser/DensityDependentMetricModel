@@ -1,0 +1,41 @@
+{
+  "ppn": [
+    {
+      "gamma": 1.0,
+      "beta": 1.0,
+      "alpha1": 0.0,
+      "alpha2": 0.0
+    },
+    {
+      "gamma": 1.0,
+      "beta": 1.0,
+      "alpha1": 0.0,
+      "alpha2": 0.0
+    },
+    {
+      "gamma": 1.0,
+      "beta": 1.0,
+      "alpha1": 0.0,
+      "alpha2": 0.0
+    },
+    {
+      "gamma": 1.0,
+      "beta": 1.0,
+      "alpha1": 0.0,
+      "alpha2": 0.0
+    },
+    {
+      "gamma": 1.0,
+      "beta": 1.0,
+      "alpha1": 0.0,
+      "alpha2": 0.0
+    },
+    {
+      "gamma": 1.0,
+      "beta": 1.0,
+      "alpha1": 0.0,
+      "alpha2": 0.0
+    }
+  ],
+  "source": "fallback_GR_screened_assumption"
+}

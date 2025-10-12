@@ -1,0 +1,19 @@
+{
+  "clusters": {
+    "diagnostics_csv": "Paper DensityAccel Variants/results/cluster_hybrid/cluster_gate_diagnostics.csv",
+    "summary_json": "Paper DensityAccel Variants/results/cluster_hybrid/summary_variants.json"
+  },
+  "ephemeris": {
+    "sample_output": "printed to console (\u0394G/G ~ const ~ 0.049 for density gate with rho_c=1e-24, rho_env=1e-21)"
+  },
+  "sparc": {
+    "note": "SPARC rotmods are not in CSV format under external_data/Rotmod_LTG; sparc_variants.py expects CSVs like NGC3198.csv. Provide a rotmod-to-csv export or update the loader to parse .dat."
+  },
+  "lensing": {
+    "json": "Paper DensityAccel Variants/results/lensing_density.json"
+  },
+  "mw_kz": {
+    "kz_csv": "Paper DensityAccel Variants/results/mw_kz/mw_kz_baryons_only.csv",
+    "gate_meta": "Paper DensityAccel Variants/results/mw_kz/mw_kz_gate_meta.json"
+  }
+}

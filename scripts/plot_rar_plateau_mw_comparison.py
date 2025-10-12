@@ -23,17 +23,83 @@ import sys
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-import cupy as cp  # type: ignore
-from core.density_metric_cupy import (
-    v_baryon_comprehensive_kms_cupy,
-    v_total_kms_cupy,
-)
+# Try GPU path; fall back to CPU-only models if CuPy is unavailable
+try:
+    import cupy as cp  # type: ignore
+    from core.density_metric_cupy import (
+        v_baryon_comprehensive_kms_cupy,
+        v_total_kms_cupy,
+    )
+    _GPU_OK = True
+except Exception:
+    cp = None  # type: ignore
+    v_baryon_comprehensive_kms_cupy = None  # type: ignore
+    v_total_kms_cupy = None  # type: ignore
+    _GPU_OK = False
+    import numpy as _np
+    # Gravitational constant in kpc (km/s)^2 / Msun
+    _G_KPC = 4.300917270e-6
+
+    def _mn_v2(R_kpc: _np.ndarray, M_Msun: float, a_kpc: float, b_kpc: float) -> _np.ndarray:
+        R = _np.asarray(R_kpc, float)
+        a = max(float(a_kpc), 1e-9); b = max(float(b_kpc), 1e-9)
+        denom = (R*R + (a + b)**2) ** 1.5
+        return _G_KPC * float(M_Msun) * R*R / _np.maximum(denom, 1e-30)
+
+    def _hern_v2(R_kpc: _np.ndarray, M_Msun: float, a_kpc: float) -> _np.ndarray:
+        R = _np.asarray(R_kpc, float)
+        a = max(float(a_kpc), 1e-9)
+        return _G_KPC * float(M_Msun) * R / _np.maximum((R + a)**2, 1e-30)
+
+    def v_baryon_comprehensive_kms_cpu(R_kpc: _np.ndarray, p: dict) -> _np.ndarray:
+        v2 = _np.zeros_like(_np.asarray(R_kpc, float))
+        # Thin disk (Miyamoto–Nagai)
+        if p.get('include_disk_thin', True):
+            v2 += _mn_v2(R_kpc, p.get('M_disk_thin_solar', 0.0), p.get('R_d_thin_kpc', 2.6), p.get('h_z_thin_kpc', 0.3))
+        # Thick disk
+        if p.get('include_disk_thick', True):
+            v2 += _mn_v2(R_kpc, p.get('M_disk_thick_solar', 0.0), p.get('R_d_thick_kpc', 4.5), p.get('h_z_thick_kpc', 0.9))
+        # Gas disk
+        if p.get('include_gas', True):
+            v2 += _mn_v2(R_kpc, p.get('M_gas_solar', 0.0), p.get('R_d_gas_kpc', 7.0), p.get('h_z_gas_kpc', 0.15))
+        # Bulge (Hernquist)
+        if p.get('include_bulge', True):
+            v2 += _hern_v2(R_kpc, p.get('M_bulge_solar', 0.0), p.get('a_bulge_kpc', 0.7))
+        return _np.sqrt(_np.maximum(v2, 0.0))
+
+    # xi_RAR-plateau (NumPy version) copied from orchestrator for CPU path
+    ACC_M_S2_PER_KMS2_PER_KPC = 3.240779289e-14
+    def _tidal_window_numpy(T, T0, sigma_lnT, wmin):
+        T = _np.asarray(T, float)
+        if T0 is None or sigma_lnT is None or sigma_lnT <= 0:
+            return _np.ones_like(T)
+        T0 = max(float(T0), 1e-30); s = max(float(sigma_lnT), 1e-6)
+        u = (_np.log(_np.maximum(T, 1e-30)) - _np.log(T0)) / s
+        W = _np.exp(-0.5 * u * u)
+        return _np.clip(float(wmin) + (1.0 - float(wmin)) * W, 0.0, 1.0)
+
+    def xi_rar_plateau_numpy(Vbar_kms, R_kpc, *, a0_m_s2, zeta_env=0.0, rho=None, rho_c=None, gamma_exp=3.0, T0=None, sigma_lnT=None, wmin=0.0):
+        Vbar_kms = _np.asarray(Vbar_kms, float); R_kpc = _np.asarray(R_kpc, float)
+        R_safe = _np.maximum(R_kpc, 1e-12)
+        g_bar = ACC_M_S2_PER_KMS2_PER_KPC * _np.maximum(Vbar_kms, 0.0)**2 / R_safe
+        T = _np.maximum(Vbar_kms, 0.0)**2 / _np.maximum(R_safe**2, 1e-18)
+        if zeta_env > 0.0 and rho is not None and (rho_c is not None and rho_c > 0.0):
+            ratio = _np.maximum(_np.asarray(rho,float), 1e-30) / max(float(rho_c), 1e-30)
+            s_rho = 1.0 / (1.0 + _np.power(ratio, float(gamma_exp)))
+        else:
+            s_rho = 0.0
+        W = _tidal_window_numpy(T, T0, sigma_lnT, wmin)
+        a0_eff = float(a0_m_s2) * (1.0 + float(zeta_env) * s_rho * W)
+        y = _np.maximum(g_bar, 1e-30)
+        D = 0.5 + _np.sqrt(0.25 + _np.maximum(a0_eff, 0.0) / y)
+        D = _np.where(_np.isfinite(D), D, 1.0)
+        return _np.maximum(D, 1.0)
 
 # Simple NFW helper (uses baryon curve for total)
 import numpy as _np
 
 def compute_nfw_velocity(R_kpc: _np.ndarray, v_bar: _np.ndarray, M_200=1.5e12, c=12.0, R_200=230.0) -> _np.ndarray:
-    G = 4.301e-6  # km^2 kpc / (M_sun s^2)
+    G = 4.300917270e-6  # kpc (km/s)^2 / Msun
     Rs = float(R_200) / float(c)
     R = _np.asarray(R_kpc, dtype=float)
     def M_enc(r):
@@ -156,13 +222,20 @@ def make_plot(params: dict, out_path: Path, *, gaia_csv: Path | None = None, med
 
     # Radii (1..30 kpc log grid)
     R = np.logspace(0.0, np.log10(float(rmax_cap)), 320).astype(np.float32)
-    R_cp = cp.asarray(R, dtype=cp.float32)
-
     # GR (baryons-only)
-    v_gr = cp.asnumpy(v_baryon_comprehensive_kms_cupy(R_cp, params))
-
-    # rar_plateau (experimental)
-    v_rar = cp.asnumpy(v_total_kms_cupy(R_cp, dict(params), xi_type='rar_plateau'))
+    if _GPU_OK and v_baryon_comprehensive_kms_cupy is not None:
+        R_cp = cp.asarray(R, dtype=cp.float32)
+        v_gr = cp.asnumpy(v_baryon_comprehensive_kms_cupy(R_cp, params))
+        v_rar = cp.asnumpy(v_total_kms_cupy(R_cp, dict(params), xi_type='rar_plateau'))
+    else:
+        # CPU-only path using analytic component models and NumPy xi mapping
+        v_gr = v_baryon_comprehensive_kms_cpu(R, params)
+        xi = xi_rar_plateau_numpy(v_gr, R, a0_m_s2=float(params.get('a0_m_s2', 1.2e-10)),
+                                  zeta_env=float(params.get('zeta_env', 0.0)), rho=None,
+                                  rho_c=params.get('rho_c', None), gamma_exp=float(params.get('gamma_exp', 3.0)),
+                                  T0=params.get('T0', None), sigma_lnT=params.get('sigma_lnT', None),
+                                  wmin=float(params.get('wmin', 0.0)))
+        v_rar = np.sqrt(np.maximum(v_gr, 0.0)**2 * np.maximum(xi, 1.0))
 
     # NFW (ΛCDM baseline) on top of baryons
     v_nfw = compute_nfw_velocity(R, v_gr, M_200=1.5e12, c=12.0, R_200=230.0)
