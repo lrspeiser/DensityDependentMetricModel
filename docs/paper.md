@@ -131,7 +131,17 @@ We converted the **X‑ray–derived profiles** for **Abell 2261** and **MACS J1
 
 ### 5.5 N=10 curated sample (status)
 
-On a curated N=10 Tier‑1/2 set (training) we obtain consistent amplitudes μ_A ∼ 4.8 ± 0.5 and scatter σ_A ∼ 1.8 ± 0.3. Posteriors for γ remain sampler‑dependent (grid/NUTS vs. DEMetropolisZ) and are **currently inconclusive** (consistent with **0–0.5**). Work in progress (Sec. 7).
+On a curated N=10 Tier‑1/2 set (training), using the NUTS‑grid surrogate with per‑cluster Σ(R):
+
+- Model comparison (γ‑free vs γ=0): ΔWAIC = (−49.68) − (−49.72) ≈ +0.04 ± 2.5 → inconclusive.
+- 5‑fold hold‑out (aggregate over 18 predictions): coverage inside 68% = 88.9%, frac |Z|>2 = 0.0, median fractional error = 7.9%.
+
+These meet our preregistered acceptance gates (coverage ≥68%, median error ≤20%). For robustness, we re-ran NUTS with higher target_accept=0.95:
+
+- γ free: WAIC = −49.73 ± 2.50; LOO = −49.74 ± 2.51
+- γ = 0:  WAIC = −49.72 ± 2.47; LOO = −49.72 ± 2.47
+
+ΔWAIC ≈ +0.01 ± 2.5 → still inconclusive; predictive coverage remains strong.
 
 ---
 
@@ -224,13 +234,19 @@ Forthcoming work will (i) standardize **per‑cluster Σ(R)**, (ii) enlarge the 
 
 ---
 
-## Figures (suggested)
+## Figures
 
-1. **Galaxy RAR**: data vs. Sigma‑Gravity prediction; scatter histogram (0.087 dex).
-2. **Kernel maps**: K_Σ(R), boost (1 + K_Σ), and κ maps for a representative cluster.
-3. **A1689 & MACS1149 PPC**: posterior predictive histograms with observed θ_E and 68% bands (both inside 68%).
-4. **Population posteriors**: μ_A, σ_A, ℓ_0,⋆, γ (corner plot; weak γ).
-5. **Model comparison**: coverage and fractional‑error summary across train/hold‑out splits.
+1. Hold-out predicted vs observed (A2261 + MACSJ1149):
+
+   ![Hold-out predicted vs observed](../output/figures/holdouts_pred_vs_obs.png)
+
+2. K-fold hold-out: predicted vs observed and 68% coverage:
+
+   ![K-fold predicted vs observed](../output/figures/kfold_pred_vs_obs.png)
+
+   ![K-fold 68% coverage](../output/figures/kfold_coverage.png)
+
+3. Galaxy RAR (0.087 dex) and population posteriors (μ_A, σ_A, ℓ_0,⋆, γ): to be added from the galaxy suite run.
 
 ---
 
